@@ -52,6 +52,12 @@ with open(os.path.join(config_root, "kis_devlp.yaml"), encoding="UTF-8") as f:
 from key.key import get_secrets_from_password
 app_key, app_secret, app_hts_id = get_secrets_from_password()
 
+if app_key is None or app_secret is None or app_hts_id is None:
+    print("\033[91m\n[CRITICAL ERROR] Failed to load credentials.")
+    print("Access denied. The program will now terminate.\033[0m")
+    import sys
+    sys.exit(1)
+
 _cfg["my_app"] = app_key
 _cfg["my_sec"] = app_secret
 _cfg["my_htsid"] = app_hts_id
@@ -59,7 +65,7 @@ _cfg["my_htsid"] = app_hts_id
 _TRENV = tuple()
 _last_auth_time = datetime.now()
 _autoReAuth = False
-_DEBUG = True
+_DEBUG = False
 _isPaper = False
 _smartSleep = 0.1
 
@@ -246,8 +252,7 @@ def auth(svr="prod", product=_cfg["my_prod"], url=None):
     global _last_auth_time
     _last_auth_time = datetime.now()
 
-    if _DEBUG:
-        print(f"[{_last_auth_time}] => get AUTH Key completed!")
+    print(f"\033[93m[{_last_auth_time}] => get Access Token completed!\033[0m")
 
 
 # end of initialize, 토큰 재발급, 토큰 발급시 유효시간 1일
@@ -507,8 +512,7 @@ def auth_ws(svr="prod", product=_cfg["my_prod"]):
     global _last_auth_time
     _last_auth_time = datetime.now()
 
-    if _DEBUG:
-        print(f"[{_last_auth_time}] => get AUTH Key completed!")
+    print(f"\033[93m[{_last_auth_time}] => get Approval Key completed!\033[0m")
 
 
 def reAuth_ws(svr="prod", product=_cfg["my_prod"]):
@@ -703,9 +707,9 @@ class KISWebSocket:
                 )
 
                 if rsp.isPingPong:
-                    print(f"### RECV [PINGPONG] [{raw}]")
+                    logging.info(f"### RECV [PINGPONG] [{raw}]")
                     await ws.pong(raw)
-                    print(f"### SEND [PINGPONG] [{raw}]")
+                    logging.info(f"### SEND [PINGPONG] [{raw}]")
 
                 if self.result_all_data:
                     show_result = True

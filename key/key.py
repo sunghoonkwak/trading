@@ -7,10 +7,10 @@ from cryptography.fernet import Fernet
 
 def get_secrets_from_password() -> tuple[str, str, str]:
     print("--- API Key loading ---")
-    
+
     # Get password to decrypt the file
     password = getpass.getpass("Enter your encryption password: ")
-    
+
     try:
         # Generate decryption key
         key = generate_key_from_password(password)
@@ -23,7 +23,7 @@ def get_secrets_from_password() -> tuple[str, str, str]:
 
         with open("credentials.enc", "rb") as file:
             encrypted_data = file.read()
-        
+
         decrypted_data = f.decrypt(encrypted_data).decode()
         stored_key, stored_secret, stored_hts_id = decrypted_data.split(',')
 
@@ -35,7 +35,7 @@ def get_secrets_from_password() -> tuple[str, str, str]:
 
 def generate_key_from_password(password: str):
     # This must match the salt used in generate_key.py
-    salt = b'Steven is human.' 
+    salt = b'Steven is human.'
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,

@@ -5,10 +5,10 @@ from cryptography.fernet import Fernet
 
 def validate_credentials():
     print("--- API Key Validation ---")
-    
+
     # 1. Get password to decrypt the file
     password = getpass.getpass("Enter your encryption password: ")
-    
+
     try:
         # Generate decryption key
         key = generate_key_from_password(password)
@@ -17,12 +17,12 @@ def validate_credentials():
         # 2. Load and decrypt the file
         with open("credentials.enc", "rb") as file:
             encrypted_data = file.read()
-        
+
         decrypted_data = f.decrypt(encrypted_data).decode()
         stored_key, stored_secret, stored_hts_id = decrypted_data.split(',')
-        
+
         print("\n[INFO] File decrypted successfully. Now enter the keys to compare.")
-        
+
         # 3. Get actual keys from user to verify
         input_key = getpass.getpass("Enter the APP KEY to verify: ")
         input_secret = getpass.getpass("Enter the APP SECRET to verify: ")
