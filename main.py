@@ -18,57 +18,54 @@ logging.basicConfig(
     ]
 )
 
-def stock_price_request(tr_type, data, **kwargs):
-    """
-    Builds the websocket message for real-time stock price (H0STCNT0).
-    """
-    tr_id = "H0STCNT0" # Real-time domestic stock contract
+# Global flag for toggling real-time data printing
+class PrintLevel:
+    ERROR = 0
+    INFO = 1
+    DEBUG = 2
+    MAX = 3
 
-    msg = {
-        "header": {
-            "approval_key": ka._base_headers_ws["approval_key"],
-            "custtype": "P",
-            "tr_type": tr_type,
-            "content-type": "utf-8"
-        },
-        "body": {
-            "input": {
-                "tr_id": tr_id,
-                "tr_key": data
-            }
-        }
-    }
+print_level = PrintLevel.INFO
 
-    # Column headers for H0STCNT0
-    columns = [
-        'MKSC_SHRN_ISCD', 'TICK_HOUR', 'STCK_PRPR', 'PRDY_VRSS_SIGN', 'PRDY_VRSS',
-        'PRDY_CTRT', 'WGHN_AVRG_STCK_PRC', 'STCK_OPRC', 'STCK_HGPR', 'STCK_LWPR',
-        'ASKP1', 'BIDP1', 'CNTG_VOL', 'ACML_VOL', 'ACML_TR_PBMN', 'SELN_CNTG_CSNU',
-        'SHNU_CNTG_CSNU', 'NTBY_CNTG_CSNU', 'CTTR', 'SELN_CNTG_SMTN', 'SHNU_CNTG_SMTN',
-        'CCLD_DVSN', 'SHNU_RATE', 'PRDY_VOL_VRSS_ACML_VOL_RATE', 'OPRC_HOUR',
-        'OPRC_VRSS_PRPR_SIGN', 'OPRC_VRSS_PRPR', 'HGPR_HOUR', 'HGPR_VRSS_PRPR_SIGN',
-        'HGPR_VRSS_PRPR', 'LWPR_HOUR', 'LWPR_VRSS_PRPR_SIGN', 'LWPR_VRSS_PRPR',
-        'BSOP_DATE', 'NEW_MKOP_CLS_CODE', 'TRHT_YN', 'ASKP_RSQN1', 'BIDP_RSQN1',
-        'TOTAL_ASKP_RSQN', 'TOTAL_BIDP_RSQN', 'VOL_TNRT', 'PRDY_SMNS_HOUR_ACML_VOL',
-        'PRDY_SMNS_HOUR_ACML_VOL_RATE', 'HOUR_CLS_CODE', 'MRKT_TRTM_CLS_CODE', 'VI_STND_PRC'
-    ]
+# Logging functions
+def print_debug(log):
+    if print_level <= PrintLevel.DEBUG:
+        print(log)
 
-    return msg, columns
+def print_info(log):
+    if print_level <= PrintLevel.INFO:
+        print(log)
+
+def print_error(log):
+    print(log)
 
 def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
     """
     Callback function when data is received.
     """
-    if not df.empty:
-        # Extract meaningful data
-        code = df['MKSC_SHRN_ISCD'].iloc[0]
-        price = df['STCK_PRPR'].iloc[0]
-        time = df['TICK_HOUR'].iloc[0]
-        change = df['PRDY_VRSS'].iloc[0]
-
-        print(f"[{time}] Code: {code}, Current Price: {price}, Change: {change}")
-    else:
+    if df.empty:
         print(f"System Message received for TR: {tr_id}")
+        return
+
+    # Extract common data
+    code = df['MKSC_SHRN_ISCD'].iloc[0]
+
+    if tr_id == "H0UNASP0": # 주식 호가
+        time = df['BSOP_HOUR'].iloc[0]
+        ask1 = df['ASKP1'].iloc[0]
+        bid1 = df['BIDP1'].iloc[0]
+        total_ask = df['TOTAL_ASKP_RSQN'].iloc[0]
+        total_bid = df['TOTAL_BIDP_RSQN'].iloc[0]
+        print_info(f"[OrderBook][{time}] Code: {code}, Best Ask: {ask1}, Best Bid: {bid1}, Total: {total_ask}/{total_bid}")
+    elif tr_id == "H0UNCNT0": # 주식 체결
+        time = df['STCK_CNTG_HOUR'].iloc[0]
+        price = df['STCK_PRPR'].iloc[0]
+        change = df['PRDY_VRSS'].iloc[0]
+        vol = df['CNTG_VOL'].iloc[0]
+        print_info(f"[Trade][{time}] Code: {code}, Price: {price}, Change: {change}, Vol: {vol}")
+
+    else:
+        print_error(f"[{tr_id}] Unknown data received for code: {code}")
 
 def get_account_info_domastic() -> dict:
     """
@@ -135,8 +132,9 @@ def get_account_info_domastic() -> dict:
         return None
 
 def menu():
+    global print_level
     while True:
-        print("\n=== Menu ===")
+        print(f"\n=== Menu (Log Level: {print_level}) ===")
         print("1. get cash info")
         print("0. Exit")
         choice = input("Enter your choice: ")
@@ -146,8 +144,14 @@ def menu():
         elif choice == '0':
             print("Exiting...")
             os._exit(0) # Abrupt exit to stop background thread as well
+        elif choice == "":
+            print_level = (print_level + 1) % PrintLevel.MAX
+            print(f"\n[System] Real-time log level changed to {print_level}")
         else:
             print("Invalid choice. Please try again.")
+
+from kis_api.domestic_stock.asking_price_total.asking_price_total import asking_price_total
+from kis_api.domestic_stock.ccnl_total.ccnl_total import ccnl_total
 
 if __name__ == "__main__":
     print("=== KIS Real-time Trading System ===")
@@ -161,7 +165,8 @@ if __name__ == "__main__":
 
     # 3. Subscribe to stocks
     stocks_to_watch = ['005930', '000660']
-    ws.subscribe(stock_price_request, stocks_to_watch)
+    ws.subscribe(asking_price_total, stocks_to_watch)
+    ws.subscribe(ccnl_total, stocks_to_watch)
 
     print(f"Starting websocket subscription for: {stocks_to_watch}")
     print(f"Logs are being recorded to: {log_file}")
