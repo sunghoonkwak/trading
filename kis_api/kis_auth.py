@@ -49,7 +49,7 @@ if os.path.exists(token_tmp) == False:
 with open(os.path.join(config_root, "kis_devlp.yaml"), encoding="UTF-8") as f:
     _cfg = yaml.load(f, Loader=yaml.FullLoader)
 
-from key.key import get_secrets_from_password
+from kis_api.key.key import get_secrets_from_password
 app_key, app_secret, app_hts_id = get_secrets_from_password()
 
 if app_key is None or app_secret is None or app_hts_id is None:
@@ -105,10 +105,10 @@ def read_token():
         if exp_dt > now_dt:
             return tkg_tmp["token"]
         else:
-            # print('Need new token: ', tkg_tmp['valid-date'])
+            print('\033[31mNeed new token: ', tkg_tmp['valid-date'], '\033[0m')
             return None
-    except Exception:
-        # print('read token error: ', e)
+    except Exception as e:
+        print('\033[31mread token error: ', e, '\033[0m')
         return None
 
 

@@ -1,6 +1,6 @@
 import logging
 import pandas as pd
-import kis_auth as ka
+import kis_api.kis_auth as ka
 import threading
 import os
 from datetime import datetime
@@ -152,22 +152,23 @@ def menu():
 if __name__ == "__main__":
     print("=== KIS Real-time Trading System ===")
 
+    # 1. get token and ws token
     ka.auth()
     ka.auth_ws()
 
-    # 1. Initialize WebSocket
+    # 2. Initialize WebSocket
     ws = ka.KISWebSocket(api_url="/tryitout")
 
-    # 2. Subscribe to stocks
+    # 3. Subscribe to stocks
     stocks_to_watch = ['005930', '000660']
     ws.subscribe(stock_price_request, stocks_to_watch)
 
     print(f"Starting websocket subscription for: {stocks_to_watch}")
     print(f"Logs are being recorded to: {log_file}")
 
-    # 3. Start the websocket client in a background thread
+    # 4. Start the websocket client in a background thread
     ws_thread = threading.Thread(target=ws.start, args=(on_result,), daemon=True)
     ws_thread.start()
 
-    # 4. menu for sending cmd in main thread
+    # 5. menu for sending cmd in main thread
     menu()
