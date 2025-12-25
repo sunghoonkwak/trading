@@ -1,4 +1,4 @@
-from key.key import generate_key_from_password
+from key import generate_key_from_password
 import getpass
 import base64
 from cryptography.fernet import Fernet
@@ -19,16 +19,17 @@ def validate_credentials():
             encrypted_data = file.read()
         
         decrypted_data = f.decrypt(encrypted_data).decode()
-        stored_key, stored_secret = decrypted_data.split(',')
+        stored_key, stored_secret, stored_hts_id = decrypted_data.split(',')
         
         print("\n[INFO] File decrypted successfully. Now enter the keys to compare.")
         
         # 3. Get actual keys from user to verify
         input_key = getpass.getpass("Enter the APP KEY to verify: ")
         input_secret = getpass.getpass("Enter the APP SECRET to verify: ")
+        input_hts_id = getpass.getpass("Enter the HTS ID to verify: ")
 
         # 4. Comparison logic
-        if input_key == stored_key and input_secret == stored_secret:
+        if input_key == stored_key and input_secret == stored_secret and input_hts_id == stored_hts_id:
             print("\n" + "="*50)
             print("[PASS] Validation Successful!")
             print("The keys match the encrypted file perfectly.")

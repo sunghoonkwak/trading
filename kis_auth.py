@@ -49,16 +49,17 @@ if os.path.exists(token_tmp) == False:
 with open(os.path.join(config_root, "kis_devlp.yaml"), encoding="UTF-8") as f:
     _cfg = yaml.load(f, Loader=yaml.FullLoader)
 
-from key.key import get_key_secret_from_password
-app_key, app_secret = get_key_secret_from_password()
+from key.key import get_secrets_from_password
+app_key, app_secret, app_hts_id = get_secrets_from_password()
 
 _cfg["my_app"] = app_key
 _cfg["my_sec"] = app_secret
+_cfg["my_htsid"] = app_hts_id
 
 _TRENV = tuple()
 _last_auth_time = datetime.now()
 _autoReAuth = False
-_DEBUG = False
+_DEBUG = True
 _isPaper = False
 _smartSleep = 0.1
 

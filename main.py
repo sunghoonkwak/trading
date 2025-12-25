@@ -1,6 +1,5 @@
 import logging
 import pandas as pd
-from key.key import get_key_secret_from_password
 import kis_auth as ka
 
 # Configure logging
