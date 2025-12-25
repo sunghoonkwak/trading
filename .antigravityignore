@@ -1,0 +1,4 @@
+# .antigravityignore
+credentials.enc
+.env
+*.log
