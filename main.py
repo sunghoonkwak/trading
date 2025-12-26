@@ -8,6 +8,8 @@ import shutil
 from datetime import datetime
 from enum import IntEnum
 from collections import deque
+import json
+import msvcrt
 
 # Configure logging with dynamic filename based on server start time
 log_timestamp = datetime.now().strftime("%y_%m_%d_%H_%M_%S")
@@ -29,6 +31,18 @@ class PrintLevel(IntEnum):
     MAX = 3
 
 print_log_level = PrintLevel.INFO
+
+# Load Stock Code to Name Mapping from JSON
+STOCK_NAMES = {}
+try:
+    _json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stock_name.json")
+    if os.path.exists(_json_path):
+        with open(_json_path, "r", encoding="utf-8") as f:
+            STOCK_NAMES = json.load(f)
+except Exception as e:
+    # We can't use print_log here yet as the UI isn't ready,
+    # but we can fallback to a silent empty dict or simple print
+    pass
 
 # UI Configuration
 LOG_BUFFER_SIZE = 30
@@ -199,9 +213,9 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
     vol_s   = format(state['vol'], ",")
     diff_s  = f"{state.get('sign_str', '')}{format(state['change'], ',')}"
 
-    # Unified Market Log Format
-    # [Market] [10:12:38] 005930 | Bid:   114,800 | Last:   114,850 (  100) | Diff:   +3,750 ( 3.38%) | Ask:   114,900
-    msg = (f"[Market] [{time_s}] {code:<6} | "
+    # [10:54:46] [삼성전자] 005930 | Bid:   115,900 | Last:   116,000 (    15) | Diff:    +4,900 ( 4.41%) | Ask:   116,000
+    name = STOCK_NAMES.get(code, "Unknown")
+    msg = (f"[{time_s}] [{name}] {code} | "
            f"Bid: {bid_s:>9} | "
            f"Last: {price_s:>9} ({vol_s:>6}) | "
            f"Diff: {diff_s:>9} ({state['rate']:>5.2f}%) | "
@@ -209,60 +223,51 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
 
     print_log(level, msg)
 
-def get_account_info_domastic() -> list:
+def inquire_orderable_amount() -> list:
     """
-    Get domestic stock account info lines for display
+    Inquire Orderable Amount
     """
-    today = datetime.today().strftime("%Y%m%d")
+    cano = ka.getTREnv().my_acct
+    acnt_prdt_cd = ka.getTREnv().my_prod
 
+    # 2. Inquire Orderable Amount (TTTC8908R)
     params = {
-        "CANO": ka.getTREnv().my_acct,
-        "ACNT_PRDT_CD": ka.getTREnv().my_prod,
-        "INQR_DVSN_CD": "01",
-        "IVRE_DVSN": "01",
-        "BASS_DT": today,
-        "UNPR_DVSN": "01",
-        "FUND_STTL_ICLD_YN": "N",
-        "FNCG_AMT_AUTO_RDPT_YN": "N",
-        "PRTS_DVSN": "01",
-        "CTX_AREA_FK100": "",
-        "CTX_AREA_NK100": "",
-        "WCRC_FRCR_DVSN_CD": "01"
+        "CANO": cano,
+        "ACNT_PRDT_CD": acnt_prdt_cd,
+        "PDNO": "005930", # Standard stock for check
+        "ORD_UNPR": "0",
+        "ORD_DVSN": "01", # Market price
+        "CMA_EVLU_AMT_ICLD_YN": "N",
+        "OVRS_ICLD_YN": "N"
     }
+    url = "/uapi/domestic-stock/v1/trading/inquire-psbl-order"
+    res = ka._url_fetch(url, "TTTC8908R", "N", params)
 
-    url = "/uapi/domestic-stock/v1/trading/inquire-account-balance"
-    res = ka._url_fetch(url, "CTRP6010R", "N", params)
+    lines = [
+        "=" * 40,
+        " [Deposit & Orderable Info]",
+        "=" * 40,
+    ]
 
+    import json as json_lib
+
+    # 2. Process Orderable
     if res.isOK():
         body = res.getBody()
-        output = getattr(body, 'output1', None) or getattr(body, 'output2', None) or getattr(body, 'output3', None)
+        logging.info(f"--- Orderable Raw Response ---\n{json_lib.dumps(body._asdict(), indent=4, ensure_ascii=False)}")
 
-        if output:
-            total_cash = output.get('dnca_tot_amt') or output.get('tot_dncl_amt', '0')
-            available  = output.get('ord_psbl_cash') or output.get('tot_dncl_amt', '0')
-            total_asst = output.get('tot_asst_amt2') or output.get('tot_evlu_amt', '0')
+        output = getattr(body, 'output', None)
+        if isinstance(output, dict):
+            # nrcvb_buy_amt is the "Orderable KRW" without credit
+            deposit = output.get('ord_psbl_cash') or '0'
+            orderable = output.get('nrcvb_buy_amt') or '0'
+            lines.append(f" Deposit         : {format(int(float(deposit)), ','):>12} KRW")
+            lines.append(f" Orderable KRW   : {format(int(float(orderable)), ','):>12} KRW")
+            lines.append("-" * 40)
+            lines.append(f" (Log: {os.path.basename(log_file)})")
+            lines.append(" [Press any key to return to menu]")
 
-            def safe_format_krw(val):
-                try:
-                    return format(int(float(val)), ",")
-                except (ValueError, TypeError):
-                    return val
-
-            lines = [
-                "=" * 40,
-                " [Account Info]",
-                "=" * 40,
-                f" Total Deposit : {safe_format_krw(total_cash):>12} KRW",
-                f" Available     : {safe_format_krw(available):>12} KRW",
-                f" Total Assets  : {safe_format_krw(total_asst):>12} KRW",
-                "-" * 40,
-                " (Press Enter to return to menu)",
-            ]
-            return lines
-        else:
-            return ["Error: No account data found."]
-    else:
-        return [f"Error: {res.getRTName()}"]
+    return lines
 
 def menu():
     global print_log_level
@@ -276,17 +281,22 @@ def menu():
         choice = input()
 
         if choice == '1':
-            lines = get_account_info_domastic()
+            lines = inquire_orderable_amount()
             with terminal_lock:
                 sys.stdout.write(SAVE_CURSOR)
                 sys.stdout.write(HOME)
+                # Print result area with a bit more buffer
                 for line in lines:
                     sys.stdout.write(f"{CLEAR_LINE}{line}\n")
-                for _ in range(max(0, 10 - len(lines))):
+                # Clear more lines below to ensure no ghosting
+                for _ in range(max(0, 12 - len(lines))):
                     sys.stdout.write(f"{CLEAR_LINE}\n")
                 sys.stdout.write(RESTORE_CURSOR)
                 sys.stdout.flush()
-            input()
+            # Wait for any key press instead of Enter
+            msvcrt.getch()
+            # Immediately refresh UI after input to clear the result
+            render_ui(full_refresh=True)
         elif choice == "0":
             print_log_level = (print_log_level + 1) % PrintLevel.MAX
         elif choice == 'q':
