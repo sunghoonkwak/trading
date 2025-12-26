@@ -7,22 +7,20 @@
 ```text
 .
 ├── trading/                     ## core implementation folder
-│   ├── kis_api/                ## KIS API specialized package
-│   │   ├── domestic_stock/     ## Domestic stock related modules
-│   │   │   ├── asking_price_total/ ## Real-time order book (H0UNASP0)
-│   │   │   ├── ccnl_total/         ## Real-time conclusion (H0UNCNT0)
-│   │   │   └── ...                 ## other specialized modules
-│   │   ├── key/                ## encryption & security utilities
-│   │   │   ├── key.py          ## Password-based secret loading
-│   │   │   ├── generate_credentials.py
-│   │   │   └── validate_credentials.py
-│   │   └── kis_auth.py         ## REST/WebSocket auth & communication library
-│   ├── main.py                 ## entry point script (Interactive Menu & WS)
-│   ├── stock_config.json       ## Stock configuration (names, RGB, disabled)
-│   ├── target_weight.json      ## (WIP) Target portfolio weights
-│   └── openapi_trading.md      ## 프로젝트 문서
-├── credentials.enc             ## 암호화된 API 키 저장소 (Root level)
-└── .gitignore                  ## Git 제외 설정
+├── kis_api/                ## KIS API specialized package
+│   ├── domestic_stock/     ## Domestic stock related modules
+│   ├── overseas_stock/     ## Overseas stock related modules
+│   ├── key/                ## encryption & security utilities
+│   └── kis_auth.py         ## REST/WebSocket auth & communication library
+├── main.py                 ## entry point script (Interactive Menu & WS)
+├── order_handler.py        ## Order placement & management logic
+├── account_helper.py       ## Balance & Portfolio fetching logic
+├── trading_ui.py           ## Absolute coordinate UI implementation
+├── trading_config.py       ## JSON configuration loader
+├── stock_configuration.json ## Stock configuration (names, RGB, disabled)
+├── credentials.enc         ## 암호화된 API 키 저장소
+├── openapi_trading.md      ## 프로젝트 문서
+└── .gitignore              ## Git 제외 설정
 ```
 
 ## 3. Tools & Dependencies
@@ -46,15 +44,19 @@
 2. **Flexible Stock Configuration**:
    - `stock_config.json`을 통해 종목별 **이름, 고유 RGB 색상, 구독 활성화 여부(disabled)**를 중앙 관리합니다.
    - 프로젝트 실행 시 `disabled: false`인 종목만 자동으로 구독 목록에 포함됩니다.
-3. **Advanced Terminal UI**:
-   - **Prioritized Latest Status**: 로그 영역 상단에 구독 중인 모든 종목의 **최신 체결/호가 상태**를 1줄씩 고정하여 실시간 현황판 역할을 수행합니다.
+3. **Static Coordinate UI (Anti-Scrolling)**:
+   - **Absolute Positioning**: ANSI Escape Code를 활용하여 모든 터미널 출력을 절대 좌표(`\033[row;colH`) 기반으로 수행합니다.
+   - **Fixed Layout**: 로그가 쏟아져도 상단 메뉴와 입력란이 위로 밀려 올라가지 않고 고정된 위치를 유지합니다.
    - **Visual Width Alignment**: 한글(2폭)과 영문(1폭)의 차이를 계산하여 종목명이 달라도 로그 줄이 흐트러지지 않도록 **10자 고정 폭 정렬**을 적용했습니다.
    - **Color-Coded Tracks**: 종목별 고유 RGB 색상을 적용하여 수많은 로그 흐름 속에서도 특정 종목의 데이터를 즉시 구분할 수 있습니다.
-   - **Clean Screen Refresh**: 메뉴와 로그 영역 사이의 잔상을 제거하기 위해 ANSI Escape Code(`CLEAR_LINE`)를 활용한 정밀한 화면 갱신을 구현했습니다.
-4. **Combined Account Info**:
-   - **KRW/USD Unified Inquiry**: 국내 주식 주문 가능 금액(`TTTC8908R`)과 해외 주식 예수금 현황(`CTRP6504R`)을 통합하여 한 번에 조회할 수 있는 기능을 제공합니다.
-   - **Data Robustness**: API 응답 형식이 리스트나 딕셔너리로 가변적인 경우에도 안정적으로 데이터를 추출하여 원화 및 외화 잔고를 정확히 표시합니다.
-5. **Robust Data Handling**:
+4. **Smart Log & Exit Management**:
+   - **3-Step Cycling**: 로그 레벨을 `INFO` -> `DEBUG` -> `ERROR` 순서로 순환 토글하여 상황에 맞는 감시가 가능합니다.
+   - **Clean Exit**: 프로그램 종료 시 커서를 화면 최하단으로 이동시켜 쉘 프롬프트가 UI 결과물을 덮어쓰지 않도록 보호합니다.
+5. **Combined Account Info**:
+    - **KRW/USD Unified Inquiry**: 국내 주식 주문 가능 금액(`TTTC8908R`)과 해외 주식 예수금 현황(`CTRP6504R`)을 통합하여 한 번에 조회할 수 있는 기능을 제공합니다.
+    - **Holdings Inquiry (Domestic/Overseas)**: 실시간 계좌 잔고 및 수익률 정보를 조회합니다. 단, 국내 주식 잔고 조회(`TTTC8434R`)는 서버 정산 시간대(18:00~19:00 경)에 정합성 문제로 일시적으로 제한될 수 있습니다.
+    - **Robust Retry Strategy**: 국내 잔고 조회 시 발생하는 '데이터 변경' 및 '시스템 바쁨' 오류를 극복하기 위해 최대 3회 자동 재시도 및 지수 지연 대기 로직을 포함하고 있습니다.
+6. **Robust Data Handling**:
    - **Multi-record Processing**: 웹소켓 메시지 하나에 여러 건의 데이터가 묶여 올 경우(`count > 1`), 이를 누락 없이 개별 레코드로 분리하여 처리합니다.
    - **Async Stability**: 구독 요청 간에 짧은 비동기 지연(`asyncio.sleep`)을 주어 서버의 요청 제한(Throttling)을 방지합니다.
 
