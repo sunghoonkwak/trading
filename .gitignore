@@ -134,3 +134,4 @@ cython_debug/
 # Project specific ignores
 credentials.enc
 .agent
+WebSocket_25*.log
