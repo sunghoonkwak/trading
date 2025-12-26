@@ -18,13 +18,15 @@ def handle_place_order():
         krw_bal = bal.get('krw_orderable', 0)
         usd_bal = bal.get('usd_withdrawable', 0.0)
 
-        # Prepare Favorite List
+        # Prepare Favorite List (Flatten version for selection menu)
         fav_list = []
         idx = 1
-        for code, info in trading_config.STOCK_CONFIG.items():
-            if not info.get('disabled', False):
-                fav_list.append((str(idx), code, info['name']))
-                idx += 1
+        for market in ["KR", "US"]:
+            for item in trading_config.CONFIG.get(market, []):
+                if not item.get('disabled', False):
+                    # item format: {"ticker": "...", "name": "...", "color": [...], "disabled": bool}
+                    fav_list.append((str(idx), item["ticker"], item["name"]))
+                    idx += 1
 
         current_page = 0
         ITEMS_PER_PAGE = 10
@@ -125,7 +127,7 @@ def handle_place_order():
         if not pdno: return
 
         # Stock Name Lookup
-        stock_name = trading_config.STOCK_CONFIG.get(pdno, {}).get('name', 'Unknown')
+        stock_name = trading_config.get_stock_info(pdno).get('name', 'Unknown')
 
         # Redraw header with selected stock info
         clear_result_area()

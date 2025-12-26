@@ -1,47 +1,127 @@
 {
-    "005930": {
-        "name": "삼성전자",
-        "color": [
-            255,
-            255,
-            0
-        ],
-        "disabled": false
-    },
-    "000660": {
-        "name": "SK하이닉스",
-        "color": [
-            255,
-            165,
-            0
-        ],
-        "disabled": false
-    },
-    "016360": {
-        "name": "삼성증권",
-        "color": [
-            0,
-            255,
-            255
-        ],
-        "disabled": false
-    },
-    "030200": {
-        "name": "KT",
-        "color": [
-            255,
-            50,
-            50
-        ],
-        "disabled": false
-    },
-    "017670": {
-        "name": "SK텔레콤",
-        "color": [
-            255,
-            80,
-            80
-        ],
-        "disabled": false
-    }
+    "KR": [
+        {
+            "ticker": "005930",
+            "name": "삼성전자",
+            "market": "KOSPI",
+            "color": [
+                255,
+                255,
+                0
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "000660",
+            "name": "SK하이닉스",
+            "market": "KOSPI",
+            "color": [
+                255,
+                165,
+                0
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "016360",
+            "name": "삼성증권",
+            "market": "KOSPI",
+            "color": [
+                0,
+                255,
+                255
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "030200",
+            "name": "KT",
+            "market": "KOSPI",
+            "color": [
+                255,
+                50,
+                50
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "017670",
+            "name": "SK텔레콤",
+            "market": "KOSPI",
+            "color": [
+                255,
+                80,
+                80
+            ],
+            "disabled": false
+        }
+    ],
+    "US": [
+        {
+            "ticker": "QQQM",
+            "name": "Nasdaq100",
+            "market": "NASDAQ",
+            "color": [
+                50,
+                255,
+                50
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "SOXL",
+            "name": "SOXL",
+            "market": "NASDAQ",
+            "color": [
+                50,
+                255,
+                50
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "NVDA",
+            "name": "NVIDIA",
+            "market": "NASDAQ",
+            "color": [
+                255,
+                255,
+                50
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "AVGO",
+            "name": "Broadcom",
+            "market": "NASDAQ",
+            "color": [
+                255,
+                255,
+                50
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "TSM",
+            "name": "TSMC",
+            "market": "NYSE",
+            "color": [
+                160,
+                160,
+                160
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "BLK",
+            "name": "BlackRock",
+            "market": "NYSE",
+            "color": [
+                160,
+                160,
+                160
+            ],
+            "disabled": false
+        }
+    ]
 }

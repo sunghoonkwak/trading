@@ -6,7 +6,7 @@ import logging
 import sys
 
 sys.path.extend(['../..', '.'])
-import kis_auth as ka
+import kis_api.kis_auth as ka
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +22,7 @@ def asking_price(
     """
     해외주식 실시간호가를 이용하여 미국시세 실시간 1호가(매수/매도) 시세가 무료로 제공됩니다. (미국은 유료시세 제공 X)
 
-    아시아 국가의 경우, HTS(efriend Plus) [7781] 시세신청(실시간) 화면에서 유료 서비스 신청 시, 
+    아시아 국가의 경우, HTS(efriend Plus) [7781] 시세신청(실시간) 화면에서 유료 서비스 신청 시,
     "해외주식 실시간호가 HDFSASP0" 을 이용하여 아시아국가 유료시세(실시간호가)를 받아보실 수 있습니다. (24.11.29 반영)
     (아시아 국가 무료시세는 "해외주식 지연호가(아시아) HDFSASP1" 를 이용하시기 바랍니다.)
 
@@ -73,4 +73,4 @@ def asking_price(
         "dask1"
     ]
 
-    return msg, columns 
+    return msg, columns

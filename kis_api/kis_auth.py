@@ -346,10 +346,18 @@ class APIResp:
     def printAll(self):
         print("<Header>")
         for x in self.getHeader()._fields:
-            print(f"\t-{x}: {getattr(self.getHeader(), x)}")
+            val = getattr(self.getHeader(), x)
+            # Mask sensitive tokens in header output
+            if x.lower() in ["authorization", "appkey", "appsecret", "secretkey", "approval_key"]:
+                val = "********"
+            print(f"\t-{x}: {val}")
         print("<Body>")
         for x in self.getBody()._fields:
-            print(f"\t-{x}: {getattr(self.getBody(), x)}")
+            val = getattr(self.getBody(), x)
+            # Mask sensitive body fields
+            if x.lower() in ["appkey", "appsecret", "secretkey"]:
+                val = "********"
+            print(f"\t-{x}: {val}")
 
     def printError(self, url):
         logging.error("-" * 31)
@@ -435,12 +443,12 @@ def _url_fetch(
                 headers[x] = appendHeaders.get(x)
 
     if _DEBUG:
-        # Mask sensitive info in debug logs
+        # Global masking helper
         def _mask_dict(d):
             if not isinstance(d, dict): return d
             masked = copy.deepcopy(d)
             for k in masked.keys():
-                if k.lower() in ["appkey", "appsecret", "authorization", "secretkey"]:
+                if k.lower() in ["appkey", "appsecret", "authorization", "secretkey", "approval_key", "my_hts_id"]:
                     masked[k] = "********"
             return masked
 
@@ -532,9 +540,17 @@ def data_fetch(tr_id, tr_type, params, appendHeaders=None) -> dict:
                 headers[x] = appendHeaders.get(x)
 
     if _DEBUG:
+        def _mask_dict(d):
+            if not isinstance(d, dict): return d
+            masked = copy.deepcopy(d)
+            for k in list(masked.keys()):
+                if k.lower() in ["appkey", "appsecret", "authorization", "secretkey", "approval_key"]:
+                    masked[k] = "********"
+            return masked
+
         print("< Sending Info >")
         print(f"TR: {tr_id}")
-        print(f"<header>\n{headers}")
+        print(f"<header>\n{_mask_dict(headers)}")
 
     inp = {
         "tr_id": tr_id,
@@ -628,10 +644,17 @@ def add_open_map(
         open_map[name]["items"] += data
     elif type(data) is str:
         open_map[name]["items"].append(data)
-
-
 data_map: dict = {}
 
+
+# Overseas TR Compatibility Mapping
+# Real field counts per record in the WebSocket stream vs what's defined in official samples.
+_OVERSEAS_TR_FIX = {
+    "HDFSASP0": {"real_size": 71, "skip_idx": 2}, # Asking Price
+    "HDFSCNT0": {"real_size": 26, "skip_idx": 2}, # Execution
+    'H0GSCNI0': {'real_size': 25, 'skip_idx': 0},  # Market type MTYP at index 0 (Real)
+    'H0GSCNI9': {'real_size': 25, 'skip_idx': 0},  # Market type MTYP at index 0 (Demo)
+}
 
 def add_data_map(
         tr_id: str,
@@ -681,41 +704,81 @@ class KISWebSocket:
             df = pd.DataFrame()
 
             if raw[0] in ["0", "1"]:
-                d1 = raw.split("|")
-                if len(d1) < 4:
-                    raise ValueError("data not found...")
+                # Standard format: 0(or 1)|TR_ID|COUNT|DATA|
+                parts = raw.split("|", 3)
+                if len(parts) < 4:
+                    logging.warning(f"Malformed real-time message: {raw}")
+                    continue
 
-                tr_id = d1[1].strip()
+                tr_id = parts[1].strip()
+                count_str = parts[2]
+                data_segment = parts[3]
+
                 dm = data_map.get(tr_id)
                 if not dm:
-                    # Fallback for unmapped TR_IDs
                     logging.warning(f"No column mapping for TR {tr_id}")
                     continue
 
-                d = d1[3]
-
-                # Reliable encryption check: First character '1' means encrypted
-                is_encrypted = (raw[0] == '1')
-                if is_encrypted:
+                # Decrypt if lead-char is '1'
+                if raw[0] == '1':
                     if dm.get("key") and dm.get("iv"):
-                        d = aes_cbc_base64_dec(dm["key"], dm["iv"], d)
+                        data_segment = aes_cbc_base64_dec(dm["key"], dm["iv"], data_segment)
                     else:
                         logging.warning(f"Decryption failed: No key/iv for TR {tr_id}")
+                        continue
 
-                # Split raw data string by '^' and chunk it based on column count
-                raw_values = d.split("^")
+                # Remove trailing pipe
+                if data_segment.endswith("|"):
+                    data_segment = data_segment[:-1]
+
+                if "^" in data_segment:
+                    raw_values = data_segment.split("^")
+                else:
+                    raw_values = data_segment.split("|")
+
+                # Prepend the market division code (e.g. '1' or '0') for Overseas Notifications
+                # to align with official column definitions (CUST_ID, ACNT_NO, etc.)
+                if tr_id in ["H0GSCNI0", "H0GSCNI9"]:
+                    raw_values.insert(0, raw[0])
+
                 num_cols = len(dm["columns"])
+                if num_cols == 0:
+                    logging.warning(f"TR {tr_id} has 0 columns defined.")
+                    continue
 
-                # Reshape records: Some KIS messages bundle multiple updates (e.g. 002 count)
-                records = [raw_values[i:i + num_cols] for i in range(0, len(raw_values), num_cols)
-                           if len(raw_values[i:i + num_cols]) >= num_cols]
+                # Record size and Alignment compatibility
+                fix = _OVERSEAS_TR_FIX.get(tr_id)
+                real_size = fix["real_size"] if fix else num_cols
+
+                try:
+                    count = int(count_str)
+                except:
+                    count = 1
+
+                records = []
+                # Process records based on actual stream size
+                for i in range(0, len(raw_values), real_size):
+                    record = raw_values[i:i + real_size]
+                    if len(record) < real_size: continue
+
+                    # Apply alignment skip if needed (skipping index 2 to align with official files)
+                    if fix and "skip_idx" in fix:
+                        s = fix["skip_idx"]
+                        record = record[:s] + record[s+1:]
+
+                    # Truncate to match official column definition
+                    records.append(record[:num_cols])
+
+                # Failsafe: if count is 1 but we produced multiple records due to size mismatch,
+                # only keep the first one to avoid treating trailing fields as new records.
+                if count == 1 and len(records) > 1:
+                    records = [records[0]]
 
                 if records:
-                    logging.info(f"--- Recv {tr_id} count={d1[2]} parsed_records={len(records)} first_code={records[0][0]} ---")
                     df = pd.DataFrame(records, columns=dm["columns"])
                     show_result = True
                 else:
-                    logging.warning(f"Could not parse records from data (length error?): {d[:100]}...")
+                    logging.warning(f"Could not parse records for {tr_id}. len={len(raw_values)}, cols={num_cols}, count={count}")
 
             else:
                 rsp = system_resp(raw)

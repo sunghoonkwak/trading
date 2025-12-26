@@ -43,7 +43,7 @@ def get_fixed_width_name(name, width=8):
     return result + (" " * (width - current_width))
 
 def get_ansi_rgb(code, text):
-    cfg = trading_config.STOCK_CONFIG.get(code)
+    cfg = trading_config.get_stock_info(code)
     if cfg and "color" in cfg:
         r, g, b = cfg["color"]
         return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
@@ -62,23 +62,26 @@ def print_log(level, log):
 
     global latest_logs
     if level <= print_log_level:
+        # Find the ticker code in the log msg: e.g. [MKT][Samsung   ] 005930 |
+        # Looks for the string between the last closing bracket and the pipe.
         code = None
-        match = re.search(r"\] (([A-Z0-9]{6})|([0-9]{6})) \|", log)
+        match = re.search(r"\]\s+([\w\d]+)\s+\|", log)
         if match:
             code = match.group(1).strip()
 
         colored_log = log
         if level == PrintLevel.ERROR:
             colored_log = f"\033[91m{log}\033[0m"
+        elif level == PrintLevel.DEBUG:
+            colored_log = f"\033[90m{log}\033[0m" # Gray for DEBUG
         elif level == PrintLevel.INFO:
             if code:
                 colored_log = get_ansi_rgb(code, log)
             else:
-                colored_log = f"\033[93m{log}\033[0m"
+                colored_log = f"\033[93m{log}\033[0m" # Yellow for general INFO
 
         if code and level == PrintLevel.INFO:
-            if code in latest_logs:
-                del latest_logs[code]
+            # Update the latest summary for this stock
             latest_logs[code] = colored_log
 
         log_buffer.appendleft(colored_log)

@@ -20,6 +20,9 @@ from order_handler import handle_place_order, handle_manage_orders
 # Specific KIS imports (only asking price subscription uses them?)
 from kis_api.domestic_stock.asking_price_total.asking_price_total import asking_price_total
 from kis_api.domestic_stock.ccnl_total.ccnl_total import ccnl_total
+from kis_api.overseas_stock.asking_price.asking_price import asking_price
+from kis_api.overseas_stock.ccnl_notice.ccnl_notice import ccnl_notice
+from kis_api.overseas_stock.delayed_ccnl.delayed_ccnl import delayed_ccnl
 
 # [CRITICAL] Configure logging at the VERY TOP
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -140,8 +143,9 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                     # Skip if neither ask nor bid changed
                     if state['ask'] == new_ask and state['bid'] == new_bid:
                         continue
-                    else:
-                        level = PrintLevel.INFO
+
+                    # Set to DEBUG (Gray)
+                    level = PrintLevel.DEBUG
 
                     state['ask'] = new_ask
                     state['bid'] = new_bid
@@ -154,9 +158,8 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                     new_price = int(float(row['STCK_PRPR']))
                     new_vol   = int(float(row['CNTG_VOL']))
 
-                    # Check for INFO level conditions: price change or large volume
-                    if state['price'] != new_price or new_vol >= 100:
-                        level = PrintLevel.INFO
+                    # Execution is INFO level (Colors)
+                    level = PrintLevel.INFO
 
                     state['price']  = new_price
                     state['change'] = int(float(row['PRDY_VRSS']))
@@ -164,15 +167,19 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                     state['vol']    = new_vol
 
                     # Add sign to change for display
-                    # 1: Upper limit, 2: Up, 3: Flat, 4: Lower limit, 5: Down
                     sign = row['PRDY_VRSS_SIGN']
                     state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
                 except (ValueError, TypeError, KeyError):
                     continue
 
             # Format values for the unified log
-            time_v = state.get('time', '000000')
-            time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
+            time_v = str(state.get('time', '000000')).strip()
+            if len(time_v) == 6:
+                time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
+            else:
+                # Handle cases where time might be HHMM or HHMMSS.ms or just a number
+                time_s = time_v[-6:] if len(time_v) > 6 else time_v.zfill(6)
+                time_s = f"{time_s[:2]}:{time_s[2:4]}:{time_s[4:6]}"
 
             # Use fallback values if data hasn't arrived yet
             bid_s   = format(state.get('bid', 0), ",")
@@ -182,8 +189,13 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             vol_s   = format(state.get('vol', 0), ",")
             diff_s  = f"{state.get('sign_str', '')}{format(state.get('change', 0), ',')}"
 
-            # [12:03:44] [MKT][SK하이닉스] 000660 | Bid:   178,500 ...
-            cfg = trading_config.STOCK_CONFIG.get(code, {})
+            # [12:03:44] [MKT][SK하이닉스]
+            cfg = trading_config.get_stock_info(code)
+            if not cfg:
+                # If we can't identify the stock (e.g., due to parsing shift or unknown code), skip it.
+                # This prevents trash data like '1' or '189.85' from cluttering the UI.
+                continue
+
             name = cfg.get("name", "Unknown")
             fixed_name = get_fixed_width_name(name, 10)
             msg = (f"[{time_s}] [MKT][{fixed_name}] {code:<6} | "
@@ -192,6 +204,79 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                    f"Diff: {diff_s:>9} ({state.get('rate', 0.0):>5.2f}%) | "
                    f"Ask: {ask_s:>9}")
 
+            print_log(level, msg)
+            continue
+
+        elif tr_id in ["HDFSASP0", "HDFSCNT0"]: # Overseas Market Data
+            # Note: Field names differ from domestic TRs
+            code = row.get('symb', row.get('SYMB'))
+            if not code: continue
+
+            if code not in trading_state.stock_data_state:
+                trading_state.stock_data_state[code] = {
+                    'price': 0, 'ask': 0, 'bid': 0,
+                    'change': 0, 'rate': 0.0, 'vol': 0,
+                    'time': '000000'
+                }
+
+            state = trading_state.stock_data_state[code]
+            level = PrintLevel.DEBUG
+
+            if tr_id == "HDFSASP0": # Overseas Asking Price
+                state['time'] = row.get('xhms', '000000')
+                try:
+                    # Overseas prices can be floating point
+                    state['ask'] = float(row['pask1'])
+                    state['bid'] = float(row['pbid1'])
+                    level = PrintLevel.DEBUG
+                except: continue
+
+            elif tr_id == "HDFSCNT0": # Overseas Execution
+                state['time'] = row.get('XHMS', '000000')
+                try:
+                    state['price']  = float(row['LAST'])
+                    state['change'] = float(row['DIFF'])
+                    state['rate']   = float(row['RATE'])
+                    state['vol']    = float(row['EVOL'])
+
+                    # Update bid/ask from execution record if available
+                    if 'PBID' in row: state['bid'] = float(row['PBID'])
+                    if 'PASK' in row: state['ask'] = float(row['PASK'])
+
+                    sign = row.get('SIGN', '3')
+                    state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
+                    level = PrintLevel.INFO
+                except: continue
+
+            # Format and Log (Shared logic with Domestic)
+            time_v = str(state.get('time', '000000')).strip()
+            if len(time_v) == 6:
+                time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
+            else:
+                time_s = time_v.zfill(6)
+                time_s = f"{time_s[:2]}:{time_s[2:4]}:{time_s[4:6]}"
+
+            # Overseas Bid/Ask often use float
+            bid_s   = format(state.get('bid', 0.0), ",.2f") if state.get('bid', 0) > 0 else "0"
+            ask_s   = format(state.get('ask', 0.0), ",.2f") if state.get('ask', 0) > 0 else "0"
+            price_v = state.get('price', 0.0)
+            price_s = format(price_v, ",.2f") if price_v > 0 else "-------"
+            vol_v   = state.get('vol', 0.0)
+            vol_s   = format(vol_v, ",.0f") if vol_v > 0 else "0"
+            diff_s  = f"{state.get('sign_str', '')}{format(state.get('change', 0.0), ',.2f')}"
+
+            cfg = trading_config.get_stock_info(code)
+            if not cfg:
+                # Skip overseas system messages or misparsed records
+                continue
+
+            name = cfg.get("name", "Unknown")
+            fixed_name = get_fixed_width_name(name, 10)
+            msg = (f"[{time_s}] [MKT][{fixed_name}] {code:<8} | "
+                   f"Bid: {bid_s:>9} | "
+                   f"Last: {price_s:>9} ({vol_s:>6}) | "
+                   f"Diff: {diff_s:>9} ({state.get('rate', 0.0):>5.2f}%) | "
+                   f"Ask: {ask_s:>9}")
             print_log(level, msg)
             continue
 
@@ -212,7 +297,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 side = "BUY" if row['SELN_BYOV_CLS'] == '02' else "SEL"
                 order_no = row['ODER_NO']
 
-                cfg = trading_config.STOCK_CONFIG.get(code, {})
+                cfg = trading_config.get_stock_info(code)
 
                 def safe_int_format(val):
                     try:
@@ -259,6 +344,89 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 continue
             except Exception as e:
                 print_log(PrintLevel.ERROR, f"Error parsing H0STCNI0: {e}")
+                continue
+
+        elif tr_id in ["H0GSCNI0", "H0GSCNI9"]: # Overseas Order Notification
+            try:
+                # Based on observed KIS raw data for Overseas Notifications
+                # Note: Field alignment is handled by kis_auth's prepending logic.
+
+                # Debug: Log raw row content to DEBUG only
+                if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
+                    raw_list = row.tolist() if hasattr(row, 'tolist') else list(row)
+                    logging.debug(f"[{tr_id} RAW] {raw_list}")
+
+                code = str(row.get('STCK_SHRN_ISCD', 'Unknown')).strip()
+                # If ticker is malformed (too many zeros), try to clean it
+                if code.startswith('000') and len(code) > 8:
+                    code = code.lstrip('0') or "Unknown"
+
+                cfg = trading_config.get_stock_info(code)
+                time_v = str(row.get('STCK_CNTG_HOUR', '000000')).strip()
+
+                # Use current market time if available, otherwise calculate relative to system clock
+                if not time_v or time_v in ["0", "000000"]:
+                    # If US market, adjust to US Eastern Time (approx -14h from KST in winter)
+                    if cfg and cfg.get('market') in ['NASDAQ', 'NYSE', 'AMEX']:
+                        from datetime import timedelta
+                        time_s = (datetime.now() - timedelta(hours=14)).strftime("%H:%M:%S")
+                    else:
+                        time_s = datetime.now().strftime("%H:%M:%S")
+                else:
+                    if len(time_v) >= 6:
+                        time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
+                    else:
+                        time_s = time_v.zfill(6)
+                        time_s = f"{time_s[:2]}:{time_s[2:4]}:{time_s[4:6]}"
+
+                cntg_yn = str(row.get('CNTG_YN', '1')).strip()
+                rctf_cls = str(row.get('RCTF_CLS', '01')).strip()
+                rfus_yn = str(row.get('RFUS_YN', 'N')).strip()
+                side = "BUY" if str(row.get('SELN_BYOV_CLS')) == '02' else "SEL"
+                order_no = str(row.get('ODER_NO', '0'))
+
+
+
+                def get_val(key, default=0):
+                    v = row.get(key, default)
+                    try: return float(v)
+                    except: return 0
+
+                # OVERSEAS PRICE SCALING: KIS uses integers with 4 decimal places implied
+                price_v = get_val('CNTG_UNPR')
+                if price_v >= 10000: price_v = price_v / 10000.0
+
+                qty_v = get_val('CNTG_QTY')
+                if qty_v > 1000000: qty_v = get_val('ODER_QTY')
+
+                price = format(price_v, ",.2f")
+                qty = format(qty_v, ",.0f")
+
+                msg_level = PrintLevel.INFO
+                extra_info = ""
+
+                # Refusal check
+                if rfus_yn in ['Y', '1']:
+                    order_val = "REJ"
+                    msg_level = PrintLevel.ERROR
+                elif cntg_yn == '2':
+                    order_val = "EXE"
+                else:
+                    if rctf_cls in ['0', '00']: order_val = "ODR"
+                    elif rctf_cls in ['1', '01']: order_val = "COR" # Correction
+                    elif rctf_cls in ['2', '02']: order_val = "CAN" # Cancellation
+                    else: order_val = "OTH"
+
+                name = cfg.get("name", row.get('CNTG_ISNM', 'Unknown')).strip()
+                fixed_name = get_fixed_width_name(name, 10)
+
+                msg = (f"[{time_s}] [{side}][{order_val}] [{fixed_name}] {code:<8} | "
+                       f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
+
+                print_log(msg_level, msg)
+                continue
+            except Exception as e:
+                print_log(PrintLevel.ERROR, f"Error parsing overseas notification: {e}")
                 continue
 
         else:
@@ -412,11 +580,48 @@ if __name__ == "__main__":
     ws = ka.KISWebSocket(api_url="")
 
     # Load stocks to watch from config, filtering out disabled ones
-    stocks_to_watch = [code for code, cfg in trading_config.STOCK_CONFIG.items() if not cfg.get("disabled", False)]
+    watch_list_kr = [s["ticker"] for s in trading_config.CONFIG.get("KR", []) if not s.get("disabled", False)]
+    watch_list_us = [s["ticker"] for s in trading_config.CONFIG.get("US", []) if not s.get("disabled", False)]
 
-    if stocks_to_watch:
-        ws.subscribe(asking_price_total, stocks_to_watch)
-        ws.subscribe(ccnl_total, stocks_to_watch)
+    # Personal Fill Notifications (Order/Execution Notifications)
+    # These TR IDs (H0STCNI0 for Domestic, H0GSCNI0 for Overseas) use HTSID as the key, not tickers.
+    # They should be subscribed ONLY ONCE.
+    htsid = ka.getTREnv().my_htsid
+    if htsid:
+        # Domestic Notification
+        # (Importing ccnl_total as request function for consistency if it handles H0STCNI0)
+        # Actually H0STCNI0 is for domestic order alerts.
+        # For now we use standard tickers for market data and HTSID for personal alerts.
+        ws.subscribe(ccnl_notice, htsid, kwargs={"env_dv": "real"})
+
+    if watch_list_kr:
+        ws.subscribe(asking_price_total, watch_list_kr)
+        ws.subscribe(ccnl_total, watch_list_kr)
+
+    if watch_list_us:
+        # KIS Overseas Real-time TRs require prefixes like DNAS (NASDAQ) or DNYE (NYSE).
+        formatted_us_list = []
+        for ticker in watch_list_us:
+            if any(ticker.startswith(p) for p in ["DNAS", "DNYE", "DAME", "BAQ", "BAY"]):
+                formatted_us_list.append(ticker)
+                continue
+
+            info = trading_config.get_stock_info(ticker)
+            market = info.get("market", "").upper()
+
+            if market == "NASDAQ":
+                formatted_us_list.append(f"DNAS{ticker}")
+            elif market == "NYSE":
+                formatted_us_list.append(f"DNYE{ticker}")
+            elif market == "AMEX":
+                formatted_us_list.append(f"DAME{ticker}")
+            else:
+                # Default fallback
+                formatted_us_list.append(f"DNAS{ticker}")
+
+        # Use the formatted list for subscription
+        ws.subscribe(asking_price, formatted_us_list)
+        ws.subscribe(delayed_ccnl, formatted_us_list)
 
     # Register callback (Try add_callback as generic guess)
     if hasattr(ws, 'add_callback'):
