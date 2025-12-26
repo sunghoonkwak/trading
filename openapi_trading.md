@@ -41,7 +41,13 @@
    - **Compatibility Layer**: 공식 샘플 파일(`asking_price.py` 등)의 필드 정의가 실제 데이터 스트림과 일치하지 않는 문제를 `kis_auth.py` 내부의 수정 레이어(`_OVERSEAS_TR_FIX`)로 해결했습니다. 공식 파일을 수정하지 않고도 데이터 밀림 없이 정확한 파싱이 가능합니다.
    - **Automatic Reconnection**: 네트워크 단절 시 지수 백오프(Exponential Backoff) 전략을 사용하여 자동으로 재접속 및 전 종목 재구독을 수행합니다.
    - **Order Notification**: 국내(`H0STCNI0`) 및 해외(`H0GSCNI0`) 주문/체결 통보를 완벽 지원합니다. 특히 해외 통보의 경우 필드 밀림 현상을 자동 보정하고, 비정상적인 가격 단위(Scale)와 현지 시각(Local Time)을 추론하여 사용자에게 정확한 정보를 제공합니다.
-4. **Enhanced Terminal UI**:
+4. **Integrated Overseas Trading**:
+   - **Unified Place Order Interface**: 주문 메뉴(`2`) 진입 시 기본적으로 **해외 주식(US)**으로 설정되며, `Enter` 키를 통해 즉시 **국내 주식(KR)** 모드로 전환할 수 있습니다.
+   - **Smart Quantity Calculation**: `KRW`(국내)와 `USD`(해외) 잔고를 각각 인식하여, 현재가 대비 최대 매수 가능 수량을 자동으로 계산하여 표시합니다.
+   - **Prioritized Order Management**: 주문 정정/취소(`3`) 메뉴는 **해외 미체결 내역**을 우선적으로 조회하며, 검색 결과가 없을 경우 자동으로 국내 미체결 내역을 탐색합니다.
+   - **Result Feedback**: 정정/취소 결과에 대해 성공 여부, 주문 번호, 처리 메시지를 명확하게 피드백하며, UI 잔상을 자동으로 정리합니다.
+
+5. **Enhanced Terminal UI**:
    - **Multi-Level Coloring**:
      - `DEBUG` (회색): 빈번한 호가 업데이트 등 배경 데이터.
      - `INFO` (종목 색상): 실제 체결 및 주문 결과 등 중요 데이터.
@@ -50,10 +56,11 @@
      - **Dual Anchor**: 동일 종목이라도 '실시간 시세(`MKT`)'와 '주문 상태(`ODR`)'를 분리하여 상단에 고정합니다. 이로 인해 체결 알림이 현재가 정보를 덮어쓰지 않아 두 가지 중요한 정보를 동시에 모니터링할 수 있습니다.
    - **Clear Command**: 트레이딩 중 화면에 쌓인 완료된 주문/체결 로그는 메뉴에서 `c` 키를 눌러 즉시 정리하고 시세 모니터링에 집중할 수 있습니다.
    - **Real-time Log Rotation**: 실행 시마다 이전 로그를 타임스탬프와 함께 백업하여 `WebSocket_latest.log`를 항상 깨끗하게 유지합니다.
-5. **Combined Portfolio Management**:
+
+6. **Combined Portfolio Management**:
    - 국내외 통합 계좌 조회 기능을 통해 원화/외화 예수금과 전체 수익률을 통합하여 모니터링할 수 있습니다.
 
-6. **Security & Privacy (로그 보안)**:
+7. **Security & Privacy (로그 보안)**:
     - **Automatic Masking**: 시스템은 `App Key`, `App Secret`, `HTS ID`, `Access Token`, `Approval Key` 등 보안에 민감한 정보가 로그나 터미널에 평문으로 출력되지 않도록 **자동 마스킹(`********`)** 기능을 포함하고 있습니다.
     - **Log Safety**: `_DEBUG` 모드 활성 시에도 통신 헤더의 보안 필드는 보호됩니다.
     - **Safety Rule**: 개발 시 `print(headers)` 등 전체 객체를 그대로 출력하는 행위를 지양하고, 반드시 마스킹 헬퍼를 거치도록 설계되었습니다.
@@ -70,6 +77,8 @@
 2. 암호화 비밀번호 입력
 3. 메뉴 선택:
    - `1`: 통합 예수금 조회 (KRW/USD)
+   - `2`: 주식 매수/매도 (US/KR 토글 지원)
+   - `3`: 미체결 주문 정정/취소 (US 우선 조회)
    - `4`: 통합 포트폴리오 및 수익률 확인
    - `0`: 로그 감시 레벨 변경 (INFO <-> DEBUG)
    - `q`: 안전하게 종료

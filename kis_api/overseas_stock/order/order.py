@@ -11,7 +11,7 @@ import sys
 import pandas as pd
 
 sys.path.extend(['../..', '.'])
-import kis_auth as ka
+import kis_api.kis_auth as ka
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
@@ -40,10 +40,10 @@ def order(
 
 ) -> Optional[pd.DataFrame]:
     """
-    [해외주식] 주문/계좌 
+    [해외주식] 주문/계좌
     해외주식 주문[v1_해외주식-001]
     해외주식 주문 API를 호출하여 DataFrame으로 반환합니다.
-    
+
     Args:
         cano (str): 계좌번호 체계(8-2)의 앞 8자리
         acnt_prdt_cd (str): 계좌번호 체계(8-2)의 뒤 2자리
@@ -52,15 +52,15 @@ def order(
         ord_qty (str): 주문수량 (해외거래소 별 최소 주문수량 및 주문단위 확인 필요)
         ovrs_ord_unpr (str): 1주당 가격 * 시장가의 경우 1주당 가격을 공란으로 비우지 않음 "0"으로 입력
         ord_dv (str): 주문구분 (buy: 매수, sell: 매도)
-        ctac_tlno (str): 
-        mgco_aptm_odno (str): 
+        ctac_tlno (str):
+        mgco_aptm_odno (str):
         ord_svr_dvsn_cd (str): "0"(Default)
         ord_dvsn (str): [Header tr_id TTTT1002U(미국 매수 주문)] 00 : 지정가 32 : LOO(장개시지정가) 34 : LOC(장마감지정가) * 모의투자 VTTT1002U(미국 매수 주문)로는 00:지정가만 가능  [Header tr_id TTTT1006U(미국 매도 주문)] 00 : 지정가 31 : MOO(장개시시장가) 32 : LOO(장개시지정가) 33 : MOC(장마감시장가) 34 : LOC(장마감지정가) * 모의투자 VTTT1006U(미국 매도 주문)로는 00:지정가만 가능  [Header tr_id TTTS1001U(홍콩 매도 주문)] 00 : 지정가 50 : 단주지정가 * 모의투자 VTTS1001U(홍콩 매도 주문)로는 00:지정가만 가능  [그외 tr_id] 제거
         env_dv (str): 실전모의구분 (real:실전, demo:모의)
-        
+
     Returns:
         Optional[pd.DataFrame]: 해외주식 주문 데이터
-        
+
     Example:
         >>> df = order(
         ...     cano=trenv.my_acct,
@@ -182,7 +182,7 @@ def order(
             dataframe = pd.DataFrame(output_data)
         else:
             dataframe = pd.DataFrame()
-                    
+
         logger.info("Data fetch complete.")
         return dataframe
     else:

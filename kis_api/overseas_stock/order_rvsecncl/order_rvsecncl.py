@@ -10,7 +10,7 @@ import sys
 import pandas as pd
 
 sys.path.extend(['../..', '.'])
-import kis_auth as ka
+import kis_api.kis_auth as ka
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
@@ -37,10 +37,10 @@ def order_rvsecncl(
 
 ) -> Optional[pd.DataFrame]:
     """
-    [해외주식] 주문/계좌 
+    [해외주식] 주문/계좌
     해외주식 정정취소주문[v1_해외주식-003]
     해외주식 정정취소주문 API를 호출하여 DataFrame으로 반환합니다.
-    
+
     Args:
         cano (str): 계좌번호 체계(8-2)의 앞 8자리
         acnt_prdt_cd (str): 계좌번호 체계(8-2)의 뒤 2자리
@@ -53,10 +53,10 @@ def order_rvsecncl(
         mgco_aptm_odno (str): 운용사지정주문번호
         ord_svr_dvsn_cd (str): "0"(Default)
         env_dv (str): 실전모의구분 (real:실전, demo:모의)
-        
+
     Returns:
         Optional[pd.DataFrame]: 해외주식 정정취소주문 데이터
-        
+
     Example:
         >>> df = order_rvsecncl(
         ...     cano=trenv.my_acct,
@@ -98,7 +98,7 @@ def order_rvsecncl(
     if not ovrs_ord_unpr:
         logger.error("ovrs_ord_unpr is required. (e.g. '226.00')")
         raise ValueError("ovrs_ord_unpr is required. (e.g. '226.00')")
-    
+
     # TR ID 설정 (모의투자 지원 로직)
     if env_dv == "real":
         tr_id = "TTTT1004U"  # 실전투자용 TR ID
@@ -140,4 +140,4 @@ def order_rvsecncl(
     else:
         logger.error("API call failed: %s - %s", res.getErrorCode(), res.getErrorMessage())
         res.printError(API_URL)
-        return pd.DataFrame()
+        return pd.DataFrame([{'rt_cd': res.getErrorCode(), 'msg1': res.getErrorMessage(), 'error_msg': res.getErrorMessage()}])

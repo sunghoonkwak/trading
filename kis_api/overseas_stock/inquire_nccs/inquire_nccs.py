@@ -12,7 +12,7 @@ import sys
 import pandas as pd
 
 sys.path.extend(['../..', '.'])
-import kis_auth as ka
+import kis_api.kis_auth as ka
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
@@ -39,10 +39,10 @@ def inquire_nccs(
     max_depth: int = 10
 ) -> Optional[pd.DataFrame]:
     """
-    [해외주식] 주문/계좌 
+    [해외주식] 주문/계좌
     해외주식 미체결내역[v1_해외주식-005]
     해외주식 미체결내역 API를 호출하여 DataFrame으로 반환합니다.
-    
+
     Args:
         cano (str): 계좌번호 체계(8-2)의 앞 8자리
         acnt_prdt_cd (str): 계좌번호 체계(8-2)의 뒤 2자리
@@ -55,10 +55,10 @@ def inquire_nccs(
         dataframe (Optional[pd.DataFrame]): 누적 데이터프레임
         depth (int): 현재 재귀 깊이
         max_depth (int): 최대 재귀 깊이 (기본값: 10)
-        
+
     Returns:
         Optional[pd.DataFrame]: 해외주식 미체결내역 데이터
-        
+
     Example:
         >>> df = inquire_nccs(
         ...     cano=trenv.my_acct,
@@ -88,7 +88,7 @@ def inquire_nccs(
     if depth >= max_depth:
         logger.warning("Maximum recursion depth (%d) reached. Stopping further requests.", max_depth)
         return dataframe if dataframe is not None else pd.DataFrame()
-    
+
     tr_id = "TTTS3018R"
 
     params = {
@@ -110,14 +110,14 @@ def inquire_nccs(
             current_data = pd.DataFrame(output_data)
         else:
             current_data = pd.DataFrame()
-            
+
         if dataframe is not None:
             dataframe = pd.concat([dataframe, current_data], ignore_index=True)
         else:
             dataframe = current_data
-            
+
         tr_cont, NK200, FK200 = res.getHeader().tr_cont, res.getBody().ctx_area_nk200, res.getBody().ctx_area_fk200
-        
+
         if tr_cont in ["M", "F"]:
             logger.info("Calling next page...")
             ka.smart_sleep()

@@ -1,229 +1,279 @@
 import msvcrt
 import logging
 import kis_api.kis_auth as ka
-from trading_ui import clear_result_area, show_in_result_area, input_at, render_ui, print_log, PrintLevel
+from trading_ui import clear_result_area, show_in_result_area, input_at, render_ui, print_log, PrintLevel, safe_write, CLEAR_LINE
 import trading_config
 import trading_state
 from account_helper import get_account_balance
 from kis_api.domestic_stock.order_cash.order_cash import order_cash
 from kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl
 from kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import inquire_psbl_rvsecncl
+from kis_api.overseas_stock.order.order import order as order_overseas
+from kis_api.overseas_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl as order_rvsecncl_overseas
+from kis_api.overseas_stock.inquire_nccs.inquire_nccs import inquire_nccs as inquire_nccs_overseas
 
 def handle_place_order():
     clear_result_area()
 
-    try:
-        # Fetch balance initially
-        bal = get_account_balance()
-        krw_bal = bal.get('krw_orderable', 0)
-        usd_bal = bal.get('usd_withdrawable', 0.0)
+    # Default to Overseas
+    target_market = "US"
 
-        # Prepare Favorite List (Flatten version for selection menu)
-        fav_list = []
-        idx = 1
-        for market in ["KR", "US"]:
-            for item in trading_config.CONFIG.get(market, []):
+    try:
+        while True:
+            # Fetch balance each time we loop back to main menu
+            bal = get_account_balance()
+            krw_bal = bal.get('krw_orderable', 0)
+            usd_bal = bal.get('usd_withdrawable', 0.0)
+
+            # Market Label
+            market_label = "OVERSEAS (US)" if target_market == "US" else "DOMESTIC (KR)"
+
+            # 1. Side Selection with Toggle
+            clear_result_area()
+            header = [f" [Place Order - {market_label}] KRW: {krw_bal:,} | USD: ${usd_bal:,.2f}"]
+            show_in_result_area(header)
+
+            side_input = input_at(2, 2, f" Select Side (1: Buy, 2: Sell, Enter: Toggle Check {('KR' if target_market=='US' else 'US')}, q: Cancel): ").strip()
+
+            if side_input.lower() == 'q': return
+
+            if not side_input:
+                target_market = "KR" if target_market == "US" else "US"
+                render_ui(full_refresh=True) # Refresh to clear artifacts
+                continue
+
+            ord_dv = "buy" if side_input == "1" else "sell" if side_input == "2" else None
+            if not ord_dv: continue
+
+            side_label = "BUY" if ord_dv == "buy" else "SELL"
+
+            # Prepare Favorite List
+            fav_list = []
+            idx = 1
+            # Filter specifically by target_market
+            for item in trading_config.CONFIG.get(target_market, []):
                 if not item.get('disabled', False):
-                    # item format: {"ticker": "...", "name": "...", "color": [...], "disabled": bool}
                     fav_list.append((str(idx), item["ticker"], item["name"]))
                     idx += 1
 
-        current_page = 0
-        ITEMS_PER_PAGE = 10
-        total_pages = (len(fav_list) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE if fav_list else 1
-
-        side_input = input_at(2, 2, "Select Side (1: Buy, 2: Sell, q: Cancel): ").strip()
-        if not side_input or side_input.lower() == 'q': return
-        ord_dv = "buy" if side_input == "1" else "sell"
-        side_label = "BUY" if ord_dv == "buy" else "SELL"
-
-        pdno = ""
-
-        while True:
-            # 1. Build Menu UI
-            start_idx = current_page * ITEMS_PER_PAGE
-            end_idx = min(start_idx + ITEMS_PER_PAGE, len(fav_list))
-            page_items = fav_list[start_idx:end_idx]
-
-            # Header with Balance
-            # Header with Balance
-            lines = [f"[Place Domestic Cash Order - {side_label}] KRW: {krw_bal:,} , USD: ${usd_bal:,.2f}"]
-            # lines.append("-" * 100)
-
-            # Build Grid: 5 items per line
-            row_buffer = []
-            for item in page_items:
-                # item: (idx, code, name)
-                # Format: '1.Name' truncated or padded to ~15 chars
-                # Calculate max buyable qty
-                state = trading_state.stock_data_state.get(item[1], {})
-                curr_price = state.get('price', 0)
-                if curr_price == 0:
-                    curr_price = state.get('ask', 0)
-
-                # Max Qty Calculation (Only for Buy)
-                qty_str = ""
-                if ord_dv == "buy":
-                    if curr_price > 0:
-                        qty_str = f"({int(krw_bal / curr_price)}주)"
-                    else:
-                        qty_str = "(nodata)"
-
-                display_text = f"{item[0]}.{item[2]}{qty_str}"
-                row_buffer.append(f"{display_text}")
-
-                if len(row_buffer) == 5:
-                    lines.append(" ".join([f"{x:<18}" for x in row_buffer]))
-                    row_buffer = []
-
-            if row_buffer:
-                 lines.append(" ".join([f"{x:<18}" for x in row_buffer]))
-
-            # lines.append("-" * 100)
-            lines.append(" [Enter]: Next List   q: Cancel   99: Direct Input")
-
-            # Pad lines to ensure we overwrite previous output (anti-ghosting)
-            # Padding removed to prevent log overlap
-
-            show_in_result_area(lines)
-
-            # 2. Input
-            # Calculate input row relative to lines we just printed
-            # Use a safe fixed row if lines fluctuates, or strictly following len(lines)
-            # lines has been padded to 12, so input at 16 (12 + 4) is safe
-            input_row = len(lines) + 1
-            user_input = input_at(input_row, 2, "Select Index: ").strip()
-
-            # Clear the input line for next iteration just in case (optional as input_at clears line)
-
-            # Navigation Logic
-            if not user_input:
-                current_page += 1
-                if current_page >= total_pages:
-                    current_page = 0
+            if not fav_list:
+                show_in_result_area(header + ["No favorites found for this market.", "Press any key to toggle..."])
+                msvcrt.getch()
+                target_market = "KR" if target_market == "US" else "US"
                 continue
 
-            if user_input == '0' or user_input.lower() == 'q':
-                return
+            current_page = 0
+            ITEMS_PER_PAGE = 10
+            total_pages = (len(fav_list) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
 
-            if user_input == '99':
-                pdno = input_at(input_row + 1, 2, "Enter Stock Code: ").strip()
-                break
+            pdno = ""
 
-            # Check if selected from list
-            found = next((x for x in fav_list if x[0] == user_input), None)
-            if found:
-                pdno = found[1]
-                break
+            # Stock Selection Loop
+            while True:
+                start_idx = current_page * ITEMS_PER_PAGE
+                end_idx = min(start_idx + ITEMS_PER_PAGE, len(fav_list))
+                page_items = fav_list[start_idx:end_idx]
 
-            # Check if direct code input (fallback)
-            if len(user_input) >= 6:
-                pdno = user_input
-                break
+                lines = [f"[Place Order - {market_label} - {side_label}] KRW: {krw_bal:,} | USD: ${usd_bal:,.2f}"]
 
-            # Loop again if invalid
-            continue
+                # Build Grid
+                row_buffer = []
+                for item in page_items:
+                    # Logic for displaying price/qty hints
+                    # Lookup with prefixes for US if needed (DNAS, DNYE, DAME)
+                    keys_to_check = [item[1]]
+                    if target_market == "US":
+                        keys_to_check += [f"{p}{item[1]}" for p in ["DNAS", "DNYE", "DAME"]]
 
-        if not pdno: return
+                    curr_price = 0
+                    for k in keys_to_check:
+                         st = trading_state.stock_data_state.get(k, {})
+                         p = st.get('price', 0)
+                         if p == 0: p = st.get('ask', 0)
+                         if p > 0:
+                             curr_price = p
+                             break
 
-        # Stock Name Lookup
-        stock_name = trading_config.get_stock_info(pdno).get('name', 'Unknown')
+                    qty_str = ""
+                    if ord_dv == "buy":
+                        if curr_price > 0:
+                            if target_market == "KR":
+                                qty_str = f"({int(krw_bal / curr_price)})"
+                            else:
+                                # US: USD / Price
+                                qty_str = f"({int(usd_bal / curr_price)})"
+                        else:
+                            qty_str = "(?)"
 
-        # Redraw header with selected stock info
-        clear_result_area()
-        header_lines = [
-            f" [Place Domestic Cash Order - {side_label}]",
-            # "-"*80,
-            f" Stock Code : {pdno}",
-            f" Stock Name : {stock_name}"
-        ]
-        show_in_result_area(header_lines)
+                    display_text = f"{item[0]}.{item[2]}{qty_str}"
+                    # Truncate if too long (simple check)
+                    if len(display_text) > 18: display_text = display_text[:17] + "."
 
-        # Side is already selected
-        # side_idx = input_at(len(header_lines)+2, 2, "Side (1: Buy, 2: Sell, q: Cancel): ").strip() # Removed
+                    row_buffer.append(f"{display_text}")
+                    if len(row_buffer) == 5:
+                        lines.append(" ".join([f"{x:<20}" for x in row_buffer]))
+                        row_buffer = []
 
-        price_input = input_at(len(header_lines)+1, 2, "Price (Enter for Market, q: Cancel): ").strip()
-        if price_input.lower() == 'q': return
+                if row_buffer:
+                    lines.append(" ".join([f"{x:<20}" for x in row_buffer]))
 
-        # Calculate Max Qty logic
-        max_qty_str = "?"
-        calc_price = 0
+                lines.append(" [Enter]: Next List   q: Back   99: Direct Input")
+                show_in_result_area(lines)
 
-        # If market price or price not entered, use current price from state
-        if not price_input or price_input == "0":
-            calc_price = trading_state.stock_data_state.get(pdno, {}).get('price', 0)
-        else:
-            try:
-                calc_price = int(price_input)
-            except:
-                calc_price = 0
+                input_row = len(lines) + 2
+                user_input = input_at(input_row, 2, "Select Index: ").strip()
 
-        if calc_price > 0:
-            max_qty = int(krw_bal / calc_price)
-            max_qty_str = f"{max_qty}"
+                if not user_input:
+                    current_page += 1
+                    if current_page >= total_pages: current_page = 0
+                    continue
 
-        qty = input_at(len(header_lines)+2, 2, f"Quantity (MAX: {max_qty_str}주, q: Cancel): ").strip()
-        if qty.lower() == 'q': return
-        price = price_input  # Keep variable name consistent with downstream logic
+                if user_input.lower() == 'q':
+                    pdno = None
+                    break # Break stock loop to go back to side selection
 
-        # Final Formatting
-        ord_dvsn = "01" if not price or price == "0" else "00"
+                if user_input == '99':
+                    pdno = input_at(input_row + 1, 2, "Enter Stock Code: ").strip()
+                    break
 
-        recap = header_lines + [
-            f" Side       : {ord_dv.upper()}",
-            f" Quantity   : {qty}",
-            f" Price      : {'Market' if ord_dvsn == '01' else f'{int(price):,}'}",
-            # "-"*80
-        ]
-        show_in_result_area(recap)
+                found = next((x for x in fav_list if x[0] == user_input), None)
+                if found:
+                    pdno = found[1]
+                    break
 
-        confirm = input_at(len(recap)+1, 2, " Submit Order? (y/n): ").strip().lower()
-        if confirm != 'y':
-            show_in_result_area(recap + ["Order Cancelled. Press any key..."])
-            msvcrt.getch()
-            return
+            if not pdno: continue # Back to Side/Market Selection
 
-        cano = ka.getTREnv().my_acct
-        prod = ka.getTREnv().my_prod
+            # Order Details Entry
+            stock_info = trading_config.get_stock_info(pdno)
+            stock_name = stock_info.get('name', 'Unknown')
 
-        df = order_cash(
-            env_dv="real",
-            ord_dv=ord_dv,
-            cano=cano,
-            acnt_prdt_cd=prod,
-            pdno=pdno,
-            ord_dvsn=ord_dvsn,
-            ord_qty=qty,
-            ord_unpr=price if ord_dvsn == "00" else "0",
-            excg_id_dvsn_cd="SOR"
-        )
-
-        # Robust field retrieval (casing varies across KIS APIs)
-        odno_val = None
-        ord_tmd_val = None
-        if not df.empty:
-            cols = {c.lower(): c for c in df.columns}
-            if 'odno' in cols:
-                odno_val = df.iloc[0].get(cols['odno'])
-            if 'ord_tmd' in cols:
-                ord_tmd_val = df.iloc[0].get(cols['ord_tmd'])
-
-        if odno_val:
-            res_lines = [
-                # "-"*80,
-                "Result: SUCCESS",
-                f"Order No: {odno_val}",
-                f"Time: {ord_tmd_val if ord_tmd_val else 'N/A'}",
-                "Press any key to return..."
+            clear_result_area()
+            header_lines = [
+                f" [Place Order - {market_label} - {side_label}]",
+                f" Stock : {pdno} ({stock_name})"
             ]
-        else:
-            res_lines = ["-"*80, "Result: FAILED (Check logs)", "Press any key to return..."]
+            show_in_result_area(header_lines)
 
-        show_in_result_area(recap + res_lines)
-        msvcrt.getch()
+            price_input = input_at(len(header_lines)+1, 2, "Price (Enter for Market/Current, q: Cancel): ").strip()
+            if price_input.lower() == 'q': continue
+
+            # Determine Price
+            # Note: For US, usually limit orders are standard. Market orders might need special '0' or different implementation.
+            # Assuming limit order if price given.
+            # Check price logic
+            price_val = 0
+            if not price_input or price_input == "0":
+                 # Use current price reference
+                 price_val = trading_state.stock_data_state.get(pdno, {}).get('price', 0)
+                 if price_val == 0: price_val = trading_state.stock_data_state.get(pdno, {}).get('ask', 0)
+            else:
+                try: price_val = float(price_input)
+                except: price_val = 0
+
+            # Calc Max Qty
+            max_qty_str = "?"
+            if price_val > 0:
+                if target_market == "KR":
+                    max_qty = int(krw_bal / price_val)
+                    max_qty_str = f"{max_qty}"
+                else:
+                    max_qty = int(usd_bal / price_val)
+                    max_qty_str = f"{max_qty}"
+
+            qty = input_at(len(header_lines)+2, 2, f"Quantity (MAX: {max_qty_str}, q: Cancel): ").strip()
+            if qty.lower() == 'q': continue
+
+            # Final Confirm
+            price_disp = price_input if price_input and price_input != "0" else f"{price_val} (Market/Ref)"
+            if target_market == "KR" and (not price_input or price_input=="0"):
+                 price_disp = "Market Price"
+
+            recap = header_lines + [
+                f" Side       : {ord_dv.upper()}",
+                f" Quantity   : {qty}",
+                f" Price      : {price_disp}",
+            ]
+            show_in_result_area(recap)
+
+            confirm = input_at(len(recap)+1, 2, " Submit Order? (y/n): ").strip().lower()
+            if confirm != 'y':
+                show_in_result_area(recap + ["Order Cancelled."])
+                msvcrt.getch()
+                continue
+
+            # Execute Order
+            cano = ka.getTREnv().my_acct
+            prod = ka.getTREnv().my_prod
+
+            df_res = None
+            if target_market == "KR":
+                ord_dvsn = "01" if not price_input or price_input == "0" else "00"
+                df_res = order_cash(
+                    env_dv="real",
+                    ord_dv=ord_dv,
+                    cano=cano,
+                    acnt_prdt_cd=prod,
+                    pdno=pdno,
+                    ord_dvsn=ord_dvsn,
+                    ord_qty=qty,
+                    ord_unpr=price_input if ord_dvsn == "00" else "0",
+                    excg_id_dvsn_cd="SOR" # SOR default
+                )
+            else:
+                # Overseas
+                # Need Exchange Code. Try to get from config or default to NASD (as inferred)
+                mkt_code = stock_info.get('market', 'NASD').upper()
+                # Config might have specific codes or need mapping
+                # Assuming Config has valid codes (NASDAQ, NYSE etc -> need mapping)
+                # Map standard markets to KIS codes
+                excg_map = {"NASDAQ": "NASD", "NYSE": "NYSE", "AMEX": "AMEX", "US": "NASD"}
+                ovrs_excg = excg_map.get(mkt_code, "NASD") # Default to NASD (which checks all for some APIs, but for order needs specific?)
+                # Wait, for ORDER, we need specific. But if we don't know, maybe we should ask or try NASD?
+                # User config usually says NASDAQ/NYSE.
+
+                # Price must be supplied. If 0/Market, US uses "00" with price "0"?
+                # Check order() doc: "00 : 지정가". Market orders for US? "32: LOO, 31: MOO"... KIS usually treats "00" as limit.
+                # If user wants market, maybe we force limit at current price? Or check if US supports market order via API easily.
+                # Documentation says "00: Limit". Market order might be simpler if we just pass 0 price?
+                # Let's stick to Limit (00) with specified price. If user entered 0, we use collected price?
+
+                final_price = str(price_val)
+                if not price_input or price_input == "0":
+                     # Use current price as limit price if "market" intended, or warn?
+                     # Let's trust user input. If 0, maybe API rejects.
+                     pass
+
+                df_res = order_overseas(
+                    cano=cano,
+                    acnt_prdt_cd=prod,
+                    ovrs_excg_cd=ovrs_excg,
+                    pdno=pdno,
+                    ord_qty=qty,
+                    ovrs_ord_unpr=final_price,
+                    ord_dv=ord_dv,
+                    ctac_tlno="",
+                    mgco_aptm_odno="",
+                    ord_svr_dvsn_cd="0",
+                    ord_dvsn="00", # Limit
+                    env_dv="real"
+                )
+
+            # Check Result
+            is_success = False
+            msg = "FAILED"
+
+            if not df_res.empty:
+                cols = {c.lower(): c for c in df_res.columns}
+                if 'odno' in cols or 'ord_no' in cols: # Overseas might use ODNO
+                    is_success = True
+                    msg = "SUCCESS"
+                    # Log details if needed
+
+            show_in_result_area(recap + [f"Result: {msg}", "Press any key..."])
+            msvcrt.getch()
 
     except Exception as e:
-        print_log(PrintLevel.ERROR, f"Order error: {e}")
+        print_log(PrintLevel.ERROR, f"Order Flow Error: {e}")
     finally:
         render_ui(full_refresh=True)
 
@@ -237,92 +287,220 @@ def handle_manage_orders():
         cano = ka.getTREnv().my_acct
         prod = ka.getTREnv().my_prod
 
-        df = inquire_psbl_rvsecncl(cano=cano, acnt_prdt_cd=prod, inqr_dvsn_1="0", inqr_dvsn_2="0")
+        # Priority: Overseas -> Domestic
+        market_found = "US"
 
-        # [DEBUG] Dump raw data for troubleshooting
-        if not df.empty:
-            logging.debug(f"--- Raw Open Orders Data ---\n{df.to_dict(orient='records')}")
+        # 1. Check Overseas
+        # ovrs_excg_cd="NASD" (searches all US matches per docs) or leave empty if possible (but docs say must verify).
+        # Assuming US trading mainly.
+        df = inquire_nccs_overseas(cano=cano, acnt_prdt_cd=prod, ovrs_excg_cd="NASD", sort_sqn="DS", FK200="", NK200="")
 
         if df.empty:
-            show_in_result_area(lines + ["No open orders found.", "Press any key to return..."])
+            market_found = "KR"
+            df = inquire_psbl_rvsecncl(cano=cano, acnt_prdt_cd=prod, inqr_dvsn_1="0", inqr_dvsn_2="0")
+
+        if df.empty:
+            show_in_result_area(lines + ["No open orders found in US or KR.", "Press any key to return..."])
             msvcrt.getch()
             return
 
-        # List orders
         order_list = []
         for i, row in df.iterrows():
-            # KIS API for inquire-psbl-rvsecncl uses 'prdt_name' not 'itms_nm'
+            # Normalize fields
+            # KR: prdt_name, ord_unpr, psbl_qty, ord_dvsn_cd, ord_gno_brno, odno
+            # US: prdt_name, ft_ord_unpr4(price), ft_ord_qty4(qty), sll_buy_dvsn_cd_name, odno, ovrs_excg_cd, pdno
+
+            # Common
             name = row.get('prdt_name', row.get('pdno', 'Unknown'))
-            side = "BUY " if row.get('sll_buy_dvsn_cd') == '02' else "SELL"
-            price = int(float(row.get('ord_unpr', '0')))
-            order_list.append(f" {i+1}. {name} | {side} | Prc: {price:,} | Qty: {row['psbl_qty']}")
-            if i >= 5: break # Only show first 5
+            odno = row.get('odno', 'Unknown')
+
+            # Helper for robust retrieval (case-insensitive)
+            # Create a localized dict with lower-cased keys for this row
+            row_lower = {k.lower(): v for k, v in row.items()}
+
+            def get_val(keys, default=0):
+                for k in keys:
+                    if k in row_lower:
+                        return row_lower[k]
+                return default
+
+            # Price/Qty
+            price = 0
+            qty = 0
+            side = "?"
+
+            if market_found == "KR":
+                side = "BUY " if row.get('sll_buy_dvsn_cd') == '02' else "SELL"
+                price = int(float(row.get('ord_unpr', '0')))
+                qty = row.get('psbl_qty', 0)
+            else: # US
+                # Log raw keys for first item to help debugging
+                if i == 0:
+                    logging.debug(f"[ManageOrders] Row Keys: {list(row.keys())}")
+                    logging.debug(f"[ManageOrders] Row Values: {row.to_dict()}")
+
+                side_name = get_val(['sll_buy_dvsn_cd_name', 'sll_buy_dvsn_name'], '?')
+                if not side_name or side_name == '?':
+                    side_code = get_val(['sll_buy_dvsn_cd'], '')
+                    side = "BUY" if side_code=='02' else "SELL"
+                else:
+                    side = side_name
+
+                # Price: Try floating point fields first, then string fields
+                p_val = get_val(['ft_ord_unpr4', 'ft_ord_unpr3', 'ovrs_ord_unpr', 'ord_unpr'], '0')
+                try: price = float(p_val)
+                except: price = 0.0
+
+                # Qty: Prioritize 'nccs_qty' (Unexecuted) -> 'ord_qty' (Total Order)
+                q_val = get_val(['nccs_qty', 'ft_ord_qty4', 'ord_qty'], 0)
+                try: qty = int(float(q_val))
+                except: qty = 0
+
+            order_list.append(f" {i+1}. [{market_found}] {name} | {side} | Prc: {price} | Qty: {qty}")
+            if i >= 6: break
 
         show_in_result_area(lines[:3] + order_list + ["Select Index or 'q':"])
         idx_s = input_at(len(order_list)+4, 2, "Choice: ").strip()
         if idx_s.lower() == 'q' or not idx_s: return
 
-        idx = int(idx_s) - 1
+        try:
+            idx = int(idx_s) - 1
+            if idx < 0 or idx >= len(df): raise ValueError
+        except: return
+
         target_order = df.iloc[idx]
+        # Normalize target order to dict with lowercase keys
+        t_ord = {k.lower(): v for k, v in target_order.items()}
 
         action = input_at(len(order_list)+5, 2, "Action (1: Correct, 2: Cancel): ").strip()
+        if action not in ['1', '2']: return
 
-        # Use existing ord_dvsn_cd if available, else fallback to '00'
-        ord_dvsn = target_order.get('ord_dvsn_cd', target_order.get('ord_dvsn', '00'))
-        # KIS API for inquire-psbl-rvsecncl uses 'ord_gno_brno' for organization number
-        org_no = target_order.get('ord_gno_brno', target_order.get('krx_fwdg_ord_orgno', ''))
-        # Dynamically get Exchange ID (Crucial: orders might be SOR/NXT, not just KRX)
-        excg_id = target_order.get('excg_id_dvsn_cd', 'KRX')
+        # Execute Action
+        df_res = None
+        if market_found == "KR":
+            ord_dvsn = t_ord.get('ord_dvsn_cd', t_ord.get('ord_dvsn', '00'))
+            org_no = t_ord.get('ord_gno_brno', t_ord.get('krx_fwdg_ord_orgno', ''))
+            excg_id = t_ord.get('excg_id_dvsn_cd', 'KRX')
 
-        if action == '2': # Cancel
-            df_res = order_rvsecncl(
-                env_dv="real",
-                cano=cano,
-                acnt_prdt_cd=prod,
-                krx_fwdg_ord_orgno=org_no,
-                orgn_odno=target_order['odno'],
-                ord_dvsn=ord_dvsn,
-                rvse_cncl_dvsn_cd="02",
-                ord_qty=target_order['psbl_qty'],
-                ord_unpr="0",
-                qty_all_ord_yn="Y",
-                excg_id_dvsn_cd=excg_id
-            )
-        else: # Correct
-            new_price = input_at(len(order_list)+6, 2, "New Price: ").strip()
-            df_res = order_rvsecncl(
-                env_dv="real",
-                cano=cano,
-                acnt_prdt_cd=prod,
-                krx_fwdg_ord_orgno=org_no,
-                orgn_odno=target_order['odno'],
-                ord_dvsn=ord_dvsn,
-                rvse_cncl_dvsn_cd="01",
-                ord_qty=target_order['psbl_qty'],
-                ord_unpr=new_price,
-                qty_all_ord_yn="Y",
-                excg_id_dvsn_cd=excg_id
-            )
+            if action == '2': # Cancel
+                 df_res = order_rvsecncl(
+                    env_dv="real",
+                    cano=cano,
+                    acnt_prdt_cd=prod,
+                    krx_fwdg_ord_orgno=org_no,
+                    orgn_odno=t_ord.get('odno'),
+                    ord_dvsn=ord_dvsn,
+                    rvse_cncl_dvsn_cd="02",
+                    ord_qty=t_ord.get('psbl_qty'),
+                    ord_unpr="0",
+                    qty_all_ord_yn="Y",
+                    excg_id_dvsn_cd=excg_id
+                )
+            else: # Correct
+                 new_price = input_at(len(order_list)+6, 2, "New Price: ").strip()
+                 df_res = order_rvsecncl(
+                    env_dv="real",
+                    cano=cano,
+                    acnt_prdt_cd=prod,
+                    krx_fwdg_ord_orgno=org_no,
+                    orgn_odno=t_ord.get('odno'),
+                    ord_dvsn=ord_dvsn,
+                    rvse_cncl_dvsn_cd="01", # Correct
+                    ord_qty=t_ord.get('psbl_qty'),
+                    ord_unpr=new_price,
+                    qty_all_ord_yn="Y",
+                    excg_id_dvsn_cd=excg_id
+                )
+        else: # US
+             # Cancel/Correct Overseas
+             pdno = t_ord.get('pdno')
+             orgn_odno = t_ord.get('odno')
+             excg_cd = t_ord.get('ovrs_excg_cd', 'NASD')
 
-        # Robust field retrieval for modification/cancellation result
-        res_odno = None
+             # Qty (nccs_qty = unexecuted, ft_ord_qty4/ord_qty = total?)
+             # Prioritize nccs_qty if available for remnant cancellation
+             qty = t_ord.get('nccs_qty', t_ord.get('ft_ord_qty4', t_ord.get('ord_qty', 0)))
+
+             # Use full quantity directly as requested (no partial)
+             final_qty = str(qty)
+
+             if action == '2': # Cancel
+                 df_res = order_rvsecncl_overseas(
+                     cano=cano,
+                     acnt_prdt_cd=prod,
+                     ovrs_excg_cd=excg_cd,
+                     pdno=pdno,
+                     orgn_odno=orgn_odno,
+                     rvse_cncl_dvsn_cd="02", # Cancel
+                     ord_qty=final_qty,
+                     ovrs_ord_unpr="0",
+                     mgco_aptm_odno="",
+                     ord_svr_dvsn_cd="0",
+                     env_dv="real"
+                 )
+             else: # Correct
+                 new_price = input_at(len(order_list)+6, 2, "New Price: ").strip()
+                 df_res = order_rvsecncl_overseas(
+                     cano=cano,
+                     acnt_prdt_cd=prod,
+                     ovrs_excg_cd=excg_cd,
+                     pdno=pdno,
+                     orgn_odno=orgn_odno,
+                     rvse_cncl_dvsn_cd="01", # Correct
+                     ord_qty=final_qty,
+                     ovrs_ord_unpr=new_price,
+                     mgco_aptm_odno="",
+                     ord_svr_dvsn_cd="0",
+                     env_dv="real"
+                 )
+
+        # Check Result
+        clear_result_area()
+        # Clear specific input rows that might persist (rows 10-14)
+        # Note: render_ui will restore rows 12-14 (Separator/Header) if we call it, but we want to show result first.
+        # Safest is to write spaces to those lines then let render_ui fix the bottom later.
+        for r in range(10, 15):
+            safe_write(f"\033[{r};1H{CLEAR_LINE}")
+
+        is_success = False
+        res_msg = "Processed"
+        res_odno = ""
+
         if not df_res.empty:
-            cols = {c.lower(): c for c in df_res.columns}
-            if 'odno' in cols:
-                res_odno = df_res.iloc[0].get(cols['odno'])
+             # Case-insensitive column check
+             cols = {c.lower(): c for c in df_res.columns}
 
-        if res_odno:
-            show_in_result_area(lines[:3] + ["Result: SUCCESS", f"Order/Req No: {res_odno}", "Press any key to return..."])
+             # Success Check
+             if 'odno' in cols:
+                 is_success = True
+                 res_odno = df_res.iloc[0][cols['odno']]
+             elif 'ord_no' in cols:
+                 is_success = True
+                 res_odno = df_res.iloc[0][cols['ord_no']]
+             elif 'msg1' in cols:
+                 # Some APIs return success msg in msg1 without odno in output (rare for order)
+                 if df_res.iloc[0][cols['msg1']] and "정상" in str(df_res.iloc[0][cols['msg1']]):
+                     is_success = True
+
+             # Message Extraction
+             if 'msg1' in cols: res_msg = df_res.iloc[0][cols['msg1']]
+             elif 'message' in cols: res_msg = df_res.iloc[0][cols['message']]
+
+        final_lines = lines[:3] # Keep Header
+        if is_success:
+             final_lines.append(f" Result : SUCCESS")
+             final_lines.append(f" Ord No : {res_odno}")
+             final_lines.append(f" Message: {res_msg}")
         else:
-            # Check for specific error message
-            err_msg = "Check logs"
-            if 'error_msg' in df_res.columns and not df_res.empty:
-                err_msg = df_res.iloc[0]['error_msg']
-            show_in_result_area(lines[:3] + [f"Result: FAILED ({err_msg})", "Press any key to return..."])
+             final_lines.append(f" Result : FAILED")
+             final_lines.append(f" Message: {res_msg}")
+
+        final_lines.append(" Press any key to return...")
+        show_in_result_area(final_lines)
 
         msvcrt.getch()
 
     except Exception as e:
-        print_log(PrintLevel.ERROR, f"Order error: {e}")
+        print_log(PrintLevel.ERROR, f"Order Manage Error: {e}")
     finally:
         render_ui(full_refresh=True)
