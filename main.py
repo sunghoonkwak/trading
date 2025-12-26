@@ -25,52 +25,77 @@ from kis_api.domestic_stock.ccnl_total.ccnl_total import ccnl_total
 base_dir = os.path.dirname(os.path.abspath(__file__))
 latest_log = os.path.join(base_dir, "WebSocket_latest.log")
 
+rotation_msgs = []
+
 # Log Rotation Logic
 if os.path.exists(latest_log):
-    # Try to extract timestamp from the first line for renaming
     old_ts = ""
+    # 1. Try to extract timestamp from the first few lines of the existing log
     try:
-        with open(latest_log, "r", encoding="utf-8") as f:
-            first_line = f.readline()
-            # Match YYYY-MM-DD HH:MM:SS
-            match = re.search(r"(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})", first_line)
-            if match:
-                # Convert to YY_MM_DD_HH_MM_SS
-                y, m, d, hh, mm, ss = match.groups()
-                old_ts = f"{y[2:]}_{m}_{d}_{hh}_{mm}_{ss}"
-    except:
-        pass
+        with open(latest_log, "r", encoding="utf-8-sig") as f:
+            for _ in range(20): # Check first 20 lines
+                line = f.readline()
+                if not line: break
+                # Match YYYY-MM-DD HH:MM:SS
+                match = re.search(r"(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})", line)
+                if match:
+                    y, m, d, hh, mm, ss = match.groups()
+                    old_ts = f"{y[2:]}_{m}_{d}_{hh}_{mm}_{ss}"
+                    break
+    except Exception as e:
+        rotation_msgs.append(f"[LogRotation] Warning: Could not read timestamp from content: {e}")
 
-    # Fallback to file modification time if first line extraction fails
+    # 2. Fallback to file modification time if no timestamp found in content
     if not old_ts:
-        mtime = os.path.getmtime(latest_log)
-        old_ts = datetime.fromtimestamp(mtime).strftime("%y_%m_%d_%H_%M_%S")
+        try:
+            mtime = os.path.getmtime(latest_log)
+            old_ts = datetime.fromtimestamp(mtime).strftime("%y_%m_%d_%H_%M_%S")
+        except:
+            old_ts = datetime.now().strftime("%y_%m_%d_%H_%M_%S")
 
-    # Rename old log
+    # 3. Define archive name and handle collisions
     archive_name = os.path.join(base_dir, f"WebSocket_{old_ts}.log")
+    if os.path.exists(archive_name):
+        archive_name = archive_name.replace(".log", f"_{int(datetime.now().timestamp())}.log")
+
+    # 4. Attempt to rotate
     try:
-        if os.path.exists(archive_name):
-            archive_name = archive_name.replace(".log", f"_{int(datetime.now().timestamp())}.log")
         os.rename(latest_log, archive_name)
-    except:
-        pass
+        rotation_msgs.append(f"[LogRotation] Archived old log: {os.path.basename(latest_log)} -> {os.path.basename(archive_name)}")
+    except PermissionError:
+        rotation_msgs.append(f"[LogRotation] Warning: {os.path.basename(latest_log)} is locked. Appending to existing file.")
+    except Exception as e:
+        rotation_msgs.append(f"[LogRotation] Error during rename: {e}")
+else:
+    rotation_msgs.append(f"[LogRotation] Fresh session. No existing log file found.")
 
 log_file = latest_log
 trading_ui.log_file_path = log_file
 
-# Force reset root logger handlers to prevent stdout leakage
+# Force reset root logger handlers to prevent leakage
 root_logger = logging.getLogger()
 if root_logger.handlers:
     for handler in list(root_logger.handlers):
         root_logger.removeHandler(handler)
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(log_file, encoding='utf-8'),
-    ]
-)
+# Initialize logger with both File and temporarily a Stream handler
+file_handler = logging.FileHandler(log_file, encoding='utf-8')
+stream_handler = logging.StreamHandler(sys.stdout)
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+file_handler.setFormatter(formatter)
+stream_handler.setFormatter(formatter)
+
+root_logger.setLevel(logging.DEBUG)
+root_logger.addHandler(file_handler)
+root_logger.addHandler(stream_handler)
+
+# Flush captured rotation messages to both destinations
+for msg in rotation_msgs:
+    logging.info(msg)
+
+# Remove StreamHandler before Terminal UI starts to prevent layout corruption
+root_logger.removeHandler(stream_handler)
+logging.info(f"[System] Logging initialized. All system messages now directed to: {os.path.basename(log_file)}")
 
 # Rename local PrintLevel to avoid some typing conflicts if any
 PyPrintLevel = PrintLevel
