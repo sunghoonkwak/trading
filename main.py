@@ -25,47 +25,91 @@ class PrintLevel:
     DEBUG = 2
     MAX = 3
 
-print_level = PrintLevel.INFO
+print_log_level = PrintLevel.INFO
+
+# Data structure to store the last state for each code
+stock_data_state = {} # { 'code': { 'price': val, 'ask': val, 'bid': val } }
 
 # Logging functions
-def print_debug(log):
-    if print_level <= PrintLevel.DEBUG:
-        print(log)
-
-def print_info(log):
-    if print_level <= PrintLevel.INFO:
-        print(log)
-
-def print_error(log):
-    print(log)
+def print_log(level, log):
+    if level <= print_log_level:
+        if level == PrintLevel.ERROR:
+            print(f"\033[91m{log}\033[0m") # Red for error
+        elif level == PrintLevel.INFO:
+            print(f"\033[93m{log}\033[0m") # Yellow for info
+        else:
+            print(log)
 
 def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
     """
     Callback function when data is received.
     """
     if df.empty:
-        print(f"System Message received for TR: {tr_id}")
+        print_log(PrintLevel.ERROR, f"System Message received for TR: {tr_id}")
         return
 
     # Extract common data
     code = df['MKSC_SHRN_ISCD'].iloc[0]
+    
+    # Initialize state for code if not exists
+    if code not in stock_data_state:
+        stock_data_state[code] = {'price': None, 'ask': None, 'bid': None}
+
+    state = stock_data_state[code]
 
     if tr_id == "H0UNASP0": # 주식 호가
         time = df['BSOP_HOUR'].iloc[0]
-        ask1 = df['ASKP1'].iloc[0]
-        bid1 = df['BIDP1'].iloc[0]
-        total_ask = df['TOTAL_ASKP_RSQN'].iloc[0]
-        total_bid = df['TOTAL_BIDP_RSQN'].iloc[0]
-        print_info(f"[OrderBook][{time}] Code: {code}, Best Ask: {ask1}, Best Bid: {bid1}, Total: {total_ask}/{total_bid}")
+        try:
+            ask1 = int(float(df['ASKP1'].iloc[0]))
+            bid1 = int(float(df['BIDP1'].iloc[0]))
+            total_ask = int(float(df['TOTAL_ASKP_RSQN'].iloc[0]))
+            total_bid = int(float(df['TOTAL_BIDP_RSQN'].iloc[0]))
+        except (ValueError, TypeError):
+            return # Skip if data is invalid
+
+        # Check if changed
+        is_changed = (state['ask'] != ask1 or state['bid'] != bid1)
+        level = PrintLevel.INFO if is_changed else PrintLevel.DEBUG
+        
+        # Update state
+        state['ask'] = ask1
+        state['bid'] = bid1
+        
+        # Formatted output with safe comma formatting
+        ask_s = format(ask1, ",")
+        bid_s = format(bid1, ",")
+        t_ask_s = format(total_ask, ",")
+        t_bid_s = format(total_bid, ",")
+        
+        msg = f"[OrderBook]  [{time}] Code: {code:<6} | Ask  : {ask_s:>10} | Bid  : {bid_s:>10} | Total: {t_ask_s:>10} / {t_bid_s:<10}"
+        print_log(level, msg)
+
     elif tr_id == "H0UNCNT0": # 주식 체결
         time = df['STCK_CNTG_HOUR'].iloc[0]
-        price = df['STCK_PRPR'].iloc[0]
-        change = df['PRDY_VRSS'].iloc[0]
-        vol = df['CNTG_VOL'].iloc[0]
-        print_info(f"[Trade][{time}] Code: {code}, Price: {price}, Change: {change}, Vol: {vol}")
+        try:
+            price  = int(float(df['STCK_PRPR'].iloc[0]))
+            change = int(float(df['PRDY_VRSS'].iloc[0]))
+            vol    = int(float(df['CNTG_VOL'].iloc[0]))
+        except (ValueError, TypeError):
+            return # Skip if data is invalid
+            
+        # Check if changed or large volume (User request: vol >= 100)
+        is_changed = (state['price'] != price)
+        level = PrintLevel.INFO if (is_changed or vol >= 100) else PrintLevel.DEBUG
+        
+        # Update state
+        state['price'] = price
+        
+        # Formatted output with safe comma formatting
+        price_s = format(price, ",")
+        chg_s   = format(change, ",")
+        vol_s   = format(vol, ",")
+        
+        msg = f"[Trade]      [{time}] Code: {code:<6} | Price: {price_s:>10} | Diff : {chg_s:>8} | Vol  : {vol_s:>10}"
+        print_log(level, msg)
 
     else:
-        print_error(f"[{tr_id}] Unknown data received for code: {code}")
+        print_log(PrintLevel.ERROR, f"[{tr_id}] Unknown data received for code: {code}")
 
 def get_account_info_domastic() -> dict:
     """
@@ -132,9 +176,9 @@ def get_account_info_domastic() -> dict:
         return None
 
 def menu():
-    global print_level
+    global print_log_level
     while True:
-        print(f"\n=== Menu (Log Level: {print_level}) ===")
+        print(f"\n=== Menu (Log Level: {print_log_level}) ===")
         print("1. get cash info")
         print("0. Exit")
         choice = input("Enter your choice: ")
@@ -145,8 +189,8 @@ def menu():
             print("Exiting...")
             os._exit(0) # Abrupt exit to stop background thread as well
         elif choice == "":
-            print_level = (print_level + 1) % PrintLevel.MAX
-            print(f"\n[System] Real-time log level changed to {print_level}")
+            print_log_level = (print_log_level + 1) % PrintLevel.MAX
+            print(f"\n[System] Real-time log level changed to {print_log_level}")
         else:
             print("Invalid choice. Please try again.")
 
