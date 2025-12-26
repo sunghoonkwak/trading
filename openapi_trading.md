@@ -50,8 +50,10 @@
    - **Prioritized Latest Status**: 로그 영역 상단에 구독 중인 모든 종목의 **최신 체결/호가 상태**를 1줄씩 고정하여 실시간 현황판 역할을 수행합니다.
    - **Visual Width Alignment**: 한글(2폭)과 영문(1폭)의 차이를 계산하여 종목명이 달라도 로그 줄이 흐트러지지 않도록 **10자 고정 폭 정렬**을 적용했습니다.
    - **Color-Coded Tracks**: 종목별 고유 RGB 색상을 적용하여 수많은 로그 흐름 속에서도 특정 종목의 데이터를 즉시 구분할 수 있습니다.
-4. **Account & Orderable Info**:
-   - `CTRP6010R` (잔고)와 `TTTC8908R` (주문가능조회) API를 동시에 활용하여 실제 앱과 동일한 **주문가능원화**를 정확히 산출합니다.
+   - **Clean Screen Refresh**: 메뉴와 로그 영역 사이의 잔상을 제거하기 위해 ANSI Escape Code(`CLEAR_LINE`)를 활용한 정밀한 화면 갱신을 구현했습니다.
+4. **Combined Account Info**:
+   - **KRW/USD Unified Inquiry**: 국내 주식 주문 가능 금액(`TTTC8908R`)과 해외 주식 예수금 현황(`CTRP6504R`)을 통합하여 한 번에 조회할 수 있는 기능을 제공합니다.
+   - **Data Robustness**: API 응답 형식이 리스트나 딕셔너리로 가변적인 경우에도 안정적으로 데이터를 추출하여 원화 및 외화 잔고를 정확히 표시합니다.
 5. **Robust Data Handling**:
    - **Multi-record Processing**: 웹소켓 메시지 하나에 여러 건의 데이터가 묶여 올 경우(`count > 1`), 이를 누락 없이 개별 레코드로 분리하여 처리합니다.
    - **Async Stability**: 구독 요청 간에 짧은 비동기 지연(`asyncio.sleep`)을 주어 서버의 요청 제한(Throttling)을 방지합니다.
@@ -60,4 +62,4 @@
 1. 터미널에서 프로젝트 루트 폴더로 이동합니다.
 2. `python trading/main.py` 명령어로 프로그램을 실행합니다.
 3. `API Key loading` 프롬프트가 뜨면 설정한 비밀번호를 입력합니다.
-4. 실시간 로그를 확인하며 상단의 메뉴(1, 0, q)를 통해 계좌 정보 확인 및 로그 레벨을 제어합니다.
+4. 실시간 로그를 확인하며 상단의 메뉴(1, 0, q)를 통해 **국내외 통합 계좌 정보 확인** 및 로그 레벨을 제어합니다.

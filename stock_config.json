@@ -1,0 +1,47 @@
+{
+    "005930": {
+        "name": "삼성전자",
+        "color": [
+            255,
+            255,
+            0
+        ],
+        "disabled": false
+    },
+    "000660": {
+        "name": "SK하이닉스",
+        "color": [
+            255,
+            165,
+            0
+        ],
+        "disabled": false
+    },
+    "016360": {
+        "name": "삼성증권",
+        "color": [
+            0,
+            255,
+            255
+        ],
+        "disabled": false
+    },
+    "030200": {
+        "name": "KT",
+        "color": [
+            255,
+            50,
+            50
+        ],
+        "disabled": false
+    },
+    "017670": {
+        "name": "SK텔레콤",
+        "color": [
+            255,
+            80,
+            80
+        ],
+        "disabled": false
+    }
+}

@@ -146,7 +146,7 @@ def render_ui(full_refresh=False):
                 "=" * min(cols, 40),
                 f" KIS Real-time System (Log: {status_name})",
                 "=" * min(cols, 40),
-                " 1. Get Cash Info",
+                " 1. Get Cash Info (KRW/USD)",
                 " 0. Change Log Level",
                 " q. Exit",
                 "-" * min(cols, 40),
@@ -155,11 +155,15 @@ def render_ui(full_refresh=False):
             for line in menu_lines:
                 sys.stdout.write(f"{CLEAR_LINE}{line}\n")
 
+            # 1.5 Clear any leftovers between menu end and log area (Line 9 & 10)
+            for _ in range(2):
+                sys.stdout.write(f"{CLEAR_LINE}\n")
+
         # 2. Jump to Log Area (Line 11)
         sys.stdout.write(MOVE_TO_LOG_START)
-        sys.stdout.write("\n" + "=" * (cols - 1) + "\n")
+        sys.stdout.write(f"{CLEAR_LINE}\n" + "=" * (cols - 1) + "\n")
         sys.stdout.write(f"{CLEAR_LINE} Recent Logs (Max visible: {visible_logs_count}):\n")
-        sys.stdout.write("-" * (cols - 1) + "\n")
+        sys.stdout.write(f"{CLEAR_LINE}" + "-" * (cols - 1) + "\n")
 
         # 3. Print Logs
         # Build the prioritized display list:
@@ -219,9 +223,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             }
 
         state = stock_data_state[code]
-        # Forced logging for debug (SK Hynix & Samsung Securities)
-        if code in ["000660", "016360"]:
-            logging.info(f"!!! DATA RECEIVED FOR {code} !!! TR_ID: {tr_id}")
+
         level = PrintLevel.DEBUG # Default level
 
         if tr_id == "H0UNASP0": # Stock Asking Price
@@ -287,49 +289,90 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
 
         print_log(level, msg)
 
-def inquire_orderable_amount() -> list:
+def inquire_combined_cash() -> list:
     """
-    Inquire Orderable Amount
+    Inquire both Domestic (KRW) and Overseas (USD) Cash Info
     """
-    cano = ka.getTREnv().my_acct
-    acnt_prdt_cd = ka.getTREnv().my_prod
-
-    # 2. Inquire Orderable Amount (TTTC8908R)
-    params = {
-        "CANO": cano,
-        "ACNT_PRDT_CD": acnt_prdt_cd,
-        "PDNO": "005930", # Standard stock for check
-        "ORD_UNPR": "0",
-        "ORD_DVSN": "01", # Market price
-        "CMA_EVLU_AMT_ICLD_YN": "N",
-        "OVRS_ICLD_YN": "N"
-    }
-    url = "/uapi/domestic-stock/v1/trading/inquire-psbl-order"
-    res = ka._url_fetch(url, "TTTC8908R", "N", params)
-
     lines = [
         "=" * 40,
-        " [Deposit & Orderable Info]",
+        " [Account Cash Information]",
         "=" * 40,
     ]
 
-    import json as json_lib
+    # 1. Domestic Info (KRW)
+    cano = ka.getTREnv().my_acct
+    acnt_prdt_cd = ka.getTREnv().my_prod
 
-    # 2. Process Orderable
-    if res.isOK():
-        body = res.getBody()
+    params_krw = {
+        "CANO": cano,
+        "ACNT_PRDT_CD": acnt_prdt_cd,
+        "PDNO": "005930",
+        "ORD_UNPR": "0",
+        "ORD_DVSN": "01",
+        "CMA_EVLU_AMT_ICLD_YN": "N",
+        "OVRS_ICLD_YN": "N"
+    }
+    url_krw = "/uapi/domestic-stock/v1/trading/inquire-psbl-order"
+    res_krw = ka._url_fetch(url_krw, "TTTC8908R", "N", params_krw)
+
+    import json as json_lib # Import here to avoid global import if not used elsewhere
+
+    if res_krw.isOK():
+        body = res_krw.getBody()
         logging.info(f"--- Orderable Raw Response ---\n{json_lib.dumps(body._asdict(), indent=4, ensure_ascii=False)}")
-
         output = getattr(body, 'output', None)
         if isinstance(output, dict):
-            # nrcvb_buy_amt is the "Orderable KRW" without credit
             deposit = output.get('ord_psbl_cash') or '0'
             orderable = output.get('nrcvb_buy_amt') or '0'
-            lines.append(f" Deposit         : {format(int(float(deposit)), ','):>12} KRW")
+            lines.append(f" KRW Deposit     : {format(int(float(deposit)), ','):>12} KRW")
             lines.append(f" Orderable KRW   : {format(int(float(orderable)), ','):>12} KRW")
-            lines.append("-" * 40)
-            lines.append(f" (Log: {os.path.basename(log_file)})")
-            lines.append(" [Press any key to return to menu]")
+    else:
+        lines.append(f" KRW Error       : {res_krw.getErrorMessage()}")
+
+    lines.append("-" * 40)
+
+    # 2. Overseas Info (USD)
+    # TR_ID: CTRP6504R (Real), VTRP6504R (Demo)
+    tr_id_usd = "CTRP6504R"
+
+    params_usd = {
+        "CANO": cano,
+        "ACNT_PRDT_CD": acnt_prdt_cd,
+        "WCRC_FRCR_DVSN_CD": "02",
+        "NATN_CD": "000",
+        "TR_MKET_CD": "00",
+        "INQR_DVSN_CD": "00"
+    }
+    url_usd = "/uapi/overseas-stock/v1/trading/inquire-present-balance"
+    res_usd = ka._url_fetch(url_usd, tr_id_usd, "N", params_usd)
+
+    if res_usd.isOK():
+        body = res_usd.getBody()
+        logging.info(f"--- Overseas Cash Raw Response ---\n{json_lib.dumps(body._asdict(), indent=4, ensure_ascii=False)}")
+
+        # Robustly extract the first record from output2
+        output2 = getattr(body, 'output2', None)
+        data = None
+        if isinstance(output2, list) and len(output2) > 0:
+            data = output2[0]
+        elif isinstance(output2, dict):
+            data = output2
+
+        if data:
+            def _gv(o, k): return o.get(k, '0') if isinstance(o, dict) else getattr(o, k, '0')
+            f_deposit = _gv(data, 'frcr_dncl_amt_2')
+            f_withdrawable = _gv(data, 'frcr_drwg_psbl_amt_1')
+
+            lines.append(f" USD Deposit     : {format(float(f_deposit), ',.2f'):>12} USD")
+            lines.append(f" Withdrawable USD: {format(float(f_withdrawable), ',.2f'):>12} USD")
+        else:
+            lines.append(" USD Error       : Balance info not found in output2")
+    else:
+        lines.append(f" USD Error       : {res_usd.getErrorMessage()}")
+
+    lines.append("-" * 40)
+    lines.append(f" (Log: {os.path.basename(log_file)})")
+    lines.append(" [Press any key to return to menu]")
 
     return lines
 
@@ -345,7 +388,7 @@ def menu():
         choice = input()
 
         if choice == '1':
-            lines = inquire_orderable_amount()
+            lines = inquire_combined_cash()
             with terminal_lock:
                 sys.stdout.write(SAVE_CURSOR)
                 sys.stdout.write(HOME)
@@ -353,13 +396,11 @@ def menu():
                 for line in lines:
                     sys.stdout.write(f"{CLEAR_LINE}{line}\n")
                 # Clear more lines below to ensure no ghosting
-                for _ in range(max(0, 12 - len(lines))):
+                for _ in range(max(0, 15 - len(lines))):
                     sys.stdout.write(f"{CLEAR_LINE}\n")
                 sys.stdout.write(RESTORE_CURSOR)
                 sys.stdout.flush()
-            # Wait for any key press instead of Enter
             msvcrt.getch()
-            # Immediately refresh UI after input to clear the result
             render_ui(full_refresh=True)
         elif choice == "0":
             print_log_level = (print_log_level + 1) % PrintLevel.MAX
