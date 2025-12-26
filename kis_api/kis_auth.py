@@ -742,9 +742,13 @@ class KISWebSocket:
 
         url = f"{getTREnv().my_url_ws}{self.api_url}"
 
-        while self.retry_count < self.max_retries:
+        while True:
             try:
-                async with websockets.connect(url) as ws:
+                logging.info(f"Connecting to WebSocket: {url}")
+                async with websockets.connect(url, ping_interval=60, ping_timeout=120) as ws:
+                    self.retry_count = 0 # Reset on successful connection
+                    logging.info("WebSocket Connected!")
+
                     # request subscribe
                     for name, obj in open_map.items():
                         await self.send_multiple(
@@ -755,10 +759,15 @@ class KISWebSocket:
                     await asyncio.gather(
                         self.__subscriber(ws),
                     )
+            except websockets.exceptions.ConnectionClosed as e:
+                logging.warning(f"WebSocket Connection Closed: {e}")
             except Exception as e:
-                print("Connection exception >> ", e)
-                self.retry_count += 1
-                await asyncio.sleep(1)
+                logging.error(f"WebSocket Connection Error: {e}")
+
+            self.retry_count += 1
+            wait_time = min(60, 2 ** self.retry_count) # Exponential backoff capped at 60s
+            logging.info(f"Reconnecting in {wait_time} seconds (Attempt {self.retry_count})...")
+            await asyncio.sleep(wait_time)
 
     # func
     @classmethod
