@@ -36,7 +36,7 @@
    - API 키와 HTS ID는 `PBKDF2`와 `Fernet`으로 암호화되어 `credentials.enc`에 보관됩니다. 실행 시 비밀번호 입력을 통해 안전하게 로드됩니다.
 2. **Global Market Support**:
    - **Unified Watchlist**: `stock_configuration.json`에서 `KR` 및 `US` 그룹으로 종목을 관리합니다.
-   - **Dynamic Prefixing**: US 종목의 경우 `market` 필드(NASDAQ, NYSE)를 참조하여 `DNAS`, `DNYE` 등의 KIS 전용 접두어를 자동으로 부여하여 구독합니다.
+   - **Dynamic Prefixing**: US 종목의 경우 `market` 필드(NASDAQ, NYSE, AMEX)를 참조하여 `DNAS`, `DNYS`, `DAMS` 등의 KIS 전용 접두어를 자동으로 부여하여 구독합니다.
 3. **Robust WebSocket Engine**:
    - **Compatibility Layer**: 공식 샘플 파일(`asking_price.py` 등)의 필드 정의가 실제 데이터 스트림과 일치하지 않는 문제를 `kis_auth.py` 내부의 수정 레이어(`_OVERSEAS_TR_FIX`)로 해결했습니다. 공식 파일을 수정하지 않고도 데이터 밀림 없이 정확한 파싱이 가능합니다.
    - **Automatic Reconnection**: 네트워크 단절 시 지수 백오프(Exponential Backoff) 전략을 사용하여 자동으로 재접속 및 전 종목 재구독을 수행합니다.

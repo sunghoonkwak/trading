@@ -212,6 +212,8 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             code = row.get('symb', row.get('SYMB'))
             if not code: continue
 
+
+
             if code not in trading_state.stock_data_state:
                 trading_state.stock_data_state[code] = {
                     'price': 0, 'ask': 0, 'bid': 0,
@@ -601,10 +603,10 @@ if __name__ == "__main__":
         ws.subscribe(ccnl_total, watch_list_kr)
 
     if watch_list_us:
-        # KIS Overseas Real-time TRs require prefixes like DNAS (NASDAQ) or DNYE (NYSE).
+        # KIS Overseas Real-time TRs require prefixes like DNAS (NASDAQ) or DNYS (NYSE) or DAMS (AMEX).
         formatted_us_list = []
         for ticker in watch_list_us:
-            if any(ticker.startswith(p) for p in ["DNAS", "DNYE", "DAME", "BAQ", "BAY"]):
+            if any(ticker.startswith(p) for p in ["DNAS", "DNYS", "DAMS"]):
                 formatted_us_list.append(ticker)
                 continue
 
@@ -614,9 +616,9 @@ if __name__ == "__main__":
             if market == "NASDAQ":
                 formatted_us_list.append(f"DNAS{ticker}")
             elif market == "NYSE":
-                formatted_us_list.append(f"DNYE{ticker}")
+                formatted_us_list.append(f"DNYS{ticker}")
             elif market == "AMEX":
-                formatted_us_list.append(f"DAME{ticker}")
+                formatted_us_list.append(f"DAMS{ticker}")
             else:
                 # Default fallback
                 formatted_us_list.append(f"DNAS{ticker}")

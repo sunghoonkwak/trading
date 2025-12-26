@@ -16,12 +16,14 @@ def get_stock_info(ticker: str) -> dict:
     """Find stock information by ticker across all markets, handling prefixes."""
     if not ticker: return {}
 
-    # Strip known market prefixes (DNAS: Nasdaq, DNYE: NYSE, etc.)
+    # Strip known market prefixes (DNAS: Nasdaq, DNYS: NYSE, DAMS: AMEX, etc.)
     clean_ticker = ticker
-    for prefix in ["DNAS", "DNYE", "DAMS", "BAQ", "BAY"]:
+    for prefix in ["DNAS", "DNYS", "DAMS"]:
         if ticker.startswith(prefix):
             clean_ticker = ticker[len(prefix):]
             break
+
+    clean_ticker = clean_ticker.strip()
 
     for market in ["KR", "US"]:
         for stock in CONFIG.get(market, []):

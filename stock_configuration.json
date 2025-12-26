@@ -71,7 +71,18 @@
         {
             "ticker": "SOXL",
             "name": "SOXL",
-            "market": "NASDAQ",
+            "market": "AMEX",
+            "color": [
+                50,
+                255,
+                50
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "VOO",
+            "name": "VOO",
+            "market": "AMEX",
             "color": [
                 50,
                 255,
@@ -115,6 +126,28 @@
         {
             "ticker": "BLK",
             "name": "BlackRock",
+            "market": "NYSE",
+            "color": [
+                160,
+                160,
+                160
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "O",
+            "name": "Realty Income",
+            "market": "NYSE",
+            "color": [
+                160,
+                160,
+                160
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "CPNG",
+            "name": "Coupang",
             "market": "NYSE",
             "color": [
                 160,
