@@ -1,5 +1,5 @@
 """
-Created on 20250112 
+Created on 20250112
 """
 
 
@@ -10,10 +10,10 @@ import logging
 import pandas as pd
 
 sys.path.extend(['../..', '.'])
-import kis_auth as ka
+import kis_api.kis_auth as ka
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
+# 로깅 설정 (Removed redundant config to prevent terminal bleed)
+# logging.basicConfig(level=logging.INFO)
 
 ##############################################################################################
 # [국내주식] 주문/계좌 > 주식주문(정정취소)[v1_국내주식-003]
@@ -45,7 +45,7 @@ def order_rvsecncl(
 
     ※ POST API의 경우 BODY값의 key값들을 대문자로 작성하셔야 합니다.
     (EX. "CANO" : "12345678", "ACNT_PRDT_CD": "01",...)
-    
+
     Args:
         env_dv (str): [필수] 실전모의구분 (ex. real:실전, demo:모의)
         cano (str): [필수] 종합계좌번호
@@ -62,7 +62,7 @@ def order_rvsecncl(
 
     Returns:
         pd.DataFrame: 주식주문(정정취소) 결과 데이터
-        
+
     Example:
         >>> df = order_rvsecncl(env_dv="real", cano=trenv.my_acct, acnt_prdt_cd=trenv.my_prod, ...)
         >>> print(df)
@@ -71,34 +71,34 @@ def order_rvsecncl(
     # 필수 파라미터 검증
     if env_dv == "" or env_dv is None:
         raise ValueError("env_dv is required (e.g. 'real', 'demo')")
-    
+
     if cano == "" or cano is None:
         raise ValueError("cano is required")
-    
+
     if acnt_prdt_cd == "" or acnt_prdt_cd is None:
         raise ValueError("acnt_prdt_cd is required")
-    
+
     if krx_fwdg_ord_orgno == "" or krx_fwdg_ord_orgno is None:
         raise ValueError("krx_fwdg_ord_orgno is required")
-    
+
     if orgn_odno == "" or orgn_odno is None:
         raise ValueError("orgn_odno is required")
-    
+
     if ord_dvsn == "" or ord_dvsn is None:
         raise ValueError("ord_dvsn is required")
-    
+
     if rvse_cncl_dvsn_cd == "" or rvse_cncl_dvsn_cd is None:
         raise ValueError("rvse_cncl_dvsn_cd is required (e.g. '01', '02')")
-    
+
     if ord_qty == "" or ord_qty is None:
         raise ValueError("ord_qty is required")
-    
+
     if ord_unpr == "" or ord_unpr is None:
         raise ValueError("ord_unpr is required")
-    
+
     if qty_all_ord_yn == "" or qty_all_ord_yn is None:
         raise ValueError("qty_all_ord_yn is required (e.g. 'Y', 'N')")
-    
+
     if excg_id_dvsn_cd == "" or excg_id_dvsn_cd is None:
         raise ValueError("excg_id_dvsn_cd is required (e.g. 'KRX', 'NXT', 'SOR')")
 
@@ -122,15 +122,16 @@ def order_rvsecncl(
         "QTY_ALL_ORD_YN": qty_all_ord_yn,
         "EXCG_ID_DVSN_CD": excg_id_dvsn_cd
     }
-    
+
     # 옵션 파라미터 추가
     if cndt_pric:
         params["CNDT_PRIC"] = cndt_pric
-    
+
     res = ka._url_fetch(API_URL, tr_id, "", params, postFlag=True)
-    
+
     if res.isOK():
         return pd.DataFrame([res.getBody().output])
     else:
         res.printError(url=API_URL)
-        return pd.DataFrame() 
+        # Return a DataFrame with the error message so the UI can display it
+        return pd.DataFrame([{'error_msg': res.getErrorMessage()}])

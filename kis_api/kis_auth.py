@@ -352,21 +352,12 @@ class APIResp:
             print(f"\t-{x}: {getattr(self.getBody(), x)}")
 
     def printError(self, url):
-        print(
-            "-------------------------------\nError in response: ",
-            self.getResCode(),
-            " url=",
-            url,
+        logging.error("-" * 31)
+        logging.error(f"Error in response: {self.getResCode()} url={url}")
+        logging.error(
+            f"rt_cd : {self.getBody().rt_cd} / msg_cd : {self.getErrorCode()} / msg1 : {self.getErrorMessage()}"
         )
-        print(
-            "rt_cd : ",
-            self.getBody().rt_cd,
-            "/ msg_cd : ",
-            self.getErrorCode(),
-            "/ msg1 : ",
-            self.getErrorMessage(),
-        )
-        print("-------------------------------")
+        logging.error("-" * 31)
 
     # end of class APIResp
 
@@ -444,10 +435,19 @@ def _url_fetch(
                 headers[x] = appendHeaders.get(x)
 
     if _DEBUG:
+        # Mask sensitive info in debug logs
+        def _mask_dict(d):
+            if not isinstance(d, dict): return d
+            masked = copy.deepcopy(d)
+            for k in masked.keys():
+                if k.lower() in ["appkey", "appsecret", "authorization", "secretkey"]:
+                    masked[k] = "********"
+            return masked
+
         print("< Sending Info >")
         print(f"URL: {url}, TR: {tr_id}")
-        print(f"<header>\n{headers}")
-        print(f"<body>\n{params}")
+        print(f"<header>\n{_mask_dict(headers)}")
+        print(f"<body>\n{_mask_dict(params)}")
 
     if postFlag:
         # if (hashFlag): set_order_hash_key(headers, params)
@@ -685,11 +685,22 @@ class KISWebSocket:
                 if len(d1) < 4:
                     raise ValueError("data not found...")
 
-                tr_id = d1[1]
-                dm = data_map[tr_id]
+                tr_id = d1[1].strip()
+                dm = data_map.get(tr_id)
+                if not dm:
+                    # Fallback for unmapped TR_IDs
+                    logging.warning(f"No column mapping for TR {tr_id}")
+                    continue
+
                 d = d1[3]
-                if dm.get("encrypt", None) == "Y":
-                    d = aes_cbc_base64_dec(dm["key"], dm["iv"], d)
+
+                # Reliable encryption check: First character '1' means encrypted
+                is_encrypted = (raw[0] == '1')
+                if is_encrypted:
+                    if dm.get("key") and dm.get("iv"):
+                        d = aes_cbc_base64_dec(dm["key"], dm["iv"], d)
+                    else:
+                        logging.warning(f"Decryption failed: No key/iv for TR {tr_id}")
 
                 # Split raw data string by '^' and chunk it based on column count
                 raw_values = d.split("^")
@@ -764,7 +775,15 @@ class KISWebSocket:
 
         add_data_map(tr_id=msg["body"]["input"]["tr_id"], columns=columns)
 
-        logging.info("send message >> %s" % json.dumps(msg))
+        # Mask sensitive data in WebSocket logs
+        def _mask_recursive(d):
+            if isinstance(d, dict):
+                return {k: ("********" if k.lower() in ["appkey", "secretkey", "tr_key", "approval_key"] else _mask_recursive(v)) for k, v in d.items()}
+            elif isinstance(d, list):
+                return [_mask_recursive(i) for i in d]
+            return d
+
+        logging.info("send message >> %s" % json.dumps(_mask_recursive(msg)))
 
         await ws.send(json.dumps(msg))
         await asyncio.sleep(0.5) # Reverted to 0.5s as requested

@@ -6,7 +6,7 @@ import logging
 import sys
 
 sys.path.extend(['../..', '.'])
-import kis_auth as ka
+import kis_api.kis_auth as ka
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
@@ -43,7 +43,7 @@ def ccnl_notice(
         >>> msg, columns = ccnl_notice("1", "005930", env_dv="real")
         >>> print(msg, columns)
 
-    웹소켓을 통해 실시간 데이터를 수신하며, 데이터는 암호화되어 제공됩니다. 
+    웹소켓을 통해 실시간 데이터를 수신하며, 데이터는 암호화되어 제공됩니다.
     AES256 KEY와 IV를 사용하여 복호화해야 합니다.
     """
 
@@ -66,7 +66,7 @@ def ccnl_notice(
     # 데이터 요청
     msg = ka.data_fetch(tr_id, tr_type, params)
 
-    # 응답 데이터 컬럼 정보
+    # 응답 데이터 컬럼 정보 (공식 규격 유지)
     columns = [
         "CUST_ID", "ACNT_NO", "ODER_NO", "ODER_QTY", "SELN_BYOV_CLS", "RCTF_CLS",
         "ODER_KIND", "ODER_COND", "STCK_SHRN_ISCD", "CNTG_QTY", "CNTG_UNPR",

@@ -9,10 +9,10 @@ import logging
 import pandas as pd
 
 sys.path.extend(['../..', '.'])
-import kis_auth as ka
+import kis_api.kis_auth as ka
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
+# 로깅 설정 (Removed redundant config to prevent terminal bleed)
+# logging.basicConfig(level=logging.INFO)
 
 ##############################################################################################
 # [국내주식] 주문/계좌 > 주식주문(현금)[v1_국내주식-001]
@@ -37,7 +37,7 @@ def order_cash(
     """
     국내주식주문(현금) API 입니다.
 
-    ※ TTC0802U(현금매수) 사용하셔서 미수매수 가능합니다. 단, 거래하시는 계좌가 증거금40%계좌로 신청이 되어있어야 가능합니다. 
+    ※ TTC0802U(현금매수) 사용하셔서 미수매수 가능합니다. 단, 거래하시는 계좌가 증거금40%계좌로 신청이 되어있어야 가능합니다.
     ※ 신용매수는 별도의 API가 준비되어 있습니다.
 
     ※ ORD_QTY(주문수량), ORD_UNPR(주문단가) 등을 String으로 전달해야 함에 유의 부탁드립니다.
@@ -49,7 +49,7 @@ def order_cash(
 
     ※ 종목코드 마스터파일 파이썬 정제코드는 한국투자증권 Github 참고 부탁드립니다.
     https://github.com/koreainvestment/open-trading-api/tree/main/stocks_info
-    
+
     Args:
         env_dv (str): [필수] 실전모의구분 (real:실전, demo:모의)
         ord_dv (str): [필수] 매도매수구분 (buy:매수, sell:매도)
@@ -65,7 +65,7 @@ def order_cash(
 
     Returns:
         pd.DataFrame: 주식주문 결과 데이터
-        
+
     Example:
         >>> df = order_cash(env_dv="demo", ord_dv="buy", cano=trenv.my_acct, acnt_prdt_cd=trenv.my_prod, pdno="005930", ord_dvsn="00", ord_qty="1", ord_unpr="70000", excg_id_dvsn_cd="KRX")
         >>> print(df)
@@ -74,28 +74,28 @@ def order_cash(
     # 필수 파라미터 검증
     if env_dv == "" or env_dv is None:
         raise ValueError("env_dv is required (e.g. 'real:실전, demo:모의')")
-        
+
     if ord_dv == "" or ord_dv is None:
         raise ValueError("ord_dv is required (e.g. 'buy:매수, sell:매도')")
-        
+
     if cano == "" or cano is None:
         raise ValueError("cano is required (e.g. '종합계좌번호')")
-        
+
     if acnt_prdt_cd == "" or acnt_prdt_cd is None:
         raise ValueError("acnt_prdt_cd is required (e.g. '상품유형코드')")
-        
+
     if pdno == "" or pdno is None:
         raise ValueError("pdno is required (e.g. '종목코드(6자리) , ETN의 경우 7자리 입력')")
-        
+
     if ord_dvsn == "" or ord_dvsn is None:
         raise ValueError("ord_dvsn is required (e.g. '')")
-        
+
     if ord_qty == "" or ord_qty is None:
         raise ValueError("ord_qty is required (e.g. '')")
-        
+
     if ord_unpr == "" or ord_unpr is None:
         raise ValueError("ord_unpr is required (e.g. '')")
-        
+
     if excg_id_dvsn_cd == "" or excg_id_dvsn_cd is None:
         raise ValueError("excg_id_dvsn_cd is required (e.g. 'KRX')")
 
@@ -128,12 +128,12 @@ def order_cash(
         "SLL_TYPE": sll_type,  # 매도유형
         "CNDT_PRIC": cndt_pric  # 조건가격
     }
-    
+
     res = ka._url_fetch(API_URL, tr_id, "", params, postFlag=True)
-    
+
     if res.isOK():
         current_data = pd.DataFrame([res.getBody().output])
         return current_data
     else:
         res.printError(url=API_URL)
-        return pd.DataFrame() 
+        return pd.DataFrame()

@@ -1,5 +1,5 @@
 """
-Created on 20250601 
+Created on 20250601
 """
 
 
@@ -11,10 +11,10 @@ import logging
 import pandas as pd
 
 sys.path.extend(['../..', '.'])
-import kis_auth as ka
+import kis_api.kis_auth as ka
 
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
+# 로깅 설정 (Removed redundant config to prevent terminal bleed)
+# logging.basicConfig(level=logging.INFO)
 
 ##############################################################################################
 # [국내주식] 주문/계좌 > 주식정정취소가능주문조회[v1_국내주식-004]
@@ -39,7 +39,7 @@ def inquire_psbl_rvsecncl(
     주식정정취소가능주문조회 API입니다. 한 번의 호출에 최대 50건까지 확인 가능하며, 이후의 값은 연속조회를 통해 확인하실 수 있습니다.
 
     ※ 주식주문(정정취소) 호출 전에 반드시 주식정정취소가능주문조회 호출을 통해 정정취소가능수량(output > psbl_qty)을 확인하신 후 정정취소주문 내시기 바랍니다.
-    
+
     Args:
         cano (str): [필수] 종합계좌번호 (ex. 계좌번호 체계(8-2)의 앞 8자리)
         acnt_prdt_cd (str): [필수] 계좌상품코드 (ex. 계좌번호 체계(8-2)의 뒤 2자리)
@@ -54,7 +54,7 @@ def inquire_psbl_rvsecncl(
 
     Returns:
         pd.DataFrame: 주식정정취소가능주문조회 데이터
-        
+
     Example:
         >>> df = inquire_psbl_rvsecncl(cano=trenv.my_acct, acnt_prdt_cd=trenv.my_prod, inqr_dvsn_1="1", inqr_dvsn_2="0")
         >>> print(df)
@@ -62,13 +62,13 @@ def inquire_psbl_rvsecncl(
 
     if cano == "":
         raise ValueError("cano is required (e.g. '계좌번호 체계(8-2)의 앞 8자리')")
-    
+
     if acnt_prdt_cd == "":
         raise ValueError("acnt_prdt_cd is required (e.g. '계좌번호 체계(8-2)의 뒤 2자리')")
-    
+
     if inqr_dvsn_1 == "":
         raise ValueError("inqr_dvsn_1 is required (e.g. '0: 주문, 1: 종목')")
-    
+
     if inqr_dvsn_2 == "":
         raise ValueError("inqr_dvsn_2 is required (e.g. '0: 전체, 1: 매도, 2: 매수')")
 
@@ -89,21 +89,21 @@ def inquire_psbl_rvsecncl(
         "CTX_AREA_FK100": FK100,  # 연속조회검색조건100
         "CTX_AREA_NK100": NK100  # 연속조회키100
     }
-    
+
     res = ka._url_fetch(API_URL, tr_id, tr_cont, params)
-    
+
     if res.isOK():
         current_data = pd.DataFrame(res.getBody().output)
-            
+
         if dataframe is not None:
             dataframe = pd.concat([dataframe, current_data], ignore_index=True)
         else:
             dataframe = current_data
-            
+
         tr_cont = res.getHeader().tr_cont
         FK100 = res.getBody().ctx_area_fk100
         NK100 = res.getBody().ctx_area_nk100
-        
+
         if tr_cont in ["M", "F"]:  # 다음 페이지 존재
             logging.info("Call Next page...")
             ka.smart_sleep()  # 시스템 안정적 운영을 위한 지연
@@ -115,4 +115,4 @@ def inquire_psbl_rvsecncl(
             return dataframe
     else:
         res.printError(url=API_URL)
-        return pd.DataFrame() 
+        return pd.DataFrame()
