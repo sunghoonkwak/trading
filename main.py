@@ -10,6 +10,8 @@ from enum import IntEnum
 from collections import deque
 import json
 import msvcrt
+import re
+import unicodedata
 
 # Configure logging with dynamic filename based on server start time
 log_timestamp = datetime.now().strftime("%y_%m_%d_%H_%M_%S")
@@ -32,21 +34,44 @@ class PrintLevel(IntEnum):
 
 print_log_level = PrintLevel.INFO
 
-# Load Stock Code to Name Mapping from JSON
-STOCK_NAMES = {}
+def get_fixed_width_name(name, width=8):
+    """
+    Returns a string of the specified visual width.
+    Korean characters are counted as 2 units, others as 1.
+    """
+    current_width = 0
+    result = ""
+    for char in name:
+        # 'W'ide and 'F'ullwidth are typically 2 units in terminals
+        w = 2 if unicodedata.east_asian_width(char) in ('W', 'F') else 1
+        if current_width + w > width:
+            break
+        result += char
+        current_width += w
+    return result + (" " * (width - current_width))
+
+# Load Stock Configuration from JSON
+STOCK_CONFIG = {}
 try:
-    _json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stock_name.json")
+    _json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stock_config.json")
     if os.path.exists(_json_path):
         with open(_json_path, "r", encoding="utf-8") as f:
-            STOCK_NAMES = json.load(f)
+            STOCK_CONFIG = json.load(f)
 except Exception as e:
-    # We can't use print_log here yet as the UI isn't ready,
-    # but we can fallback to a silent empty dict or simple print
     pass
+
+def get_ansi_rgb(code, text):
+    """Wrap text in ANSI RGB color sequence if config exists"""
+    cfg = STOCK_CONFIG.get(code)
+    if cfg and "color" in cfg:
+        r, g, b = cfg["color"]
+        return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
+    return text
 
 # UI Configuration
 LOG_BUFFER_SIZE = 30
 log_buffer = deque(maxlen=LOG_BUFFER_SIZE)
+latest_logs = {} # Map[code, colored_log]
 stock_data_state = {}
 terminal_lock = threading.Lock()
 
@@ -72,14 +97,30 @@ def print_log(level, log):
         logging.info(log)
 
     # 2. Update Terminal UI if level matches
+    global latest_logs
     if level <= print_log_level:
+        code = None
+        match = re.search(r"\] (([A-Z0-9]{6})|([0-9]{6})) \|", log)
+        if match:
+            code = match.group(1).strip()
+
         colored_log = log
         if level == PrintLevel.ERROR:
             colored_log = f"\033[91m{log}\033[0m" # Red
         elif level == PrintLevel.INFO:
-            colored_log = f"\033[93m{log}\033[0m" # Yellow
+            if code:
+                colored_log = get_ansi_rgb(code, log)
+            else:
+                colored_log = f"\033[93m{log}\033[0m" # Fallback Yellow
 
-        # Add to buffer
+        # Update latest logs per stock for the top section
+        if code and level == PrintLevel.INFO:
+            # Move to front of 'latest' section by re-inserting
+            if code in latest_logs:
+                del latest_logs[code]
+            latest_logs[code] = colored_log
+
+        # Add to historical buffer
         log_buffer.appendleft(colored_log)
         render_ui()
 
@@ -120,13 +161,29 @@ def render_ui(full_refresh=False):
         sys.stdout.write(f"{CLEAR_LINE} Recent Logs (Max visible: {visible_logs_count}):\n")
         sys.stdout.write("-" * (cols - 1) + "\n")
 
-        # Print top N logs from buffer that fit the screen
-        current_logs = list(log_buffer)[:visible_logs_count]
-        for log in current_logs:
-            sys.stdout.write(f"{CLEAR_LINE}{log[:cols+20]}\n")
+        # 3. Print Logs
+        # Build the prioritized display list:
+        # First, the latest message from each stock (most recent stock first)
+        display_list = []
+        # latest_logs keys are updated such that most recent is last. Let's reverse for top.
+        latest_msgs_list = list(latest_logs.values())
+        latest_msgs_list.reverse()
+
+        display_list.extend(latest_msgs_list)
+
+        # Then, fill the rest with historical logs from buffer, excluding the ones already at top
+        latest_set = set(latest_msgs_list)
+        for msg in log_buffer:
+            if msg not in latest_set:
+                display_list.append(msg)
+            if len(display_list) >= visible_logs_count:
+                break
+
+        for log in display_list[:visible_logs_count]:
+            sys.stdout.write(f"{CLEAR_LINE}{log[:cols+100]}\n")
 
         # Clear remaining rows below logs up to terminal bottom to prevent ghosting
-        for _ in range(max(0, rows - 15 - len(current_logs))):
+        for _ in range(max(0, rows - 15 - len(display_list))):
             sys.stdout.write(f"{CLEAR_LINE}\n")
 
         # 3. RETURN TO USER INPUT POSITION
@@ -148,80 +205,87 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
         print_log(PrintLevel.ERROR, f"System Message received for TR: {tr_id}")
         return
 
-    # Extract common data
-    code = df['MKSC_SHRN_ISCD'].iloc[0]
+    # Process all records in the DataFrame (KIS can send multiple updates in one message)
+    for i in range(len(df)):
+        row = df.iloc[i]
+        code = row['MKSC_SHRN_ISCD']
 
-    # Initialize state for code if not exists with all market fields
-    if code not in stock_data_state:
-        stock_data_state[code] = {
-            'price': 0, 'ask': 0, 'bid': 0,
-            'change': 0, 'rate': 0.0, 'vol': 0,
-            'time': '000000'
-        }
+        # Initialize state for code if not exists with all market fields
+        if code not in stock_data_state:
+            stock_data_state[code] = {
+                'price': 0, 'ask': 0, 'bid': 0,
+                'change': 0, 'rate': 0.0, 'vol': 0,
+                'time': '000000'
+            }
 
-    state = stock_data_state[code]
-    level = PrintLevel.DEBUG # Default level
+        state = stock_data_state[code]
+        # Forced logging for debug (SK Hynix & Samsung Securities)
+        if code in ["000660", "016360"]:
+            logging.info(f"!!! DATA RECEIVED FOR {code} !!! TR_ID: {tr_id}")
+        level = PrintLevel.DEBUG # Default level
 
-    if tr_id == "H0UNASP0": # Stock Asking Price
-        state['time'] = df['BSOP_HOUR'].iloc[0]
-        try:
-            new_ask = int(float(df['ASKP1'].iloc[0]))
-            new_bid = int(float(df['BIDP1'].iloc[0]))
+        if tr_id == "H0UNASP0": # Stock Asking Price
+            state['time'] = row['BSOP_HOUR']
+            try:
+                new_ask = int(float(row['ASKP1']))
+                new_bid = int(float(row['BID_PRC1'] if 'BID_PRC1' in row else row['BIDP1']))
 
-            # Skip if neither ask nor bid changed
-            if state['ask'] == new_ask and state['bid'] == new_bid:
-                return
-            else:
-                level = PrintLevel.INFO
+                # Skip if neither ask nor bid changed
+                if state['ask'] == new_ask and state['bid'] == new_bid:
+                    continue
+                else:
+                    level = PrintLevel.INFO
 
-            state['ask'] = new_ask
-            state['bid'] = new_bid
-        except (ValueError, TypeError):
-            return
+                state['ask'] = new_ask
+                state['bid'] = new_bid
+            except (ValueError, TypeError, KeyError):
+                continue
 
-    elif tr_id == "H0UNCNT0": # Stock Execution
-        state['time'] = df['STCK_CNTG_HOUR'].iloc[0]
-        try:
-            new_price = int(float(df['STCK_PRPR'].iloc[0]))
-            new_vol   = int(float(df['CNTG_VOL'].iloc[0]))
+        elif tr_id == "H0UNCNT0": # Stock Execution
+            state['time'] = row['STCK_CNTG_HOUR']
+            try:
+                new_price = int(float(row['STCK_PRPR']))
+                new_vol   = int(float(row['CNTG_VOL']))
 
-            # Check for INFO level conditions: price change or large volume
-            if state['price'] != new_price or new_vol >= 100:
-                level = PrintLevel.INFO
+                # Check for INFO level conditions: price change or large volume
+                if state['price'] != new_price or new_vol >= 100:
+                    level = PrintLevel.INFO
 
-            state['price']  = new_price
-            state['change'] = int(float(df['PRDY_VRSS'].iloc[0]))
-            state['rate']   = float(df['PRDY_CTRT'].iloc[0])
-            state['vol']    = new_vol
+                state['price']  = new_price
+                state['change'] = int(float(row['PRDY_VRSS']))
+                state['rate']   = float(row['PRDY_CTRT'])
+                state['vol']    = new_vol
 
-            # Add sign to change for display
-            # 1: Upper limit, 2: Up, 3: Flat, 4: Lower limit, 5: Down
-            sign = df['PRDY_VRSS_SIGN'].iloc[0]
-            state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
-        except (ValueError, TypeError):
-            return
+                # Add sign to change for display
+                # 1: Upper limit, 2: Up, 3: Flat, 4: Lower limit, 5: Down
+                sign = row['PRDY_VRSS_SIGN']
+                state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
+            except (ValueError, TypeError, KeyError):
+                continue
 
-    # Skip if we don't have enough data yet
-    if state['price'] == 0:
-        return
+        # Format values for the unified log
+        time_v = state.get('time', '000000')
+        time_s  = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
 
-    # Format values for the unified log
-    time_s  = f"{state['time'][:2]}:{state['time'][2:4]}:{state['time'][4:6]}"
-    bid_s   = format(state['bid'], ",")
-    ask_s   = format(state['ask'], ",")
-    price_s = format(state['price'], ",")
-    vol_s   = format(state['vol'], ",")
-    diff_s  = f"{state.get('sign_str', '')}{format(state['change'], ',')}"
+        # Use fallback values if data hasn't arrived yet
+        bid_s   = format(state.get('bid', 0), ",")
+        ask_s   = format(state.get('ask', 0), ",")
+        price_v = state.get('price', 0)
+        price_s = format(price_v, ",") if price_v > 0 else "-------"
+        vol_s   = format(state.get('vol', 0), ",")
+        diff_s  = f"{state.get('sign_str', '')}{format(state.get('change', 0), ',')}"
 
-    # [10:54:46] [삼성전자] 005930 | Bid:   115,900 | Last:   116,000 (    15) | Diff:    +4,900 ( 4.41%) | Ask:   116,000
-    name = STOCK_NAMES.get(code, "Unknown")
-    msg = (f"[{time_s}] [{name}] {code} | "
-           f"Bid: {bid_s:>9} | "
-           f"Last: {price_s:>9} ({vol_s:>6}) | "
-           f"Diff: {diff_s:>9} ({state['rate']:>5.2f}%) | "
-           f"Ask: {ask_s:>9}")
+        # [12:03:44] [SK하이닉스] 000660 | Bid:   178,500 | Last:   178,600 (     5) | Diff:    +5,800 ( 5.22%) | Ask:   12,300
+        cfg = STOCK_CONFIG.get(code, {})
+        name = cfg.get("name", "Unknown")
+        fixed_name = get_fixed_width_name(name, 10)
+        msg = (f"[{time_s}] [{fixed_name}] {code:<6} | "
+               f"Bid: {bid_s:>9} | "
+               f"Last: {price_s:>9} ({vol_s:>6}) | "
+               f"Diff: {diff_s:>9} ({state.get('rate', 0.0):>5.2f}%) | "
+               f"Ask: {ask_s:>9}")
 
-    print_log(level, msg)
+        print_log(level, msg)
 
 def inquire_orderable_amount() -> list:
     """
@@ -316,11 +380,14 @@ if __name__ == "__main__":
     ka.auth()
     ka.auth_ws()
 
-    ws = ka.KISWebSocket(api_url="/tryitout")
+    ws = ka.KISWebSocket(api_url="")
 
-    stocks_to_watch = ['005930', '000660']
-    ws.subscribe(asking_price_total, stocks_to_watch)
-    ws.subscribe(ccnl_total, stocks_to_watch)
+    # Load stocks to watch from config, filtering out disabled ones
+    stocks_to_watch = [code for code, cfg in STOCK_CONFIG.items() if not cfg.get("disabled", False)]
+
+    if stocks_to_watch:
+        ws.subscribe(asking_price_total, stocks_to_watch)
+        ws.subscribe(ccnl_total, stocks_to_watch)
 
     print(f"Starting websocket subscription for: {stocks_to_watch}")
     print(f"Logs are being recorded to: {log_file}")

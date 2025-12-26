@@ -18,38 +18,46 @@
 │   │   │   └── validate_credentials.py
 │   │   └── kis_auth.py         ## REST/WebSocket auth & communication library
 │   ├── main.py                 ## entry point script (Interactive Menu & WS)
-│   ├── stock_name.json         ## Stock code to name mapping
+│   ├── stock_config.json       ## Stock configuration (names, RGB, disabled)
 │   ├── target_weight.json      ## (WIP) Target portfolio weights
 │   └── openapi_trading.md      ## 프로젝트 문서
-├── credentials.enc             ## 암호화된 API 키 저장소
+├── credentials.enc             ## 암호화된 API 키 저장소 (Root level)
 └── .gitignore                  ## Git 제외 설정
 ```
 
 ## 3. Tools & Dependencies
 1. **Language**: Python 3.12+
-2. **Core Libraries**:
+2. **External Libraries (Install via pip)**:
    - `requests`: REST API 통신
    - `websockets`: 실시간 시세 수신
    - `pandas`: 데이터 프레임 처리
    - `cryptography`: API 키 암호화 (Fernet)
    - `pycryptodome`: KIS 실시간 데이터 복호화 (AES-CBC)
    - `PyYAML`: 설정 파일 관리
-   - `msvcrt`: Windows용 비차단 키 입력 처리
+3. **Standard Libraries (Built-in)**:
+   - `msvcrt`: Windows 전용 비차단 키 입력 처리
+   - `unicodedata`: 한글/영문 폭 계산 및 정렬 도움
+   - `logging`, `threading`, `re`, `json` 등
 
 ## 4. Implementation Details
 1. **Security-First Approach**:
    - `App Key`, `App Secret`, `HTS ID`는 `PBKDF2`와 `Fernet`으로 암호화되어 관리됩니다.
    - 실행 시 비밀번호 입력을 통해 동적으로 복호화하여 사용합니다.
-2. **Structured API Package**:
-   - `kis_api` 패키지 구조를 도입하여 기능별(국내주식, 해외주식, 인증 등)로 모듈화되었습니다.
-3. **Enhanced Logging & UI**:
-   - **Multi-level Log Control**: 메뉴에서 **0번** 입력을 통해 실시간 데이터의 로그 레벨을 순환 변경합니다.
-   - **Market Data with Names**: `stock_name.json`을 통해 종목 코드를 종목명으로 자동 변환하여 출력합니다.
-   - **Non-blocking Return**: `msvcrt.getch()`를 사용하여 조회 결과 확인 후 아무 키나 눌러 메뉴로 즉시 복귀할 수 있습니다.
-   - **Raw Data Logging**: API 응답 원본을 타임스탬프가 포함된 로그 파일에 JSON 형식으로 상세히 기록합니다.
+2. **Flexible Stock Configuration**:
+   - `stock_config.json`을 통해 종목별 **이름, 고유 RGB 색상, 구독 활성화 여부(disabled)**를 중앙 관리합니다.
+   - 프로젝트 실행 시 `disabled: false`인 종목만 자동으로 구독 목록에 포함됩니다.
+3. **Advanced Terminal UI**:
+   - **Prioritized Latest Status**: 로그 영역 상단에 구독 중인 모든 종목의 **최신 체결/호가 상태**를 1줄씩 고정하여 실시간 현황판 역할을 수행합니다.
+   - **Visual Width Alignment**: 한글(2폭)과 영문(1폭)의 차이를 계산하여 종목명이 달라도 로그 줄이 흐트러지지 않도록 **10자 고정 폭 정렬**을 적용했습니다.
+   - **Color-Coded Tracks**: 종목별 고유 RGB 색상을 적용하여 수많은 로그 흐름 속에서도 특정 종목의 데이터를 즉시 구분할 수 있습니다.
 4. **Account & Orderable Info**:
-   - `inquire-psbl-order` (TTTC8908R) API를 호출하여 한국투자증권 앱과 일치하는 정확한 **주문가능원화(nrcvb_buy_amt)**를 조회합니다.
-   - 예수금 총액 및 자산 총액도 함께 표시하여 계좌 상태를 한눈에 파악할 수 있습니다.
-5. **Real-time Data Processing**:
-   - `KISWebSocket` 클래스가 비동기 스레드에서 동작하며, `on_result` 콜백을 통해 데이터를 실시간으로 처리합니다.
-   - 수신된 데이터는 시각, 종목명, 현재가, 대비, 거래량 등을 포함한 정형화된 포맷으로 출력됩니다.
+   - `CTRP6010R` (잔고)와 `TTTC8908R` (주문가능조회) API를 동시에 활용하여 실제 앱과 동일한 **주문가능원화**를 정확히 산출합니다.
+5. **Robust Data Handling**:
+   - **Multi-record Processing**: 웹소켓 메시지 하나에 여러 건의 데이터가 묶여 올 경우(`count > 1`), 이를 누락 없이 개별 레코드로 분리하여 처리합니다.
+   - **Async Stability**: 구독 요청 간에 짧은 비동기 지연(`asyncio.sleep`)을 주어 서버의 요청 제한(Throttling)을 방지합니다.
+
+## 5. How to use
+1. 터미널에서 프로젝트 루트 폴더로 이동합니다.
+2. `python trading/main.py` 명령어로 프로그램을 실행합니다.
+3. `API Key loading` 프롬프트가 뜨면 설정한 비밀번호를 입력합니다.
+4. 실시간 로그를 확인하며 상단의 메뉴(1, 0, q)를 통해 계좌 정보 확인 및 로그 레벨을 제어합니다.

@@ -267,11 +267,10 @@ def getEnv():
     return _cfg
 
 
-def smart_sleep():
+async def smart_sleep_async():
     if _DEBUG:
         print(f"[RateLimit] Sleeping {_smartSleep}s ")
-
-    time.sleep(_smartSleep)
+    await asyncio.sleep(_smartSleep)
 
 
 def getTREnv():
@@ -675,9 +674,10 @@ class KISWebSocket:
     # private
     async def __subscriber(self, ws: websockets.ClientConnection):
         async for raw in ws:
-            logging.info("received message >> %s" % raw)
-            show_result = False
+            # Debug: Log ALL raw messages at the very beginning
+            logging.debug(f"### [RAW RECV] {raw[:200]}...")
 
+            show_result = False
             df = pd.DataFrame()
 
             if raw[0] in ["0", "1"]:
@@ -686,17 +686,25 @@ class KISWebSocket:
                     raise ValueError("data not found...")
 
                 tr_id = d1[1]
-
                 dm = data_map[tr_id]
                 d = d1[3]
                 if dm.get("encrypt", None) == "Y":
                     d = aes_cbc_base64_dec(dm["key"], dm["iv"], d)
 
-                df = pd.read_csv(
-                    StringIO(d), header=None, sep="^", names=dm["columns"], dtype=object
-                )
+                # Split raw data string by '^' and chunk it based on column count
+                raw_values = d.split("^")
+                num_cols = len(dm["columns"])
 
-                show_result = True
+                # Reshape records: Some KIS messages bundle multiple updates (e.g. 002 count)
+                records = [raw_values[i:i + num_cols] for i in range(0, len(raw_values), num_cols)
+                           if len(raw_values[i:i + num_cols]) >= num_cols]
+
+                if records:
+                    logging.info(f"--- Recv {tr_id} count={d1[2]} parsed_records={len(records)} first_code={records[0][0]} ---")
+                    df = pd.DataFrame(records, columns=dm["columns"])
+                    show_result = True
+                else:
+                    logging.warning(f"Could not parse records from data (length error?): {d[:100]}...")
 
             else:
                 rsp = system_resp(raw)
@@ -759,7 +767,7 @@ class KISWebSocket:
         logging.info("send message >> %s" % json.dumps(msg))
 
         await ws.send(json.dumps(msg))
-        smart_sleep()
+        await asyncio.sleep(0.5) # Reverted to 0.5s as requested
 
     async def send_multiple(
             self,
