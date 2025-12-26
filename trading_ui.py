@@ -62,12 +62,30 @@ def print_log(level, log):
 
     global latest_logs
     if level <= print_log_level:
-        # Find the ticker code in the log msg: e.g. [MKT][Samsung   ] 005930 |
-        # Looks for the string between the last closing bracket and the pipe.
+        # Extract Ticker and Type to create a composite key
+        # Patterns:
+        # Market: [MKT][Name] Ticker | ...
+        # Order:  [BUY][ODR] [Name] Ticker | ...
+
         code = None
-        match = re.search(r"\]\s+([\w\d]+)\s+\|", log)
-        if match:
-            code = match.group(1).strip()
+        log_type = "MKT" # Default to Market
+
+        # 1. Extract Ticker
+        # Look for the string between the last closing bracket and the pipe.
+        match_code = re.search(r"\]\s+([\w\d]+)\s+\|", log)
+        if match_code:
+            raw_code = match_code.group(1).strip()
+            # Normalize code: Remove 4-char prefix if it's an overseas code (e.g. DNASNVDA -> NVDA)
+            if len(raw_code) > 6 and raw_code[:4] in ["DNAS", "DNYE", "DAME", "HKSE", "HNXS"]:
+                 code = raw_code[4:]
+            else:
+                 code = raw_code
+
+        # 2. Extract Type (MKT vs ODR/COR/CAN/EXE/REJ)
+        if "[MKT]" in log:
+            log_type = "MKT"
+        elif any(x in log for x in ["[ODR]", "[COR]", "[CAN]", "[EXE]", "[REJ]"]):
+            log_type = "ODR"
 
         colored_log = log
         if level == PrintLevel.ERROR:
@@ -76,13 +94,21 @@ def print_log(level, log):
             colored_log = f"\033[90m{log}\033[0m" # Gray for DEBUG
         elif level == PrintLevel.INFO:
             if code:
+                # Use normalized code fo coloring lookup if needed, but usually raw code is in config?
+                # Actually config keys are usually without prefix or with?
+                # efficient strategy: try both or assume config key.
+                # Let's use the extracted code for coloring if possible.
                 colored_log = get_ansi_rgb(code, log)
+                if colored_log == log: # Fallback using raw code if normalized one fails
+                    colored_log = get_ansi_rgb(match_code.group(1).strip(), log)
             else:
                 colored_log = f"\033[93m{log}\033[0m" # Yellow for general INFO
 
         if code and level == PrintLevel.INFO:
-            # Update the latest summary for this stock
-            latest_logs[code] = colored_log
+            # Update the latest summary with COMPOSITE KEY
+            # Key format: "NVDA_MKT" or "NVDA_ODR"
+            composite_key = f"{code}_{log_type}"
+            latest_logs[composite_key] = colored_log
 
         log_buffer.appendleft(colored_log)
         render_ui()
@@ -103,6 +129,15 @@ def show_in_result_area(lines):
             sys.stdout.write(f"\033[{i+1};1H{CLEAR_LINE}{line}")
         sys.stdout.write(RESTORE_CURSOR)
         sys.stdout.flush()
+
+def clear_order_logs():
+    global latest_logs
+    # Remove keys ending with _ODR
+    # Use list(keys) to avoid runtime error during iteration
+    keys_to_remove = [k for k in latest_logs.keys() if k.endswith("_ODR")]
+    for k in keys_to_remove:
+        del latest_logs[k]
+    render_ui()
 
 def input_at(row, col, prompt):
     with terminal_lock:
@@ -128,7 +163,7 @@ def render_ui(full_refresh=False):
                 " 3. Manage Open Orders (Correct/Cancel)",
                 " 4. Show Portfolio (Holdings)",
                 " 0. Change Log Level",
-                " q. Exit"
+                " c. Clear Order Logs  q. Exit"
             ]
             for i, line in enumerate(menu_lines):
                 sys.stdout.write(f"\033[{i+1};1H{CLEAR_LINE}{line}")

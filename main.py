@@ -564,6 +564,8 @@ def menu():
             else:
                 trading_ui.print_log_level = PrintLevel.INFO
             print_log(PrintLevel.ERROR, f"Log Level Changed to: {trading_ui.print_log_level.name}")
+        elif choice.lower() == 'c':
+            trading_ui.clear_order_logs()
         elif choice.lower() == 'q':
             prepare_exit()
             print("Exiting...")
