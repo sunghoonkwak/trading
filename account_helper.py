@@ -145,7 +145,7 @@ def get_integrated_account_info() -> dict:
                 mapped = {
                     'name': _get_val(item, ['prdt_name', 'PRDT_NAME'], 'Unknown'),
                     'qty': float(_get_val(item, ['ccld_qty_smtl1', 'CCLD_QTY_SMTL1'],
-                                   _get_val(item, ['ovrs_cblc_qty', 'OVRS_CBLC_QTY'], 0))),
+                                _get_val(item, ['ovrs_cblc_qty', 'OVRS_CBLC_QTY'], 0))),
                     'cur_price': float(_get_val(item, ['ovrs_now_pric1', 'OVRS_NOW_PRIC1'], 0)),
                     'avg_price': float(_get_val(item, ['pchs_avg_pric', 'PCHS_AVG_PRIC'], 0)),
                     'pnl_rate': float(_get_val(item, ['evlu_pfls_rt1', 'EVLU_PFLS_RT1'], 0)),
@@ -165,8 +165,8 @@ def get_integrated_account_info() -> dict:
             o2 = out2[0] if isinstance(out2, list) else out2
             asset.update(o2)
             if ex_rate == 0.0:
-                 r2 = _get_val(o2, ['frst_bltn_exrt', 'FRST_BLTN_EXRT'], 0)
-                 if r2: ex_rate = float(r2)
+                r2 = _get_val(o2, ['frst_bltn_exrt', 'FRST_BLTN_EXRT'], 0)
+                if r2: ex_rate = float(r2)
 
         if out3:
             o3 = out3[0] if isinstance(out3, list) else out3

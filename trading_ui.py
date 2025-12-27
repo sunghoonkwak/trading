@@ -77,9 +77,9 @@ def print_log(level, log):
             raw_code = match_code.group(1).strip()
             # Normalize code: Remove 4-char prefix if it's an overseas code (e.g. DNASNVDA -> NVDA)
             if len(raw_code) > 6 and raw_code[:4] in ["DNAS", "DNYE", "DAME", "HKSE", "HNXS"]:
-                 code = raw_code[4:]
+                code = raw_code[4:]
             else:
-                 code = raw_code
+                code = raw_code
 
         # 2. Extract Type (MKT vs ODR/COR/CAN/EXE/REJ)
         if "[MKT]" in log:

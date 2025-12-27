@@ -159,10 +159,10 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             name = cfg.get("name", "Unknown")
             fixed_name = get_fixed_width_name(name, 10)
             msg = (f"[{time_s}] [MKT][{fixed_name}] {code:<6} | "
-                   f"Bid: {bid_s:>9} | "
-                   f"Last: {price_s:>9} ({vol_s:>6}) | "
-                   f"Diff: {diff_s:>9} ({state.get('rate', 0.0):>5.2f}%) | "
-                   f"Ask: {ask_s:>9}")
+                f"Bid: {bid_s:>9} | "
+                f"Last: {price_s:>9} ({vol_s:>6}) | "
+                f"Diff: {diff_s:>9} ({state.get('rate', 0.0):>5.2f}%) | "
+                f"Ask: {ask_s:>9}")
             print_log(level, msg)
             continue
 
@@ -219,10 +219,10 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             name = cfg.get("name", "Unknown")
             fixed_name = get_fixed_width_name(name, 10)
             msg = (f"[{time_s}] [MKT][{fixed_name}] {code:<8} | "
-                   f"Bid: {bid_s:>9} | "
-                   f"Last: {price_s:>9} ({vol_s:>6}) | "
-                   f"Diff: {diff_s:>9} ({state.get('rate', 0.0):>5.2f}%) | "
-                   f"Ask: {ask_s:>9}")
+                f"Bid: {bid_s:>9} | "
+                f"Last: {price_s:>9} ({vol_s:>6}) | "
+                f"Diff: {diff_s:>9} ({state.get('rate', 0.0):>5.2f}%) | "
+                f"Ask: {ask_s:>9}")
             print_log(level, msg)
             continue
 
@@ -271,7 +271,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 fixed_name = get_fixed_width_name(name, 10)
 
                 msg = (f"[{time_s}] [{side}][{order_val}] [{fixed_name}] {code:<6} | "
-                       f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
+                    f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
                 print_log(msg_level, msg)
                 continue
             except Exception as e:
@@ -335,7 +335,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 fixed_name = get_fixed_width_name(name, 10)
 
                 msg = (f"[{time_s}] [{side}][{order_val}] [{fixed_name}] {code:<8} | "
-                       f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
+                    f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
                 print_log(msg_level, msg)
                 continue
             except Exception as e:
@@ -448,8 +448,8 @@ def inquire_account_info() -> list:
             page_items = target_list[start_idx:end_idx]
 
             if not page_items:
-                 lines.append("  (No holdings)")
-                 for _ in range(ROWS_PER_PAGE-1): lines.append("")
+                lines.append("  (No holdings)")
+                for _ in range(ROWS_PER_PAGE-1): lines.append("")
             else:
                 for item in page_items:
                     ticker = str(item.get('symbol', ''))[:6]

@@ -104,12 +104,12 @@ def handle_place_order():
 
                     curr_price = 0
                     for k in keys_to_check:
-                         st = trading_state.stock_data_state.get(k, {})
-                         p = st.get('price', 0)
-                         if p == 0: p = st.get('ask', 0)
-                         if p > 0:
-                             curr_price = p
-                             break
+                        st = trading_state.stock_data_state.get(k, {})
+                        p = st.get('price', 0)
+                        if p == 0: p = st.get('ask', 0)
+                        if p > 0:
+                            curr_price = p
+                            break
 
                     qty_str = ""
                     if ord_dv == "buy":
@@ -180,9 +180,9 @@ def handle_place_order():
             # Check price logic
             price_val = 0
             if not price_input or price_input == "0":
-                 # Use current price reference
-                 price_val = trading_state.stock_data_state.get(pdno, {}).get('price', 0)
-                 if price_val == 0: price_val = trading_state.stock_data_state.get(pdno, {}).get('ask', 0)
+                # Use current price reference
+                price_val = trading_state.stock_data_state.get(pdno, {}).get('price', 0)
+                if price_val == 0: price_val = trading_state.stock_data_state.get(pdno, {}).get('ask', 0)
             else:
                 try: price_val = float(price_input)
                 except: price_val = 0
@@ -203,7 +203,7 @@ def handle_place_order():
             # Final Confirm
             price_disp = price_input if price_input and price_input != "0" else f"{price_val} (Market/Ref)"
             if target_market == "KR" and (not price_input or price_input=="0"):
-                 price_disp = "Market Price"
+                price_disp = "Market Price"
 
             recap = header_lines + [
                 f" Side       : {ord_dv.upper()}",
@@ -256,9 +256,9 @@ def handle_place_order():
 
                 final_price = str(price_val)
                 if not price_input or price_input == "0":
-                     # Use current price as limit price if "market" intended, or warn?
-                     # Let's trust user input. If 0, maybe API rejects.
-                     pass
+                    # Use current price as limit price if "market" intended, or warn?
+                    # Let's trust user input. If 0, maybe API rejects.
+                    pass
 
                 df_res = order_overseas(
                     cano=cano,
@@ -400,7 +400,7 @@ def handle_manage_orders():
             excg_id = t_ord.get('excg_id_dvsn_cd', 'KRX')
 
             if action == '2': # Cancel
-                 df_res = order_rvsecncl(
+                df_res = order_rvsecncl(
                     env_dv="real",
                     cano=cano,
                     acnt_prdt_cd=prod,
@@ -414,8 +414,8 @@ def handle_manage_orders():
                     excg_id_dvsn_cd=excg_id
                 )
             else: # Correct
-                 new_price = input_at(len(order_list)+6, 2, "New Price: ").strip()
-                 df_res = order_rvsecncl(
+                new_price = input_at(len(order_list)+6, 2, "New Price: ").strip()
+                df_res = order_rvsecncl(
                     env_dv="real",
                     cano=cano,
                     acnt_prdt_cd=prod,
@@ -429,47 +429,47 @@ def handle_manage_orders():
                     excg_id_dvsn_cd=excg_id
                 )
         else: # US
-             # Cancel/Correct Overseas
-             pdno = t_ord.get('pdno')
-             orgn_odno = t_ord.get('odno')
-             excg_cd = t_ord.get('ovrs_excg_cd', 'NASD')
+            # Cancel/Correct Overseas
+            pdno = t_ord.get('pdno')
+            orgn_odno = t_ord.get('odno')
+            excg_cd = t_ord.get('ovrs_excg_cd', 'NASD')
 
-             # Qty (nccs_qty = unexecuted, ft_ord_qty4/ord_qty = total?)
-             # Prioritize nccs_qty if available for remnant cancellation
-             qty = t_ord.get('nccs_qty', t_ord.get('ft_ord_qty4', t_ord.get('ord_qty', 0)))
+            # Qty (nccs_qty = unexecuted, ft_ord_qty4/ord_qty = total?)
+            # Prioritize nccs_qty if available for remnant cancellation
+            qty = t_ord.get('nccs_qty', t_ord.get('ft_ord_qty4', t_ord.get('ord_qty', 0)))
 
-             # Use full quantity directly as requested (no partial)
-             final_qty = str(qty)
+            # Use full quantity directly as requested (no partial)
+            final_qty = str(qty)
 
-             if action == '2': # Cancel
-                 df_res = order_rvsecncl_overseas(
-                     cano=cano,
-                     acnt_prdt_cd=prod,
-                     ovrs_excg_cd=excg_cd,
-                     pdno=pdno,
-                     orgn_odno=orgn_odno,
-                     rvse_cncl_dvsn_cd="02", # Cancel
-                     ord_qty=final_qty,
-                     ovrs_ord_unpr="0",
-                     mgco_aptm_odno="",
-                     ord_svr_dvsn_cd="0",
-                     env_dv="real"
-                 )
-             else: # Correct
-                 new_price = input_at(len(order_list)+6, 2, "New Price: ").strip()
-                 df_res = order_rvsecncl_overseas(
-                     cano=cano,
-                     acnt_prdt_cd=prod,
-                     ovrs_excg_cd=excg_cd,
-                     pdno=pdno,
-                     orgn_odno=orgn_odno,
-                     rvse_cncl_dvsn_cd="01", # Correct
-                     ord_qty=final_qty,
-                     ovrs_ord_unpr=new_price,
-                     mgco_aptm_odno="",
-                     ord_svr_dvsn_cd="0",
-                     env_dv="real"
-                 )
+            if action == '2': # Cancel
+                df_res = order_rvsecncl_overseas(
+                    cano=cano,
+                    acnt_prdt_cd=prod,
+                    ovrs_excg_cd=excg_cd,
+                    pdno=pdno,
+                    orgn_odno=orgn_odno,
+                    rvse_cncl_dvsn_cd="02", # Cancel
+                    ord_qty=final_qty,
+                    ovrs_ord_unpr="0",
+                    mgco_aptm_odno="",
+                    ord_svr_dvsn_cd="0",
+                    env_dv="real"
+                )
+            else: # Correct
+                new_price = input_at(len(order_list)+6, 2, "New Price: ").strip()
+                df_res = order_rvsecncl_overseas(
+                    cano=cano,
+                    acnt_prdt_cd=prod,
+                    ovrs_excg_cd=excg_cd,
+                    pdno=pdno,
+                    orgn_odno=orgn_odno,
+                    rvse_cncl_dvsn_cd="01", # Correct
+                    ord_qty=final_qty,
+                    ovrs_ord_unpr=new_price,
+                    mgco_aptm_odno="",
+                    ord_svr_dvsn_cd="0",
+                    env_dv="real"
+                )
 
         # Check Result
         clear_result_area()
@@ -484,33 +484,33 @@ def handle_manage_orders():
         res_odno = ""
 
         if not df_res.empty:
-             # Case-insensitive column check
-             cols = {c.lower(): c for c in df_res.columns}
+            # Case-insensitive column check
+            cols = {c.lower(): c for c in df_res.columns}
 
-             # Success Check
-             if 'odno' in cols:
-                 is_success = True
-                 res_odno = df_res.iloc[0][cols['odno']]
-             elif 'ord_no' in cols:
-                 is_success = True
-                 res_odno = df_res.iloc[0][cols['ord_no']]
-             elif 'msg1' in cols:
-                 # Some APIs return success msg in msg1 without odno in output (rare for order)
-                 if df_res.iloc[0][cols['msg1']] and "정상" in str(df_res.iloc[0][cols['msg1']]):
-                     is_success = True
+            # Success Check
+            if 'odno' in cols:
+                is_success = True
+                res_odno = df_res.iloc[0][cols['odno']]
+            elif 'ord_no' in cols:
+                is_success = True
+                res_odno = df_res.iloc[0][cols['ord_no']]
+            elif 'msg1' in cols:
+                # Some APIs return success msg in msg1 without odno in output (rare for order)
+                if df_res.iloc[0][cols['msg1']] and "정상" in str(df_res.iloc[0][cols['msg1']]):
+                    is_success = True
 
-             # Message Extraction
-             if 'msg1' in cols: res_msg = df_res.iloc[0][cols['msg1']]
-             elif 'message' in cols: res_msg = df_res.iloc[0][cols['message']]
+            # Message Extraction
+            if 'msg1' in cols: res_msg = df_res.iloc[0][cols['msg1']]
+            elif 'message' in cols: res_msg = df_res.iloc[0][cols['message']]
 
         final_lines = lines[:3] # Keep Header
         if is_success:
-             final_lines.append(f" Result : SUCCESS")
-             final_lines.append(f" Ord No : {res_odno}")
-             final_lines.append(f" Message: {res_msg}")
+            final_lines.append(f" Result : SUCCESS")
+            final_lines.append(f" Ord No : {res_odno}")
+            final_lines.append(f" Message: {res_msg}")
         else:
-             final_lines.append(f" Result : FAILED")
-             final_lines.append(f" Message: {res_msg}")
+            final_lines.append(f" Result : FAILED")
+            final_lines.append(f" Message: {res_msg}")
 
         final_lines.append(" Press any key to return...")
         show_in_result_area(final_lines)
