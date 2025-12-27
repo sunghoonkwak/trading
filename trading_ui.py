@@ -23,6 +23,15 @@ CLEAR_LINE = "\033[2K"
 HOME = "\033[H"
 CLEAR_SCREEN = "\033[2J"
 
+# Menu Options (Synced with main.py logic)
+MENU_OPTIONS = [
+    " 1. Account Info (Balance & Portfolio)",
+    " 2. Place Order (Buy/Sell)",
+    " 3. Manage Open Orders (Correct/Cancel)",
+    " 0. Change Log Level", # Toggle
+    " c. Clear Order Logs  q. Exit"
+]
+
 class PrintLevel(IntEnum):
     ERROR = 0
     INFO = 1
@@ -63,10 +72,7 @@ def print_log(level, log):
     global latest_logs
     if level <= print_log_level:
         # Extract Ticker and Type to create a composite key
-        # Patterns:
-        # Market: [MKT][Name] Ticker | ...
-        # Order:  [BUY][ODR] [Name] Ticker | ...
-
+        # Patterns: [MKT][Name] Ticker | ... OR [BUY][ODR] [Name] Ticker | ...
         code = None
         log_type = "MKT" # Default to Market
 
@@ -76,7 +82,7 @@ def print_log(level, log):
         if match_code:
             raw_code = match_code.group(1).strip()
             # Normalize code: Remove 4-char prefix if it's an overseas code (e.g. DNASNVDA -> NVDA)
-            if len(raw_code) > 6 and raw_code[:4] in ["DNAS", "DNYE", "DAME", "HKSE", "HNXS"]:
+            if len(raw_code) > 6 and raw_code[:4] in ["DNAS", "DNYS", "DAMS", "HKSE", "HNXS"]:
                 code = raw_code[4:]
             else:
                 code = raw_code
@@ -94,12 +100,9 @@ def print_log(level, log):
             colored_log = f"\033[90m{log}\033[0m" # Gray for DEBUG
         elif level == PrintLevel.INFO:
             if code:
-                # Use normalized code fo coloring lookup if needed, but usually raw code is in config?
-                # Actually config keys are usually without prefix or with?
-                # efficient strategy: try both or assume config key.
-                # Let's use the extracted code for coloring if possible.
+                # Use extracted code for coloring lookup
                 colored_log = get_ansi_rgb(code, log)
-                if colored_log == log: # Fallback using raw code if normalized one fails
+                if colored_log == log and match_code: # Fallback using raw code
                     colored_log = get_ansi_rgb(match_code.group(1).strip(), log)
             else:
                 colored_log = f"\033[93m{log}\033[0m" # Yellow for general INFO
@@ -133,7 +136,6 @@ def show_in_result_area(lines):
 def clear_order_logs():
     global latest_logs
     # Remove keys ending with _ODR
-    # Use list(keys) to avoid runtime error during iteration
     keys_to_remove = [k for k in latest_logs.keys() if k.endswith("_ODR")]
     for k in keys_to_remove:
         del latest_logs[k]
@@ -154,18 +156,13 @@ def render_ui(full_refresh=False):
 
         if full_refresh:
             status_name = "ERROR" if print_log_level == PrintLevel.ERROR else "INFO" if print_log_level == PrintLevel.INFO else "DEBUG"
-            menu_lines = [
-                "=" * min(cols, 40),
-                f" KIS Real-time System (Log: {status_name})",
-                "=" * min(cols, 40),
-                " 1. Account Info (Balance & Portfolio)",
-                " 2. Place Order (Buy/Sell)",
-                " 3. Manage Open Orders (Correct/Cancel)",
-                " 0. Change Log Level",
-                " c. Clear Order Logs  q. Exit"
-            ]
-            for i, line in enumerate(menu_lines):
-                sys.stdout.write(f"\033[{i+1};1H{CLEAR_LINE}{line}")
+
+            sys.stdout.write(f"\033[1;1H{CLEAR_LINE}" + "=" * min(cols, 40))
+            sys.stdout.write(f"\033[2;1H{CLEAR_LINE} KIS Real-time System (Log: {status_name})")
+            sys.stdout.write(f"\033[3;1H{CLEAR_LINE}" + "=" * min(cols, 40))
+
+            for i, opt in enumerate(MENU_OPTIONS):
+                sys.stdout.write(f"\033[{i+4};1H{CLEAR_LINE}{opt}")
 
         sys.stdout.write(f"\033[12;1H{CLEAR_LINE}" + "=" * (cols - 1))
         sys.stdout.write(f"\033[13;1H{CLEAR_LINE} Recent Logs (Max: {visible_logs_count})")

@@ -10,8 +10,7 @@ def get_integrated_account_info() -> dict:
     Fetch Integrated Account Info (Cash + Portfolio)
 
     1. Domestic Balance (TTTC8434R): Stocks & Total Asset
-    2. Domestic Orderable (TTTC8908R): Precise Orderable Cash
-    3. Overseas Present (CTRP6504R): Stocks, Asset & Exchange Rate
+    2. Overseas Present (CTRP6504R): Stocks, Asset & Exchange Rate
 
     Returns:
         {
@@ -20,7 +19,7 @@ def get_integrated_account_info() -> dict:
             'domestic_asset': {},
             'overseas_asset': {},
             'exchange_rate': 0.0,
-            'krw_orderable': 0, # From TTTC8908R
+            'krw_orderable': 0,
             'error': None
         }
     """
@@ -98,7 +97,7 @@ def get_integrated_account_info() -> dict:
 
 
 
-    # --- 3. Overseas: inquire-present-balance (CTRP6504R) ---
+    # --- 2. Overseas: inquire-present-balance (CTRP6504R) ---
     url_us = "/uapi/overseas-stock/v1/trading/inquire-present-balance"
     tr_id_us = "CTRP6504R"
     params_us = {

@@ -22,19 +22,9 @@ def handle_place_order():
         while True:
             # Fetch balance each time we loop back to main menu
             data = get_integrated_account_info()
-            # Domestic: Output2 'ord_psbl_cash' (Orderable Cash) or 'dnca_tot_amt' (Deposit)
-            # Use 'dnca_tot_amt' as safe default if 'ord_psbl_cash' is not in Output2 of inquire-balance
-            # Wait, inquire-balance (TTTC8434R) output2 has 'dnca_tot_amt', 'prvs_rcdl_excc_amt', etc.
-            # It does NOT have 'ord_psbl_cash' explicitly usually (that's in inquire-psbl-order).
-            # But let's check key names from log or previous usage.
-            # Previous usage used inquire-psbl-order. Now we use inquire-balance.
-            # inquire-balance Output2 keys: dnca_tot_amt, bfdy_tot_asst_evlu_amt, etc.
-            # Let's use 'dnca_tot_amt' (Deposit) for KRW balance approximation.
-            # For strict orderable, we might need the other API, but user wanted integration.
-            # Let's use 'dnca_tot_amt' (Deposit) as Orderable for now.
 
-            d_asset = data.get('domestic_asset', {})
-            try: krw_bal = int(float(d_asset.get('dnca_tot_amt', 0)))
+            # Domestic: Use 'krw_orderable' (Orderable Cash) to match Account Info view
+            try: krw_bal = int(data.get('krw_orderable', 0))
             except: krw_bal = 0
 
             # Overseas: Output2 'frcr_drwg_psbl_amt_1' (Withdrawable)
@@ -47,7 +37,7 @@ def handle_place_order():
 
             # 1. Side Selection with Toggle
             clear_result_area()
-            header = [f" [Place Order - {market_label}] KRW: {krw_bal:,} | USD: ${usd_bal:,.2f}"]
+            header = [f" [Place Order - {market_label}] Orderable KRW: {krw_bal:,} | USD: ${usd_bal:,.2f}"]
             show_in_result_area(header)
 
             side_input = input_at(2, 2, f" Select Side (1: Buy, 2: Sell, Enter: Toggle Check {('KR' if target_market=='US' else 'US')}, q: Cancel): ").strip()
@@ -91,7 +81,7 @@ def handle_place_order():
                 end_idx = min(start_idx + ITEMS_PER_PAGE, len(fav_list))
                 page_items = fav_list[start_idx:end_idx]
 
-                lines = [f"[Place Order - {market_label} - {side_label}] KRW: {krw_bal:,} | USD: ${usd_bal:,.2f}"]
+                lines = [f"[Place Order - {market_label} - {side_label}] Orderable KRW: {krw_bal:,} | USD: ${usd_bal:,.2f}"]
 
                 # Build Grid
                 row_buffer = []
@@ -100,7 +90,7 @@ def handle_place_order():
                     # Lookup with prefixes for US if needed (DNAS, DNYE, DAME)
                     keys_to_check = [item[1]]
                     if target_market == "US":
-                        keys_to_check += [f"{p}{item[1]}" for p in ["DNAS", "DNYE", "DAME"]]
+                        keys_to_check += [f"{p}{item[1]}" for p in ["DNAS", "DNYS", "DAMS"]]
 
                     curr_price = 0
                     for k in keys_to_check:
@@ -175,9 +165,6 @@ def handle_place_order():
             if price_input.lower() == 'q': continue
 
             # Determine Price
-            # Note: For US, usually limit orders are standard. Market orders might need special '0' or different implementation.
-            # Assuming limit order if price given.
-            # Check price logic
             price_val = 0
             if not price_input or price_input == "0":
                 # Use current price reference
@@ -238,26 +225,14 @@ def handle_place_order():
                 )
             else:
                 # Overseas
-                # Need Exchange Code. Try to get from config or default to NASD (as inferred)
                 mkt_code = stock_info.get('market', 'NASD').upper()
-                # Config might have specific codes or need mapping
-                # Assuming Config has valid codes (NASDAQ, NYSE etc -> need mapping)
-                # Map standard markets to KIS codes
                 excg_map = {"NASDAQ": "NASD", "NYSE": "NYSE", "AMEX": "AMEX", "US": "NASD"}
-                ovrs_excg = excg_map.get(mkt_code, "NASD") # Default to NASD (which checks all for some APIs, but for order needs specific?)
-                # Wait, for ORDER, we need specific. But if we don't know, maybe we should ask or try NASD?
-                # User config usually says NASDAQ/NYSE.
-
-                # Price must be supplied. If 0/Market, US uses "00" with price "0"?
-                # Check order() doc: "00 : 지정가". Market orders for US? "32: LOO, 31: MOO"... KIS usually treats "00" as limit.
-                # If user wants market, maybe we force limit at current price? Or check if US supports market order via API easily.
-                # Documentation says "00: Limit". Market order might be simpler if we just pass 0 price?
-                # Let's stick to Limit (00) with specified price. If user entered 0, we use collected price?
+                ovrs_excg = excg_map.get(mkt_code, "NASD")
 
                 final_price = str(price_val)
                 if not price_input or price_input == "0":
-                    # Use current price as limit price if "market" intended, or warn?
-                    # Let's trust user input. If 0, maybe API rejects.
+                    # If user entered 0/Market, we use captured price as limit
+                    # (KIS US market ordering often requires limit price)
                     pass
 
                 df_res = order_overseas(
@@ -284,7 +259,6 @@ def handle_place_order():
                 if 'odno' in cols or 'ord_no' in cols: # Overseas might use ODNO
                     is_success = True
                     msg = "SUCCESS"
-                    # Log details if needed
 
             show_in_result_area(recap + [f"Result: {msg}", "Press any key..."])
             msvcrt.getch()
@@ -308,8 +282,7 @@ def handle_manage_orders():
         market_found = "US"
 
         # 1. Check Overseas
-        # ovrs_excg_cd="NASD" (searches all US matches per docs) or leave empty if possible (but docs say must verify).
-        # Assuming US trading mainly.
+        # ovrs_excg_cd="NASD" (searches all US matches per docs)
         df = inquire_nccs_overseas(cano=cano, acnt_prdt_cd=prod, ovrs_excg_cd="NASD", sort_sqn="DS", FK200="", NK200="")
 
         if df.empty:
@@ -323,10 +296,6 @@ def handle_manage_orders():
 
         order_list = []
         for i, row in df.iterrows():
-            # Normalize fields
-            # KR: prdt_name, ord_unpr, psbl_qty, ord_dvsn_cd, ord_gno_brno, odno
-            # US: prdt_name, ft_ord_unpr4(price), ft_ord_qty4(qty), sll_buy_dvsn_cd_name, odno, ovrs_excg_cd, pdno
-
             # Common
             name = row.get('prdt_name', row.get('pdno', 'Unknown'))
             odno = row.get('odno', 'Unknown')
@@ -351,11 +320,6 @@ def handle_manage_orders():
                 price = int(float(row.get('ord_unpr', '0')))
                 qty = row.get('psbl_qty', 0)
             else: # US
-                # Log raw keys for first item to help debugging
-                if i == 0:
-                    logging.debug(f"[ManageOrders] Row Keys: {list(row.keys())}")
-                    logging.debug(f"[ManageOrders] Row Values: {row.to_dict()}")
-
                 side_name = get_val(['sll_buy_dvsn_cd_name', 'sll_buy_dvsn_name'], '?')
                 if not side_name or side_name == '?':
                     side_code = get_val(['sll_buy_dvsn_cd'], '')
@@ -410,7 +374,7 @@ def handle_manage_orders():
                     rvse_cncl_dvsn_cd="02",
                     ord_qty=t_ord.get('psbl_qty'),
                     ord_unpr="0",
-                    qty_all_ord_yn="Y",
+                    qty_all_ord_yn="Y", # Full quantity only (API Restriction)
                     excg_id_dvsn_cd=excg_id
                 )
             else: # Correct
@@ -425,7 +389,7 @@ def handle_manage_orders():
                     rvse_cncl_dvsn_cd="01", # Correct
                     ord_qty=t_ord.get('psbl_qty'),
                     ord_unpr=new_price,
-                    qty_all_ord_yn="Y",
+                    qty_all_ord_yn="Y", # Full quantity only (API Restriction)
                     excg_id_dvsn_cd=excg_id
                 )
         else: # US
@@ -474,8 +438,6 @@ def handle_manage_orders():
         # Check Result
         clear_result_area()
         # Clear specific input rows that might persist (rows 10-14)
-        # Note: render_ui will restore rows 12-14 (Separator/Header) if we call it, but we want to show result first.
-        # Safest is to write spaces to those lines then let render_ui fix the bottom later.
         for r in range(10, 15):
             safe_write(f"\033[{r};1H{CLEAR_LINE}")
 

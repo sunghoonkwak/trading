@@ -10,7 +10,7 @@ try:
         with open(_json_path, "r", encoding="utf-8") as f:
             CONFIG = json.load(f)
 except Exception as e:
-    pass
+    print(f"[Config] Error loading stock_configuration.json: {e}")
 
 def get_stock_info(ticker: str) -> dict:
     """Find stock information by ticker across all markets, handling prefixes."""
