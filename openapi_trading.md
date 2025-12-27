@@ -57,8 +57,10 @@
    - **Clear Command**: 트레이딩 중 화면에 쌓인 완료된 주문/체결 로그는 메뉴에서 `c` 키를 눌러 즉시 정리하고 시세 모니터링에 집중할 수 있습니다.
    - **Real-time Log Rotation**: 실행 시마다 이전 로그를 타임스탬프와 함께 백업하여 `WebSocket_latest.log`를 항상 깨끗하게 유지합니다.
 
-6. **Combined Portfolio Management**:
-   - 국내외 통합 계좌 조회 기능을 통해 원화/외화 예수금과 전체 수익률을 통합하여 모니터링할 수 있습니다.
+6. **Interactive Portfolio Management**:
+   - **Interactive View**: Supports toggling between Domestic (`KR`) and Overseas (`US`) stocks using the `f` key, and pagination for large portfolios using `Space`.
+   - **Currency-Specific Assets**: Accurately displays Total Evaluation and Cash Deposit separated by currency (KRW/USD) at the bottom for clearer asset tracking.
+   - **Detailed Logging**: API response data (Output1, Output2) is explicitly logged for debugging and verification purposes.
 
 7. **Security & Privacy (로그 보안)**:
     - **Automatic Masking**: 시스템은 `App Key`, `App Secret`, `HTS ID`, `Access Token`, `Approval Key` 등 보안에 민감한 정보가 로그나 터미널에 평문으로 출력되지 않도록 **자동 마스킹(`********`)** 기능을 포함하고 있습니다.

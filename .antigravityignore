@@ -1,3 +1,4 @@
 # .antigravityignore
 credentials.enc
 .env
+password.txt

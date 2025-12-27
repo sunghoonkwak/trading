@@ -2,6 +2,7 @@ import logging
 import kis_api.kis_auth as ka
 import json
 import time
+from datetime import datetime, timedelta
 import pandas as pd
 
 def get_account_balance() -> dict:
@@ -36,7 +37,6 @@ def get_account_balance() -> dict:
 
     if res_krw.isOK():
         body = res_krw.getBody()
-        logging.info(f"--- Orderable Raw Response ---\n{json.dumps(body._asdict(), indent=4, ensure_ascii=False)}")
         output = getattr(body, 'output', None)
         if isinstance(output, dict):
             deposit = output.get('ord_psbl_cash') or '0'
@@ -61,8 +61,6 @@ def get_account_balance() -> dict:
 
     if res_usd.isOK():
         body = res_usd.getBody()
-        logging.info(f"--- Overseas Cash Raw Response ---\n{json.dumps(body._asdict(), indent=4, ensure_ascii=False)}")
-
         output2 = getattr(body, 'output2', None)
         data = None
         if isinstance(output2, list) and len(output2) > 0:
@@ -86,143 +84,156 @@ def get_account_balance() -> dict:
 def get_account_portfolio() -> dict:
     """
     Fetch current holdings for Domestic and Overseas stocks.
-    Uses recursive logic for Domestic 'Data changed' error.
+    Fetches only the first page (no pagination/recursion).
+    Returns a dictionary with retrieved values normalized for main.py.
     """
-    result = {'domestic': [], 'overseas': [], 'dom_error': None, 'ovs_error': None}
+    result = {
+        "domestic": [],
+        "overseas": [],
+        "dom_total": {},
+        "ovs_total": {},
+        "dom_error": None,
+        "ovs_error": None
+    }
 
     cano = ka.getTREnv().my_acct
     acnt_prdt_cd = ka.getTREnv().my_prod
 
-    # --- 1. Domestic Stock Holdings (TTTC8434R) ---
-    # Temporarily commented out due to persistent SYDB0050 server errors during settlement hours.
-    """
-    url_kr = "/uapi/domestic-stock/v1/trading/inquire-balance"
-    dom_holdings = []
-    dom_total = {}
+    def _get_val(d, keys, default=None):
+        """Helper to get value from dict trying multiple keys"""
+        if hasattr(d, '_asdict'):
+            d = d._asdict()
 
-    def fetch_domestic_loop(fk="", nk="", retry_count=0):
-        if retry_count > 3: # Reduced retries
-            return "Max retries exceeded (Data too unstable)"
+        if isinstance(d, dict):
+            for k in keys:
+                if k in d:
+                    return d[k]
+        return default
 
-        params = {
-            "CANO": cano,
-            "ACNT_PRDT_CD": acnt_prdt_cd,
-            "AFHR_FLPR_YN": "N",
-            "OFL_YN": "",
-            "INQR_DVSN": "02",
-            "UNPR_DVSN": "01",
-            "FUND_STTL_ICLD_YN": "N",
-            "FNCG_AMT_AUTO_RDPT_YN": "N",
-            "PRCS_DVSN": "01",
-            "CTX_AREA_FK100": fk,
-            "CTX_AREA_NK100": nk
-        }
+    # --- 1. Domestic Holdings (Output1 List, Output2 Summary) ---
+    url_krw = "/uapi/domestic-stock/v1/trading/inquire-balance"
+    tr_id_krw = "TTTC8434R"
 
-        res = ka._url_fetch(url_kr, "TTTC8434R", "N", params)
-        body = res.getBody()
-        err_msg = res.getErrorMessage()
-        msg_cd = getattr(body, 'msg_cd', 'Unknown')
+    params_krw = {
+        "CANO": cano,
+        "ACNT_PRDT_CD": acnt_prdt_cd,
+        "AFHR_FLPR_YN": "N",
+        "OFL_YN": "",
+        "INQR_DVSN": "02",
+        "UNPR_DVSN": "01",
+        "FUND_STTL_ICLD_YN": "N",
+        "FNCG_AMT_AUTO_RDPT_YN": "N",
+        "PRCS_DVSN": "00",
+        "CTX_AREA_FK100": "",
+        "CTX_AREA_NK100": ""
+    }
 
-        if not res.isOK():
-            if msg_cd in ["SYDB0050", "KIOK0560"] or "변경" in err_msg:
-                out1 = getattr(body, 'output1', [])
-                if isinstance(out1, list) and len(out1) > 0:
-                    logging.info(f"[Domestic] Found {len(out1)} items despite {msg_cd}. Processing.")
-                else:
-                    wait_time = 3.0
-                    logging.warning(f"[Domestic] System Busy ({msg_cd}). Wait {wait_time}s... ({retry_count+1}/3)")
-                    time.sleep(wait_time)
-                    dom_holdings.clear()
-                    dom_total.clear()
-                    return fetch_domestic_loop(fk="", nk="", retry_count=retry_count + 1)
+    res_krw = ka._url_fetch(url_krw, tr_id_krw, "", params_krw)
 
-            elif "조회 결과가 없습니다" in err_msg or msg_cd == "KIOK0047":
-                return None
-            else:
-                return f"[{msg_cd}] {err_msg}"
+    if res_krw.isOK():
+        body = res_krw.getBody()
 
-        # Success - Parse data
+        # Output1: Holdings List
         output1 = getattr(body, 'output1', [])
+        logging.debug(f"[Domestic Output1] {json.dumps(output1, default=str, indent=4, ensure_ascii=False)}")
+        raw_list = []
         if isinstance(output1, list):
-            for item in output1:
-                qty = int(item.get('hldg_qty', 0))
-                if qty > 0:
-                    dom_holdings.append({
-                        'code': item.get('pdno'),
-                        'name': item.get('prdt_name'),
-                        'qty': qty,
-                        'avg_price': float(item.get('pchs_avg_pric', 0.0)),
-                        'cur_price': float(item.get('prpr', 0.0)),
-                        'pnl_rate': float(item.get('evlu_pfls_rt', 0.0))
-                    })
+            raw_list = output1
+        elif isinstance(output1, dict):
+            raw_list = [output1]
 
+        # Map fields
+        for item in raw_list:
+            try:
+                mapped = {
+                    'name': _get_val(item, ['prdt_name', 'PRDT_NAME'], 'Unknown'),
+                    'qty': int(_get_val(item, ['hldg_qty', 'HLDG_QTY'], 0)),
+                    'avg_price': float(_get_val(item, ['pchs_avg_pric', 'PCHS_AVG_PRIC'], 0)),
+                    'cur_price': float(_get_val(item, ['prpr', 'PRPR'], 0)),
+                    'pnl_rate': float(_get_val(item, ['evlu_pfls_rt', 'EVLU_PFLS_RT'], 0)),
+                    'symbol': _get_val(item, ['pdno', 'PDNO'], '')
+                }
+                if mapped['qty'] > 0:
+                    result['domestic'].append(mapped)
+            except Exception as e:
+                logging.error(f"Error mapping domestic item: {e}")
+
+        # Output2: Summary
         output2 = getattr(body, 'output2', [])
-        if not dom_total:
-            if isinstance(output2, list) and len(output2) > 0:
-                dom_total.update(output2[0])
-            elif isinstance(output2, dict):
-                dom_total.update(output2)
+        logging.debug(f"[Domestic Output2] {json.dumps(output2, default=str, indent=4, ensure_ascii=False)}")
+        if output2:
+            if isinstance(output2, list): result['dom_total'] = output2[0]
+            elif isinstance(output2, dict): result['dom_total'] = output2
 
-        h_tr_cont = getattr(res.getHeader(), 'tr_cont', "")
-        next_fk = getattr(body, 'ctx_area_fk100', "").strip()
-        next_nk = getattr(body, 'ctx_area_nk100', "").strip()
+    else:
+        result['dom_error'] = res_krw.getErrorMessage()
 
-        if h_tr_cont in ["M", "F"] and next_nk:
-            return fetch_domestic_loop(next_fk, next_nk, retry_count)
+    # --- 2. Overseas Holdings (Loop NASD, NYSE, AMEX) ---
+    url_usd = "/uapi/overseas-stock/v1/trading/inquire-balance"
+    tr_id_usd = "TTTS3012R"
 
-        return None
+    # Check 3 major exchanges
+    exchanges = ["NASD", "NYSE", "AMEX"]
+    seen_symbols = set()
 
-    err = fetch_domestic_loop()
-    if err:
-        result['dom_error'] = err
-    result['domestic'] = dom_holdings
-    result['dom_total'] = dom_total
-    """
-    result['dom_error'] = "Service temporarily disabled (Settlement hours)"
-    result['domestic'] = []
-    result['dom_total'] = {}
-
-    # 2. Overseas Stock Holdings (Iterate Exchanges)
-    url_us = "/uapi/overseas-stock/v1/trading/inquire-balance"
-    exchanges = ['NASD', 'NYS', 'AMS']
-
-    for ex in exchanges:
-        params_us = {
+    for excg in exchanges:
+        params_usd = {
             "CANO": cano,
             "ACNT_PRDT_CD": acnt_prdt_cd,
-            "OVRS_EXCG_CD": ex,
-            "TR_MKET_CD": "00",
-            "INQR_DVSN": "00",
-            # Pagination keys required for Overseas
+            "OVRS_EXCG_CD": excg,
+            "TR_CRCY_CD": "USD",
             "CTX_AREA_FK200": "",
             "CTX_AREA_NK200": ""
         }
-        res_us = ka._url_fetch(url_us, "TTTS3012R", "N", params_us)
 
-        # Retry once for currency field issue if needed
-        if not res_us.isOK() and "TR_CRCY_CD" in str(res_us.getErrorMessage()):
-             params_us['TR_CRCY_CD'] = "USD"
-             res_us = ka._url_fetch(url_us, "TTTS3012R", "N", params_us)
+        res_usd = ka._url_fetch(url_usd, tr_id_usd, "", params_usd)
 
-        if res_us.isOK():
-            body_us = res_us.getBody()
-            output1 = getattr(body_us, 'output1', [])
+        if res_usd.isOK():
+            body = res_usd.getBody()
+
+            # Output1: Holdings List
+            output1 = getattr(body, 'output1', [])
+            logging.debug(f"[Overseas Output1 ({excg})] {json.dumps(output1, default=str, indent=4, ensure_ascii=False)}")
+            raw_list = []
             if isinstance(output1, list):
-                for item in output1:
-                    qty = float(item.get('ovrs_cblc_qty', 0))
-                    if qty > 0:
-                        result['overseas'].append({
-                            'code': item.get('ovrs_pdno'),
-                            'name': item.get('ovrs_item_name'),
-                            'qty': qty,
-                            'avg_price': float(item.get('pchs_avg_pric', 0.0)),
-                            'cur_price': float(item.get('now_pric2', 0.0)),
-                            'pnl_rate': float(item.get('evlu_pfls_rt', 0.0)),
-                            'exchange': ex
-                        })
+                raw_list = output1
+            elif isinstance(output1, dict):
+                raw_list = [output1]
+
+            # Map fields
+            for item in raw_list:
+                try:
+                    symbol = _get_val(item, ['ovrs_pdno', 'OVRS_PDNO'], '')
+
+                    # Deduplicate based on symbol
+                    if symbol and symbol in seen_symbols:
+                        continue
+
+                    mapped = {
+                        'name': _get_val(item, ['ovrs_item_name', 'OVRS_ITEM_NAME'], 'Unknown'),
+                        'qty': float(_get_val(item, ['ovrs_cblc_qty', 'OVRS_CBLC_QTY'], 0)),
+                        'avg_price': float(_get_val(item, ['pchs_avg_pric', 'PCHS_AVG_PRIC'], 0)),
+                        'cur_price': float(_get_val(item, ['now_pric2', 'NOW_PRIC2'], 0)),
+                        'pnl_rate': float(_get_val(item, ['evlu_pfls_rt', 'EVLU_PFLS_RT'], 0)),
+                        'exchange': _get_val(item, ['ovrs_excg_cd', 'OVRS_EXCG_CD'], excg),
+                        'symbol': symbol
+                    }
+
+                    if mapped['qty'] > 0:
+                        result['overseas'].append(mapped)
+                        if symbol:
+                            seen_symbols.add(symbol)
+                except Exception as e:
+                    logging.error(f"Error mapping overseas item ({excg}): {e}")
+
+            # Output2: Summary
+            output2 = getattr(body, 'output2', [])
+            logging.debug(f"[Overseas Output2 ({excg})] {json.dumps(output2, default=str, indent=4, ensure_ascii=False)}")
+            if output2:
+                if isinstance(output2, list): result['ovs_total'] = output2[0]
+                elif isinstance(output2, dict): result['ovs_total'] = output2
+
         else:
-            if not result['overseas']:
-                 if not result['ovs_error']:
-                     result['ovs_error'] = res_us.getErrorMessage()
+            logging.error(f"Failed to fetch {excg}: {res_usd.getErrorMessage()}")
 
     return result

@@ -9,7 +9,10 @@ def get_secrets_from_password() -> tuple[str, str, str]:
     print("--- API Key loading ---")
 
     # Get password to decrypt the file
-    password = getpass.getpass("Enter your encryption password: ")
+    # password = getpass.getpass("Enter your encryption password: ")
+    # read password from file
+    with open("password.txt", "r") as f:
+        password = f.read().strip()
 
     try:
         # Generate decryption key

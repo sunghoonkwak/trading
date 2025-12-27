@@ -91,6 +91,17 @@
             "disabled": false
         },
         {
+            "ticker": "SPYM",
+            "name": "SPYM",
+            "market": "AMEX",
+            "color": [
+                50,
+                255,
+                50
+            ],
+            "disabled": false
+        },
+        {
             "ticker": "NVDA",
             "name": "NVIDIA",
             "market": "NASDAQ",

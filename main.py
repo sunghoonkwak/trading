@@ -470,66 +470,123 @@ def inquire_combined_cash() -> list:
 
 def inquire_portfolio() -> list:
     """
-    Inquire Portfolio (Holdings)
+    Inquire Portfolio (Holdings) - Interactive
+    Mode: Overseas (Default) <-> Domestic (Toggle 'f')
+    Page: 5 items/page (Toggle 'Space')
     """
     clear_result_area()
-    lines = ["=" * 60, " [Account Portfolio]", "=" * 60, "Fetching data..."]
-    show_in_result_area(lines)
+    show_in_result_area(["Fetching data..."])
 
     port = get_account_portfolio()
 
-    lines = ["=" * 60, " [Account Portfolio]", "=" * 60]
+    # Debug log for portfolio data
+    import json
+    logging.debug(f"Portfolio Data: {json.dumps(port, default=str, indent=4, ensure_ascii=False)}")
 
-    # Domestic
-    lines.append(" [Domestic Stocks]")
-    if port.get('dom_error'):
-        lines.append(f"  [ERROR] {port['dom_error']}")
-    elif not port['domestic']:
-        lines.append("  (No holdings)")
+    # Fetch Cash Balance for footer
+    bal = get_account_balance()
+    krw_cash = bal.get('krw_deposit', 0)
+    usd_cash = bal.get('usd_deposit', 0.0)
+
+    # Calculate Totals
+    total_krw_eval = 0
+    if port['dom_total']:
+        try: total_krw_eval = float(port['dom_total'].get('tot_evlu_amt', 0))
+        except: pass
     else:
-        # Header
-        lines.append(f"  {'Name':<14} | {'Qty':>6} | {'AvgPrice':>10} | {'CurPrice':>10} | {'P/L(%)':>10}")
-        lines.append("-" * 71)
-        for item in port['domestic']:
-            name = get_fixed_width_name(item['name'], 14)
-            lines.append(f"  {name} | {item['qty']:>6,} | {item['avg_price']:>10,.0f} | {item['cur_price']:>10,.0f} | {item['pnl_rate']:>9.2f}%")
+        for d in port['domestic']:
+            total_krw_eval += (d['cur_price'] * d['qty'])
 
-        # Summary
-        total = port.get('dom_total', {})
-        if total:
-            try:
-                tot_evlu = float(total.get('tot_evlu_amt', 0))
-                pnl_amt = float(total.get('evlu_pfls_amt_tot', 0))
-                lines.append("-" * 71)
-                lines.append(f"  Total Eval: {tot_evlu:>12,.0f} | Total P/L: {pnl_amt:>12,.0f}")
-            except: pass
+    total_usd_eval = 0.0
+    for o in port['overseas']:
+        total_usd_eval += (o['cur_price'] * o['qty'])
 
-    lines.append("-" * 60)
+    # State
+    mode = 'OVERSEAS' # Default
+    page_idx = 0
+    ROWS_PER_PAGE = 5
 
-    # Overseas
-    lines.append(" [Overseas Stocks]")
-    if port.get('ovs_error') and not port['overseas']:
-        lines.append(f"  [ERROR] {port['ovs_error']}")
-    elif not port['overseas']:
-        lines.append("  (No holdings)")
-    else:
-        # Header
-        lines.append(f"  {'Name':<14} | {'Qty':>6} | {'AvgPrice':>10} | {'CurPrice':>10} | {'P/L(%)':>8}")
-        lines.append("-" * 60)
-        for item in port['overseas']:
-            name = get_fixed_width_name(item['name'], 14)
-            ex_code = item.get('exchange', 'US')
-            # Show exchange code if not just generic? Or just format nice
-            # E.g. "[NASD] Apple" or just append to name?
-            # Space is limited. Let's just assume list is mixed.
-            # Maybe: Name......... (NASD)
-            # Or just rely on code/name.
-            lines.append(f"  {name} | {item['qty']:>6,.2f} | ${item['avg_price']:>9.2f} | ${item['cur_price']:>9.2f} | {item['pnl_rate']:>7.2f}%")
+    while True:
+        # Select Data
+        current_list = port['overseas'] if mode == 'OVERSEAS' else port['domestic']
 
-    lines.append("-" * 60)
-    lines.append(" [Press any key to return to menu]")
+        # Pagination Logic
+        total_items = len(current_list)
+        total_pages = (total_items + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE
+        if total_pages == 0: total_pages = 1
 
-    return lines
+        # Wrapped Page Index
+        if page_idx >= total_pages:
+            page_idx = 0
+
+        start_idx = page_idx * ROWS_PER_PAGE
+        end_idx = start_idx + ROWS_PER_PAGE
+        page_items = current_list[start_idx:end_idx]
+
+        # Render
+        lines = []
+        mode_str = "US Stocks" if mode == 'OVERSEAS' else "KR Stocks"
+        # Using fixed width title to avoid jitter
+        title = f" [{mode_str}] ({page_idx+1}/{total_pages})"
+        lines.append(f"{title:<40}")
+
+        # Header: Ticker(6) | Name(18) | Qty(5) | Price(10) | P/L%(7)
+        lines.append(f" {'Ticker':<6} | {'Name':<18} | {'Qty':>5} | {'Price':>10} | {'P/L%':>7}")
+        lines.append("-" * 55)
+
+        if not page_items:
+            lines.append("  (No holdings)")
+            for _ in range(4): lines.append("") # Fill empty rows
+        else:
+            for item in page_items:
+                ticker = str(item.get('symbol', ''))[:6]
+                name = get_fixed_width_name(item['name'], 18)
+
+                if mode == 'OVERSEAS':
+                    q_val = item['qty']
+                    # Smart int formatting
+                    if isinstance(q_val, float) and q_val.is_integer():
+                         qty = f"{int(q_val):,}"
+                    else:
+                         qty = f"{q_val:,.2f}"
+                    price = f"${item['cur_price']:,.2f}"
+                else:
+                    qty = f"{item['qty']:,}"
+                    price = f"{item['cur_price']:,.0f}"
+
+                pnl = f"{item['pnl_rate']:.2f}%"
+
+                lines.append(f" {ticker:<6} | {name} | {qty:>5} | {price:>10} | {pnl:>7}")
+
+            # Fill remaining lines to keep UI stable
+            rem_lines = ROWS_PER_PAGE - len(page_items)
+            for _ in range(rem_lines):
+                 lines.append("") # Empty line
+
+        lines.append("-" * 55)
+        # Footer: Totals matched to mode
+        if mode == 'OVERSEAS':
+            lines.append(f" Eval: ${total_usd_eval:,.2f} | Cash: ${usd_cash:,.2f}")
+        else:
+            lines.append(f" Eval: {total_krw_eval:,.0f} KRW | Cash: {krw_cash:,} KRW")
+
+        lines.append(" [f] Toggle Market  [Space] Next Page  [q] Quit")
+
+        show_in_result_area(lines)
+
+        # Input Handling
+        ch = msvcrt.getch()
+        if ch == b'q':
+            return [] # Return empty list, Menu loop will redraw UI
+        elif ch == b'f':
+            mode = 'DOMESTIC' if mode == 'OVERSEAS' else 'OVERSEAS'
+            page_idx = 0 # Reset page on toggle
+        elif ch == b' ':
+            page_idx += 1
+            if page_idx >= total_pages:
+                page_idx = 0 # Loop back to start
+
+    return []
 
 def menu():
     # To modify global print_log_level from trading_ui, we access it directly or via helper.
@@ -554,9 +611,8 @@ def menu():
         elif choice == '3':
             handle_manage_orders()
         elif choice == '4':
-            lines = inquire_portfolio()
-            show_in_result_area(lines)
-            msvcrt.getch()
+            inquire_portfolio()
+            # Removed separate show_in_result_area and getch, handled in loop
         elif choice == '0':
             # Toggle Log Level: INFO -> DEBUG -> ERROR -> INFO ...
             if trading_ui.print_log_level == PrintLevel.INFO:
