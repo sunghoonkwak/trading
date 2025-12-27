@@ -58,9 +58,15 @@
    - **Real-time Log Rotation**: 실행 시마다 이전 로그를 타임스탬프와 함께 백업하여 `WebSocket_latest.log`를 항상 깨끗하게 유지합니다.
 
 6. **Interactive Portfolio Management**:
-   - **Interactive View**: Supports toggling between Domestic (`KR`) and Overseas (`US`) stocks using the `f` key, and pagination for large portfolios using `Space`.
-   - **Currency-Specific Assets**: Accurately displays Total Evaluation and Cash Deposit separated by currency (KRW/USD) at the bottom for clearer asset tracking.
-   - **Detailed Logging**: API response data (Output1, Output2) is explicitly logged for debugging and verification purposes.
+   - **Unified Account View**: A single interface cycles through **Summary -> US Portfolio -> KR Portfolio** using the `f` key, providing smooth navigation between asset classes.
+   - **Enhanced List UI**:
+     - Supports pagination for large portfolios using the `n` key.
+     - Features visually perfect alignment for mixed English/Korean stock names.
+     - Includes detailed columns: `Average Price`, `Current Price`, `P/L Amount`, and `P/L Rate`.
+   - **Smart Analytics**:
+     - **Summary**: Displays Total Value (Stock Eval + Orderable), Orderable Cash, and P/L Summary for both KR and US markets.
+     - **Footer**: Each portfolio view concludes with a **Total Line** showing the specific market's Total Stock Evaluation and Aggregate P/L.
+   - **Data Accuracy**: Uses strictly calculated weighted averages for P/L rates and verifies `Orderable Cash` through dedicated balance inquiries.
 
 7. **Security & Privacy (로그 보안)**:
     - **Automatic Masking**: 시스템은 `App Key`, `App Secret`, `HTS ID`, `Access Token`, `Approval Key` 등 보안에 민감한 정보가 로그나 터미널에 평문으로 출력되지 않도록 **자동 마스킹(`********`)** 기능을 포함하고 있습니다.
@@ -78,9 +84,8 @@
 1. 터미널에서 `python trading/main.py` 실행
 2. 암호화 비밀번호 입력
 3. 메뉴 선택:
-   - `1`: 통합 예수금 조회 (KRW/USD)
+   - `1`: 통합 계좌 정보 (예수금, 포트폴리오, 수익률 조회)
    - `2`: 주식 매수/매도 (US/KR 토글 지원)
    - `3`: 미체결 주문 정정/취소 (US 우선 조회)
-   - `4`: 통합 포트폴리오 및 수익률 확인
    - `0`: 로그 감시 레벨 변경 (INFO <-> DEBUG)
-   - `q`: 안전하게 종료
+   - `c` / `q`: 로그 클리어 / 안전하게 종료

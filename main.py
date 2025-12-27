@@ -14,10 +14,10 @@ import trading_config
 import trading_state
 import trading_ui
 from trading_ui import PrintLevel, print_log, render_ui, show_in_result_area, safe_write, get_fixed_width_name, clear_result_area, input_at, prepare_exit
-from account_helper import get_account_balance, get_account_portfolio
+from account_helper import get_integrated_account_info
 from order_handler import handle_place_order, handle_manage_orders
 
-# Specific KIS imports (only asking price subscription uses them?)
+# Specific KIS imports
 from kis_api.domestic_stock.asking_price_total.asking_price_total import asking_price_total
 from kis_api.domestic_stock.ccnl_total.ccnl_total import ccnl_total
 from kis_api.overseas_stock.asking_price.asking_price import asking_price
@@ -33,13 +33,11 @@ rotation_msgs = []
 # Log Rotation Logic
 if os.path.exists(latest_log):
     old_ts = ""
-    # 1. Try to extract timestamp from the first few lines of the existing log
     try:
         with open(latest_log, "r", encoding="utf-8-sig") as f:
-            for _ in range(20): # Check first 20 lines
+            for _ in range(20):
                 line = f.readline()
                 if not line: break
-                # Match YYYY-MM-DD HH:MM:SS
                 match = re.search(r"(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})", line)
                 if match:
                     y, m, d, hh, mm, ss = match.groups()
@@ -48,7 +46,6 @@ if os.path.exists(latest_log):
     except Exception as e:
         rotation_msgs.append(f"[LogRotation] Warning: Could not read timestamp from content: {e}")
 
-    # 2. Fallback to file modification time if no timestamp found in content
     if not old_ts:
         try:
             mtime = os.path.getmtime(latest_log)
@@ -56,12 +53,10 @@ if os.path.exists(latest_log):
         except:
             old_ts = datetime.now().strftime("%y_%m_%d_%H_%M_%S")
 
-    # 3. Define archive name and handle collisions
     archive_name = os.path.join(base_dir, f"WebSocket_{old_ts}.log")
     if os.path.exists(archive_name):
         archive_name = archive_name.replace(".log", f"_{int(datetime.now().timestamp())}.log")
 
-    # 4. Attempt to rotate
     try:
         os.rename(latest_log, archive_name)
         rotation_msgs.append(f"[LogRotation] Archived old log: {os.path.basename(latest_log)} -> {os.path.basename(archive_name)}")
@@ -75,13 +70,12 @@ else:
 log_file = latest_log
 trading_ui.log_file_path = log_file
 
-# Force reset root logger handlers to prevent leakage
+# Force reset root logger handlers
 root_logger = logging.getLogger()
 if root_logger.handlers:
     for handler in list(root_logger.handlers):
         root_logger.removeHandler(handler)
 
-# Initialize logger with both File and temporarily a Stream handler
 file_handler = logging.FileHandler(log_file, encoding='utf-8')
 stream_handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
@@ -92,38 +86,28 @@ root_logger.setLevel(logging.DEBUG)
 root_logger.addHandler(file_handler)
 root_logger.addHandler(stream_handler)
 
-# Flush captured rotation messages to both destinations
 for msg in rotation_msgs:
     logging.info(msg)
 
-# Remove StreamHandler before Terminal UI starts to prevent layout corruption
 root_logger.removeHandler(stream_handler)
 logging.info(f"[System] Logging initialized. All system messages now directed to: {os.path.basename(log_file)}")
 
-# Rename local PrintLevel to avoid some typing conflicts if any
 PyPrintLevel = PrintLevel
 
 def write_cleared(text, end="\n"):
-    """Write text while clearing the current line"""
     safe_write(f"{trading_ui.CLEAR_LINE}{text}{end}")
 
 def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
-    """
-    Callback function when data is received.
-    """
     if df.empty:
         print_log(PrintLevel.ERROR, f"System Message received for TR: {tr_id}")
         return
 
     tr_id = tr_id.strip()
-    # Process all records in the DataFrame (KIS can send multiple updates in one message)
     for i in range(len(df)):
         row = df.iloc[i]
 
         if tr_id in ["H0UNASP0", "H0UNCNT0"]: # Market Data
             code = row['MKSC_SHRN_ISCD']
-
-            # Initialize state for code if not exists with all market fields
             if code not in trading_state.stock_data_state:
                 trading_state.stock_data_state[code] = {
                     'price': 0, 'ask': 0, 'bid': 0,
@@ -132,56 +116,36 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 }
 
             state = trading_state.stock_data_state[code]
-            level = PrintLevel.DEBUG # Default level
+            level = PrintLevel.DEBUG
 
-            if tr_id == "H0UNASP0": # Stock Asking Price
+            if tr_id == "H0UNASP0":
                 state['time'] = row['BSOP_HOUR']
                 try:
                     new_ask = int(float(row['ASKP1']))
                     new_bid = int(float(row['BID_PRC1'] if 'BID_PRC1' in row else row['BIDP1']))
-
-                    # Skip if neither ask nor bid changed
-                    if state['ask'] == new_ask and state['bid'] == new_bid:
-                        continue
-
-                    # Set to DEBUG (Gray)
+                    if state['ask'] == new_ask and state['bid'] == new_bid: continue
                     level = PrintLevel.DEBUG
-
                     state['ask'] = new_ask
                     state['bid'] = new_bid
-                except (ValueError, TypeError, KeyError):
-                    continue
+                except: continue
 
-            elif tr_id == "H0UNCNT0": # Stock Execution
+            elif tr_id == "H0UNCNT0":
                 state['time'] = row['STCK_CNTG_HOUR']
                 try:
                     new_price = int(float(row['STCK_PRPR']))
                     new_vol   = int(float(row['CNTG_VOL']))
-
-                    # Execution is INFO level (Colors)
                     level = PrintLevel.INFO
-
                     state['price']  = new_price
                     state['change'] = int(float(row['PRDY_VRSS']))
                     state['rate']   = float(row['PRDY_CTRT'])
                     state['vol']    = new_vol
-
-                    # Add sign to change for display
                     sign = row['PRDY_VRSS_SIGN']
                     state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
-                except (ValueError, TypeError, KeyError):
-                    continue
+                except: continue
 
-            # Format values for the unified log
             time_v = str(state.get('time', '000000')).strip()
-            if len(time_v) == 6:
-                time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
-            else:
-                # Handle cases where time might be HHMM or HHMMSS.ms or just a number
-                time_s = time_v[-6:] if len(time_v) > 6 else time_v.zfill(6)
-                time_s = f"{time_s[:2]}:{time_s[2:4]}:{time_s[4:6]}"
+            time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}" if len(time_v) == 6 else time_v.zfill(6)
 
-            # Use fallback values if data hasn't arrived yet
             bid_s   = format(state.get('bid', 0), ",")
             ask_s   = format(state.get('ask', 0), ",")
             price_v = state.get('price', 0)
@@ -189,12 +153,8 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             vol_s   = format(state.get('vol', 0), ",")
             diff_s  = f"{state.get('sign_str', '')}{format(state.get('change', 0), ',')}"
 
-            # [12:03:44] [MKT][SK하이닉스]
             cfg = trading_config.get_stock_info(code)
-            if not cfg:
-                # If we can't identify the stock (e.g., due to parsing shift or unknown code), skip it.
-                # This prevents trash data like '1' or '189.85' from cluttering the UI.
-                continue
+            if not cfg: continue
 
             name = cfg.get("name", "Unknown")
             fixed_name = get_fixed_width_name(name, 10)
@@ -203,16 +163,12 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                    f"Last: {price_s:>9} ({vol_s:>6}) | "
                    f"Diff: {diff_s:>9} ({state.get('rate', 0.0):>5.2f}%) | "
                    f"Ask: {ask_s:>9}")
-
             print_log(level, msg)
             continue
 
         elif tr_id in ["HDFSASP0", "HDFSCNT0"]: # Overseas Market Data
-            # Note: Field names differ from domestic TRs
             code = row.get('symb', row.get('SYMB'))
             if not code: continue
-
-
 
             if code not in trading_state.stock_data_state:
                 trading_state.stock_data_state[code] = {
@@ -224,41 +180,31 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             state = trading_state.stock_data_state[code]
             level = PrintLevel.DEBUG
 
-            if tr_id == "HDFSASP0": # Overseas Asking Price
+            if tr_id == "HDFSASP0":
                 state['time'] = row.get('xhms', '000000')
                 try:
-                    # Overseas prices can be floating point
                     state['ask'] = float(row['pask1'])
                     state['bid'] = float(row['pbid1'])
                     level = PrintLevel.DEBUG
                 except: continue
 
-            elif tr_id == "HDFSCNT0": # Overseas Execution
+            elif tr_id == "HDFSCNT0":
                 state['time'] = row.get('XHMS', '000000')
                 try:
                     state['price']  = float(row['LAST'])
                     state['change'] = float(row['DIFF'])
                     state['rate']   = float(row['RATE'])
                     state['vol']    = float(row['EVOL'])
-
-                    # Update bid/ask from execution record if available
                     if 'PBID' in row: state['bid'] = float(row['PBID'])
                     if 'PASK' in row: state['ask'] = float(row['PASK'])
-
                     sign = row.get('SIGN', '3')
                     state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
                     level = PrintLevel.INFO
                 except: continue
 
-            # Format and Log (Shared logic with Domestic)
             time_v = str(state.get('time', '000000')).strip()
-            if len(time_v) == 6:
-                time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
-            else:
-                time_s = time_v.zfill(6)
-                time_s = f"{time_s[:2]}:{time_s[2:4]}:{time_s[4:6]}"
+            time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}" if len(time_v) >= 6 else time_v.zfill(6)
 
-            # Overseas Bid/Ask often use float
             bid_s   = format(state.get('bid', 0.0), ",.2f") if state.get('bid', 0) > 0 else "0"
             ask_s   = format(state.get('ask', 0.0), ",.2f") if state.get('ask', 0) > 0 else "0"
             price_v = state.get('price', 0.0)
@@ -268,9 +214,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             diff_s  = f"{state.get('sign_str', '')}{format(state.get('change', 0.0), ',.2f')}"
 
             cfg = trading_config.get_stock_info(code)
-            if not cfg:
-                # Skip overseas system messages or misparsed records
-                continue
+            if not cfg: continue
 
             name = cfg.get("name", "Unknown")
             fixed_name = get_fixed_width_name(name, 10)
@@ -282,20 +226,18 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             print_log(level, msg)
             continue
 
-        elif tr_id == "H0STCNI0": # Domestic Order Notification (Real Only)
+        elif tr_id == "H0STCNI0": # Domestic Order
             try:
                 code = row['STCK_SHRN_ISCD']
                 time_v = row['STCK_CNTG_HOUR']
                 time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
 
-                # [DUMP] Full row data for debugging
                 logging.info(f"--- H0STCNI0 FULL DUMP ---\n{row.to_dict()}")
 
-                cntg_yn = row['CNTG_YN'] # 1: Acceptance, 2: Execution
-                rctf_cls = row['RCTF_CLS'] # 01: Order, 02: Cor, 03: Can (Correction 01 or 1?)
-                rfus_yn = row.get('RFUS_YN', '0') # Refusal YN (Y/N or 1/0)
+                cntg_yn = row['CNTG_YN']
+                rctf_cls = row['RCTF_CLS']
+                rfus_yn = row.get('RFUS_YN', '0')
 
-                # SELN_BYOV_CLS: 01: Sell, 02: Buy
                 side = "BUY" if row['SELN_BYOV_CLS'] == '02' else "SEL"
                 order_no = row['ODER_NO']
 
@@ -305,12 +247,9 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                     try:
                         if not val or str(val).strip() == "": return "0"
                         return format(int(float(val)), ",")
-                    except:
-                        return "0"
+                    except: return "0"
 
-                # Price: Strictly use CNTG_UNPR as requested
-                p_cntg = str(row.get('CNTG_UNPR', '0')).strip()
-                price = safe_int_format(p_cntg)
+                price = safe_int_format(str(row.get('CNTG_UNPR', '0')).strip())
                 qty = safe_int_format(row['CNTG_QTY'])
 
                 msg_level = PrintLevel.INFO
@@ -319,67 +258,46 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 if rfus_yn in ['Y', '1']:
                     order_val = "REJ"
                     msg_level = PrintLevel.ERROR
-                    # Try to find rejection reason
                     remark = str(row.get('RM', '')).strip()
                     if remark: extra_info = f" ({remark})"
-                elif cntg_yn == '2': # EXECUTION
-                    order_val = "EXE"
-                else: # ORDER / CANCELLATION (Following raw API codes)
-                    if rctf_cls in ['0', '00']:
-                        order_val = "ODR"
-                    elif rctf_cls in ['1', '01']: # Correction
-                        order_val = "COR"
-                    elif rctf_cls in ['2', '02']: # Cancellation
-                        order_val = "CAN"
-                    else:
-                        order_val = "OTH"
+                elif cntg_yn == '2': order_val = "EXE"
+                else:
+                    if rctf_cls in ['0', '00']: order_val = "ODR"
+                    elif rctf_cls in ['1', '01']: order_val = "COR"
+                    elif rctf_cls in ['2', '02']: order_val = "CAN"
+                    else: order_val = "OTH"
 
-                # Try to get name from config, otherwise use the name in the row
                 name = cfg.get("name", row.get('CNTG_ISNM40', 'Unknown')).strip()
                 fixed_name = get_fixed_width_name(name, 10)
 
-                # PREMIUM COMPACT LOG FORMAT
                 msg = (f"[{time_s}] [{side}][{order_val}] [{fixed_name}] {code:<6} | "
                        f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
-
                 print_log(msg_level, msg)
                 continue
             except Exception as e:
                 print_log(PrintLevel.ERROR, f"Error parsing H0STCNI0: {e}")
                 continue
 
-        elif tr_id in ["H0GSCNI0", "H0GSCNI9"]: # Overseas Order Notification
+        elif tr_id in ["H0GSCNI0", "H0GSCNI9"]: # Overseas Order
             try:
-                # Based on observed KIS raw data for Overseas Notifications
-                # Note: Field alignment is handled by kis_auth's prepending logic.
-
-                # Debug: Log raw row content to DEBUG only
                 if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
                     raw_list = row.tolist() if hasattr(row, 'tolist') else list(row)
                     logging.debug(f"[{tr_id} RAW] {raw_list}")
 
                 code = str(row.get('STCK_SHRN_ISCD', 'Unknown')).strip()
-                # If ticker is malformed (too many zeros), try to clean it
-                if code.startswith('000') and len(code) > 8:
-                    code = code.lstrip('0') or "Unknown"
+                if code.startswith('000') and len(code) > 8: code = code.lstrip('0') or "Unknown"
 
                 cfg = trading_config.get_stock_info(code)
                 time_v = str(row.get('STCK_CNTG_HOUR', '000000')).strip()
 
-                # Use current market time if available, otherwise calculate relative to system clock
                 if not time_v or time_v in ["0", "000000"]:
-                    # If US market, adjust to US Eastern Time (approx -14h from KST in winter)
                     if cfg and cfg.get('market') in ['NASDAQ', 'NYSE', 'AMEX']:
                         from datetime import timedelta
                         time_s = (datetime.now() - timedelta(hours=14)).strftime("%H:%M:%S")
                     else:
                         time_s = datetime.now().strftime("%H:%M:%S")
                 else:
-                    if len(time_v) >= 6:
-                        time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
-                    else:
-                        time_s = time_v.zfill(6)
-                        time_s = f"{time_s[:2]}:{time_s[2:4]}:{time_s[4:6]}"
+                    time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}" if len(time_v) >= 6 else time_v.zfill(6)
 
                 cntg_yn = str(row.get('CNTG_YN', '1')).strip()
                 rctf_cls = str(row.get('RCTF_CLS', '01')).strip()
@@ -387,17 +305,13 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 side = "BUY" if str(row.get('SELN_BYOV_CLS')) == '02' else "SEL"
                 order_no = str(row.get('ODER_NO', '0'))
 
-
-
                 def get_val(key, default=0):
                     v = row.get(key, default)
                     try: return float(v)
                     except: return 0
 
-                # OVERSEAS PRICE SCALING: KIS uses integers with 4 decimal places implied
                 price_v = get_val('CNTG_UNPR')
                 if price_v >= 10000: price_v = price_v / 10000.0
-
                 qty_v = get_val('CNTG_QTY')
                 if qty_v > 1000000: qty_v = get_val('ODER_QTY')
 
@@ -407,16 +321,14 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 msg_level = PrintLevel.INFO
                 extra_info = ""
 
-                # Refusal check
                 if rfus_yn in ['Y', '1']:
                     order_val = "REJ"
                     msg_level = PrintLevel.ERROR
-                elif cntg_yn == '2':
-                    order_val = "EXE"
+                elif cntg_yn == '2': order_val = "EXE"
                 else:
                     if rctf_cls in ['0', '00']: order_val = "ODR"
-                    elif rctf_cls in ['1', '01']: order_val = "COR" # Correction
-                    elif rctf_cls in ['2', '02']: order_val = "CAN" # Cancellation
+                    elif rctf_cls in ['1', '01']: order_val = "COR"
+                    elif rctf_cls in ['2', '02']: order_val = "CAN"
                     else: order_val = "OTH"
 
                 name = cfg.get("name", row.get('CNTG_ISNM', 'Unknown')).strip()
@@ -424,7 +336,6 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
 
                 msg = (f"[{time_s}] [{side}][{order_val}] [{fixed_name}] {code:<8} | "
                        f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
-
                 print_log(msg_level, msg)
                 continue
             except Exception as e:
@@ -432,168 +343,168 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 continue
 
         else:
-            if i == 0: # Only once per batch
-                print_log(PrintLevel.DEBUG, f"Unhandled TR_ID: {tr_id}")
+            if i == 0: print_log(PrintLevel.DEBUG, f"Unhandled TR_ID: {tr_id}")
 
-def inquire_combined_cash() -> list:
+def inquire_account_info() -> list:
     """
-    Inquire both Domestic (KRW) and Overseas (USD) Cash Info
+    Integrated Account Info View
+    3-State View: Summary -> US Portfolio -> KR Portfolio -> Summary
     """
-    lines = [
-        "=" * 40,
-        " [Account Cash Information]",
-        "=" * 40,
-    ]
+    from account_helper import get_integrated_account_info
 
-    bal = get_account_balance()
-
-    if bal['error_krw']:
-        lines.append(f" KRW Error       : {bal['error_krw']}")
-    else:
-        lines.append(f" KRW Deposit     : {format(bal['krw_deposit'], ','):>12} KRW")
-        lines.append(f" Orderable KRW   : {format(bal['krw_orderable'], ','):>12} KRW")
-
-    lines.append("-" * 40)
-
-    if bal['error_usd']:
-        lines.append(f" USD Error       : {bal['error_usd']}")
-    else:
-        lines.append(f" USD Deposit     : {format(bal['usd_deposit'], ',.2f'):>12} USD")
-        lines.append(f" Withdrawable USD: {format(bal['usd_withdrawable'], ',.2f'):>12} USD")
-
-
-    lines.append("-" * 40)
-    lines.append(f" (Log: {os.path.basename(log_file)})")
-    lines.append(" [Press any key to return to menu]")
-
-    return lines
-
-def inquire_portfolio() -> list:
-    """
-    Inquire Portfolio (Holdings) - Interactive
-    Mode: Overseas (Default) <-> Domestic (Toggle 'f')
-    Page: 5 items/page (Toggle 'Space')
-    """
+    # Initial Loading State
     clear_result_area()
-    show_in_result_area(["Fetching data..."])
+    show_in_result_area(["Fetching integrated account data..."])
 
-    port = get_account_portfolio()
-
-    # Debug log for portfolio data
-    import json
-    logging.debug(f"Portfolio Data: {json.dumps(port, default=str, indent=4, ensure_ascii=False)}")
-
-    # Fetch Cash Balance for footer
-    bal = get_account_balance()
-    krw_cash = bal.get('krw_deposit', 0)
-    usd_cash = bal.get('usd_deposit', 0.0)
-
-    # Calculate Totals
-    total_krw_eval = 0
-    if port['dom_total']:
-        try: total_krw_eval = float(port['dom_total'].get('tot_evlu_amt', 0))
-        except: pass
-    else:
-        for d in port['domestic']:
-            total_krw_eval += (d['cur_price'] * d['qty'])
-
-    total_usd_eval = 0.0
-    for o in port['overseas']:
-        total_usd_eval += (o['cur_price'] * o['qty'])
+    data = get_integrated_account_info()
 
     # State
-    mode = 'OVERSEAS' # Default
+    view_mode = 0 # 0: Summary, 1: US List, 2: KR List
     page_idx = 0
     ROWS_PER_PAGE = 5
 
+    # Pre-calc Summary Data
+    ex_rate = data.get('exchange_rate', 0.0)
+
+    # --- KR Summary ---
+    d_asset = data['domestic_asset']
+    # d_deposit removed from ui as per request, just calc values
+    d_orderable = data.get('krw_orderable', 0)
+
+    d_pl_amt = 0.0
+    d_pchs_amt = 0.0
+    for stock in data['domestic_stocks']:
+        d_pl_amt += stock['pnl_amt']
+        d_pchs_amt += (stock['avg_price'] * stock['qty'])
+
+    d_tot_eval = d_pchs_amt + d_pl_amt
+    d_pl_rate = (d_pl_amt / d_pchs_amt * 100) if d_pchs_amt > 0 else 0.0
+
+    # --- US Summary ---
+    o_asset = data['overseas_asset']
+    o_orderable_usd = float(o_asset.get('frcr_drwg_psbl_amt_1', 0))
+
+    o_pl_amt_usd = 0.0
+    o_pchs_amt_usd = 0.0
+    o_stock_eval_usd = 0.0
+
+    for stock in data['overseas_stocks']:
+        o_pl_amt_usd += stock['pnl_amt']
+        pchs = stock['avg_price'] * stock['qty']
+        o_pchs_amt_usd += pchs
+        o_stock_eval_usd += (stock['cur_price'] * stock['qty'])
+
+    o_pl_rate = (o_pl_amt_usd / o_pchs_amt_usd * 100) if o_pchs_amt_usd > 0 else 0.0
+
+    o_tot_val_usd = o_stock_eval_usd + o_orderable_usd
+
     while True:
-        # Select Data
-        current_list = port['overseas'] if mode == 'OVERSEAS' else port['domestic']
-
-        # Pagination Logic
-        total_items = len(current_list)
-        total_pages = (total_items + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE
-        if total_pages == 0: total_pages = 1
-
-        # Wrapped Page Index
-        if page_idx >= total_pages:
-            page_idx = 0
-
-        start_idx = page_idx * ROWS_PER_PAGE
-        end_idx = start_idx + ROWS_PER_PAGE
-        page_items = current_list[start_idx:end_idx]
-
-        # Render
+        clear_result_area()
         lines = []
-        mode_str = "US Stocks" if mode == 'OVERSEAS' else "KR Stocks"
-        # Using fixed width title to avoid jitter
-        title = f" [{mode_str}] ({page_idx+1}/{total_pages})"
-        lines.append(f"{title:<40}")
 
-        # Header: Ticker(6) | Name(18) | Qty(5) | Price(10) | P/L%(7)
-        lines.append(f" {'Ticker':<6} | {'Name':<18} | {'Qty':>5} | {'Price':>10} | {'P/L%':>7}")
-        lines.append("-" * 55)
+        SEPARATOR_LEN = 95
 
-        if not page_items:
-            lines.append("  (No holdings)")
-            for _ in range(4): lines.append("") # Fill empty rows
+        # --- VIEW 0: SUMMARY ---
+        if view_mode == 0:
+            lines.append("=" * SEPARATOR_LEN)
+            lines.append(f" [Account Summary] exchange rate : {ex_rate:,.2f} KRW/USD")
+            lines.append("=" * SEPARATOR_LEN)
+
+            lines.append(f" [KR] Total value: {d_tot_eval:,.0f} KRW | Orderable: {d_orderable:,.0f} KRW")
+            lines.append(f"      PL Amt      : {d_pl_amt:,.0f} KRW ({d_pl_rate:+.2f} %)")
+            lines.append("-" * SEPARATOR_LEN)
+
+            lines.append(f" [US] Total value: ${o_tot_val_usd:,.2f} | Orderable: ${o_orderable_usd:,.2f}")
+            lines.append(f"      PL Amt      : ${o_pl_amt_usd:,.2f} ({o_pl_rate:+.2f} %)")
+            lines.append("=" * SEPARATOR_LEN)
+
+            lines.append(f" [f] Toggle View(US List)  [q] Quit")
+
+        # --- VIEW 1 & 2: LIST ---
         else:
-            for item in page_items:
-                ticker = str(item.get('symbol', ''))[:6]
-                name = get_fixed_width_name(item['name'], 18)
+            is_us = (view_mode == 1)
+            target_list = data['overseas_stocks'] if is_us else data['domestic_stocks']
+            title = "US Stocks" if is_us else "KR Stocks"
 
-                if mode == 'OVERSEAS':
-                    q_val = item['qty']
-                    # Smart int formatting
-                    if isinstance(q_val, float) and q_val.is_integer():
-                         qty = f"{int(q_val):,}"
+            l_pl_amt = o_pl_amt_usd if is_us else d_pl_amt
+            l_pl_rate = o_pl_rate if is_us else d_pl_rate
+            l_tot_stock = o_stock_eval_usd if is_us else d_tot_eval
+
+            total_items = len(target_list)
+            total_pages = (total_items + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE
+            if total_pages == 0: total_pages = 1
+            if page_idx >= total_pages: page_idx = 0
+
+            lines.append("=" * SEPARATOR_LEN)
+            lines.append(f" [Portfolio: {title}] ({page_idx+1}/{total_pages})")
+
+            # Header
+            header_fmt = " {:<6} | {} | {:>6} | {:>9} | {:>9} | {:>9} | {:>7}"
+            hdr_name = get_fixed_width_name("Name", 20)
+            lines.append(header_fmt.format("Ticker", hdr_name, "Qty", "Avg", "Cur", "P/L", "P/L%"))
+
+            start_idx = page_idx * ROWS_PER_PAGE
+            end_idx = start_idx + ROWS_PER_PAGE
+            page_items = target_list[start_idx:end_idx]
+
+            if not page_items:
+                 lines.append("  (No holdings)")
+                 for _ in range(ROWS_PER_PAGE-1): lines.append("")
+            else:
+                for item in page_items:
+                    ticker = str(item.get('symbol', ''))[:6]
+                    name = get_fixed_width_name(item['name'], 20)
+
+                    if is_us:
+                        q_val = item['qty']
+                        qty = f"{int(q_val):,}" if q_val.is_integer() else f"{q_val:,.2f}"
+                        avg = f"${item['avg_price']:,.2f}"
+                        cur = f"${item['cur_price']:,.2f}"
+                        pl_val = f"${item['pnl_amt']:,.2f}"
                     else:
-                         qty = f"{q_val:,.2f}"
-                    price = f"${item['cur_price']:,.2f}"
-                else:
-                    qty = f"{item['qty']:,}"
-                    price = f"{item['cur_price']:,.0f}"
+                        qty = f"{item['qty']:,}"
+                        avg = f"{item['avg_price']:,.0f}"
+                        cur = f"{item['cur_price']:,.0f}"
+                        pl_val = f"{item['pnl_amt']:,.0f}"
 
-                pnl = f"{item['pnl_rate']:.2f}%"
+                    pnl_pct = f"{item['pnl_rate']:.2f}%"
+                    lines.append(header_fmt.format(ticker, name, qty, avg, cur, pl_val, pnl_pct))
 
-                lines.append(f" {ticker:<6} | {name} | {qty:>5} | {price:>10} | {pnl:>7}")
+                rem = ROWS_PER_PAGE - len(page_items)
+                for _ in range(rem): lines.append("")
 
-            # Fill remaining lines to keep UI stable
-            rem_lines = ROWS_PER_PAGE - len(page_items)
-            for _ in range(rem_lines):
-                 lines.append("") # Empty line
+            lines.append("-" * SEPARATOR_LEN)
 
-        lines.append("-" * 55)
-        # Footer: Totals matched to mode
-        if mode == 'OVERSEAS':
-            lines.append(f" Eval: ${total_usd_eval:,.2f} | Cash: ${usd_cash:,.2f}")
-        else:
-            lines.append(f" Eval: {total_krw_eval:,.0f} KRW | Cash: {krw_cash:,} KRW")
+            rate_str = f"{l_pl_rate:+.2f}%"
+            if l_pl_amt < 0 and "0.00%" in rate_str and "+" in rate_str:
+                rate_str = rate_str.replace("+", "-")
 
-        lines.append(" [f] Toggle Market  [Space] Next Page  [q] Quit")
+            if is_us:
+                tot_str = f" Total: ${l_tot_stock:,.2f}       P/L: ${l_pl_amt:,.2f} ({rate_str})"
+            else:
+                tot_str = f" Total: {l_tot_stock:,.0f} KRW       P/L: {l_pl_amt:,.0f} KRW ({rate_str})"
+            lines.append(tot_str)
+
+            next_view = "KR List" if is_us else "Summary"
+            lines.append(f" [n] Next Page  [f] Toggle({next_view})  [q] Quit")
 
         show_in_result_area(lines)
 
-        # Input Handling
         ch = msvcrt.getch()
         if ch == b'q':
-            return [] # Return empty list, Menu loop will redraw UI
+            clear_result_area() # Ensure cleared on exit
+            return []
         elif ch == b'f':
-            mode = 'DOMESTIC' if mode == 'OVERSEAS' else 'OVERSEAS'
-            page_idx = 0 # Reset page on toggle
-        elif ch == b' ':
-            page_idx += 1
-            if page_idx >= total_pages:
-                page_idx = 0 # Loop back to start
+            view_mode = (view_mode + 1) % 3
+            page_idx = 0
+        elif ch == b'n':
+            if view_mode != 0:
+                page_idx += 1
+                if page_idx >= total_pages: page_idx = 0
 
     return []
 
 def menu():
-    # To modify global print_log_level from trading_ui, we access it directly or via helper.
-    # But print_log_level is module-level in trading_ui.
-    # "global print_log_level" in main.py is referring to main's variable, but we deleted it.
-    # We should use trading_ui.print_log_level.
-
     os.system('cls' if os.name == 'nt' else 'clear')
     render_ui(full_refresh=True)
 
@@ -602,19 +513,13 @@ def menu():
         choice = input_at(10, 2, "Enter Choice: ").strip()
 
         if choice == '1':
-            clear_result_area()
-            lines = inquire_combined_cash()
-            show_in_result_area(lines)
-            msvcrt.getch()
+            inquire_account_info()
         elif choice == '2':
             handle_place_order()
         elif choice == '3':
             handle_manage_orders()
-        elif choice == '4':
-            inquire_portfolio()
-            # Removed separate show_in_result_area and getch, handled in loop
+        # Option 4 removed
         elif choice == '0':
-            # Toggle Log Level: INFO -> DEBUG -> ERROR -> INFO ...
             if trading_ui.print_log_level == PrintLevel.INFO:
                 trading_ui.print_log_level = PrintLevel.DEBUG
             elif trading_ui.print_log_level == PrintLevel.DEBUG:
@@ -639,19 +544,13 @@ if __name__ == "__main__":
 
     ws = ka.KISWebSocket(api_url="")
 
-    # Load stocks to watch from config, filtering out disabled ones
+    # Load stocks to watch
     watch_list_kr = [s["ticker"] for s in trading_config.CONFIG.get("KR", []) if not s.get("disabled", False)]
     watch_list_us = [s["ticker"] for s in trading_config.CONFIG.get("US", []) if not s.get("disabled", False)]
 
-    # Personal Fill Notifications (Order/Execution Notifications)
-    # These TR IDs (H0STCNI0 for Domestic, H0GSCNI0 for Overseas) use HTSID as the key, not tickers.
-    # They should be subscribed ONLY ONCE.
+    # Personal Notifications
     htsid = ka.getTREnv().my_htsid
     if htsid:
-        # Domestic Notification
-        # (Importing ccnl_total as request function for consistency if it handles H0STCNI0)
-        # Actually H0STCNI0 is for domestic order alerts.
-        # For now we use standard tickers for market data and HTSID for personal alerts.
         ws.subscribe(ccnl_notice, htsid, kwargs={"env_dv": "real"})
 
     if watch_list_kr:
@@ -659,7 +558,6 @@ if __name__ == "__main__":
         ws.subscribe(ccnl_total, watch_list_kr)
 
     if watch_list_us:
-        # KIS Overseas Real-time TRs require prefixes like DNAS (NASDAQ) or DNYS (NYSE) or DAMS (AMEX).
         formatted_us_list = []
         for ticker in watch_list_us:
             if any(ticker.startswith(p) for p in ["DNAS", "DNYS", "DAMS"]):
@@ -669,32 +567,21 @@ if __name__ == "__main__":
             info = trading_config.get_stock_info(ticker)
             market = info.get("market", "").upper()
 
-            if market == "NASDAQ":
-                formatted_us_list.append(f"DNAS{ticker}")
-            elif market == "NYSE":
-                formatted_us_list.append(f"DNYS{ticker}")
-            elif market == "AMEX":
-                formatted_us_list.append(f"DAMS{ticker}")
-            else:
-                # Default fallback
-                formatted_us_list.append(f"DNAS{ticker}")
+            if market == "NASDAQ": formatted_us_list.append(f"DNAS{ticker}")
+            elif market == "NYSE": formatted_us_list.append(f"DNYS{ticker}")
+            elif market == "AMEX": formatted_us_list.append(f"DAMS{ticker}")
+            else: formatted_us_list.append(f"DNAS{ticker}")
 
-        # Use the formatted list for subscription
         ws.subscribe(asking_price, formatted_us_list)
         ws.subscribe(delayed_ccnl, formatted_us_list)
 
-    # Register callback (Try add_callback as generic guess)
     if hasattr(ws, 'add_callback'):
         ws.add_callback(on_result)
     elif hasattr(ws, 'on'):
         ws.on("message", on_result)
     else:
-        # Fallback: Assume library uses global handler or set property
-        # print_log(PrintLevel.INFO, "Could not set callback explicitly. Assuming library handles it.")
-        # Try setting attribute directly if simple implementation
         ws.callback = on_result
 
-    # Start WebSocket thread
     ws_thread = threading.Thread(target=ws.start, args=(on_result,), daemon=True)
     ws_thread.start()
 

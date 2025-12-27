@@ -158,10 +158,9 @@ def render_ui(full_refresh=False):
                 "=" * min(cols, 40),
                 f" KIS Real-time System (Log: {status_name})",
                 "=" * min(cols, 40),
-                " 1. Get Cash Info (KRW/USD)",
+                " 1. Account Info (Balance & Portfolio)",
                 " 2. Place Order (Buy/Sell)",
                 " 3. Manage Open Orders (Correct/Cancel)",
-                " 4. Show Portfolio (Holdings)",
                 " 0. Change Log Level",
                 " c. Clear Order Logs  q. Exit"
             ]

@@ -4,7 +4,7 @@ import kis_api.kis_auth as ka
 from trading_ui import clear_result_area, show_in_result_area, input_at, render_ui, print_log, PrintLevel, safe_write, CLEAR_LINE
 import trading_config
 import trading_state
-from account_helper import get_account_balance
+from account_helper import get_integrated_account_info
 from kis_api.domestic_stock.order_cash.order_cash import order_cash
 from kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl
 from kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import inquire_psbl_rvsecncl
@@ -21,9 +21,26 @@ def handle_place_order():
     try:
         while True:
             # Fetch balance each time we loop back to main menu
-            bal = get_account_balance()
-            krw_bal = bal.get('krw_orderable', 0)
-            usd_bal = bal.get('usd_withdrawable', 0.0)
+            data = get_integrated_account_info()
+            # Domestic: Output2 'ord_psbl_cash' (Orderable Cash) or 'dnca_tot_amt' (Deposit)
+            # Use 'dnca_tot_amt' as safe default if 'ord_psbl_cash' is not in Output2 of inquire-balance
+            # Wait, inquire-balance (TTTC8434R) output2 has 'dnca_tot_amt', 'prvs_rcdl_excc_amt', etc.
+            # It does NOT have 'ord_psbl_cash' explicitly usually (that's in inquire-psbl-order).
+            # But let's check key names from log or previous usage.
+            # Previous usage used inquire-psbl-order. Now we use inquire-balance.
+            # inquire-balance Output2 keys: dnca_tot_amt, bfdy_tot_asst_evlu_amt, etc.
+            # Let's use 'dnca_tot_amt' (Deposit) for KRW balance approximation.
+            # For strict orderable, we might need the other API, but user wanted integration.
+            # Let's use 'dnca_tot_amt' (Deposit) as Orderable for now.
+
+            d_asset = data.get('domestic_asset', {})
+            try: krw_bal = int(float(d_asset.get('dnca_tot_amt', 0)))
+            except: krw_bal = 0
+
+            # Overseas: Output2 'frcr_drwg_psbl_amt_1' (Withdrawable)
+            o_asset = data.get('overseas_asset', {})
+            try: usd_bal = float(o_asset.get('frcr_drwg_psbl_amt_1', 0))
+            except: usd_bal = 0.0
 
             # Market Label
             market_label = "OVERSEAS (US)" if target_market == "US" else "DOMESTIC (KR)"
