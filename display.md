@@ -59,3 +59,33 @@
 - `None`.
 #### output
 - `None`.
+
+### clear_result_area
+터미널의 "결과 영역"(1~10행)을 완전히 지웁니다.
+#### input
+- `None`.
+#### output
+- `None`.
+
+### input_at
+터미널의 지정된 행/열 위치에서 사용자 입력을 받습니다.
+#### input
+- `row` (int): 행 번호.
+- `col` (int): 열 번호.
+- `prompt` (str): 표시할 프롬프트 메시지.
+#### output
+- `str`: 사용자가 입력한 문자열.
+
+### safe_write
+스레드 안전하게 터미널에 텍스트를 출력합니다.
+#### input
+- `text` (str): 출력할 텍스트.
+#### output
+- `None`.
+
+### prepare_exit
+종료 시 커서를 터미널 하단으로 이동하여 UI가 셸 프롬프트에 의해 덮어쓰이지 않도록 합니다.
+#### input
+- `None`.
+#### output
+- `None`.

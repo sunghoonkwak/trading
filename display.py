@@ -18,7 +18,7 @@ LOG_BUFFER_SIZE = 30
 log_buffer = deque(maxlen=LOG_BUFFER_SIZE)
 latest_logs = {} # Map[code, colored_log]
 terminal_lock = threading.Lock()
-log_file_path = "latest.log"
+log_file_path = "WebSocket_latest.log"  # Overwritten by main.py at startup
 
 # ANSI Escape Codes for UI
 SAVE_CURSOR = "\033[s"

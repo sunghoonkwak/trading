@@ -45,7 +45,7 @@ def print_open_orders_list(df, market):
             if k in row_lower: return row_lower[k]
         return default
 
-    for i, row in df.iterrows():
+    for idx, (_, row) in enumerate(df.iterrows()):
         name = row.get('prdt_name', row.get('pdno', 'Unknown'))
         row_lower = {k.lower(): v for k, v in row.items()}
 
@@ -63,8 +63,8 @@ def print_open_orders_list(df, market):
             try: qty = int(float(q_val))
             except: qty = 0
 
-        order_list.append(f" {i+1}. [{market}] {name} | {side} | Prc: {price} | Qty: {qty}")
-        if i >= 6: break
+        order_list.append(f" {idx+1}. [{market}] {name} | {side} | Prc: {price} | Qty: {qty}")
+        if idx >= 6: break
 
     return header_lines + order_list
 

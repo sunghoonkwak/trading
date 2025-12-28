@@ -4,7 +4,6 @@ It centralizes data fetching and provides an interactive terminal UI for portfol
 """
 import msvcrt
 import logging
-import json
 import pandas as pd
 import kis_api.kis_auth as ka
 from display import clear_result_area, show_in_result_area, get_fixed_width_name
