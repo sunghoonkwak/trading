@@ -145,21 +145,27 @@ def draw_sticky_area(stock_config: dict):
     # Set scroll region for history area only
     set_scroll_region(history_start_row, rows)
 
-    # Move cursor to history area
-    sys.stdout.write(f"\033[{rows};1H")
-
     sys.stdout.write(RESTORE_CURSOR)
     sys.stdout.flush()
 
 
+# Track current row for history
+current_history_row = 10
+
 def append_history_log(log: str, stock_config: dict):
     """Append a log to the history area (scrollable)."""
+    global current_history_row
     cols, rows = get_terminal_size()
     colored = colorize_log(log, stock_config)
 
-    # Move to bottom of scroll region and print (causes scroll)
-    sys.stdout.write(f"\033[{rows};1H")
-    sys.stdout.write(f"\n{colored}")
+    if current_history_row < rows:
+        # Still filling up - print at current row
+        sys.stdout.write(f"\033[{current_history_row};1H{colored}")
+        current_history_row += 1
+    else:
+        # Full - scroll by printing at bottom
+        sys.stdout.write(f"\033[{rows};1H\n{colored}")
+
     sys.stdout.flush()
 
 
@@ -201,6 +207,10 @@ def main():
         latest_logs[key] = log
 
     draw_sticky_area(stock_config)
+
+    # Initialize history row after sticky area
+    global current_history_row
+    current_history_row = history_start_row
 
     try:
         while True:
