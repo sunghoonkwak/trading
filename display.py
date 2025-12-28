@@ -1,6 +1,9 @@
 """
 This module handles ANSI-based terminal UI rendering and colorized logging.
 It focuses solely on display logic, separating from the trading business logic.
+
+REFACTORED: Now sends WebSocket logs to separate terminal via Named Pipe,
+and displays order status + alerts in main terminal.
 """
 import sys
 import shutil
@@ -10,15 +13,29 @@ import unicodedata
 import os
 import logging
 from enum import IntEnum
-from collections import deque
+from collections import deque, OrderedDict
 import trading_config
+
+# Try to import event_pipe for separate terminal support
+try:
+    import event_pipe
+    PIPE_AVAILABLE = True
+except ImportError:
+    PIPE_AVAILABLE = False
 
 # UI and Logging Configuration
 LOG_BUFFER_SIZE = 30
 log_buffer = deque(maxlen=LOG_BUFFER_SIZE)
-latest_logs = {} # Map[code, colored_log]
 terminal_lock = threading.Lock()
 log_file_path = "WebSocket_latest.log"  # Overwritten by main.py at startup
+
+# Order State Tracking
+# Map[order_id, OrderInfo dict]
+order_states = OrderedDict()
+MAX_ORDER_DISPLAY = 15
+
+# Alert buffer
+alert_buffer = deque(maxlen=10)
 
 # ANSI Escape Codes for UI
 SAVE_CURSOR = "\033[s"
@@ -27,13 +44,24 @@ CLEAR_LINE = "\033[2K"
 HOME = "\033[H"
 CLEAR_SCREEN = "\033[2J"
 
-# Menu Options (Mapped to main.py choice cases)
+# Colors
+COLOR_RESET = "\033[0m"
+COLOR_RED = "\033[91m"
+COLOR_GREEN = "\033[92m"
+COLOR_YELLOW = "\033[93m"
+COLOR_CYAN = "\033[96m"
+COLOR_GRAY = "\033[90m"
+
+# Menu Options (Mapped to main.py choice cases) - EXPANDED by 3 lines
 MENU_OPTIONS = [
     " 1. Account Info (Balance & Portfolio)",
     " 2. Place Order (Buy/Sell)",
     " 3. Manage Open Orders (Correct/Cancel)",
-    " 0. Change Log Level", # Toggle
-    " c. Clear Order Logs  q. Exit"
+    " ",
+    " 0. Change Log Level",
+    " c. Clear Completed Orders",
+    " v. Open Log Viewer",
+    " q. Exit"
 ]
 
 class PrintLevel(IntEnum):
@@ -62,63 +90,70 @@ def get_ansi_rgb(code, text):
         return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
     return text
 
+
 def safe_write(text):
     with terminal_lock:
         sys.stdout.write(text)
         sys.stdout.flush()
 
+
+def send_to_viewer(log: str):
+    """Send log to separate terminal via Named Pipe."""
+    if PIPE_AVAILABLE and event_pipe.is_connected():
+        event_pipe.send_log(log)
+
+
 def print_log(level, log):
+    """Log to file and send to separate terminal viewer."""
+    # Always log to file
     if level == PrintLevel.ERROR:
         logging.error(log)
     elif level == PrintLevel.INFO or level == PrintLevel.DEBUG:
         logging.info(log)
 
-    global latest_logs
+    # Send to separate terminal viewer
     if level <= print_log_level:
-        # Extract Ticker and Type to create a composite key
-        # Patterns: [MKT][Name] Ticker | ... OR [BUY][ODR] [Name] Ticker | ...
-        code = None
-        log_type = "MKT" # Default to Market
+        send_to_viewer(log)
+        log_buffer.appendleft(log)
 
-        # 1. Extract Ticker
-        # Look for the string between the last closing bracket and the pipe.
-        match_code = re.search(r"\]\s+([\w\d]+)\s+\|", log)
-        if match_code:
-            raw_code = match_code.group(1).strip()
-            # Normalize code: Remove 4-char prefix if it's an overseas code (e.g. DNASNVDA -> NVDA)
-            if len(raw_code) > 6 and raw_code[:4] in ["DNAS", "DNYS", "DAMS", "HKSE", "HNXS"]:
-                code = raw_code[4:]
-            else:
-                code = raw_code
 
-        # 2. Extract Type (MKT vs ODR/COR/CAN/EXE/REJ)
-        if "[MKT]" in log:
-            log_type = "MKT"
-        elif any(x in log for x in ["[ODR]", "[COR]", "[CAN]", "[EXE]", "[REJ]"]):
-            log_type = "ODR"
+def update_order_state(order_id: str, ticker: str, name: str, side: str,
+                       price: str, qty: str, state: str):
+    """Update order state for display in main terminal."""
+    order_states[order_id] = {
+        "ticker": ticker,
+        "name": name,
+        "side": side,
+        "price": price,
+        "qty": qty,
+        "state": state  # PLACED, EXECUTED, CANCELED, CORRECTING
+    }
+    # Move to end (most recent)
+    order_states.move_to_end(order_id)
+    render_ui()
 
-        colored_log = log
-        if level == PrintLevel.ERROR:
-            colored_log = f"\033[91m{log}\033[0m"
-        elif level == PrintLevel.DEBUG:
-            colored_log = f"\033[90m{log}\033[0m" # Gray for DEBUG
-        elif level == PrintLevel.INFO:
-            if code:
-                # Use extracted code for coloring lookup
-                colored_log = get_ansi_rgb(code, log)
-                if colored_log == log and match_code: # Fallback using raw code
-                    colored_log = get_ansi_rgb(match_code.group(1).strip(), log)
-            else:
-                colored_log = f"\033[93m{log}\033[0m" # Yellow for general INFO
 
-        if code and level == PrintLevel.INFO:
-            # Update the latest summary with COMPOSITE KEY
-            # Key format: "NVDA_MKT" or "NVDA_ODR"
-            composite_key = f"{code}_{log_type}"
-            latest_logs[composite_key] = colored_log
+def add_alert(message: str, level: str = "INFO"):
+    """Add alert message to display."""
+    color = COLOR_YELLOW
+    if level == "ERROR":
+        color = COLOR_RED
+    elif level == "SUCCESS":
+        color = COLOR_GREEN
 
-        log_buffer.appendleft(colored_log)
-        render_ui()
+    alert_buffer.appendleft(f"{color}{message}{COLOR_RESET}")
+    render_ui()
+
+
+def clear_completed_orders():
+    """Remove EXECUTED and CANCELED orders from display."""
+    global order_states
+    keys_to_remove = [k for k, v in order_states.items()
+                      if v["state"] in ["EXECUTED", "CANCELED"]]
+    for k in keys_to_remove:
+        del order_states[k]
+    render_ui()
+
 
 def clear_result_area():
     with terminal_lock:
@@ -127,6 +162,7 @@ def clear_result_area():
             sys.stdout.write(f"\033[{r};1H{CLEAR_LINE}")
         sys.stdout.write(RESTORE_CURSOR)
         sys.stdout.flush()
+
 
 def show_in_result_area(lines):
     with terminal_lock:
@@ -137,13 +173,11 @@ def show_in_result_area(lines):
         sys.stdout.write(RESTORE_CURSOR)
         sys.stdout.flush()
 
+
 def clear_order_logs():
-    global latest_logs
-    # Remove keys ending with _ODR
-    keys_to_remove = [k for k in latest_logs.keys() if k.endswith("_ODR")]
-    for k in keys_to_remove:
-        del latest_logs[k]
-    render_ui()
+    """Alias for clear_completed_orders for backward compatibility."""
+    clear_completed_orders()
+
 
 def input_at(row, col, prompt):
     with terminal_lock:
@@ -151,53 +185,103 @@ def input_at(row, col, prompt):
         sys.stdout.flush()
     return input()
 
+
+def _format_order_line(order_id: str, info: dict, cols: int) -> str:
+    """Format a single order line for display."""
+    ticker = info["ticker"][:6].ljust(6)
+    name = get_fixed_width_name(info["name"], 8)
+    side = "BUY " if info["side"] == "BUY" else "SELL"
+    price = info["price"][:10].rjust(10)
+    qty = info["qty"][:6].rjust(6)
+    state = info["state"]
+
+    # Color based on state
+    if state == "EXECUTED":
+        color = COLOR_GREEN
+    elif state == "CANCELED":
+        color = COLOR_RED
+    elif state == "PLACED":
+        color = COLOR_YELLOW
+    else:
+        color = COLOR_CYAN
+
+    line = f"id:{order_id[-5:]} {ticker}:{name} {side} prc:{price} qty:{qty} [{state}]"
+    return f"{color}{line}{COLOR_RESET}"
+
+
 def render_ui(full_refresh=False):
     cols, rows = shutil.get_terminal_size()
-    visible_logs_count = min(LOG_BUFFER_SIZE, max(1, rows - 14))
+
+    # Layout:
+    # Row 1-3: Header
+    # Row 4-11: Menu (8 lines, expanded by 3)
+    # Row 12: Separator
+    # Row 13: Order Status Header
+    # Row 14: Separator
+    # Row 15+: Orders and Alerts
+
+    order_area_start = 15
+    available_rows = max(1, rows - order_area_start)
 
     with terminal_lock:
         sys.stdout.write(SAVE_CURSOR)
 
         if full_refresh:
             status_name = "ERROR" if print_log_level == PrintLevel.ERROR else "INFO" if print_log_level == PrintLevel.INFO else "DEBUG"
+            pipe_status = "[VIEWER ON]" if (PIPE_AVAILABLE and event_pipe.is_connected()) else "[VIEWER OFF]"
 
-            sys.stdout.write(f"\033[1;1H{CLEAR_LINE}" + "=" * min(cols, 40))
-            sys.stdout.write(f"\033[2;1H{CLEAR_LINE} KIS Real-time System (Log: {status_name})")
-            sys.stdout.write(f"\033[3;1H{CLEAR_LINE}" + "=" * min(cols, 40))
+            sys.stdout.write(f"\033[1;1H{CLEAR_LINE}" + "=" * min(cols, 50))
+            sys.stdout.write(f"\033[2;1H{CLEAR_LINE} KIS Real-time System (Log: {status_name}) {pipe_status}")
+            sys.stdout.write(f"\033[3;1H{CLEAR_LINE}" + "=" * min(cols, 50))
 
             for i, opt in enumerate(MENU_OPTIONS):
                 sys.stdout.write(f"\033[{i+4};1H{CLEAR_LINE}{opt}")
 
         sys.stdout.write(f"\033[12;1H{CLEAR_LINE}" + "=" * (cols - 1))
-        sys.stdout.write(f"\033[13;1H{CLEAR_LINE} Recent Logs (Max: {visible_logs_count})")
+        sys.stdout.write(f"\033[13;1H{CLEAR_LINE} Order Status & Alerts")
         sys.stdout.write(f"\033[14;1H{CLEAR_LINE}" + "-" * (cols - 1))
 
-        # 3. Print Logs from line 14 onwards
-        display_list = []
-        latest_msgs_list = list(latest_logs.values())
-        latest_msgs_list.reverse()
-        display_list.extend(latest_msgs_list)
+        # Display orders (most recent first)
+        order_list = list(order_states.items())
+        order_list.reverse()
 
-        latest_set = set(latest_msgs_list)
-        for msg in log_buffer:
-            if msg not in latest_set:
-                display_list.append(msg)
-            if len(display_list) >= visible_logs_count:
+        row = order_area_start
+        displayed = 0
+
+        # Show orders
+        for order_id, info in order_list[:MAX_ORDER_DISPLAY]:
+            if row >= rows:
                 break
+            line = _format_order_line(order_id, info, cols)
+            sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}{line}")
+            row += 1
+            displayed += 1
 
-        for i in range(visible_logs_count):
-            row = 15 + i
-            if row >= rows: break
-            content = display_list[i] if i < len(display_list) else ""
-            sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}{content}")
+        # Show alerts after orders if space
+        if displayed < available_rows and alert_buffer:
+            # Add separator if there are orders
+            if displayed > 0:
+                sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}" + "-" * 20 + " Alerts " + "-" * 20)
+                row += 1
+
+            for alert in list(alert_buffer)[:available_rows - displayed - 1]:
+                if row >= rows:
+                    break
+                sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}{alert}")
+                row += 1
+
+        # Clear remaining rows
+        while row < rows:
+            sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}")
+            row += 1
 
         sys.stdout.write(RESTORE_CURSOR)
         sys.stdout.flush()
+
 
 def prepare_exit():
     """Move cursor to the bottom to prevent shell prompt from overwriting UI."""
     cols, rows = shutil.get_terminal_size()
     with terminal_lock:
-        # Move to the last line of the terminal
         sys.stdout.write(f"\033[{rows};1H\n")
         sys.stdout.flush()

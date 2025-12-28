@@ -16,6 +16,7 @@ def menu():
     from .handle_account_info import handle_account_info
     from .handle_place_order import handle_place_order
     from .handle_manage_orders import handle_manage_orders
+    import main  # For spawn_viewer
 
     os.system('cls' if os.name == 'nt' else 'clear')
     if MENU_DEBUG:
@@ -25,7 +26,7 @@ def menu():
 
     while True:
         render_ui(full_refresh=True)
-        choice = input_at(10, 2, "Enter Choice: ").strip()
+        choice = input_at(13, 2, "Enter Choice: ").strip()  # Row 13 for expanded menu
 
         if choice == '1':
             handle_account_info()
@@ -43,7 +44,11 @@ def menu():
             print_log(PrintLevel.ERROR, f"Log Level Changed to: {display.print_log_level.name}")
         elif choice.lower() == 'c':
             display.clear_order_logs()
+        elif choice.lower() == 'v':
+            main.spawn_viewer()
+            display.add_alert("Viewer terminal launched!", "SUCCESS")
         elif choice.lower() == 'q':
+            main.close_viewer()  # Close viewer terminal before exit
             prepare_exit()
             print("Exiting...")
             os._exit(0)

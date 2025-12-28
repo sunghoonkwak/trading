@@ -12,12 +12,14 @@ import msvcrt
 import threading
 import sys
 import shutil
+import subprocess
 
 # Import refactored modules
 import trading_config
 import trading_state
 import display
-from display import PrintLevel, print_log, render_ui, show_in_result_area, safe_write, get_fixed_width_name, clear_result_area, input_at, prepare_exit
+from display import PrintLevel, print_log, render_ui, show_in_result_area, safe_write, get_fixed_width_name, clear_result_area, input_at, prepare_exit, update_order_state, add_alert
+import event_pipe
 
 from menu.menu import menu
 
@@ -101,7 +103,43 @@ PyPrintLevel = PrintLevel
 def write_cleared(text, end="\n"):
     safe_write(f"{display.CLEAR_LINE}{text}{end}")
 
+_viewer_process = None
+
+def spawn_viewer():
+    """Spawn the Event viewer in Windows Terminal."""
+    global _viewer_process
+    viewer_path = os.path.join(base_dir, "event_viewer.py")
+    try:
+        # Use Windows Terminal (wt) - opens in new tab
+        _viewer_process = subprocess.Popen(
+            ["wt", "-w", "0", "nt", "--title", "Event Viewer",
+             "python", viewer_path],
+            cwd=base_dir
+        )
+        logging.info("[System] Viewer terminal spawned")
+        return True
+    except Exception as e:
+        logging.error(f"[System] Failed to spawn viewer: {e}")
+        return False
+
+def close_viewer():
+    """Close the viewer terminal if running."""
+    global _viewer_process
+    if _viewer_process is not None:
+        try:
+            _viewer_process.terminate()
+            _viewer_process = None
+            logging.info("[System] Viewer terminal closed")
+        except:
+            pass
+
 def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
+    # Handle PINGPONG for testing (displays even when market is closed)
+    if tr_id == "PINGPONG":
+        time_s = datetime.now().strftime("%H:%M:%S")
+        print_log(PrintLevel.INFO, f"[{time_s}] [SYS] PINGPONG received")
+        return
+
     if df.empty:
         print_log(PrintLevel.ERROR, f"System Message received for TR: {tr_id}")
         return
@@ -277,6 +315,10 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 msg = (f"[{time_s}] [{side}][{order_val}] [{fixed_name}] {code:<6} | "
                     f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
                 print_log(msg_level, msg)
+
+                # Update order state for main terminal display
+                state_map = {"ODR": "PLACED", "EXE": "EXECUTED", "CAN": "CANCELED", "COR": "CORRECTING", "REJ": "REJECTED"}
+                update_order_state(order_no, code, name, side, price, qty, state_map.get(order_val, "UNKNOWN"))
                 continue
             except Exception as e:
                 print_log(PrintLevel.ERROR, f"Error parsing H0STCNI0: {e}")
@@ -341,6 +383,10 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 msg = (f"[{time_s}] [{side}][{order_val}] [{fixed_name}] {code:<8} | "
                     f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
                 print_log(msg_level, msg)
+
+                # Update order state for main terminal display
+                state_map = {"ODR": "PLACED", "EXE": "EXECUTED", "CAN": "CANCELED", "COR": "CORRECTING", "REJ": "REJECTED"}
+                update_order_state(order_no, code, name, side, price, qty, state_map.get(order_val, "UNKNOWN"))
                 continue
             except Exception as e:
                 print_log(PrintLevel.ERROR, f"Error parsing overseas notification: {e}")
@@ -401,5 +447,13 @@ if __name__ == "__main__":
 
     ws_thread = threading.Thread(target=ws.start, args=(on_result,), daemon=True)
     ws_thread.start()
+
+    # Initialize Named Pipe server for viewer communication
+    if event_pipe.create_pipe_server():
+        # Wait for client connection in background thread
+        def wait_for_viewer():
+            event_pipe.wait_for_client()
+        pipe_thread = threading.Thread(target=wait_for_viewer, daemon=True)
+        pipe_thread.start()
 
     menu()
