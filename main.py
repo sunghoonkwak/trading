@@ -1,3 +1,7 @@
+"""
+This is the main entry point of the KIS Trading System.
+It initializes authentication, WebSocket connections, and the interactive menu.
+"""
 import logging
 import os
 import re
@@ -12,10 +16,10 @@ import shutil
 # Import refactored modules
 import trading_config
 import trading_state
-import trading_ui
-from trading_ui import PrintLevel, print_log, render_ui, show_in_result_area, safe_write, get_fixed_width_name, clear_result_area, input_at, prepare_exit
-from account_helper import get_integrated_account_info
-from order_handler import handle_place_order, handle_manage_orders
+import display
+from display import PrintLevel, print_log, render_ui, show_in_result_area, safe_write, get_fixed_width_name, clear_result_area, input_at, prepare_exit
+
+from menu.menu import menu
 
 # Specific KIS imports
 from kis_api.domestic_stock.asking_price_total.asking_price_total import asking_price_total
@@ -68,7 +72,7 @@ else:
     rotation_msgs.append(f"[LogRotation] Fresh session. No existing log file found.")
 
 log_file = latest_log
-trading_ui.log_file_path = log_file
+display.log_file_path = log_file
 
 # Force reset root logger handlers
 root_logger = logging.getLogger()
@@ -95,7 +99,7 @@ logging.info(f"[System] Logging initialized. All system messages now directed to
 PyPrintLevel = PrintLevel
 
 def write_cleared(text, end="\n"):
-    safe_write(f"{trading_ui.CLEAR_LINE}{text}{end}")
+    safe_write(f"{display.CLEAR_LINE}{text}{end}")
 
 def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
     if df.empty:
@@ -345,196 +349,9 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
         else:
             if i == 0: print_log(PrintLevel.DEBUG, f"Unhandled TR_ID: {tr_id}")
 
-def inquire_account_info() -> list:
-    """
-    Integrated Account Info View
-    3-State View: Summary -> US Portfolio -> KR Portfolio -> Summary
-    """
-    from account_helper import get_integrated_account_info
 
-    # Initial Loading State
-    clear_result_area()
-    show_in_result_area(["Fetching integrated account data..."])
 
-    data = get_integrated_account_info()
 
-    # State
-    view_mode = 0 # 0: Summary, 1: US List, 2: KR List
-    page_idx = 0
-    ROWS_PER_PAGE = 5
-
-    # Pre-calc Summary Data
-    ex_rate = data.get('exchange_rate', 0.0)
-
-    # --- KR Summary ---
-    d_asset = data['domestic_asset']
-    # d_deposit removed from ui as per request, just calc values
-    d_orderable = data.get('krw_orderable', 0)
-
-    d_pl_amt = 0.0
-    d_pchs_amt = 0.0
-    for stock in data['domestic_stocks']:
-        d_pl_amt += stock['pnl_amt']
-        d_pchs_amt += (stock['avg_price'] * stock['qty'])
-
-    d_tot_eval = d_pchs_amt + d_pl_amt
-    d_pl_rate = (d_pl_amt / d_pchs_amt * 100) if d_pchs_amt > 0 else 0.0
-
-    # --- US Summary ---
-    o_asset = data['overseas_asset']
-    o_orderable_usd = float(o_asset.get('frcr_drwg_psbl_amt_1', 0))
-
-    o_pl_amt_usd = 0.0
-    o_pchs_amt_usd = 0.0
-    o_stock_eval_usd = 0.0
-
-    for stock in data['overseas_stocks']:
-        o_pl_amt_usd += stock['pnl_amt']
-        pchs = stock['avg_price'] * stock['qty']
-        o_pchs_amt_usd += pchs
-        o_stock_eval_usd += (stock['cur_price'] * stock['qty'])
-
-    o_pl_rate = (o_pl_amt_usd / o_pchs_amt_usd * 100) if o_pchs_amt_usd > 0 else 0.0
-
-    o_tot_val_usd = o_stock_eval_usd + o_orderable_usd
-
-    while True:
-        clear_result_area()
-        lines = []
-
-        SEPARATOR_LEN = 95
-
-        # --- VIEW 0: SUMMARY ---
-        if view_mode == 0:
-            lines.append("=" * SEPARATOR_LEN)
-            lines.append(f" [Account Summary] exchange rate : {ex_rate:,.2f} KRW/USD")
-            lines.append("=" * SEPARATOR_LEN)
-
-            lines.append(f" [KR] Total value: {d_tot_eval:,.0f} KRW | Orderable: {d_orderable:,.0f} KRW")
-            lines.append(f"      PL Amt      : {d_pl_amt:,.0f} KRW ({d_pl_rate:+.2f} %)")
-            lines.append("-" * SEPARATOR_LEN)
-
-            lines.append(f" [US] Total value: ${o_tot_val_usd:,.2f} | Orderable: ${o_orderable_usd:,.2f}")
-            lines.append(f"      PL Amt      : ${o_pl_amt_usd:,.2f} ({o_pl_rate:+.2f} %)")
-            lines.append("=" * SEPARATOR_LEN)
-
-            lines.append(f" [f] Toggle View(US List)  [q] Quit")
-
-        # --- VIEW 1 & 2: LIST ---
-        else:
-            is_us = (view_mode == 1)
-            target_list = data['overseas_stocks'] if is_us else data['domestic_stocks']
-            title = "US Stocks" if is_us else "KR Stocks"
-
-            l_pl_amt = o_pl_amt_usd if is_us else d_pl_amt
-            l_pl_rate = o_pl_rate if is_us else d_pl_rate
-            l_tot_stock = o_stock_eval_usd if is_us else d_tot_eval
-
-            total_items = len(target_list)
-            total_pages = (total_items + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE
-            if total_pages == 0: total_pages = 1
-            if page_idx >= total_pages: page_idx = 0
-
-            lines.append("=" * SEPARATOR_LEN)
-            lines.append(f" [Portfolio: {title}] ({page_idx+1}/{total_pages})")
-
-            # Header
-            header_fmt = " {:<6} | {} | {:>6} | {:>9} | {:>9} | {:>9} | {:>7}"
-            hdr_name = get_fixed_width_name("Name", 20)
-            lines.append(header_fmt.format("Ticker", hdr_name, "Qty", "Avg", "Cur", "P/L", "P/L%"))
-
-            start_idx = page_idx * ROWS_PER_PAGE
-            end_idx = start_idx + ROWS_PER_PAGE
-            page_items = target_list[start_idx:end_idx]
-
-            if not page_items:
-                lines.append("  (No holdings)")
-                for _ in range(ROWS_PER_PAGE-1): lines.append("")
-            else:
-                for item in page_items:
-                    ticker = str(item.get('symbol', ''))[:6]
-                    name = get_fixed_width_name(item['name'], 20)
-
-                    if is_us:
-                        q_val = item['qty']
-                        qty = f"{int(q_val):,}" if q_val.is_integer() else f"{q_val:,.2f}"
-                        avg = f"${item['avg_price']:,.2f}"
-                        cur = f"${item['cur_price']:,.2f}"
-                        pl_val = f"${item['pnl_amt']:,.2f}"
-                    else:
-                        qty = f"{item['qty']:,}"
-                        avg = f"{item['avg_price']:,.0f}"
-                        cur = f"{item['cur_price']:,.0f}"
-                        pl_val = f"{item['pnl_amt']:,.0f}"
-
-                    pnl_pct = f"{item['pnl_rate']:.2f}%"
-                    lines.append(header_fmt.format(ticker, name, qty, avg, cur, pl_val, pnl_pct))
-
-                rem = ROWS_PER_PAGE - len(page_items)
-                for _ in range(rem): lines.append("")
-
-            lines.append("-" * SEPARATOR_LEN)
-
-            rate_str = f"{l_pl_rate:+.2f}%"
-            if l_pl_amt < 0 and "0.00%" in rate_str and "+" in rate_str:
-                rate_str = rate_str.replace("+", "-")
-
-            if is_us:
-                tot_str = f" Total: ${l_tot_stock:,.2f}       P/L: ${l_pl_amt:,.2f} ({rate_str})"
-            else:
-                tot_str = f" Total: {l_tot_stock:,.0f} KRW       P/L: {l_pl_amt:,.0f} KRW ({rate_str})"
-            lines.append(tot_str)
-
-            next_view = "KR List" if is_us else "Summary"
-            lines.append(f" [n] Next Page  [f] Toggle({next_view})  [q] Quit")
-
-        show_in_result_area(lines)
-
-        ch = msvcrt.getch()
-        if ch == b'q':
-            clear_result_area() # Ensure cleared on exit
-            return []
-        elif ch == b'f':
-            view_mode = (view_mode + 1) % 3
-            page_idx = 0
-        elif ch == b'n':
-            if view_mode != 0:
-                page_idx += 1
-                if page_idx >= total_pages: page_idx = 0
-
-    return []
-
-def menu():
-    os.system('cls' if os.name == 'nt' else 'clear')
-    render_ui(full_refresh=True)
-
-    while True:
-        render_ui(full_refresh=True)
-        choice = input_at(10, 2, "Enter Choice: ").strip()
-
-        if choice == '1':
-            inquire_account_info()
-        elif choice == '2':
-            handle_place_order()
-        elif choice == '3':
-            handle_manage_orders()
-        # Option 4 removed
-        elif choice == '0':
-            if trading_ui.print_log_level == PrintLevel.INFO:
-                trading_ui.print_log_level = PrintLevel.DEBUG
-            elif trading_ui.print_log_level == PrintLevel.DEBUG:
-                trading_ui.print_log_level = PrintLevel.ERROR
-            else:
-                trading_ui.print_log_level = PrintLevel.INFO
-            print_log(PrintLevel.ERROR, f"Log Level Changed to: {trading_ui.print_log_level.name}")
-        elif choice.lower() == 'c':
-            trading_ui.clear_order_logs()
-        elif choice.lower() == 'q':
-            prepare_exit()
-            print("Exiting...")
-            os._exit(0)
-        else:
-            pass
 
 if __name__ == "__main__":
     print("=== KIS Real-time Trading System ===")

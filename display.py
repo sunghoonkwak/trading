@@ -1,3 +1,7 @@
+"""
+This module handles ANSI-based terminal UI rendering and colorized logging.
+It focuses solely on display logic, separating from the trading business logic.
+"""
 import sys
 import shutil
 import re
@@ -9,7 +13,7 @@ from enum import IntEnum
 from collections import deque
 import trading_config
 
-# UI Configuration
+# UI and Logging Configuration
 LOG_BUFFER_SIZE = 30
 log_buffer = deque(maxlen=LOG_BUFFER_SIZE)
 latest_logs = {} # Map[code, colored_log]
@@ -23,7 +27,7 @@ CLEAR_LINE = "\033[2K"
 HOME = "\033[H"
 CLEAR_SCREEN = "\033[2J"
 
-# Menu Options (Synced with main.py logic)
+# Menu Options (Mapped to main.py choice cases)
 MENU_OPTIONS = [
     " 1. Account Info (Balance & Portfolio)",
     " 2. Place Order (Buy/Sell)",

@@ -344,20 +344,20 @@ class APIResp:
         return self._err_message
 
     def printAll(self):
-        print("<Header>")
+        logging.debug("<Header>")
         for x in self.getHeader()._fields:
             val = getattr(self.getHeader(), x)
             # Mask sensitive tokens in header output
             if x.lower() in ["authorization", "appkey", "appsecret", "secretkey", "approval_key"]:
                 val = "********"
-            print(f"\t-{x}: {val}")
-        print("<Body>")
+            logging.debug(f"\t-{x}: {val}")
+        logging.debug("<Body>")
         for x in self.getBody()._fields:
             val = getattr(self.getBody(), x)
             # Mask sensitive body fields
             if x.lower() in ["appkey", "appsecret", "secretkey"]:
                 val = "********"
-            print(f"\t-{x}: {val}")
+            logging.debug(f"\t-{x}: {val}")
 
     def printError(self, url):
         logging.error("-" * 31)
@@ -452,10 +452,10 @@ def _url_fetch(
                     masked[k] = "********"
             return masked
 
-        print("< Sending Info >")
-        print(f"URL: {url}, TR: {tr_id}")
-        print(f"<header>\n{_mask_dict(headers)}")
-        print(f"<body>\n{_mask_dict(params)}")
+        logging.debug("< Sending Info >")
+        logging.debug(f"URL: {url}, TR: {tr_id}")
+        logging.debug(f"<header>\n{_mask_dict(headers)}")
+        logging.debug(f"<body>\n{_mask_dict(params)}")
 
     if postFlag:
         # if (hashFlag): set_order_hash_key(headers, params)
@@ -469,7 +469,7 @@ def _url_fetch(
             ar.printAll()
         return ar
     else:
-        print("Error Code : " + str(res.status_code) + " | " + res.text)
+        logging.error("Error Code : " + str(res.status_code) + " | " + res.text)
         return APIRespError(res.status_code, res.text)
 
 
@@ -548,9 +548,9 @@ def data_fetch(tr_id, tr_type, params, appendHeaders=None) -> dict:
                     masked[k] = "********"
             return masked
 
-        print("< Sending Info >")
-        print(f"TR: {tr_id}")
-        print(f"<header>\n{_mask_dict(headers)}")
+        logging.debug("< Sending Info >")
+        logging.debug(f"TR: {tr_id}")
+        logging.debug(f" <header>\n{_mask_dict(headers)}")
 
     inp = {
         "tr_id": tr_id,

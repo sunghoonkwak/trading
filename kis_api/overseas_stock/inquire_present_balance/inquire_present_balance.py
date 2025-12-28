@@ -12,7 +12,7 @@ import sys
 import pandas as pd
 
 sys.path.extend(['../..', '.'])
-import kis_auth as ka
+import kis_api.kis_auth as ka
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
@@ -41,10 +41,10 @@ def inquire_present_balance(
     max_depth: int = 10
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    [해외주식] 주문/계좌 
+    [해외주식] 주문/계좌
     해외주식 체결기준현재잔고[v1_해외주식-008]
     해외주식 체결기준현재잔고 API를 호출하여 DataFrame으로 반환합니다.
-    
+
     Args:
         cano (str): 계좌번호 체계(8-2)의 앞 8자리
         acnt_prdt_cd (str): 계좌번호 체계(8-2)의 뒤 2자리
@@ -59,10 +59,10 @@ def inquire_present_balance(
         tr_cont (str): 연속 거래 여부
         depth (int): 현재 재귀 깊이
         max_depth (int): 최대 재귀 깊이 (기본값: 10)
-        
+
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]: 해외주식 체결기준현재잔고 데이터
-        
+
     Example:
         >>> df1, df2, df3 = inquire_present_balance(
         ...     cano=trenv.my_acct,
@@ -100,7 +100,7 @@ def inquire_present_balance(
     if depth >= max_depth:
         logger.warning("Maximum recursion depth (%d) reached. Stopping further requests.", max_depth)
         return dataframe1 if dataframe1 is not None else pd.DataFrame(), dataframe2 if dataframe2 is not None else pd.DataFrame(), dataframe3 if dataframe3 is not None else pd.DataFrame()
-    
+
     # TR ID 설정 (모의투자 지원 로직)
     if env_dv == "real":
         tr_id = "CTRP6504R"  # 실전투자용 TR ID
@@ -125,11 +125,8 @@ def inquire_present_balance(
         if hasattr(res.getBody(), 'output1'):
             output_data = res.getBody().output1
             if output_data:
-                if isinstance(output_data, list):
-                    current_data1 = pd.DataFrame(output_data)
-                else:
-                    current_data1 = pd.DataFrame([output_data])
-                
+                current_data1 = pd.DataFrame(output_data if isinstance(output_data, list) else [output_data])
+
                 if dataframe1 is not None:
                     dataframe1 = pd.concat([dataframe1, current_data1], ignore_index=True)
                 else:
@@ -140,16 +137,13 @@ def inquire_present_balance(
         else:
             if dataframe1 is None:
                 dataframe1 = pd.DataFrame()
-        
+
         # output2 처리
         if hasattr(res.getBody(), 'output2'):
             output_data = res.getBody().output2
             if output_data:
-                if isinstance(output_data, list):
-                    current_data2 = pd.DataFrame(output_data)
-                else:
-                    current_data2 = pd.DataFrame([output_data])
-                
+                current_data2 = pd.DataFrame(output_data if isinstance(output_data, list) else [output_data])
+
                 if dataframe2 is not None:
                     dataframe2 = pd.concat([dataframe2, current_data2], ignore_index=True)
                 else:
@@ -160,16 +154,13 @@ def inquire_present_balance(
         else:
             if dataframe2 is None:
                 dataframe2 = pd.DataFrame()
-        
+
         # output3 처리
         if hasattr(res.getBody(), 'output3'):
             output_data = res.getBody().output3
             if output_data:
-                if isinstance(output_data, list):
-                    current_data3 = pd.DataFrame(output_data)
-                else:
-                    current_data3 = pd.DataFrame([output_data])
-                
+                current_data3 = pd.DataFrame(output_data if isinstance(output_data, list) else [output_data])
+
                 if dataframe3 is not None:
                     dataframe3 = pd.concat([dataframe3, current_data3], ignore_index=True)
                 else:
@@ -180,9 +171,9 @@ def inquire_present_balance(
         else:
             if dataframe3 is None:
                 dataframe3 = pd.DataFrame()
-        
+
         tr_cont = res.getHeader().tr_cont
-        
+
         if tr_cont in ["M", "F"]:
             logger.info("Calling next page...")
             ka.smart_sleep()
