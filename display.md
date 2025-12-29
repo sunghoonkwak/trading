@@ -37,6 +37,13 @@ Row 30:      Alerts Log (최신 알림 메시지)
 #### output
 - `str`: 색상이 적용된 텍스트 또는 설정이 없을 경우 원본 텍스트.
 
+### get_fear_and_greed_display
+Fear & Greed 지수를 안전하게 가져옵니다. 10분 캐싱을 적용하여 UI 블로킹을 방지합니다.
+#### input
+- `None`.
+#### output
+- `int` or `str`: 현재 지수 값 (0~100) 또는 초기화/에러 상태 문자열.
+
 ### send_to_viewer
 Named Pipe를 통해 로그를 별도 터미널(Event Viewer)로 전송합니다.
 #### input
@@ -55,13 +62,11 @@ Named Pipe를 통해 로그를 별도 터미널(Event Viewer)로 전송합니다
 ### update_order_state
 주문 상태를 메인 터미널에 표시하기 위해 업데이트합니다.
 #### input
-- `order_id` (str): 주문 번호.
 - `ticker` (str): 종목 코드.
 - `name` (str): 종목명.
 - `side` (str): "BUY" 또는 "SELL".
 - `price` (str): 주문 가격.
 - `qty` (str): 수량.
-- `state` (str): 주문 상태 (PLACED, EXECUTED, CANCELED, CORRECTING).
 #### output
 - `None`.
 

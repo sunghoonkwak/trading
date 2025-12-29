@@ -16,6 +16,34 @@ from enum import IntEnum
 from datetime import datetime
 from collections import deque, OrderedDict
 import trading_config
+import fear_and_greed
+import time
+
+# Cache for Fear & Greed Index
+_fg_cache = {"value": "Init", "last_update": 0}
+
+def get_fear_and_greed_display():
+    """
+    Fetches Fear & Greed index safely with caching (10 min).
+    Prevents blocking the UI thread with frequent network calls.
+    """
+    global _fg_cache
+
+    try:
+        now = time.time()
+        # Update every 10 minutes (600 seconds) to avoid API spam/blocking
+        if now - _fg_cache["last_update"] > 600:
+            data = fear_and_greed.get()
+            # value is typically float (e.g. 42.0), convert to int for display
+            _fg_cache["value"] = int(data.value)
+            _fg_cache["last_update"] = now
+    except Exception:
+        # On error, retain old value or show error indicator if needed
+        if _fg_cache["value"] == "Init":
+            _fg_cache["value"] = "Err"
+
+    return _fg_cache["value"]
+
 
 # Try to import event_pipe for separate terminal support
 try:
@@ -202,20 +230,19 @@ def input_at(row, col, prompt):
     return input()
 
 
-def _format_order_line(order_id: str, info: dict, cols: int) -> str:
+def _format_order_line(info: dict, cols: int) -> str:
     """Format a single order line for display."""
     ticker = info["ticker"][:6].ljust(6)
-    name = get_fixed_width_name(info["name"], 16)
+    name = get_fixed_width_name(info["name"], 24)
     side_text = info["side"]
-    side = f"{side_text:<8}"
-    price = info["price"][:10].rjust(10)
-    qty = info["qty"][:6].rjust(6)
+    side = f"{side_text:<6}"
+    price = info["price"][:8].rjust(8)
+    qty = info["qty"][:4].rjust(4)
 
     # Active orders are shown in Yellow
     color = COLOR_YELLOW
 
-    # Added "|" separator between name and side, removed [STATE] suffix
-    line = f"id:{order_id[-5:]} {ticker}:{name}| {side} prc:{price} qty:{qty}"
+    line = f"{ticker}:{name} | {side} prc:{price} qty:{qty}"
     return f"{color}{line}{COLOR_RESET}"
 
 
@@ -239,17 +266,17 @@ def render_ui(full_refresh=False):
         if full_refresh:
             status_name = "ERROR" if print_log_level == PrintLevel.ERROR else "INFO" if print_log_level == PrintLevel.INFO else "DEBUG"
 
-            sys.stdout.write(f"\033[1;1H{CLEAR_LINE}" + "=" * min(cols, 50))
-            sys.stdout.write(f"\033[2;1H{CLEAR_LINE} KIS Real-time System (Log: {status_name})")
-            sys.stdout.write(f"\033[3;1H{CLEAR_LINE}" + "=" * min(cols, 50))
+            sys.stdout.write(f"\033[1;1H{CLEAR_LINE}" + "=" * min(cols, 60))
+            sys.stdout.write(f"\033[2;1H{CLEAR_LINE} KIS Real-time System (Log: {status_name}) (fear & greed: {get_fear_and_greed_display()})")
+            sys.stdout.write(f"\033[3;1H{CLEAR_LINE}" + "=" * min(cols, 60))
 
             for i, opt in enumerate(MENU_OPTIONS):
                 sys.stdout.write(f"\033[{i+4};1H{CLEAR_LINE}{opt}")
 
             # Separators around input area
-            sys.stdout.write(f"\033[12;1H{CLEAR_LINE}" + "-" * min(cols - 1, 50))
+            sys.stdout.write(f"\033[12;1H{CLEAR_LINE}" + "-" * min(cols - 1, 60))
             # Row 13 is for input - handled by menu.py
-            sys.stdout.write(f"\033[14;1H{CLEAR_LINE}" + "-" * min(cols - 1, 50))
+            sys.stdout.write(f"\033[14;1H{CLEAR_LINE}" + "-" * min(cols - 1, 60))
 
         # Display orders (most recent first)
         order_list = list(order_states.items())
@@ -259,19 +286,19 @@ def render_ui(full_refresh=False):
         displayed = 0
 
         # Display orders separator
-        sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}" + "-" * 20 + " orders " + "-" * 20)
+        sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}" + "-" * 26 + " Orders " + "-" * 26)
         row += 1
 
         # Show orders
-        for order_id, info in order_list[:MAX_ORDER_DISPLAY]:
+        for _, info in order_list[:MAX_ORDER_DISPLAY]:
             if row >= rows:
                 break
-            line = _format_order_line(order_id, info, cols)
+            line = _format_order_line(info, cols)
             sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}{line}")
             row += 1
             displayed += 1
 
-        sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}" + "-" * 20 + " Alerts " + "-" * 20)
+        sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}" + "-" * 26 + " Alerts " + "-" * 26)
         row += 1
 
         # Show alerts after orders if space

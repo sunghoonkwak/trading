@@ -124,6 +124,17 @@
             "disabled": false
         },
         {
+            "ticker": "GOOGL",
+            "name": "Google",
+            "market": "NASDAQ",
+            "color": [
+                255,
+                255,
+                50
+            ],
+            "disabled": false
+        },
+        {
             "ticker": "TSM",
             "name": "TSMC",
             "market": "NYSE",
