@@ -21,7 +21,7 @@
 | `3` | 미체결 주문 관리 (정정/취소) |
 | `0` | 로그 레벨 변경 (INFO → DEBUG → ERROR 순환) |
 | `c` | 체결/취소 완료 주문 삭제 |
-| `v` | Event Viewer 열기 (Windows Terminal 새 탭) |
+| `v` | Event Viewer 열기 (이미 실행 중이면 알림 표시) |
 | `q` | 종료 (Viewer도 함께 종료) |
 
 ## Global Configuration (전역 설정)

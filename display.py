@@ -34,8 +34,8 @@ log_file_path = "WebSocket_latest.log"  # Overwritten by main.py at startup
 order_states = OrderedDict()
 MAX_ORDER_DISPLAY = 15
 
-# Alert buffer
-alert_buffer = deque(maxlen=10)
+# Alert buffer (small size to show only recent alerts)
+alert_buffer = deque(maxlen=3)
 
 # ANSI Escape Codes for UI
 SAVE_CURSOR = "\033[s"
@@ -108,8 +108,10 @@ def print_log(level, log):
     # Always log to file
     if level == PrintLevel.ERROR:
         logging.error(log)
-    elif level == PrintLevel.INFO or level == PrintLevel.DEBUG:
+    elif level == PrintLevel.INFO:
         logging.info(log)
+    elif level == PrintLevel.DEBUG:
+        logging.debug(log)
 
     # Send to separate terminal viewer
     if level <= print_log_level:
@@ -134,7 +136,7 @@ def update_order_state(order_id: str, ticker: str, name: str, side: str,
 
 
 def add_alert(message: str, level: str = "INFO"):
-    """Add alert message to display."""
+    """Add alert message to display. Will be shown on next render_ui call."""
     color = COLOR_YELLOW
     if level == "ERROR":
         color = COLOR_RED
@@ -142,7 +144,7 @@ def add_alert(message: str, level: str = "INFO"):
         color = COLOR_GREEN
 
     alert_buffer.appendleft(f"{color}{message}{COLOR_RESET}")
-    render_ui()
+    # Do not call render_ui() here - it will be called by menu loop
 
 
 def clear_completed_orders():
@@ -214,9 +216,9 @@ def render_ui(full_refresh=False):
 
     # Layout:
     # Row 1-3: Header
-    # Row 4-11: Menu (8 lines, expanded by 3)
+    # Row 4-11: Menu (8 lines)
     # Row 12: Separator
-    # Row 13: Order Status Header
+    # Row 13: "Enter Choice:" input (handled by menu.py)
     # Row 14: Separator
     # Row 15+: Orders and Alerts
 
@@ -228,18 +230,18 @@ def render_ui(full_refresh=False):
 
         if full_refresh:
             status_name = "ERROR" if print_log_level == PrintLevel.ERROR else "INFO" if print_log_level == PrintLevel.INFO else "DEBUG"
-            pipe_status = "[VIEWER ON]" if (PIPE_AVAILABLE and event_pipe.is_connected()) else "[VIEWER OFF]"
 
             sys.stdout.write(f"\033[1;1H{CLEAR_LINE}" + "=" * min(cols, 50))
-            sys.stdout.write(f"\033[2;1H{CLEAR_LINE} KIS Real-time System (Log: {status_name}) {pipe_status}")
+            sys.stdout.write(f"\033[2;1H{CLEAR_LINE} KIS Real-time System (Log: {status_name})")
             sys.stdout.write(f"\033[3;1H{CLEAR_LINE}" + "=" * min(cols, 50))
 
             for i, opt in enumerate(MENU_OPTIONS):
                 sys.stdout.write(f"\033[{i+4};1H{CLEAR_LINE}{opt}")
 
-        sys.stdout.write(f"\033[12;1H{CLEAR_LINE}" + "=" * (cols - 1))
-        sys.stdout.write(f"\033[13;1H{CLEAR_LINE} Order Status & Alerts")
-        sys.stdout.write(f"\033[14;1H{CLEAR_LINE}" + "-" * (cols - 1))
+            # Separators around input area
+            sys.stdout.write(f"\033[12;1H{CLEAR_LINE}" + "-" * min(cols - 1, 50))
+            # Row 13 is for input - handled by menu.py
+            sys.stdout.write(f"\033[14;1H{CLEAR_LINE}" + "-" * min(cols - 1, 50))
 
         # Display orders (most recent first)
         order_list = list(order_states.items())

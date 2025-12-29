@@ -8,12 +8,12 @@
 ## UI Layout (화면 구성)
 
 ```
-Row 1-3:   Header (시스템 제목, VIEWER 상태)
-Row 4-11:  Menu (8줄, 확장됨)
-Row 12:    ========
-Row 13:    Order Status & Alerts
-Row 14:    --------
-Row 15+:   주문 목록 + 알림
+Row 1-3:   Header (시스템 제목, 로그 레벨)
+Row 4-11:  Menu (8줄)
+Row 12:    -------- (구분선)
+Row 13:    Enter Choice: (입력 영역)
+Row 14:    -------- (구분선)
+Row 15+:   주문 목록 + 알림 (최대 3개)
 ```
 
 ## Function (기능)

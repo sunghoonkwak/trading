@@ -67,7 +67,64 @@ def send_log(message: str) -> bool:
         except pywintypes.error as e:
             logging.warning(f"[Pipe] Send failed: {e}")
             _pipe_connected = False
+            # Trigger pipe reset for reconnection
+            _schedule_pipe_reset()
             return False
+
+
+_reset_scheduled = False
+_ui_refresh_callback = None
+
+def set_ui_callback(callback):
+    """Set callback function to refresh UI after pipe reconnection."""
+    global _ui_refresh_callback
+    _ui_refresh_callback = callback
+
+
+def _schedule_pipe_reset():
+    """Schedule pipe server reset in background thread."""
+    global _reset_scheduled
+    if _reset_scheduled:
+        return
+    _reset_scheduled = True
+
+    def reset_worker():
+        global _reset_scheduled
+        import time
+        time.sleep(0.5)  # Brief delay before reset
+        reset_pipe_server(_ui_refresh_callback)
+        _reset_scheduled = False
+
+    reset_thread = threading.Thread(target=reset_worker, daemon=True)
+    reset_thread.start()
+
+
+def reset_pipe_server(ui_refresh_callback=None):
+    """Close and recreate pipe server for new client connection."""
+    global _pipe_handle, _pipe_connected
+    logging.info("[Pipe] Resetting pipe server for reconnection...")
+
+    # Close existing pipe
+    if _pipe_handle:
+        try:
+            win32pipe.DisconnectNamedPipe(_pipe_handle)
+            win32file.CloseHandle(_pipe_handle)
+        except:
+            pass
+        _pipe_handle = None
+        _pipe_connected = False
+
+    # Recreate pipe server
+    if create_pipe_server():
+        # Wait for new client in background
+        def wait_reconnect():
+            if wait_for_client():
+                logging.info("[Pipe] New client reconnected")
+                # Update UI if callback provided
+                if ui_refresh_callback:
+                    ui_refresh_callback()
+        reconnect_thread = threading.Thread(target=wait_reconnect, daemon=True)
+        reconnect_thread.start()
 
 
 def close_pipe_server():

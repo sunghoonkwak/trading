@@ -16,6 +16,7 @@ import subprocess
 
 # Import refactored modules
 import trading_config
+from trading_config import strip_market_prefix
 import trading_state
 import display
 from display import PrintLevel, print_log, render_ui, show_in_result_area, safe_write, get_fixed_width_name, clear_result_area, input_at, prepare_exit, update_order_state, add_alert
@@ -260,7 +261,8 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
 
             name = cfg.get("name", "Unknown")
             fixed_name = get_fixed_width_name(name, 10)
-            msg = (f"{time_s}|MKT|{fixed_name}|{code:<8}|"
+            display_code = strip_market_prefix(code)
+            msg = (f"{time_s}|MKT|{fixed_name}|{display_code:<6}|"
                 f"Bid:{bid_s:>9}|"
                 f"Last:{price_s:>9}({vol_s:>6})|"
                 f"Diff:{diff_s:>9}({state.get('rate', 0.0):>5.2f}%)|"
@@ -449,10 +451,17 @@ if __name__ == "__main__":
     ws_thread.start()
 
     # Initialize Named Pipe server for viewer communication
+    # Register UI callback for pipe reconnection
+    def ui_refresh():
+        render_ui(full_refresh=True)
+    event_pipe.set_ui_callback(ui_refresh)
+
     if event_pipe.create_pipe_server():
         # Wait for client connection in background thread
         def wait_for_viewer():
-            event_pipe.wait_for_client()
+            if event_pipe.wait_for_client():
+                # Update UI to show VIEWER ON after connection
+                render_ui(full_refresh=True)
         pipe_thread = threading.Thread(target=wait_for_viewer, daemon=True)
         pipe_thread.start()
 

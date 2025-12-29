@@ -12,6 +12,16 @@ try:
 except Exception as e:
     print(f"[Config] Error loading stock_configuration.json: {e}")
 
+def strip_market_prefix(ticker: str) -> str:
+    """Remove market prefix (DNAS, DNYS, DAMS) from overseas stock code for display."""
+    if not ticker:
+        return ticker
+    for prefix in ["DNAS", "DNYS", "DAMS"]:
+        if ticker.startswith(prefix):
+            return ticker[len(prefix):]
+    return ticker
+
+
 def get_stock_info(ticker: str) -> dict:
     """Find stock information by ticker across all markets, handling prefixes."""
     if not ticker: return {}

@@ -7,6 +7,13 @@
 
 ## Function (기능)
 
+### strip_market_prefix
+해외 주식 코드에서 시장 접두사(DNAS, DNYS, DAMS)를 제거하여 표시용 티커를 반환합니다.
+#### input
+- `ticker` (str): 접두사가 포함된 티커 (예: 'DNASNVDA').
+#### output
+- `str`: 접두사가 제거된 티커 (예: 'NVDA').
+
 ### get_stock_info
 지정된 티커 또는 시장 접두사가 붙은 티커에 대한 설정 데이터를 조회합니다.
 - 시장 접두사(예: `DNASNVDA` -> `NVDA`)를 자동으로 처리합니다.

@@ -26,7 +26,7 @@ def menu():
 
     while True:
         render_ui(full_refresh=True)
-        choice = input_at(13, 2, "Enter Choice: ").strip()  # Row 13 for expanded menu
+        choice = input_at(13, 2, "Enter Choice: ").strip()  # Row 13 between separators
 
         if choice == '1':
             handle_account_info()
@@ -45,8 +45,12 @@ def menu():
         elif choice.lower() == 'c':
             display.clear_order_logs()
         elif choice.lower() == 'v':
-            main.spawn_viewer()
-            display.add_alert("Viewer terminal launched!", "SUCCESS")
+            import event_pipe
+            if event_pipe.is_connected():
+                display.add_alert("Viewer is already running!", "INFO")
+            else:
+                main.spawn_viewer()
+                display.add_alert("Viewer terminal launched!", "SUCCESS")
         elif choice.lower() == 'q':
             main.close_viewer()  # Close viewer terminal before exit
             prepare_exit()

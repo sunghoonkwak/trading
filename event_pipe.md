@@ -61,3 +61,17 @@ Pipe로부터 로그 메시지를 수신합니다. 블로킹 호출입니다.
 
 ### close_pipe_server / close_pipe_client
 Pipe 연결을 종료합니다.
+
+### set_ui_callback
+UI 새로고침 콜백 함수를 등록합니다. Pipe 재연결 시 호출됩니다.
+#### input
+- `callback` (callable): UI 새로고침 함수.
+#### output
+- `None`
+
+### reset_pipe_server
+Pipe 서버를 닫고 재생성하여 새 클라이언트 연결을 대기합니다. Viewer가 X버튼으로 종료된 후 재연결을 지원합니다.
+#### input
+- `ui_refresh_callback` (callable, optional): 재연결 후 호출할 UI 새로고침 함수.
+#### output
+- `None`
