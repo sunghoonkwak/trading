@@ -47,7 +47,7 @@ def get_fear_and_greed_display():
 
 # Try to import event_pipe for separate terminal support
 try:
-    import event_pipe
+    from event_viewer import event_pipe
     PIPE_AVAILABLE = True
 except ImportError:
     PIPE_AVAILABLE = False

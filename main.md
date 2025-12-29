@@ -23,7 +23,7 @@
 - `None`.
 
 ### spawn_viewer
-Windows Terminal에서 Event Viewer(event_viewer.py)를 별도 탭으로 실행합니다.
+Windows Terminal에서 Event Viewer(event_viewer/event_viewer.py)를 별도 탭으로 실행합니다.
 #### input
 - `None`.
 #### output

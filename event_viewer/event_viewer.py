@@ -37,11 +37,19 @@ def get_terminal_size():
 
 def load_stock_config():
     """Load stock configuration for colorization."""
-    config_path = os.path.join(os.path.dirname(__file__), "stock_configuration.json")
     try:
+        # 1. Try relative to this script (../stock_configuration.json)
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_path = os.path.join(base_dir, "stock_configuration.json")
+
+        if not os.path.exists(config_path):
+            # 2. Try current working directory
+            config_path = "stock_configuration.json"
+
         with open(config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except:
+    except Exception as e:
+        print(f"Error loading config: {e}")
         return {}
 
 

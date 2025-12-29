@@ -53,7 +53,7 @@ def menu():
             sync_open_orders()
             display.add_alert("All Data Cleared & Resynced", "SUCCESS")
         elif choice.lower() == 'v':
-            import event_pipe
+            from event_viewer import event_pipe
             if event_pipe.is_connected():
                 display.add_alert("Viewer is already running!", "INFO")
             else:

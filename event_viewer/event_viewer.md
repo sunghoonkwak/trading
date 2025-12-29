@@ -40,7 +40,7 @@ Windows 터미널에서 ANSI 색상 코드를 활성화합니다.
 
 ### colorize_log
 로그 내용에 따라 ANSI 색상을 적용합니다.
-- 종목별 RGB 색상: `stock_configuration.json`에서 정의
+- 종목별 RGB 색상: `../stock_configuration.json` (상위 디렉토리)에서 정의
 - 오류(ERROR, REJ): 빨간색
 - 시세(MKT): 회색
 - 주문/체결(ODR, EXE): 녹색

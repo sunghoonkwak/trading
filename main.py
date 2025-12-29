@@ -20,7 +20,7 @@ from trading_config import strip_market_prefix
 import trading_state
 import display
 from display import PrintLevel, print_log, render_ui, show_in_result_area, safe_write, get_fixed_width_name, clear_result_area, input_at, prepare_exit, update_order_state, add_alert
-import event_pipe
+from event_viewer import event_pipe
 
 from menu.menu import menu
 
@@ -110,7 +110,7 @@ _viewer_process = None
 def spawn_viewer():
     """Spawn the Event viewer in Windows Terminal."""
     global _viewer_process
-    viewer_path = os.path.join(base_dir, "event_viewer.py")
+    viewer_path = os.path.join(base_dir, "event_viewer", "event_viewer.py")
     try:
         # Use Windows Terminal (wt) - opens in new tab with size 140x35
         _viewer_process = subprocess.Popen(
