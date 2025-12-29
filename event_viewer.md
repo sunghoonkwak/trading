@@ -9,63 +9,75 @@
 
 ```
 ============================================================
- Event Viewer (Sticky: 4)
+ Event Viewer
 ------------------------------------------------------------
-[18:00:00] [MKT][삼성전자  ] 005930 | Last: 72,000  ← Sticky 영역
-[18:00:00] [MKT][NVDA    ] NVDA   | Last: 140.50  ← (종목별 최신)
------------------------------- History ---------------------
-[18:00:10] [SYS] PINGPONG received                 ← History 영역
-[18:00:20] [SYS] PINGPONG received                 ← (스크롤 가능)
+09:29:30|MKT|삼성전자  |005930|Bid: 119,400|Last: 119,500|...  ← Sticky 영역
+09:29:30|MKT|SK하이닉스|000660|Bid: 631,000|Last: 631,000|...  ← (종목별 최신, 순서 고정)
+09:29:30|MKT|삼성증권  |016360|Bid:  75,500|Last:  75,500|...
+------------------------------------------------------------
+09:29:29|MKT|삼성전자  |005930|Bid: 119,400|Last: 119,500|...  ← History 영역
+09:29:29|MKT|삼성전자  |005930|Bid: 119,400|Last: 119,450|...  ← (스크롤 가능)
 ```
 
-- **Sticky 영역**: 종목별 최신 가격 정보가 고정 표시됩니다.
-- **History 영역**: 비종목 로그(PINGPONG 등)가 스크롤 가능하게 쌓입니다.
+- **Sticky 영역**: 종목별 최신 가격 정보가 고정 위치에 표시됩니다. 순서는 처음 등록된 순서를 유지합니다.
+- **History 영역**: 모든 로그가 시간순으로 스크롤되며 표시됩니다. ANSI scroll region을 사용하여 sticky 영역을 보호합니다.
+
+## Log Format (로그 형식)
+
+로그는 파이프(`|`) 구분자를 사용합니다:
+```
+HH:MM:SS|TYPE|NAME|TICKER|DATA...
+```
+
+- **TYPE**: `MKT` (시세), `ODR` (주문), `EXE` (체결), `COR` (정정), `CAN` (취소), `REJ` (거부)
+- **NAME**: 종목명 (10자 고정폭)
+- **TICKER**: 종목 코드
 
 ## Function (기능)
 
 ### enable_ansi_colors
 Windows 터미널에서 ANSI 색상 코드를 활성화합니다.
-#### input
-- `None`
-#### output
-- `None` (콘솔 모드 변경).
 
 ### colorize_log
 로그 내용에 따라 ANSI 색상을 적용합니다.
-#### input
-- `log` (str): 로그 메시지.
-- `stock_config` (dict): 종목별 색상 설정.
-#### output
-- `str`: 색상이 적용된 문자열.
+- 종목별 RGB 색상: `stock_configuration.json`에서 정의
+- 오류(ERROR, REJ): 빨간색
+- 시세(MKT): 회색
+- 주문/체결(ODR, EXE): 녹색
+- 기타: 노란색
 
 ### extract_composite_key
 로그에서 종목 코드와 유형을 추출하여 복합 키를 생성합니다.
-#### input
-- `log` (str): 로그 메시지.
-#### output
-- `str | None`: `"NVDA_MKT"` 형식의 키 또는 None.
+- 입력: `"09:29:30|MKT|삼성전자|005930|..."`
+- 출력: `"005930_MKT"` 또는 `None`
 
 ### set_scroll_region / reset_scroll_region
-ANSI DECSTBM을 사용하여 터미널 스크롤 영역을 설정/해제합니다.
-#### input
-- `top`, `bottom` (int): 스크롤 영역의 시작/끝 행.
-#### output
-- `None`.
+ANSI DECSTBM 시퀀스를 사용하여 터미널 스크롤 영역을 설정/해제합니다.
+- History 영역만 스크롤되고, Sticky 영역은 고정됩니다.
+
+### draw_header
+헤더를 한 번만 그립니다 (프로그램 시작 시).
 
 ### draw_sticky_area
-헤더와 Sticky 로그를 다시 그립니다.
-#### input
-- `stock_config` (dict): 종목 색상 설정.
-#### output
-- `None` (화면 출력).
+Sticky 로그들을 각각의 고정 위치에 덮어씁니다.
+- 순서는 처음 등록된 순서 유지 (move_to_end 미사용)
+- Rate limiting: 100ms마다 최대 1번 갱신
 
 ### append_history_log
 History 영역에 로그를 추가합니다.
-#### input
-- `log` (str): 로그 메시지.
-- `stock_config` (dict): 종목 색상 설정.
-#### output
-- `None` (화면 출력).
+- Scroll region 내에서 스크롤됩니다.
 
 ### main
 Pipe 연결, 화면 초기화, 로그 수신 루프를 실행합니다.
+
+## Debug (디버깅)
+
+`viewer_debug.log` 파일에 다음 정보가 기록됩니다:
+- 수신된 이벤트와 추출된 키
+- Sticky dict 업데이트 정보
+- Sticky 영역 그리기 정보
+
+## Dependencies (의존성)
+
+- `event_pipe`: Named Pipe 통신
+- `stock_configuration.json`: 종목별 색상 설정

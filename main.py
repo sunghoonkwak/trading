@@ -110,9 +110,9 @@ def spawn_viewer():
     global _viewer_process
     viewer_path = os.path.join(base_dir, "event_viewer.py")
     try:
-        # Use Windows Terminal (wt) - opens in new tab
+        # Use Windows Terminal (wt) - opens in new tab with size 140x35
         _viewer_process = subprocess.Popen(
-            ["wt", "-w", "0", "nt", "--title", "Event Viewer",
+            ["wt", "-w", "0", "--size", "130,35", "nt", "--title", "Event Viewer",
              "python", viewer_path],
             cwd=base_dir
         )
@@ -193,18 +193,18 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             price_v = state.get('price', 0)
             price_s = format(price_v, ",") if price_v > 0 else "-------"
             vol_s   = format(state.get('vol', 0), ",")
-            diff_s  = f"{state.get('sign_str', '')}{format(state.get('change', 0), ',')}"
+            diff_s = format(state.get('change', 0), ',')
 
             cfg = trading_config.get_stock_info(code)
             if not cfg: continue
 
             name = cfg.get("name", "Unknown")
             fixed_name = get_fixed_width_name(name, 10)
-            msg = (f"[{time_s}] [MKT][{fixed_name}] {code:<6} | "
-                f"Bid: {bid_s:>9} | "
-                f"Last: {price_s:>9} ({vol_s:>6}) | "
-                f"Diff: {diff_s:>9} ({state.get('rate', 0.0):>5.2f}%) | "
-                f"Ask: {ask_s:>9}")
+            msg = (f"{time_s}|MKT|{fixed_name}|{code:<6}|"
+                f"Bid:{bid_s:>9}|"
+                f"Last:{price_s:>9}({vol_s:>6})|"
+                f"Diff:{diff_s:>9}({state.get('rate', 0.0):>5.2f}%)|"
+                f"Ask:{ask_s:>9}")
             print_log(level, msg)
             continue
 
@@ -253,18 +253,18 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             price_s = format(price_v, ",.2f") if price_v > 0 else "-------"
             vol_v   = state.get('vol', 0.0)
             vol_s   = format(vol_v, ",.0f") if vol_v > 0 else "0"
-            diff_s  = f"{state.get('sign_str', '')}{format(state.get('change', 0.0), ',.2f')}"
+            diff_s = format(state.get('change', 0.0), ',.2f')
 
             cfg = trading_config.get_stock_info(code)
             if not cfg: continue
 
             name = cfg.get("name", "Unknown")
             fixed_name = get_fixed_width_name(name, 10)
-            msg = (f"[{time_s}] [MKT][{fixed_name}] {code:<8} | "
-                f"Bid: {bid_s:>9} | "
-                f"Last: {price_s:>9} ({vol_s:>6}) | "
-                f"Diff: {diff_s:>9} ({state.get('rate', 0.0):>5.2f}%) | "
-                f"Ask: {ask_s:>9}")
+            msg = (f"{time_s}|MKT|{fixed_name}|{code:<8}|"
+                f"Bid:{bid_s:>9}|"
+                f"Last:{price_s:>9}({vol_s:>6})|"
+                f"Diff:{diff_s:>9}({state.get('rate', 0.0):>5.2f}%)|"
+                f"Ask:{ask_s:>9}")
             print_log(level, msg)
             continue
 
@@ -312,8 +312,8 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 name = cfg.get("name", row.get('CNTG_ISNM40', 'Unknown')).strip()
                 fixed_name = get_fixed_width_name(name, 10)
 
-                msg = (f"[{time_s}] [{side}][{order_val}] [{fixed_name}] {code:<6} | "
-                    f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
+                msg = (f"{time_s}|{side}|{order_val}|{fixed_name}|{code:<6}|"
+                    f"Qty:{qty:>6}|Prc:{price:>9}|No:{order_no}{extra_info}")
                 print_log(msg_level, msg)
 
                 # Update order state for main terminal display
@@ -380,8 +380,8 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 name = cfg.get("name", row.get('CNTG_ISNM', 'Unknown')).strip()
                 fixed_name = get_fixed_width_name(name, 10)
 
-                msg = (f"[{time_s}] [{side}][{order_val}] [{fixed_name}] {code:<8} | "
-                    f"Qty: {qty:>6} | Prc: {price:>9} | No: {order_no}{extra_info}")
+                msg = (f"{time_s}|{side}|{order_val}|{fixed_name}|{code:<8}|"
+                    f"Qty:{qty:>6}|Prc:{price:>9}|No:{order_no}{extra_info}")
                 print_log(msg_level, msg)
 
                 # Update order state for main terminal display
