@@ -8,12 +8,15 @@
 ## UI Layout (화면 구성)
 
 ```
-Row 1-3:   Header (시스템 제목, 로그 레벨)
-Row 4-11:  Menu (8줄)
-Row 12:    -------- (구분선)
-Row 13:    Enter Choice: (입력 영역)
-Row 14:    -------- (구분선)
-Row 15+:   주문 목록 + 알림 (최대 3개)
+Row 1:       Main Header (System Title)
+Row 2:       Sub Header (Status/Log Level)
+Row 3-14:    Result Area (12줄 - 메뉴 실행 결과, 도움말, 히스토리 조회 등)
+Row 15-20:   Menu Options (6줄 - 가로 2열 배치)
+Row 21:      -------- (구분선)
+Row 22:      Enter Choice: (입력 영역)
+Row 23:      -------- (구분선)
+Row 24-29:   Order List (최대 6개 - 실시간 미체결 주문 목록)
+Row 30:      Alerts Log (최신 알림 메시지)
 ```
 
 ## Function (기능)
@@ -70,8 +73,15 @@ Named Pipe를 통해 로그를 별도 터미널(Event Viewer)로 전송합니다
 #### output
 - `None`.
 
-### clear_completed_orders
-EXECUTED 및 CANCELED 상태의 주문을 화면에서 제거합니다.
+### clear_order_states
+미체결 주문 목록 데이터만 초기화합니다. 새로운 동기화 작업을 시작하기 전에 호출됩니다.
+#### input
+- `None`.
+#### output
+- `None`.
+
+### clear_all_display_data
+주문 목록과 알림 버퍼를 모두 초기화하고 화면을 갱신합니다.
 #### input
 - `None`.
 #### output

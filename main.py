@@ -28,6 +28,7 @@ from menu.menu import menu
 from kis_api.domestic_stock.asking_price_total.asking_price_total import asking_price_total
 from kis_api.domestic_stock.ccnl_total.ccnl_total import ccnl_total
 from kis_api.overseas_stock.asking_price.asking_price import asking_price
+from menu.handle_manage_orders import sync_open_orders
 from kis_api.overseas_stock.ccnl_notice.ccnl_notice import ccnl_notice
 from kis_api.overseas_stock.delayed_ccnl.delayed_ccnl import delayed_ccnl
 
@@ -184,6 +185,8 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                     state['vol']    = new_vol
                     sign = row['PRDY_VRSS_SIGN']
                     state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
+                    # Notify that we received market data (starts periodic save)
+                    trading_state.notify_data_received()
                 except: continue
 
             time_v = str(state.get('time', '000000')).strip()
@@ -243,6 +246,8 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                     sign = row.get('SIGN', '3')
                     state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
                     level = PrintLevel.INFO
+                    # Notify that we received market data (starts periodic save)
+                    trading_state.notify_data_received()
                 except: continue
 
             time_v = str(state.get('time', '000000')).strip()
@@ -318,9 +323,20 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                     f"Qty:{qty:>6}|Prc:{price:>9}|No:{order_no}{extra_info}")
                 print_log(msg_level, msg)
 
-                # Update order state for main terminal display
-                state_map = {"ODR": "PLACED", "EXE": "EXECUTED", "CAN": "CANCELED", "COR": "CORRECTING", "REJ": "REJECTED"}
-                update_order_state(order_no, code, name, side, price, qty, state_map.get(order_val, "UNKNOWN"))
+                # Use descriptive side text if available (e.g. "Buy", "Sell")
+                side_desc = str(row.get('SLL_BUY_DVSN_CD_NAME', row.get('SLL_BUY_DVSN_NAME', ''))).strip()
+                if side_desc and side_desc not in ['', '?', 'nan', 'None']:
+                    side = side_desc
+                else:
+                    side = "Buy" if row['SELN_BYOV_CLS'] == '02' else "Sell"
+
+                # Notify via alert area
+                state_map = {"ODR": "ODR", "EXE": "EXE", "CAN": "CAN", "COR": "COR", "REJ": "REJ"}
+                tag = state_map.get(order_val, order_val)
+                add_alert(f"[{tag}] {side} {code} {qty} @ {price}", level="INFO" if tag != "REJ" else "ERROR")
+
+                # Auto-sync all orders in background to ensure total accuracy
+                threading.Thread(target=sync_open_orders, daemon=True).start()
                 continue
             except Exception as e:
                 print_log(PrintLevel.ERROR, f"Error parsing H0STCNI0: {e}")
@@ -363,7 +379,9 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 qty_v = get_val('CNTG_QTY')
                 if qty_v > 1000000: qty_v = get_val('ODER_QTY')
 
-                price = format(price_v, ",.2f")
+                # Use $ for US stocks, KRW for others if needed.
+                # For now prefix $ for all overseas tr_id alerts to match sync.
+                price = f"${price_v:,.2f}"
                 qty = format(qty_v, ",.0f")
 
                 msg_level = PrintLevel.INFO
@@ -378,6 +396,31 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                     elif rctf_cls in ['1', '01']: order_val = "COR"
                     elif rctf_cls in ['2', '02']: order_val = "CAN"
                     else: order_val = "OTH"
+                # For US stocks in H0GSCNI0, ODER_KIND2 (Field 7 / Index 6) represents the order type:
+                # '2': Limit, 'D': LOC, 'E': MOO, 'F': LOO, 'G': MOC
+                kind_code = str(row.get('ODER_KIND2', '')).strip().upper()
+                kind_map = {
+                    '2': '',    # Normal Limit (display as Buy/Sell)
+                    'D': 'LOC',
+                    'E': 'MOO',
+                    'F': 'LOO',
+                    'G': 'MOC',
+                    '32': 'MOX', '34': 'LOC' # Just in case some fields shift
+                }
+                type_val = kind_map.get(kind_code, '')
+
+                is_buy = str(row.get('SELN_BYOV_CLS', row.get('SELN_BYOV_CLS_CD', ''))) == '02'
+                base_side = "Buy" if is_buy else "Sell"
+
+                if type_val:
+                    side = f"{type_val} {base_side}"
+                else:
+                    # Fallback to other possible fields if kind_map didn't match
+                    side_val = str(row.get('SLL_BUY_DVSN_CD_NAME', row.get('SLL_BUY_DVSN_NAME', ''))).strip()
+                    if side_val and side_val not in ['', '?', 'nan', 'None']:
+                        side = side_val
+                    else:
+                        side = base_side
 
                 name = cfg.get("name", row.get('CNTG_ISNM', 'Unknown')).strip()
                 fixed_name = get_fixed_width_name(name, 10)
@@ -386,9 +429,13 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                     f"Qty:{qty:>6}|Prc:{price:>9}|No:{order_no}{extra_info}")
                 print_log(msg_level, msg)
 
-                # Update order state for main terminal display
-                state_map = {"ODR": "PLACED", "EXE": "EXECUTED", "CAN": "CANCELED", "COR": "CORRECTING", "REJ": "REJECTED"}
-                update_order_state(order_no, code, name, side, price, qty, state_map.get(order_val, "UNKNOWN"))
+                # Notify via alert area
+                state_map = {"ODR": "ODR", "EXE": "EXE", "CAN": "CAN", "COR": "COR", "REJ": "REJ"}
+                tag = state_map.get(order_val, order_val)
+                add_alert(f"[{tag}] {side} {code} {qty} @ {price}", level="INFO" if tag != "REJ" else "ERROR")
+
+                # Auto-sync all orders in background to ensure total accuracy
+                threading.Thread(target=sync_open_orders, daemon=True).start()
                 continue
             except Exception as e:
                 print_log(PrintLevel.ERROR, f"Error parsing overseas notification: {e}")

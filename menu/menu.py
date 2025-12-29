@@ -15,13 +15,18 @@ def menu():
     # Lazy imports to avoid circular dependency with handlers importing MENU_DEBUG
     from .handle_account_info import handle_account_info
     from .handle_place_order import handle_place_order
-    from .handle_manage_orders import handle_manage_orders
+    from .handle_manage_orders import handle_manage_orders, sync_open_orders
+    from .raoeo.raoeo import raoeo_menu
     import main  # For spawn_viewer
 
     os.system('cls' if os.name == 'nt' else 'clear')
     if MENU_DEBUG:
         ka._DEBUG = True
         print_log(PrintLevel.DEBUG, "[Menu] Debug mode (ka._DEBUG) enabled via MENU_DEBUG flag.")
+
+    # Fetch initial orders on startup
+    render_ui(full_refresh=True)
+    sync_open_orders()
     render_ui(full_refresh=True)
 
     while True:
@@ -43,7 +48,10 @@ def menu():
                 display.print_log_level = PrintLevel.INFO
             print_log(PrintLevel.ERROR, f"Log Level Changed to: {display.print_log_level.name}")
         elif choice.lower() == 'c':
-            display.clear_order_logs()
+            from .handle_manage_orders import sync_open_orders
+            display.clear_all_display_data()
+            sync_open_orders()
+            display.add_alert("All Data Cleared & Resynced", "SUCCESS")
         elif choice.lower() == 'v':
             import event_pipe
             if event_pipe.is_connected():
@@ -51,7 +59,11 @@ def menu():
             else:
                 main.spawn_viewer()
                 display.add_alert("Viewer terminal launched!", "SUCCESS")
+        elif choice.lower() == 'r':
+            raoeo_menu()
         elif choice.lower() == 'q':
+            import trading_state
+            trading_state.stop_periodic_save()  # Save stock data before exit
             main.close_viewer()  # Close viewer terminal before exit
             prepare_exit()
             print("Exiting...")

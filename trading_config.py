@@ -40,3 +40,26 @@ def get_stock_info(ticker: str) -> dict:
             if stock.get("ticker") == clean_ticker:
                 return stock
     return {}
+def update_stock_name(ticker: str, new_name: str):
+    """Update the 'name' field for a ticker in CONFIG and save to JSON if changed."""
+    if not ticker or not new_name: return
+
+    clean_ticker = strip_market_prefix(ticker).strip()
+    changed = False
+
+    for market in ["KR", "US"]:
+        for stock in CONFIG.get(market, []):
+            if stock.get("ticker") == clean_ticker:
+                if stock.get("name") != new_name:
+                    stock["name"] = new_name
+                    changed = True
+                break
+        if changed: break
+
+    if changed:
+        try:
+            _json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stock_configuration.json")
+            with open(_json_path, "w", encoding="utf-8") as f:
+                json.dump(CONFIG, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            print(f"[Config] Error saving stock_configuration.json: {e}")

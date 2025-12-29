@@ -130,8 +130,8 @@ def order_rvsecncl(
     res = ka._url_fetch(API_URL, tr_id, "", params, postFlag=True)
 
     if res.isOK():
-        return pd.DataFrame([res.getBody().output])
+        return pd.DataFrame([res.getBody().output]), None
     else:
+        err_msg = f"{res.getErrorCode()} - {res.getErrorMessage()}"
         res.printError(url=API_URL)
-        # Return a DataFrame with the error message so the UI can display it
-        return pd.DataFrame([{'error_msg': res.getErrorMessage()}])
+        return pd.DataFrame(), err_msg

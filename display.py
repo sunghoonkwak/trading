@@ -13,6 +13,7 @@ import unicodedata
 import os
 import logging
 from enum import IntEnum
+from datetime import datetime
 from collections import deque, OrderedDict
 import trading_config
 
@@ -34,8 +35,8 @@ log_file_path = "WebSocket_latest.log"  # Overwritten by main.py at startup
 order_states = OrderedDict()
 MAX_ORDER_DISPLAY = 15
 
-# Alert buffer (small size to show only recent alerts)
-alert_buffer = deque(maxlen=3)
+# Alert buffer (show up to 10 recent alerts)
+alert_buffer = deque(maxlen=10)
 
 # ANSI Escape Codes for UI
 SAVE_CURSOR = "\033[s"
@@ -57,9 +58,10 @@ MENU_OPTIONS = [
     " 1. Account Info (Balance & Portfolio)",
     " 2. Place Order (Buy/Sell)",
     " 3. Manage Open Orders (Correct/Cancel)",
+    " r. RAOEO Strategy",
     " ",
     " 0. Change Log Level",
-    " c. Clear Completed Orders",
+    " c. Clear All & Sync",
     " v. Open Log Viewer",
     " q. Exit"
 ]
@@ -120,7 +122,7 @@ def print_log(level, log):
 
 
 def update_order_state(order_id: str, ticker: str, name: str, side: str,
-                       price: str, qty: str, state: str):
+                       price: str, qty: str, state: str, notify: bool = True):
     """Update order state for display in main terminal."""
     order_states[order_id] = {
         "ticker": ticker,
@@ -132,6 +134,12 @@ def update_order_state(order_id: str, ticker: str, name: str, side: str,
     }
     # Move to end (most recent)
     order_states.move_to_end(order_id)
+
+    if notify:
+        # Add to alert buffer
+        msg = f"{side} {ticker} {qty} @ {price} [{state}]"
+        add_alert(msg, level="INFO")
+
     render_ui()
 
 
@@ -143,42 +151,48 @@ def add_alert(message: str, level: str = "INFO"):
     elif level == "SUCCESS":
         color = COLOR_GREEN
 
-    alert_buffer.appendleft(f"{color}{message}{COLOR_RESET}")
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    alert_buffer.appendleft(f"[{timestamp}] {color}{message}{COLOR_RESET}")
     # Do not call render_ui() here - it will be called by menu loop
 
 
-def clear_completed_orders():
-    """Remove EXECUTED and CANCELED orders from display."""
+def clear_all_display_data():
+    """Clear all order states and alerts from display."""
+    global order_states, alert_buffer
+    order_states.clear()
+    alert_buffer.clear()
+    render_ui()
+
+def clear_order_states():
+    """Clear only the order states (for syncing)."""
     global order_states
-    keys_to_remove = [k for k, v in order_states.items()
-                      if v["state"] in ["EXECUTED", "CANCELED"]]
-    for k in keys_to_remove:
-        del order_states[k]
+    order_states.clear()
     render_ui()
 
 
 def clear_result_area():
     with terminal_lock:
         sys.stdout.write(SAVE_CURSOR)
-        for r in range(1, 11):
+        for r in range(1, 15):
             sys.stdout.write(f"\033[{r};1H{CLEAR_LINE}")
         sys.stdout.write(RESTORE_CURSOR)
         sys.stdout.flush()
 
 
 def show_in_result_area(lines):
+    """Display multiple lines in the top (1-14) area, clearing everything first."""
     with terminal_lock:
         sys.stdout.write(SAVE_CURSOR)
-        for i, line in enumerate(lines):
-            if i >= 10: break
+        for i in range(14):
+            line = lines[i] if i < len(lines) else ""
             sys.stdout.write(f"\033[{i+1};1H{CLEAR_LINE}{line}")
         sys.stdout.write(RESTORE_CURSOR)
         sys.stdout.flush()
 
 
 def clear_order_logs():
-    """Alias for clear_completed_orders for backward compatibility."""
-    clear_completed_orders()
+    """Alias for clear_all_display_data for backward compatibility."""
+    clear_all_display_data()
 
 
 def input_at(row, col, prompt):
@@ -191,23 +205,17 @@ def input_at(row, col, prompt):
 def _format_order_line(order_id: str, info: dict, cols: int) -> str:
     """Format a single order line for display."""
     ticker = info["ticker"][:6].ljust(6)
-    name = get_fixed_width_name(info["name"], 8)
-    side = "BUY " if info["side"] == "BUY" else "SELL"
+    name = get_fixed_width_name(info["name"], 16)
+    side_text = info["side"]
+    side = f"{side_text:<8}"
     price = info["price"][:10].rjust(10)
     qty = info["qty"][:6].rjust(6)
-    state = info["state"]
 
-    # Color based on state
-    if state == "EXECUTED":
-        color = COLOR_GREEN
-    elif state == "CANCELED":
-        color = COLOR_RED
-    elif state == "PLACED":
-        color = COLOR_YELLOW
-    else:
-        color = COLOR_CYAN
+    # Active orders are shown in Yellow
+    color = COLOR_YELLOW
 
-    line = f"id:{order_id[-5:]} {ticker}:{name} {side} prc:{price} qty:{qty} [{state}]"
+    # Added "|" separator between name and side, removed [STATE] suffix
+    line = f"id:{order_id[-5:]} {ticker}:{name}| {side} prc:{price} qty:{qty}"
     return f"{color}{line}{COLOR_RESET}"
 
 
@@ -250,6 +258,10 @@ def render_ui(full_refresh=False):
         row = order_area_start
         displayed = 0
 
+        # Display orders separator
+        sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}" + "-" * 20 + " orders " + "-" * 20)
+        row += 1
+
         # Show orders
         for order_id, info in order_list[:MAX_ORDER_DISPLAY]:
             if row >= rows:
@@ -259,13 +271,11 @@ def render_ui(full_refresh=False):
             row += 1
             displayed += 1
 
+        sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}" + "-" * 20 + " Alerts " + "-" * 20)
+        row += 1
+
         # Show alerts after orders if space
         if displayed < available_rows and alert_buffer:
-            # Add separator if there are orders
-            if displayed > 0:
-                sys.stdout.write(f"\033[{row};1H{CLEAR_LINE}" + "-" * 20 + " Alerts " + "-" * 20)
-                row += 1
-
             for alert in list(alert_buffer)[:available_rows - displayed - 1]:
                 if row >= rows:
                     break

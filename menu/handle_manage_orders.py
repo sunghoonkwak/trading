@@ -5,7 +5,8 @@ It follows a strict 6-step workflow for user interaction and API execution.
 import msvcrt
 import logging
 import kis_api.kis_auth as ka
-from display import clear_result_area, show_in_result_area, input_at, render_ui, PrintLevel, print_log, safe_write, CLEAR_LINE
+import trading_config
+from display import clear_result_area, show_in_result_area, input_at, render_ui, PrintLevel, print_log, safe_write, CLEAR_LINE, update_order_state, add_alert, clear_order_states
 from .menu import MENU_DEBUG
 from kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl
 from kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import inquire_psbl_rvsecncl
@@ -107,12 +108,12 @@ def execute_manage_action(market, action_type, order_data, new_price=None):
             mgco_aptm_odno="", ord_svr_dvsn_cd="0", env_dv="real"
         )
 
-def print_execution_result(df_res):
+def print_execution_result(df_res, err_msg=None):
     """Step 6: Print result of the management action."""
     header_lines = ["="*40, " [Order Result]", "="*40]
 
     is_success = False
-    res_msg, res_odno = "Processed", ""
+    res_msg, res_odno = err_msg if err_msg else "Processed", ""
 
     if not df_res.empty:
         cols = {c.lower(): c for c in df_res.columns}
@@ -121,8 +122,10 @@ def print_execution_result(df_res):
         elif 'ord_no' in cols:
             is_success, res_odno = True, df_res.iloc[0][cols['ord_no']]
 
-        if 'msg1' in cols: res_msg = df_res.iloc[0][cols['msg1']]
-        elif 'message' in cols: res_msg = df_res.iloc[0][cols['message']]
+        # If success, overwrite msg from df if available
+        if is_success:
+            if 'msg1' in cols: res_msg = df_res.iloc[0][cols['msg1']]
+            elif 'message' in cols: res_msg = df_res.iloc[0][cols['message']]
 
     final_lines = header_lines + [
         f" Result : {'SUCCESS' if is_success else 'FAILED'}",
@@ -133,22 +136,68 @@ def print_execution_result(df_res):
     show_in_result_area(final_lines)
     msvcrt.getch()
 
+def sync_open_orders():
+    """Fetch open orders from API and sync them to display state."""
+    add_alert("Syncing open orders...", "INFO")
+    clear_order_states() # Clear locally tracked orders before fetching fresh ones
+    df, market_found = fetch_open_orders()
+    if not df.empty:
+        for _, row in df.iterrows():
+            row_lower = {k.lower(): v for k, v in row.items()}
+            odno = row_lower.get('odno', row_lower.get('ord_no', 'Unknown'))
+            pdno = row_lower.get('pdno', row_lower.get('stck_shrn_iscd', 'Unknown'))
+            api_name = row_lower.get('prdt_name', row_lower.get('stck_nm', row_lower.get('stck_nm40', 'Unknown')))
+
+            # Unify name source: Update Config if API returns a better/different name
+            trading_config.update_stock_name(pdno, api_name)
+            stock_info = trading_config.get_stock_info(pdno)
+            display_name = stock_info.get('name', api_name)
+
+            if market_found == "KR":
+                side = "Buy" if row_lower.get('sll_buy_dvsn_cd') == '02' else "Sell"
+                price = str(int(float(row_lower.get('ord_unpr', '0'))))
+                qty = str(row_lower.get('psbl_qty', 0))
+            else:
+                # Use descriptive side text like "LOC Buy", fall back to Buy/Sell
+                side_text = row_lower.get('sll_buy_dvsn_cd_name', row_lower.get('sll_buy_dvsn_name', '')).strip()
+                if not side_text or side_text in ['?', 'nan', 'None', '']:
+                    side = "Buy" if row_lower.get('sll_buy_dvsn_cd') == '02' else "Sell"
+                else:
+                    side = side_text
+
+                p_val = row_lower.get('ft_ord_unpr3', row_lower.get('ft_ord_unpr4', row_lower.get('ovrs_ord_unpr', row_lower.get('ord_unpr', '0'))))
+                price = f"${float(p_val):,.2f}" if float(p_val) > 0 else "Market"
+                q_val = row_lower.get('nccs_qty', row_lower.get('ft_ord_qty4', row_lower.get('ord_qty', 0)))
+                qty = str(int(float(q_val)))
+
+            # Sync to bottom UI list without redundant alerts
+            update_order_state(odno, pdno, display_name, side, price, qty, "PLACED", notify=False)
+        add_alert(f"Sync complete ({len(df)} orders)", "SUCCESS")
+    else:
+        add_alert("Sync complete (No open orders)", "INFO")
+    return not df.empty
+
 def handle_manage_orders():
     """Main menu controller following the 6-step structure."""
     clear_result_area()
     try:
         # Step 1: Open order fetching
         show_in_result_area(["Fetching open orders..."])
+        sync_open_orders()
+
+        # We need the df for the management menu below, so fetch it again or adjust sync_open_orders
+        # To keep it simple and correct, we'll just use the internal fetch here for the selection list
         df, market_found = fetch_open_orders()
+
         if df.empty:
             show_in_result_area(["No open orders found.", "Press any key to return..."])
             msvcrt.getch()
             return
 
-        # Step 2: User input으로 어떤 order를 manage할지 결정
+        # Step 2: Determine which order to manage via user input
         display_lines = print_open_orders_list(df, market_found)
-        show_in_result_area(display_lines + ["Select Index or 'q':"])
-        idx_s = input_at(len(display_lines)+1, 2, "Choice: ").strip()
+        show_in_result_area(display_lines)
+        idx_s = input_at(len(display_lines)+2, 2, "Choice: ").strip()
         if idx_s.lower() == 'q' or not idx_s: return
 
         try:
@@ -157,23 +206,23 @@ def handle_manage_orders():
         except: return
         target_order = df.iloc[idx]
 
-        # Step 3: User input으로 correct or cancel
-        action = input_at(len(display_lines)+2, 2, "Action (1: Correct, 2: Cancel): ").strip()
+        # Step 3: Choose action (Correct or Cancel) via user input
+        action = input_at(len(display_lines)+3, 2, "Action (1: Correct, 2: Cancel): ").strip()
         if action not in ['1', '2']: return
 
-        # Step 4: Correct인 경우 user input으로 price
+        # Step 4: Get new price for Correction via user input
         new_price = None
         if action == '1':
-            new_price = input_at(len(display_lines)+3, 2, "New Price: ").strip()
+            new_price = input_at(len(display_lines)+4, 2, "New Price: ").strip()
 
         # Step 5: execute_manage_action
-        df_res = execute_manage_action(market_found, action, target_order, new_price)
+        df_res, err_msg = execute_manage_action(market_found, action, target_order, new_price)
 
         # Step 6: print result
         clear_result_area()
         # Clean terminal debris
         for r in range(10, 15): safe_write(f"\033[{r};1H{CLEAR_LINE}")
-        print_execution_result(df_res)
+        print_execution_result(df_res, err_msg)
 
     except Exception as e:
         print_log(PrintLevel.ERROR, f"Order Manage Error: {e}")

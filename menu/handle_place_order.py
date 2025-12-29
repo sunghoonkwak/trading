@@ -23,11 +23,23 @@ def fetch_balances():
     return krw_bal, usd_bal
 
 def fetch_stock_price(pdno):
-    """Get current/last price for a specific stock ticker."""
-    price_val = trading_state.stock_data_state.get(pdno, {}).get('price', 0)
-    if price_val == 0:
-        price_val = trading_state.stock_data_state.get(pdno, {}).get('ask', 0)
-    return price_val
+    """Get current/last price for a specific stock ticker, handling market prefixes."""
+    pdno_upper = pdno.upper()
+
+    # 1. Precise match first (case-insensitive)
+    for key in trading_state.stock_data_state:
+        if key.upper() == pdno_upper:
+            data = trading_state.stock_data_state[key]
+            price = data.get('price', 0)
+            return price if price > 0 else data.get('ask', 0)
+
+    # 2. Search with prefix/contains (e.g., SOXL -> DNASSOXL)
+    for key, data in trading_state.stock_data_state.items():
+        if pdno_upper in key.upper():
+            price = data.get('price', 0)
+            return price if price > 0 else data.get('ask', 0)
+
+    return 0
 
 def execute_place_order(target_market, ord_dv, pdno, qty, price_input, price_val):
     """Call KIS API to execute the trade."""
@@ -150,8 +162,14 @@ def handle_place_order():
             # 3. Details and Confirm
             stock_info = trading_config.get_stock_info(pdno)
             stock_name = stock_info.get('name', 'Unknown')
+            curr_price = fetch_stock_price(pdno)
+
             clear_result_area()
-            header_lines = [f" [Place Order - {market_label} - {side_label}]", f" Stock : {pdno} ({stock_name})"]
+            header_lines = [
+                f" [Place Order - {market_label} - {side_label}]",
+                f" Stock : {pdno} ({stock_name})",
+                f" Current Price: {f'${curr_price:,.2f}' if target_market == 'US' else f'{curr_price:,.0f} KRW' if curr_price > 0 else 'Waiting for data...'}"
+            ]
             show_in_result_area(header_lines)
 
             price_input = input_at(len(header_lines)+1, 2, "Price (Enter for Market/Current, q: Cancel): ").strip()
@@ -160,7 +178,7 @@ def handle_place_order():
             price_val = 0
             if not price_input or price_input == "0":
                 price_val = fetch_stock_price(pdno)
-                msg = f" Current Price: {price_val} | Use this price? (y/n, q: Cancel): "
+                msg = f" Market Price: {price_val} | Use this price? (y/n, q: Cancel): "
                 price_confirm = input_at(len(header_lines)+2, 2, msg).strip().lower()
                 if price_confirm == 'q': return
                 if price_confirm != 'y': continue
@@ -187,18 +205,17 @@ def handle_place_order():
                 continue
 
             # 4. Execution
-            df_res = execute_place_order(target_market, ord_dv, pdno, qty, price_input, price_val)
+            df_res, err_msg = execute_place_order(target_market, ord_dv, pdno, qty, price_input, price_val)
 
             # Result Check
             is_success = False
             if not df_res.empty:
                 cols = {c.lower(): c for c in df_res.columns}
-                if 'odno' in cols or 'ord_no' in cols: is_success = True
+                if 'odno' in cols or 'ord_no' in cols:
+                    is_success = True
 
-            if MENU_DEBUG:
-                logging.debug(f"[MenuDebug] Order Result DF: {df_res.head(1).to_dict('records')}")
-
-            show_in_result_area(recap + [f"Result: {'SUCCESS' if is_success else 'FAILED'}", "Press any key..."])
+            result_txt = "SUCCESS" if is_success else f"FAILED: {err_msg if err_msg else 'Unknown Error'}"
+            show_in_result_area(recap + [f"Result: {result_txt}", "Press any key..."])
             msvcrt.getch()
 
     except Exception as e:

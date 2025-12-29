@@ -22,3 +22,11 @@
 - `ticker` (str): 주식 티커 심볼 (예: 'AAPL', '005930').
 #### output
 - `dict`: 종목의 설정 객체(이름, 티커, 시장, 색상, 활성여부 등) 또는 찾지 못한 경우 빈 딕셔너리.
+
+### update_stock_name
+API에서 수신된 실시간 종목명으로 `stock_configuration.json`의 이름을 동적으로 갱신합니다.
+#### input
+- `ticker` (str): 종목 코드.
+- `new_name` (str): 새로운 종목명.
+#### output
+- `None` (JSON 파일 업데이트).

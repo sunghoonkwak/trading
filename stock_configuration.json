@@ -70,7 +70,7 @@
         },
         {
             "ticker": "SOXL",
-            "name": "SOXL",
+            "name": "DIREXION SEMICONDUCTOR DAILY 3X",
             "market": "AMEX",
             "color": [
                 50,
@@ -165,7 +165,7 @@
                 160,
                 160
             ],
-            "disabled": false
+            "disabled": true
         }
     ]
 }

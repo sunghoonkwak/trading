@@ -53,6 +53,13 @@ API 응답 결과를 분석하여 성공/실패 여부와 메시지를 UI에 표
 #### output
 - `None` (결과를 `show_in_result_area`를 통해 즉시 출력)
 
+### sync_open_orders
+둘러보기(Manage Orders) 진입 시 또는 실시간 이벤트 수신 시 호출되어 서버의 미체결 내역을 메인 UI의 하단 목록에 동기화합니다. 기존 목록을 초기화한 후 최신 데이터만 반영합니다.
+#### input
+- `None`.
+#### output
+- `None`.
+
 ### handle_manage_orders
 위에 정의된 6단계 흐름을 조율하는 메인 컨트롤러 함수입니다.
 #### input

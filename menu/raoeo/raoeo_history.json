@@ -1,0 +1,31 @@
+{
+    "history": [
+        {
+            "date": "2025-12-29",
+            "state": "initial",
+            "config": {
+                "seed": 6000,
+                "target": "SOXL",
+                "exchange": "AMEX",
+                "duration": 40,
+                "sell_profit": 0.1
+            },
+            "holdings": {
+                "qty": 0,
+                "avg_price": 0,
+                "cur_price": 42.688
+            },
+            "daily_budget": 150.0,
+            "orders": [
+                {
+                    "type": "buy",
+                    "price": 46.96,
+                    "qty": 3,
+                    "order_type": "LOC",
+                    "desc": "Initial buy at 110% of current price"
+                }
+            ],
+            "error": null
+        }
+    ]
+}

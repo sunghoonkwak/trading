@@ -1,0 +1,9 @@
+{
+    "config": {
+        "seed": 6000,
+        "target": "SOXL",
+        "exchange": "AMEX",
+        "duration": 40,
+        "sell_profit": 0.10
+    }
+}

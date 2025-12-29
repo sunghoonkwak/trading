@@ -136,8 +136,9 @@ def order_rvsecncl(
             dataframe = pd.DataFrame()
 
         logger.info("Data fetch complete.")
-        return dataframe
+        return dataframe, None
     else:
-        logger.error("API call failed: %s - %s", res.getErrorCode(), res.getErrorMessage())
+        err_msg = f"{res.getErrorCode()} - {res.getErrorMessage()}"
+        logger.error("API call failed: %s", err_msg)
         res.printError(API_URL)
-        return pd.DataFrame([{'rt_cd': res.getErrorCode(), 'msg1': res.getErrorMessage(), 'error_msg': res.getErrorMessage()}])
+        return pd.DataFrame(), err_msg

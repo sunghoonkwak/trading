@@ -184,8 +184,9 @@ def order(
             dataframe = pd.DataFrame()
 
         logger.info("Data fetch complete.")
-        return dataframe
+        return dataframe, None
     else:
-        logger.error("API call failed: %s - %s", res.getErrorCode(), res.getErrorMessage())
+        err_msg = f"{res.getErrorCode()} - {res.getErrorMessage()}"
+        logger.error("API call failed: %s", err_msg)
         res.printError(API_URL)
-        return pd.DataFrame()
+        return pd.DataFrame(), err_msg
