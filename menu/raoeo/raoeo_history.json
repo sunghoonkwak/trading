@@ -26,6 +26,50 @@
                 }
             ],
             "error": null
+        },
+        {
+            "date": "2025-12-30",
+            "state": "holding",
+            "config": {
+                "seed": 6000,
+                "target": "SOXL",
+                "exchange": "AMEX",
+                "duration": 40,
+                "sell_profit": 0.1
+            },
+            "holdings": {
+                "qty": 3,
+                "avg_price": 43.82,
+                "cur_price": 44.34
+            },
+            "daily_budget": 150.0,
+            "orders": [
+                {
+                    "type": "sell",
+                    "price": 48.2,
+                    "qty": 3,
+                    "order_type": "LIMIT",
+                    "type_code": "00",
+                    "desc": "Sell all at 10% profit"
+                },
+                {
+                    "type": "buy",
+                    "price": 47.76,
+                    "qty": 2,
+                    "order_type": "LOC",
+                    "type_code": "34",
+                    "desc": "Buy at 109% of avg (guaranteed)"
+                },
+                {
+                    "type": "buy",
+                    "price": 43.82,
+                    "qty": 1,
+                    "order_type": "LOC",
+                    "type_code": "34",
+                    "desc": "Buy at 100% of avg (lower cost)"
+                }
+            ],
+            "error": null
         }
     ]
 }

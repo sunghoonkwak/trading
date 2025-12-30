@@ -321,7 +321,8 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
 
                 msg = (f"{time_s}|{side}|{order_val}|{fixed_name}|{code:<6}|"
                     f"Qty:{qty:>6}|Prc:{price:>9}|No:{order_no}{extra_info}")
-                print_log(msg_level, msg)
+
+                logging.info(msg)
 
                 # Use descriptive side text if available (e.g. "Buy", "Sell")
                 side_desc = str(row.get('SLL_BUY_DVSN_CD_NAME', row.get('SLL_BUY_DVSN_NAME', ''))).strip()
@@ -427,7 +428,8 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
 
                 msg = (f"{time_s}|{side}|{order_val}|{fixed_name}|{code:<8}|"
                     f"Qty:{qty:>6}|Prc:{price:>9}|No:{order_no}{extra_info}")
-                print_log(msg_level, msg)
+
+                logging.info(msg)
 
                 # Notify via alert area
                 state_map = {"ODR": "ODR", "EXE": "EXE", "CAN": "CAN", "COR": "COR", "REJ": "REJ"}

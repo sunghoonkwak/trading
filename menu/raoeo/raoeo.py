@@ -12,6 +12,7 @@ import logging
 import msvcrt
 from datetime import datetime
 from typing import Optional
+import pytz
 
 import kis_api.kis_auth as ka
 from display import (
@@ -30,14 +31,12 @@ HISTORY_FILE = os.path.join(MODULE_DIR, "raoeo_history.json")
 
 # LOC order type code for US stocks
 LOC_ORDER_TYPE = "34"
+LIMIT_ORDER_TYPE = "00"
 
 
 def load_config() -> dict:
     """
     Load configuration from raoeo.json.
-
-    Returns:
-        dict: Configuration with keys: seed, target, exchange, duration, sell_profit
     """
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
@@ -68,13 +67,6 @@ def get_current_price(symbol: str, exchange: str = "NASD") -> float:
     """
     Fetch current price for an overseas stock from WebSocket subscription.
     Returns 0.0 if data not yet received (caller should retry).
-
-    Args:
-        symbol: Stock ticker (e.g., "SOXL")
-        exchange: Exchange code (e.g., "NASD")
-
-    Returns:
-        float: Current stock price, or 0.0 if not available
     """
     symbol_upper = symbol.upper()
 
@@ -98,15 +90,16 @@ def calculate_order() -> dict:
     Strategy:
         - Initial state (no holdings): LOC buy at current_price * 110%
         - Holding state:
-            - LOC buy 1: 50% budget at avg_price * 115% (guaranteed execution)
+            - Sell: Limit order at avg_price * (1 + sell_profit)
+            - LOC buy 1: 50% budget at avg_price * (1 + (sell_profit - 1%)) (guaranteed execution)
             - LOC buy 2: 50% budget at avg_price * 100% (lower avg cost)
-            - LOC sell:  all holdings at avg_price * (1 + sell_profit)
 
     Returns:
         dict: Order calculation result with date, config, holdings, orders
     """
+    tz_us = pytz.timezone('US/Eastern')
     result = {
-        "date": datetime.now().strftime("%Y-%m-%d"),
+        "date": datetime.now(tz_us).strftime("%Y-%m-%d"),
         "state": None,
         "config": {},
         "holdings": {},
@@ -179,6 +172,7 @@ def calculate_order() -> dict:
                 "price": buy_price,
                 "qty": buy_qty,
                 "order_type": "LOC",
+                "type_code": LOC_ORDER_TYPE,
                 "desc": "Initial buy at 110% of current price"
             })
     else:
@@ -197,34 +191,6 @@ def calculate_order() -> dict:
             result["error"] = f"Invalid average price for {target}"
             return result
 
-        # Buy order 1: 50% at 115% (guaranteed execution)
-        buy_price_1 = round(avg_price * 1.15, 2)
-        buy_budget_1 = daily_budget * 0.5
-        buy_qty_1 = int(buy_budget_1 / buy_price_1)
-
-        if buy_qty_1 > 0:
-            result["orders"].append({
-                "type": "buy",
-                "price": buy_price_1,
-                "qty": buy_qty_1,
-                "order_type": "LOC",
-                "desc": "Buy at 115% of avg (guaranteed)"
-            })
-
-        # Buy order 2: 50% at 100% (lower avg)
-        buy_price_2 = round(avg_price * 1.00, 2)
-        buy_budget_2 = daily_budget * 0.5
-        buy_qty_2 = int(buy_budget_2 / buy_price_2)
-
-        if buy_qty_2 > 0:
-            result["orders"].append({
-                "type": "buy",
-                "price": buy_price_2,
-                "qty": buy_qty_2,
-                "order_type": "LOC",
-                "desc": "Buy at 100% of avg (lower cost)"
-            })
-
         # Sell order: all holdings at avg + profit
         sell_price = round(avg_price * (1 + sell_profit), 2)
 
@@ -232,9 +198,46 @@ def calculate_order() -> dict:
             "type": "sell",
             "price": sell_price,
             "qty": qty,
-            "order_type": "LOC",
+            "order_type": "LIMIT",
+            "type_code": LIMIT_ORDER_TYPE,
             "desc": f"Sell all at {int(sell_profit*100)}% profit"
         })
+
+        # Calculate total quantity for today's budget based on avg_price
+        # Logic: Total Qty = Budget / AvgPrice
+        # Buy 1: (Total / 2) + Remainder
+        # Buy 2: (Total / 2)
+        total_buy_qty = int(daily_budget / avg_price)
+        buy_qty_1 = (total_buy_qty // 2) + (total_buy_qty % 2)
+        buy_qty_2 = total_buy_qty // 2
+
+        # Buy order 1: 1% lower than sell target (guaranteed execution, avoid self-match)
+        buy_ratio_1 = 1 + sell_profit - 0.01
+        buy_price_1 = round(avg_price * buy_ratio_1, 2)
+
+        if buy_qty_1 > 0:
+            result["orders"].append({
+                "type": "buy",
+                "price": buy_price_1,
+                "qty": buy_qty_1,
+                "order_type": "LOC",
+                "type_code": LOC_ORDER_TYPE,
+                "desc": f"Buy at {int(buy_ratio_1*100)}% of avg (guaranteed)"
+            })
+
+        # Buy order 2: at 100% (lower avg)
+        buy_price_2 = round(avg_price * 1.00, 2)
+
+        if buy_qty_2 > 0:
+            result["orders"].append({
+                "type": "buy",
+                "price": buy_price_2,
+                "qty": buy_qty_2,
+                "order_type": "LOC",
+                "type_code": LOC_ORDER_TYPE,
+                "desc": "Buy at 100% of avg (lower cost)"
+            })
+
 
     return result
 
@@ -269,7 +272,7 @@ def execute_orders(orders: list, config: dict) -> list:
                 ctac_tlno="",
                 mgco_aptm_odno="",
                 ord_svr_dvsn_cd="0",
-                ord_dvsn=LOC_ORDER_TYPE,  # "34" for LOC
+                ord_dvsn=order.get('type_code', LOC_ORDER_TYPE),
                 env_dv="real"
             )
 
@@ -388,7 +391,7 @@ def raoeo_menu():
 
             for i, order in enumerate(result['orders'], 1):
                 display_lines.append(
-                    f"   {i}. {order['type'].upper()} {order['qty']} @ ${order['price']:.2f} (LOC) - {order['desc']}"
+                    f"   {i}. {order['type'].upper()} {order['qty']} @ ${order['price']:.2f} ({order['order_type']}) - {order['desc']}"
                 )
 
             display_lines.extend(["", " Place order? (y/N): "])
