@@ -211,7 +211,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             if not cfg: continue
 
             name = cfg.get("name", "Unknown")
-            fixed_name = get_fixed_width_name(name, 10)
+            fixed_name = get_fixed_width_name(name, 20)
             msg = (f"{time_s}|MKT|{fixed_name}|{code:<6}|"
                 f"Bid:{bid_s:>9}|"
                 f"Last:{price_s:>9}({vol_s:>6})|"
@@ -273,7 +273,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             if not cfg: continue
 
             name = cfg.get("name", "Unknown")
-            fixed_name = get_fixed_width_name(name, 10)
+            fixed_name = get_fixed_width_name(name, 20)
             display_code = strip_market_prefix(code)
             msg = (f"{time_s}|MKT|{fixed_name}|{display_code:<6}|"
                 f"Bid:{bid_s:>9}|"
@@ -325,7 +325,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                     else: order_val = "OTH"
 
                 name = cfg.get("name", row.get('CNTG_ISNM40', 'Unknown')).strip()
-                fixed_name = get_fixed_width_name(name, 10)
+                fixed_name = get_fixed_width_name(name, 20)
 
                 msg = (f"{time_s}|{side}|{order_val}|{fixed_name}|{code:<6}|"
                     f"Qty:{qty:>6}|Prc:{price:>9}|No:{order_no}{extra_info}")
@@ -436,7 +436,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                         side = base_side
 
                 name = cfg.get("name", row.get('CNTG_ISNM', 'Unknown')).strip()
-                fixed_name = get_fixed_width_name(name, 10)
+                fixed_name = get_fixed_width_name(name, 20)
 
                 msg = (f"{time_s}|{side}|{order_val}|{fixed_name}|{code:<8}|"
                     f"Qty:{qty:>6}|Prc:{price:>9}|No:{order_no}{extra_info}")

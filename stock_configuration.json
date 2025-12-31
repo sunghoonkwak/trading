@@ -9,7 +9,7 @@
                 255,
                 0
             ],
-            "disabled": false
+            "disabled": true
         },
         {
             "ticker": "000660",
@@ -42,7 +42,7 @@
                 50,
                 50
             ],
-            "disabled": false
+            "disabled": true
         },
         {
             "ticker": "017670",
@@ -53,7 +53,7 @@
                 80,
                 80
             ],
-            "disabled": false
+            "disabled": true
         },
         {
             "ticker": "086790",
@@ -86,7 +86,7 @@
                 80,
                 80
             ],
-            "disabled": false
+            "disabled": true
         },
         {
             "ticker": "105560",
@@ -220,7 +220,7 @@
                 255,
                 50
             ],
-            "disabled": false
+            "disabled": true
         },
         {
             "ticker": "NVDA",
@@ -297,7 +297,7 @@
                 160,
                 160
             ],
-            "disabled": false
+            "disabled": true
         },
         {
             "ticker": "CPNG",
@@ -330,7 +330,7 @@
                 50,
                 50
             ],
-            "disabled": false
+            "disabled": true
         },
         {
             "ticker": "USD cash",
