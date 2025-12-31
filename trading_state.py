@@ -108,8 +108,8 @@ def _periodic_save_worker():
     while _save_thread_running:
         time.sleep(60)  # Wait 60 seconds
         if _save_thread_running and stock_data_state:
-            if save_stock_data():
-                _add_alert(f"Stock data saved ({len(stock_data_state)} items)", "INFO")
+            save_stock_data()
+            # _add_alert(f"Stock data saved ({len(stock_data_state)} items)", "INFO")
 
 
 def notify_data_received():
