@@ -9,7 +9,7 @@
                 255,
                 0
             ],
-            "disabled": true
+            "disabled": false
         },
         {
             "ticker": "000660",
@@ -53,7 +53,7 @@
                 80,
                 80
             ],
-            "disabled": true
+            "disabled": false
         },
         {
             "ticker": "086790",
@@ -64,7 +64,7 @@
                 80,
                 80
             ],
-            "disabled": true
+            "disabled": false
         },
         {
             "ticker": "005385",
@@ -75,7 +75,7 @@
                 80,
                 80
             ],
-            "disabled": true
+            "disabled": false
         },
         {
             "ticker": "088980",
@@ -86,7 +86,7 @@
                 80,
                 80
             ],
-            "disabled": true
+            "disabled": false
         },
         {
             "ticker": "105560",
@@ -97,7 +97,7 @@
                 80,
                 80
             ],
-            "disabled": true
+            "disabled": false
         },
         {
             "ticker": "138040",
@@ -108,7 +108,7 @@
                 80,
                 80
             ],
-            "disabled": true
+            "disabled": false
         },
         {
             "ticker": "379800",
@@ -168,6 +168,17 @@
             "disabled": false
         },
         {
+            "ticker": "QQQ",
+            "name": "Invesco QQQ Trust",
+            "market": "NASDAQ",
+            "color": [
+                50,
+                255,
+                50
+            ],
+            "disabled": true
+        },
+        {
             "ticker": "SOXL",
             "name": "DIREXION SEMICONDUCTOR DAILY 3X",
             "market": "AMEX",
@@ -192,6 +203,17 @@
         {
             "ticker": "SPYM",
             "name": "SPYM",
+            "market": "AMEX",
+            "color": [
+                50,
+                255,
+                50
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "SCHD",
+            "name": "Schwab U.S. Dividend Equity ETF",
             "market": "AMEX",
             "color": [
                 50,
@@ -225,6 +247,17 @@
         {
             "ticker": "GOOGL",
             "name": "Google",
+            "market": "NASDAQ",
+            "color": [
+                255,
+                255,
+                50
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "QCOM",
+            "name": "QUALCOMM, Inc.",
             "market": "NASDAQ",
             "color": [
                 255,
@@ -274,6 +307,50 @@
                 160,
                 160,
                 160
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "TLT",
+            "name": "iShares 20+ Year Treasury Bond ETF",
+            "market": "NASDAQ",
+            "color": [
+                160,
+                160,
+                160
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "VIXY",
+            "name": "ProShares VIX Short-Term Futures",
+            "market": "AMEX",
+            "color": [
+                255,
+                50,
+                50
+            ],
+            "disabled": false
+        },
+        {
+            "ticker": "USD cash",
+            "name": "USD cash",
+            "market": "CASH",
+            "color": [
+                200,
+                200,
+                200
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "KRW cash",
+            "name": "KRW cash",
+            "market": "CASH",
+            "color": [
+                200,
+                200,
+                200
             ],
             "disabled": true
         }

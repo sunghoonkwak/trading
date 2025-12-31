@@ -22,6 +22,7 @@
 - `ticker` (str): 주식 티커 심볼 (예: 'AAPL', '005930').
 #### output
 - `dict`: 종목의 설정 객체(이름, 티커, 시장, 색상, 활성여부 등) 또는 찾지 못한 경우 빈 딕셔너리.
+    - **Note**: `disabled: true`로 설정된 종목은 로드에서 제외되거나 로깅 시스템에서 무시될 수 있습니다.
 
 ### update_stock_name
 API에서 수신된 실시간 종목명으로 `stock_configuration.json`의 이름을 동적으로 갱신합니다.

@@ -8,6 +8,14 @@ import json
 import os
 from datetime import datetime, timezone
 import display
+try:
+    from calculate_weights import calculate_target_weights, load_config
+except ImportError:
+    # Fallback/Placeholder if file not found during dev
+    def calculate_target_weights(c, cfg, v=None): return {}, 0
+    def load_config(p): return {}
+
+import unicodedata
 
 SERVICE_ACCOUNT_FILE = 'C:\\Users\\Lara\\steven\\service-account.json'
 SCOPES = [
@@ -575,31 +583,36 @@ def _format_currency(value: float, currency: str, short: bool = False) -> str:
         return f"₩ {value:,.0f}"
 
 
-def export_portfolio_csv(current_prices: dict = None) -> bool:
+
+def get_merged_portfolio_stat(current_prices: dict = None, exchange_rate: float = 1435.0):
     """
-    Export portfolio to CSV with merged tickers and sorted by currency.
+    Load portfolio, merge holdings by ticker, and calculate total value.
+    Returns:
+        (merged_dict, total_value_usd)
 
-    Merges same tickers across accounts (weighted average for avg_price).
-    Sort order: US stocks, US cash, KR stocks, KR cash
-
-    Columns: ticker, item_name, qty, avg_price, current_price, current_value, investment, change, return_pct
+    merged_dict format:
+    {
+        ticker: {
+            "qty", "total_investment_krw", "cur_price", "name", "currency",
+            "current_value_usd", "current_value_krw", ...
+        }
+    }
     """
-    import csv
-
     portfolio = _load_portfolio()
     if "error" in portfolio:
-        display.add_alert(f"Failed to load portfolio: {portfolio['error']}", "ERROR")
-        return False
+        return {}, 0.0
 
     if current_prices is None:
         current_prices = {}
 
-    # Merge holdings by ticker
-    merged = {}  # {ticker: {qty, total_investment, cur_price, name, currency}}
-
     asset_info = portfolio.get("asset_info", {})
     holdings = portfolio.get("holdings", [])
+    cash_holdings = portfolio.get("cash_holdings", [])
 
+    merged = {}
+    total_val_usd = 0.0
+
+    # 1. Process Stocks
     for h in holdings:
         ticker = h.get("ticker", "")
         qty = h.get("qty", 0)
@@ -611,101 +624,338 @@ def export_portfolio_csv(current_prices: dict = None) -> bool:
 
         if ticker not in merged:
             merged[ticker] = {
-                "qty": 0,
-                "total_investment": 0,
+                "qty": 0.0,
+                "total_investment": 0.0,
                 "cur_price": cur_price,
                 "name": name,
-                "currency": currency
+                "currency": currency,
+                "type": "STOCK"
             }
 
+        # Aggregate
         merged[ticker]["qty"] += qty
         merged[ticker]["total_investment"] += qty * avg_price
-        # Use most recent cur_price (prefer non-zero)
         if cur_price > 0:
             merged[ticker]["cur_price"] = cur_price
 
-    # Build rows with calculated fields
-    rows = []
-    for ticker, data in merged.items():
-        qty = data["qty"]
-        total_investment = data["total_investment"]
-        avg_price = total_investment / qty if qty > 0 else 0
-        cur_price = data["cur_price"] if data["cur_price"] > 0 else avg_price
-        current_value = qty * cur_price
-        change = current_value - total_investment
-        return_pct = ((cur_price - avg_price) / avg_price * 100) if avg_price > 0 else 0
-
-        rows.append({
-            "ticker": ticker,
-            "item_name": data["name"],
-            "qty": round(qty, 2),
-            "avg_price": round(avg_price, 2),
-            "current_price": round(cur_price, 2),
-            "current_value": round(current_value, 2),
-            "investment": round(total_investment, 2),
-            "change": round(change, 2),
-            "return_pct": round(return_pct, 2),
-            "currency": data["currency"]  # For sorting
-        })
-
-    # Sort: US stocks first, then KR stocks
-    rows.sort(key=lambda x: (0 if x["currency"] == "USD" else 1, x["ticker"]))
-
-    # Add cash holdings
-    cash_holdings = portfolio.get("cash_holdings", [])
-
-    # Merge cash by currency
+    # 2. Process Cash (USD/KRW) - Create as pseudo-tickers for weight calc
     usd_cash = sum(c["amount"] for c in cash_holdings if c.get("currency") == "USD")
     krw_cash = sum(c["amount"] for c in cash_holdings if c.get("currency") == "KRW")
 
-    # Add US cash after US stocks
     if usd_cash > 0:
-        us_stock_count = len([r for r in rows if r["currency"] == "USD"])
-        rows.insert(us_stock_count, {
-            "ticker": "USD_CASH",
-            "item_name": "US Dollar Cash",
-            "qty": round(usd_cash, 2),
-            "avg_price": 1,
-            "current_price": 1,
-            "current_value": round(usd_cash, 2),
-            "investment": round(usd_cash, 2),
-            "change": 0,
-            "return_pct": 0,
-            "currency": "USD"
-        })
+        merged["USD cash"] = {
+            "qty": usd_cash, "total_investment": usd_cash, "cur_price": 1.0,
+            "name": "USD cash", "currency": "USD", "type": "CASH"
+        }
 
-    # Add KR cash at the end
     if krw_cash > 0:
-        rows.append({
-            "ticker": "KRW_CASH",
-            "item_name": "Korean Won Cash",
-            "qty": round(krw_cash, 0),
-            "avg_price": 1,
-            "current_price": 1,
-            "current_value": round(krw_cash, 0),
-            "investment": round(krw_cash, 0),
-            "change": 0,
-            "return_pct": 0,
-            "currency": "KRW"
+        merged["KRW cash"] = {
+            "qty": krw_cash, "total_investment": krw_cash, "cur_price": 1.0,
+            "name": "KRW cash", "currency": "KRW", "type": "CASH"
+        }
+
+    # 3. Calculate Values & Total
+    for ticker, data in merged.items():
+        qty = data["qty"]
+        cur_price = data["cur_price"]
+        currency = data["currency"]
+
+        # Value in native currency
+        val_native = qty * cur_price
+        data["current_value_native"] = val_native
+
+        # Convert to USD for uniform weight calculation
+        if currency == "USD":
+            val_usd = val_native
+            val_krw = val_native * exchange_rate
+        else:
+            val_krw = val_native
+            val_usd = val_native / exchange_rate if exchange_rate > 0 else 0
+
+        data["current_value_usd"] = val_usd
+        data["current_value_krw"] = val_krw
+
+        total_val_usd += val_usd
+
+    return merged, total_val_usd
+
+def check_portfolio_balance(merged_data, total_value_usd, current_weights, targets, exchange_rate):
+    """
+    Compare current weights with target weights and show top differences.
+    """
+    from display import show_in_result_area, get_fixed_width_name, input_at
+
+    if total_value_usd <= 0:
+        display.add_alert("Total asset value is 0 or error.", "ERROR")
+        return
+
+    # 4. Compare
+    diffs = []
+
+    # We care about all tickers in either Targets OR Current
+    all_tickers = set(current_weights.keys()) | set(targets.keys())
+
+    for t in all_tickers:
+        cur_w = current_weights.get(t, 0.0)
+        tgt_w = targets.get(t, 0.0)
+
+        # Filter Cash
+        data = merged_data.get(t, {})
+        # Check type "CASH" or ticker name string match
+        if data.get("type") == "CASH" or "cash" in t.lower() or "예수금" in t:
+            continue
+
+        diff = tgt_w - cur_w # Target - Current
+
+        # Create display entry
+        name = data.get("name", t)
+
+        diffs.append({
+            "ticker": t,
+            "name": name,
+            "cur_w": cur_w,
+            "tgt_w": tgt_w,
+            "diff": diff,
+            "abs_diff": abs(diff)
         })
 
-    # Remove currency field before writing (was only for sorting)
-    for row in rows:
-        del row["currency"]
+    # Sort by absolute difference descending
+    diffs.sort(key=lambda x: x["abs_diff"], reverse=True)
 
-    # Write CSV with timestamp in filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_path = os.path.join(os.path.dirname(__file__), f'portfolio_export_{timestamp}.csv')
+    # Pagination
+    import math
+    page = 0
+    page_size = 6
+    total_pages = math.ceil(len(diffs) / page_size)
+    if total_pages == 0: total_pages = 1
+
+    while True:
+        # Slice for current page
+        start_idx = page * page_size
+        end_idx = start_idx + page_size
+        page_items = diffs[start_idx:end_idx]
+
+        lines = []
+        lines.append(f" [Portfolio Check] (Total: ${total_value_usd:,.0f}) - Page {page+1}/{total_pages}")
+
+        # Header
+        # Idx: 2, Ticker: 10, Name: 30, Curr%: 8, Tgt%: 8, Diff%: 9, Qty: 6
+        header = f" {'#':>2} | {'Ticker':<10} | {'Name':<30} | {'Curr %':>8} | {'Tgt %':>8} | {'Diff %':>9} | {'Qty':>6}"
+        sep_len = len(header)
+
+        lines.append("─" * sep_len)
+        lines.append(header)
+        lines.append("─" * sep_len)
+
+        for i, item in enumerate(page_items):
+            global_idx = start_idx + i + 1
+            t = item["ticker"]
+
+            # Truncate/Pad name for display (width 30)
+            n = get_fixed_width_name(item['name'], 30)
+            c_p = item["cur_w"] * 100
+            t_p = item["tgt_w"] * 100
+            d_p = item["diff"] * 100
+
+            # Calculate Quantity Diff
+            # diff is (Tgt - Cur) weight
+            # value_diff = diff * total_value_usd
+            val_diff_usd = item["diff"] * total_value_usd
+
+            # Get stock data for price
+            m_data = merged_data.get(t, {})
+            cur_price = m_data.get("cur_price", 0)
+            currency = m_data.get("currency", "USD")
+
+            qty_diff = 0
+            if cur_price > 0:
+                if currency == "KRW":
+                    val_diff_krw = val_diff_usd * exchange_rate
+                    qty_diff = val_diff_krw / cur_price
+                else:
+                    qty_diff = val_diff_usd / cur_price
+
+            # Qty string (int)
+            qty_str = f"{int(qty_diff):+d}"
+
+            # Colorize Diff (Positive = Buy = Green, Negative = Sell = Red)
+            from display import COLOR_RED, COLOR_GREEN, COLOR_RESET
+            symbol = "+" if d_p >= 0 else "-"
+
+            # Construct line manually
+            # c_p:6.2f -> " 15.00"
+            c_str = f"{c_p:4.2f}%"
+            t_str = f"{t_p:4.2f}%"
+
+            # d_str logic
+            # base_d_str: "+11.67%" or "+ 9.66%"
+            base_d_str = f"{symbol}{abs(d_p):5.2f}%"
+
+            # Color Logic
+            if d_p > 0.5:
+                colored_d_str = f"{COLOR_GREEN}{base_d_str}{COLOR_RESET}"
+                colored_qt_str = f"{COLOR_GREEN}{qty_str:>6}{COLOR_RESET}"
+            elif d_p < -0.5:
+                colored_d_str = f"{COLOR_RED}{base_d_str}{COLOR_RESET}"
+                colored_qt_str = f"{COLOR_RED}{qty_str:>6}{COLOR_RESET}"
+            else:
+                colored_d_str = base_d_str
+                colored_qt_str = f"{qty_str:>6}"
+
+            # Alignment padding for width 9 for Diff %
+            target_width = 9
+            padding = " " * (target_width - len(base_d_str))
+            final_d_str = padding + colored_d_str
+
+            lines.append(f" {global_idx:>2} | {t:<10} | {n} | {c_str:>8} | {t_str:>8} | {final_d_str} | {colored_qt_str}")
+
+        remaining_lines = page_size - len(page_items)
+        for _ in range(remaining_lines):
+            lines.append("") # Empty lines to keep UI stable
+
+        lines.append("─" * sep_len)
+        lines.append(" (Enter: Next Page, q: Return)")
+
+        show_in_result_area(lines)
+
+        # Input Loop
+        cmd = input_at(13, 2, "Cmd (Ent/q): ").strip().lower()
+        if cmd == 'q':
+            break
+        else:
+            page = (page + 1) % total_pages
+
+
+def export_portfolio_excel(merged_data, current_weights, targets) -> bool:
+    """
+    Export portfolio to Excel (.xlsx) with formatted columns.
+    Requires 'openpyxl' library.
+    """
+    from display import add_alert
     try:
-        fieldnames = ["ticker", "item_name", "qty", "avg_price", "current_price", "investment", "current_value", "change", "return_pct"]
-        with open(csv_path, 'w', newline='', encoding='utf-8-sig') as f:
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(rows)
-        display.add_alert(f"CSV exported: {len(rows)} items", "SUCCESS")
+        import openpyxl
+        from openpyxl.styles import Font, Alignment
+    except ImportError:
+        add_alert("openpyxl not found. Please install: pip install openpyxl", "ERROR")
+        return False
+
+    from datetime import datetime
+    import os
+
+    rows = []
+
+    for ticker, data in merged_data.items():
+        qty = data["qty"]
+        if qty <= 0: continue
+
+        cur_price = data["cur_price"]
+        total_inv = data["total_investment"]
+        cur_val = data["current_value_native"]
+
+        avg_price = total_inv / qty if qty > 0 else 0
+        change = cur_val - total_inv
+        # Return pct for Excel: Ratio (0.20 = 20%)
+        ret_pct = (change / total_inv) if total_inv > 0 else 0
+
+        currency = data["currency"]
+
+        # Weigths
+        cur_w = current_weights.get(ticker, 0.0)
+        tgt_w = targets.get(ticker, 0.0)
+
+        # Sort key logic
+        sort_idx = 0 if currency == "USD" else 1
+        if data.get("type") == "CASH": sort_idx += 2
+
+        rows.append({
+            "ticker": ticker,
+            "name": data["name"],
+            "cur_w": cur_w,
+            "tgt_w": tgt_w,
+            "qty": qty,
+            "avg_price": avg_price,
+            "cur_price": cur_price,
+            "total_inv": total_inv,
+            "cur_val": cur_val,
+            "change": change,
+            "ret_pct": ret_pct,
+            "sort_key": (sort_idx, ticker)
+        })
+
+    # Sort
+    rows.sort(key=lambda x: x["sort_key"])
+
+    # Create Workbook
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Portfolio"
+
+    # Headers
+    headers = ["Ticker", "Name", "Cur Wgt", "Tgt Wgt", "Qty", "Avg Price", "Cur Price", "Invest", "Cur Val", "Change", "Ret %"]
+    ws.append(headers)
+
+    # Style Headers: Bold + Center
+    header_font = Font(bold=True)
+    header_align = Alignment(horizontal="center")
+    for cell in ws[1]:
+        cell.font = header_font
+        cell.alignment = header_align
+
+    # Write Data
+    for r in rows:
+        ws.append([
+            r["ticker"], r["name"], r["cur_w"], r["tgt_w"], r["qty"],
+            r["avg_price"], r["cur_price"], r["total_inv"], r["cur_val"],
+            r["change"], r["ret_pct"]
+        ])
+
+    # Formatting
+    # Columns (1-based):
+    # A(1):Ticker, B(2):Name, C(3):CurW, D(4):TgtW, E(5):Qty
+    # F(6):Avg, G(7):CurP, H(8):Inv, I(9):Val, J(10):Chg, K(11):Ret%
+
+    number_fmt = "#,##0.00"
+    pct_fmt = "0.00%"
+
+    for row_idx in range(2, len(rows) + 2):
+        # Weights (C, D)
+        ws.cell(row=row_idx, column=3).number_format = pct_fmt
+        ws.cell(row=row_idx, column=4).number_format = pct_fmt
+
+        # Qty (E)
+        ws.cell(row=row_idx, column=5).number_format = "#,##0.00"
+
+        # Prices/Values (F-J)
+        for col_idx in range(6, 11):
+            ws.cell(row=row_idx, column=col_idx).number_format = number_fmt
+
+        # Return (K)
+        ws.cell(row=row_idx, column=11).number_format = pct_fmt
+
+    # Column Widths
+    ws.column_dimensions['A'].width = 12
+    ws.column_dimensions['B'].width = 35
+    ws.column_dimensions['C'].width = 10
+    ws.column_dimensions['D'].width = 10
+    ws.column_dimensions['E'].width = 10
+    ws.column_dimensions['F'].width = 14
+    ws.column_dimensions['G'].width = 14
+    ws.column_dimensions['H'].width = 16
+    ws.column_dimensions['I'].width = 16
+    ws.column_dimensions['J'].width = 16
+    ws.column_dimensions['K'].width = 10
+
+    # Save
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"portfolio_export_{timestamp}.xlsx"
+    filepath = os.path.join(os.path.dirname(__file__), filename)
+
+    try:
+        wb.save(filepath)
+        add_alert(f"Excel exported: {filename}", "SUCCESS")
         return True
     except Exception as e:
-        display.add_alert(f"CSV export failed: {e}", "ERROR")
+        add_alert(f"Excel save failed: {e}", "ERROR")
         return False
 
 
@@ -753,6 +1003,25 @@ def show_portfolio_summary():
     if "error" in stats:
         display.add_alert(f"Stats error: {stats['error']}", "ERROR")
         return
+
+    # --- Pre-calculate Portfolio Data (Once) ---
+    merged_data, total_value_usd = get_merged_portfolio_stat(current_prices, exchange_rate)
+
+    current_weights = {}
+    if total_value_usd > 0:
+        for ticker, data in merged_data.items():
+            current_weights[ticker] = data["current_value_usd"] / total_value_usd
+
+    # Calculate Targets
+    targets = {}
+    try:
+        config_path = os.path.join(os.path.dirname(__file__), "portfolio_weights.json")
+        if not os.path.exists(config_path):
+             config_path = "portfolio_weights.json"
+        config = load_config(config_path)
+        targets, score = calculate_target_weights(current_weights, config)
+    except Exception as e:
+        display.add_alert(f"Weight calc error: {e}", "ERROR")
 
     while True:
         clear_result_area()
@@ -802,18 +1071,19 @@ def show_portfolio_summary():
         us_cash_str = f"{stats['us_cash_ratio']:>14.1f}        %"
         kr_cash_str = f"{stats['kr_cash_ratio']:>14.1f}        %"
         lines.append(f" {'Cash':10} │ {us_cash_str:27} │ {kr_cash_str:27} │")
-
         lines.append("─" * 80)
-        lines.append(" 1. Create CSV   q. Exit")
+        lines.append(" 1. Check Portfolio  2. Create Excel  q. Exit")
 
         show_in_result_area(lines)
 
         choice = input_at(13, 2, "Enter Choice: ").strip().lower()
 
         if choice == '1':
-            render_ui(full_refresh=True)
-            export_portfolio_csv(current_prices)
-            render_ui(full_refresh=True)
+            check_portfolio_balance(merged_data, total_value_usd, current_weights, targets, exchange_rate)
+            input_at(13, 2, "Press Enter to continue...")
+        elif choice == '2':
+            export_portfolio_excel(merged_data, current_weights, targets)
+            input_at(13, 2, "Press Enter to continue...")
         elif choice == 'q':
             break
         else:
