@@ -14,6 +14,14 @@ import sys
 import shutil
 import subprocess
 
+# Force-disable any global requests-cache to prevent SQLite multi-thread errors
+try:
+    import requests_cache
+    if requests_cache.is_installed():
+        requests_cache.uninstall_cache()
+except ImportError:
+    pass
+
 # Import refactored modules
 import trading_config
 from trading_config import strip_market_prefix
@@ -28,7 +36,7 @@ from menu.menu import menu
 from kis_api.domestic_stock.asking_price_total.asking_price_total import asking_price_total
 from kis_api.domestic_stock.ccnl_total.ccnl_total import ccnl_total
 from kis_api.overseas_stock.asking_price.asking_price import asking_price
-from menu.handle_manage_orders import sync_open_orders
+from menu.handle_manage_orders import sync_open_orders, request_sync
 from kis_api.overseas_stock.ccnl_notice.ccnl_notice import ccnl_notice
 from kis_api.overseas_stock.delayed_ccnl.delayed_ccnl import delayed_ccnl
 
@@ -336,8 +344,12 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 tag = state_map.get(order_val, order_val)
                 add_alert(f"[{tag}] {side} {code} {qty} @ {price}", level="INFO" if tag != "REJ" else "ERROR")
 
-                # Auto-sync all orders in background to ensure total accuracy
-                threading.Thread(target=sync_open_orders, daemon=True).start()
+                # 1. Immediate UI update: remove from list if canceled or executed
+                if tag in ["CAN", "EXE"]:
+                    display.remove_order_state(order_no)
+
+                # 2. Delayed auto-sync with debouncing
+                request_sync()
                 continue
             except Exception as e:
                 print_log(PrintLevel.ERROR, f"Error parsing H0STCNI0: {e}")
@@ -436,8 +448,12 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
                 tag = state_map.get(order_val, order_val)
                 add_alert(f"[{tag}] {side} {code} {qty} @ {price}", level="INFO" if tag != "REJ" else "ERROR")
 
-                # Auto-sync all orders in background to ensure total accuracy
-                threading.Thread(target=sync_open_orders, daemon=True).start()
+                # 1. Immediate UI update: remove from list if canceled or executed
+                if tag in ["CAN", "EXE"]:
+                    display.remove_order_state(order_no)
+
+                # 2. Delayed auto-sync with debouncing
+                request_sync()
                 continue
             except Exception as e:
                 print_log(PrintLevel.ERROR, f"Error parsing overseas notification: {e}")

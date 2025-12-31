@@ -196,6 +196,12 @@ def clear_order_states():
     order_states.clear()
     render_ui()
 
+def remove_order_state(order_id: str):
+    """Remove a specific order from the display state."""
+    if order_id in order_states:
+        del order_states[order_id]
+        render_ui()
+
 
 def clear_result_area():
     with terminal_lock:

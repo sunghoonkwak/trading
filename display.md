@@ -85,6 +85,13 @@ Named Pipe를 통해 로그를 별도 터미널(Event Viewer)로 전송합니다
 #### output
 - `None`.
 
+### remove_order_state
+특정 주문 고유 번호(odno)를 사용하여 미체결 주문 목록에서 해당 항목을 즉시 제거합니다. WebSocket 체결/취소 통지 시 API 동기화 전 UI를 선제적으로 갱신하기 위해 사용됩니다.
+#### input
+- `odno` (str): 제거할 주문 번호.
+#### output
+- `None`.
+
 ### clear_all_display_data
 주문 목록과 알림 버퍼를 모두 초기화하고 화면을 갱신합니다.
 #### input

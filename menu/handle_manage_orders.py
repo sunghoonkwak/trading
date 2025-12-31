@@ -12,31 +12,69 @@ from kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl
 from kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import inquire_psbl_rvsecncl
 from kis_api.overseas_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl as order_rvsecncl_overseas
 from kis_api.overseas_stock.inquire_nccs.inquire_nccs import inquire_nccs as inquire_nccs_overseas
+import threading
+import time
+
+class SyncManager:
+    """Manages order synchronization to prevent race conditions and redundant API calls."""
+    _sync_timer = None
+    _sync_lock = threading.Lock()
+    _last_request_time = 0
+    _debounce_seconds = 1.0
+
+    @classmethod
+    def request_sync(cls):
+        """Request a sync with debouncing. Resets the 1s timer on each call."""
+        with cls._sync_lock:
+            if cls._sync_timer:
+                cls._sync_timer.cancel()
+
+            cls._sync_timer = threading.Timer(cls._debounce_seconds, cls._execute_sync)
+            cls._sync_timer.daemon = True
+            cls._sync_timer.start()
+
+    @classmethod
+    def _execute_sync(cls):
+        """The actual sync execution. Wrapped in a lock to prevent concurrent runs."""
+        # Use a high-level lock to ensure only one sync runs at a time
+        if not cls._sync_lock.acquire(blocking=False):
+            # If already running, we might need another sync after this one finishes
+            # but for now, we just return to avoid overlapping.
+            return
+
+        try:
+            sync_open_orders()
+        finally:
+            cls._sync_lock.release()
+
+def request_sync():
+    """Public helper to request a debounced sync."""
+    SyncManager.request_sync()
 
 def fetch_open_orders():
-    """Step 1: Fetch open orders from both US and KR markets."""
+    """Step 1: Fetch open orders from both US and KR markets and return a combined DataFrame."""
+    import pandas as pd
     cano = ka.getTREnv().my_acct
     prod = ka.getTREnv().my_prod
 
-    if MENU_DEBUG:
-        logging.debug(f"[MenuDebug] Fetching Open Orders - Acct: {cano}")
+    # 1. US Market
+    df_us = inquire_nccs_overseas(cano=cano, acnt_prdt_cd=prod, ovrs_excg_cd="NASD", sort_sqn="DS", FK200="", NK200="")
+    if not df_us.empty:
+        df_us['_market'] = 'US'
 
-    # Priority: Overseas -> Domestic
-    market_found = "US"
-    df = inquire_nccs_overseas(cano=cano, acnt_prdt_cd=prod, ovrs_excg_cd="NASD", sort_sqn="DS", FK200="", NK200="")
+    # 2. KR Market
+    df_kr = inquire_psbl_rvsecncl(cano=cano, acnt_prdt_cd=prod, inqr_dvsn_1="0", inqr_dvsn_2="0")
+    if not df_kr.empty:
+        df_kr['_market'] = 'KR'
 
-    if MENU_DEBUG and not df.empty:
-        logging.debug(f"[MenuDebug] US Open Order Raw: {df.head(1).to_dict('records')}")
+    # Combine
+    if df_us.empty and df_kr.empty:
+        return pd.DataFrame(), 0, 0
 
-    if df.empty:
-        market_found = "KR"
-        df = inquire_psbl_rvsecncl(cano=cano, acnt_prdt_cd=prod, inqr_dvsn_1="0", inqr_dvsn_2="0")
-        if MENU_DEBUG and not df.empty:
-            logging.debug(f"[MenuDebug] KR Open Order Raw: {df.head(1).to_dict('records')}")
+    combined_df = pd.concat([df_us, df_kr], ignore_index=True)
+    return combined_df, len(df_us), len(df_kr)
 
-    return df, market_found
-
-def print_open_orders_list(df, market):
+def print_open_orders_list(df):
     """Utility to format and return lines for the open orders list."""
     header_lines = ["="*40, " [Manage Open Orders]", "="*40]
     order_list = []
@@ -47,7 +85,8 @@ def print_open_orders_list(df, market):
         return default
 
     for idx, (_, row) in enumerate(df.iterrows()):
-        name = row.get('prdt_name', row.get('pdno', 'Unknown'))
+        market = row.get('_market', 'US')
+        name = row.get('prdt_name', row.get('pdno', row.get('stck_nm', 'Unknown')))
         row_lower = {k.lower(): v for k, v in row.items()}
 
         if market == "KR":
@@ -140,25 +179,33 @@ def sync_open_orders():
     """Fetch open orders from API and sync them to display state."""
     add_alert("Syncing open orders...", "INFO")
     clear_order_states() # Clear locally tracked orders before fetching fresh ones
-    df, market_found = fetch_open_orders()
+    try:
+        df, num_us, num_kr = fetch_open_orders()
+    except Exception as e:
+        print_log(PrintLevel.ERROR, f"Sync failed: {e}")
+        return False
+
+    # Priority Alert Message requested by user
+    alert_msg = f"US # of orders: {num_us}       KR # of orders: {num_kr}"
+    add_alert(alert_msg, "SUCCESS")
+
     if not df.empty:
         for _, row in df.iterrows():
+            market = row.get('_market', 'US')
             row_lower = {k.lower(): v for k, v in row.items()}
             odno = row_lower.get('odno', row_lower.get('ord_no', 'Unknown'))
             pdno = row_lower.get('pdno', row_lower.get('stck_shrn_iscd', 'Unknown'))
             api_name = row_lower.get('prdt_name', row_lower.get('stck_nm', row_lower.get('stck_nm40', 'Unknown')))
 
-            # Unify name source: Update Config if API returns a better/different name
             trading_config.update_stock_name(pdno, api_name)
             stock_info = trading_config.get_stock_info(pdno)
             display_name = stock_info.get('name', api_name)
 
-            if market_found == "KR":
+            if market == "KR":
                 side = "Buy" if row_lower.get('sll_buy_dvsn_cd') == '02' else "Sell"
                 price = str(int(float(row_lower.get('ord_unpr', '0'))))
                 qty = str(row_lower.get('psbl_qty', 0))
             else:
-                # Use descriptive side text like "LOC Buy", fall back to Buy/Sell
                 side_text = row_lower.get('sll_buy_dvsn_cd_name', row_lower.get('sll_buy_dvsn_name', '')).strip()
                 if not side_text or side_text in ['?', 'nan', 'None', '']:
                     side = "Buy" if row_lower.get('sll_buy_dvsn_cd') == '02' else "Sell"
@@ -170,11 +217,8 @@ def sync_open_orders():
                 q_val = row_lower.get('nccs_qty', row_lower.get('ft_ord_qty4', row_lower.get('ord_qty', 0)))
                 qty = str(int(float(q_val)))
 
-            # Sync to bottom UI list without redundant alerts
+            # Sync to bottom UI list
             update_order_state(odno, pdno, display_name, side, price, qty, "PLACED", notify=False)
-        add_alert(f"Sync complete ({len(df)} orders)", "SUCCESS")
-    else:
-        add_alert("Sync complete (No open orders)", "INFO")
     return not df.empty
 
 def handle_manage_orders():
@@ -185,17 +229,15 @@ def handle_manage_orders():
         show_in_result_area(["Fetching open orders..."])
         sync_open_orders()
 
-        # We need the df for the management menu below, so fetch it again or adjust sync_open_orders
-        # To keep it simple and correct, we'll just use the internal fetch here for the selection list
-        df, market_found = fetch_open_orders()
+        # Step 2: Determine which order to manage via user input
+        df, _, _ = fetch_open_orders()
 
         if df.empty:
             show_in_result_area(["No open orders found.", "Press any key to return..."])
             msvcrt.getch()
             return
 
-        # Step 2: Determine which order to manage via user input
-        display_lines = print_open_orders_list(df, market_found)
+        display_lines = print_open_orders_list(df)
         show_in_result_area(display_lines)
         idx_s = input_at(len(display_lines)+2, 2, "Choice: ").strip()
         if idx_s.lower() == 'q' or not idx_s: return
@@ -205,6 +247,7 @@ def handle_manage_orders():
             if idx < 0 or idx >= len(df): raise ValueError
         except: return
         target_order = df.iloc[idx]
+        market = target_order.get('_market', 'US')
 
         # Step 3: Choose action (Correct or Cancel) via user input
         action = input_at(len(display_lines)+3, 2, "Action (1: Correct, 2: Cancel): ").strip()
@@ -216,7 +259,7 @@ def handle_manage_orders():
             new_price = input_at(len(display_lines)+4, 2, "New Price: ").strip()
 
         # Step 5: execute_manage_action
-        df_res, err_msg = execute_manage_action(market_found, action, target_order, new_price)
+        df_res, err_msg = execute_manage_action(market, action, target_order, new_price)
 
         # Step 6: print result
         clear_result_area()

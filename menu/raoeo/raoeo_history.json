@@ -1,8 +1,8 @@
 {
     "history": [
         {
-            "date": "2025-12-29",
-            "state": "initial",
+            "date": "2025-12-31",
+            "state": "holding",
             "config": {
                 "seed": 6000,
                 "target": "SOXL",
@@ -11,18 +11,35 @@
                 "sell_profit": 0.1
             },
             "holdings": {
-                "qty": 0,
-                "avg_price": 0,
-                "cur_price": 42.688
+                "qty": 6,
+                "avg_price": 43.74,
+                "cur_price": 43.31
             },
             "daily_budget": 150.0,
             "orders": [
                 {
+                    "type": "sell",
+                    "price": 48.12,
+                    "qty": 6,
+                    "order_type": "LIMIT",
+                    "type_code": "00",
+                    "desc": "Sell all at 10% profit"
+                },
+                {
                     "type": "buy",
-                    "price": 46.96,
-                    "qty": 3,
+                    "price": 47.68,
+                    "qty": 2,
                     "order_type": "LOC",
-                    "desc": "Initial buy at 110% of current price"
+                    "type_code": "34",
+                    "desc": "Buy at 109% of avg (guaranteed)"
+                },
+                {
+                    "type": "buy",
+                    "price": 43.74,
+                    "qty": 1,
+                    "order_type": "LOC",
+                    "type_code": "34",
+                    "desc": "Buy at 100% of avg (lower cost)"
                 }
             ],
             "error": null
@@ -67,6 +84,33 @@
                     "order_type": "LOC",
                     "type_code": "34",
                     "desc": "Buy at 100% of avg (lower cost)"
+                }
+            ],
+            "error": null
+        },
+        {
+            "date": "2025-12-29",
+            "state": "initial",
+            "config": {
+                "seed": 6000,
+                "target": "SOXL",
+                "exchange": "AMEX",
+                "duration": 40,
+                "sell_profit": 0.1
+            },
+            "holdings": {
+                "qty": 0,
+                "avg_price": 0,
+                "cur_price": 42.688
+            },
+            "daily_budget": 150.0,
+            "orders": [
+                {
+                    "type": "buy",
+                    "price": 46.96,
+                    "qty": 3,
+                    "order_type": "LOC",
+                    "desc": "Initial buy at 110% of current price"
                 }
             ],
             "error": null

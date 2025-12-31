@@ -49,9 +49,7 @@ def menu():
             print_log(PrintLevel.ERROR, f"Log Level Changed to: {display.print_log_level.name}")
         elif choice.lower() == 'c':
             from .handle_manage_orders import sync_open_orders
-            display.clear_all_display_data()
             sync_open_orders()
-            display.add_alert("All Data Cleared & Resynced", "SUCCESS")
         elif choice.lower() == 'v':
             from event_viewer import event_pipe
             if event_pipe.is_connected():
