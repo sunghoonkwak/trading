@@ -8,15 +8,15 @@
 ## UI Layout (화면 구성)
 
 ```
-Row 1:       Main Header (System Title)
-Row 2:       Sub Header (Status/Log Level)
-Row 3-14:    Result Area (12줄 - 메뉴 실행 결과, 도움말, 히스토리 조회 등)
-Row 15-20:   Menu Options (6줄 - 가로 2열 배치)
-Row 21:      -------- (구분선)
-Row 22:      Enter Choice: (입력 영역)
-Row 23:      -------- (구분선)
-Row 24-29:   Order List (최대 6개 - 실시간 미체결 주문 목록)
-Row 30:      Alerts Log (최신 알림 메시지)
+Row 1-3:     Main Header (제목, 로그 레벨, 지수)
+Row 4-11:    Menu Options (1-3, r, p, c, q - 총 8줄)
+Row 12:      -------- (구분선)
+Row 13:      Enter Choice: (입력 영역)
+Row 14:      -------- (구분선)
+Row 15:      -------------------------- Orders -------------------------- (주문 구분선)
+Row 16-30:   Order List (실시간 미체결 주문 목록)
+Row 31:      -------------------------- Alerts -------------------------- (알림 구분선)
+Row 32+:     Alerts Log (최신 알림 메시지)
 ```
 
 ## Function (기능)

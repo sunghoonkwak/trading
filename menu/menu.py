@@ -61,6 +61,9 @@ def menu():
                 display.add_alert("Viewer terminal launched!", "SUCCESS")
         elif choice.lower() == 'r':
             raoeo_menu()
+        elif choice.lower() == 'p':
+            import portfolio
+            portfolio.show_portfolio_summary()
         elif choice.lower() == 'q':
             import trading_state
             trading_state.stop_periodic_save()  # Save stock data before exit

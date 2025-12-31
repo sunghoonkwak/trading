@@ -136,3 +136,5 @@ credentials.enc
 WebSocket_25*.log
 password.txt
 stock_data.json
+portfolio_export_*.csv
+portfolio.json

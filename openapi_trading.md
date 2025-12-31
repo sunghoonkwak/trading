@@ -14,6 +14,7 @@
 │   ├── handle_manage_orders.py (handle_manage_orders.md)     ## 미체결 주문 관리 핸들러
 │   └── handle_account_info.py (handle_account_info.md)       ## 계좌 조회 및 데이터 통합
 ├── display.py (display.md)                                   ## 터미널 UI 및 컬러 로그 시스템 (출력 전담)
+├── portfolio.py (portfolio.md)                               ## 통합 포트폴리오 관리 및 CSV 내보내기
 ├── trading_config.py (trading_config.md)                     ## 설정 및 종목 정보 관리
 ├── trading_state.py (trading_state.md)                       ## 전역 실행 상태 매니저
 ├── tests/                                                    ## 유닛 테스트 폴더
@@ -25,7 +26,8 @@
 │   │   ├── generate_credentials.py (generate_credentials.md) ## 인증정보 생성 유틸리티
 │   │   └── validate_credentials.py (validate_credentials.md) ## 인증정보 검증 유틸리티
 │   └── kis_auth.py                                           ## 인증 및 통신 코어
-├── stock_configuration.json                                  ## 종목 설정 (RGB 색상, 활성여부 등)
+├── stock_configuration.json                                  ## 실시간 시세 관련 종목 설정 (색상, 활성여부 등)
+├── portfolio.json                                            ## 통합 포트폴리오 데이터 (Git 제외)
 ├── credentials.enc                                           ## 암호화된 API 키 저장소
 └── openapi_trading.md                                        ## 프로젝트 메인 문서
 ```
@@ -46,7 +48,9 @@
    - `1`: 계좌 정보 조회 (Summary/US/KR 순환).
    - `2`: 주문 실행 (US/KR 토글).
    - `3`: 미체결 주문 관리.
-   - `0/c/q`: 시스템 설정 및 종료.
+   - `r`: RAOEO 자동 주문 전략 실행.
+   - `p`: 통합 포트폴리오 현황 요약 및 CSV 내보내기.
+   - `c/q`: 시스템 초기화 및 종료.
 
 ---
 *각 모듈의 상세 구현 사항은 폴더 구조의 (md) 파일을 참조하십시오.*

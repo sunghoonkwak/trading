@@ -87,10 +87,9 @@ MENU_OPTIONS = [
     " 2. Place Order (Buy/Sell)",
     " 3. Manage Open Orders (Correct/Cancel)",
     " r. RAOEO Strategy",
+    " p. Portfolio",
     " ",
-    " 0. Change Log Level",
     " c. Clear All & Sync",
-    " v. Open Log Viewer",
     " q. Exit"
 ]
 

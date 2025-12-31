@@ -9,7 +9,7 @@
                 255,
                 0
             ],
-            "disabled": false
+            "disabled": true
         },
         {
             "ticker": "000660",
@@ -53,7 +53,106 @@
                 80,
                 80
             ],
-            "disabled": false
+            "disabled": true
+        },
+        {
+            "ticker": "086790",
+            "name": "하나금융지주",
+            "market": "KOSPI",
+            "color": [
+                255,
+                80,
+                80
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "005385",
+            "name": "현대차우",
+            "market": "KOSPI",
+            "color": [
+                255,
+                80,
+                80
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "088980",
+            "name": "맥쿼리인프라",
+            "market": "KOSPI",
+            "color": [
+                255,
+                80,
+                80
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "105560",
+            "name": "KB금융",
+            "market": "KOSPI",
+            "color": [
+                255,
+                80,
+                80
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "138040",
+            "name": "메리츠금융지주",
+            "market": "KOSPI",
+            "color": [
+                255,
+                80,
+                80
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "379800",
+            "name": "KODEX 미국S&P500",
+            "market": "KOSPI",
+            "color": [
+                255,
+                80,
+                80
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "379810",
+            "name": "KODEX 미국나스닥100",
+            "market": "KOSPI",
+            "color": [
+                255,
+                80,
+                80
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "453850",
+            "name": "ACE 미국30년국채액티브(H)",
+            "market": "KOSPI",
+            "color": [
+                255,
+                80,
+                80
+            ],
+            "disabled": true
+        },
+        {
+            "ticker": "490490",
+            "name": "SOL 미국배당미국채혼합50",
+            "market": "KOSPI",
+            "color": [
+                255,
+                80,
+                80
+            ],
+            "disabled": true
         }
     ],
     "US": [
