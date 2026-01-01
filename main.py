@@ -530,4 +530,15 @@ if __name__ == "__main__":
         pipe_thread = threading.Thread(target=wait_for_viewer, daemon=True)
         pipe_thread.start()
 
+    # Initialize Telegram bot (runs in background)
+    try:
+        from telegram_bot import initialize_telegram
+        if initialize_telegram():
+            add_alert("[TG] Bot started", level="INFO")
+        else:
+            add_alert("[TG] Failed to start", level="ERROR")
+    except Exception as e:
+        logging.warning(f"[Telegram] Failed to initialize: {e}")
+        add_alert("[TG] Init error", level="ERROR")
+
     menu()

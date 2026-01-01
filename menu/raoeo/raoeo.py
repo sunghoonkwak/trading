@@ -328,65 +328,278 @@ def save_history(order_data: dict) -> bool:
         return False
 
 
-def raoeo_menu():
-    """RAOEO strategy menu interface."""
-    os.system('cls' if os.name == 'nt' else 'clear')
+def check_today_history() -> Optional[dict]:
+    """
+    Check if RAOEO strategy was executed today.
 
-    # Get today's date in US/Eastern
+    Returns:
+        Optional[dict]: Today's execution record if exists, None otherwise
+    """
     tz_us = pytz.timezone('US/Eastern')
     today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
+
+    try:
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:
+                    history_data = json.loads(content)
+                    for entry in history_data.get('history', []):
+                        if entry.get('date') == today_str:
+                            return entry
+    except Exception as e:
+        print_log(PrintLevel.ERROR, f"Error checking history: {e}")
+
+    return None
+
+
+def build_raoeo_report() -> dict:
+    """
+    Build RAOEO status report for both terminal and Telegram.
+
+    Returns:
+        dict: Report containing:
+            - executed_today: Today's execution record if exists
+            - current_result: Calculated order result if not executed
+            - error: Error message if any
+    """
+    report = {
+        "executed_today": None,
+        "current_result": None,
+        "error": None
+    }
+
+    # Check if already executed today
+    executed_today = check_today_history()
+    if executed_today:
+        report["executed_today"] = executed_today
+        return report
+
+    # Calculate new orders
+    current_result = calculate_order()
+    if current_result.get('error'):
+        report["error"] = current_result['error']
+        report["current_result"] = current_result
+    else:
+        report["current_result"] = current_result
+
+    return report
+
+
+def format_display_lines(report: dict) -> list:
+    """
+    Format report for terminal display.
+
+    Args:
+        report: Result from build_raoeo_report()
+
+    Returns:
+        list[str]: Lines to display in terminal
+    """
+    tz_us = pytz.timezone('US/Eastern')
+    today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
+    display_lines = []
+
+    if report.get("executed_today"):
+        entry = report["executed_today"]
+        display_lines.append(f" [RAOEO Executed - {today_str}]")
+        display_lines.append(f" Target: {entry['config']['target']} @ {entry['config']['exchange']}")
+        display_lines.append(f" Holdings: {entry['holdings']['qty']} shares @ ${entry['holdings']['avg_price']:.2f}")
+        display_lines.append("")
+        display_lines.append(" Executed Orders:")
+        for i, order in enumerate(entry['orders'], 1):
+            display_lines.append(f"   {i}. {order['type'].upper()} {order['qty']} @ ${order['price']:.2f} ({order['order_type']}) - {order['desc']}")
+
+    elif report.get("error") and not report.get("current_result"):
+        display_lines.append(f" Error: {report['error']}")
+
+    elif report.get("current_result"):
+        result = report["current_result"]
+        if result.get('error'):
+            display_lines.append(f" Error: {result['error']}")
+        elif not result.get('orders'):
+            display_lines.append(f" [RAOEO Order Calculation - {result['date']}]")
+            display_lines.append("")
+            display_lines.append(" No orders calculated for today.")
+        else:
+            display_lines.append(f" [RAOEO Order Calculation - {result['date']}]")
+            display_lines.append(f" Target: {result['config']['target']} @ {result['config']['exchange']}        Current Price: ${result['holdings']['cur_price']:.2f}")
+            display_lines.append(f" Holdings: {result['holdings']['qty']} shares @ ${result['holdings']['avg_price']:.2f}")
+            display_lines.append("")
+            display_lines.append(" Calculated Orders:")
+            for i, order in enumerate(result['orders'], 1):
+                display_lines.append(f"   {i}. {order['type'].upper()} {order['qty']} @ ${order['price']:.2f} ({order['order_type']}) - {order['desc']}")
+
+    display_lines.append("")
+    display_lines.append(" 1. Execute Orders    2. View History")
+    display_lines.append("-" * 50)
+
+    return display_lines
+
+
+def prompt_order_execution(report: dict, display_lines: list) -> bool:
+    """
+    Handle menu option 1: Prompt user to confirm order execution.
+
+    Args:
+        report: Result from build_raoeo_report()
+        display_lines: Current display lines for context
+
+    Returns:
+        bool: True if orders were executed, False otherwise
+    """
+    if report.get("executed_today"):
+        show_in_result_area(display_lines + [" Strategy already executed today!"])
+        msvcrt.getch()
+        return False
+
+    current_result = report.get("current_result")
+    if not current_result or current_result.get('error') or not current_result.get('orders'):
+        show_in_result_area(display_lines + [" No valid orders to execute."])
+        msvcrt.getch()
+        return False
+
+    input_y = min(len(display_lines) + 1, 14)
+    action = input_at(input_y, 2, " Place order? (y/N): ").strip().lower()
+
+    if action == 'y':
+        return run_order_execution(current_result, display_lines)
+
+    return False
+
+
+def run_order_execution(result: dict, display_lines: list) -> bool:
+    """
+    Execute orders and save to history.
+
+    Args:
+        result: Order calculation result from calculate_order()
+        display_lines: Current display lines for context
+
+    Returns:
+        bool: True if execution successful
+    """
+    print_log(PrintLevel.INFO, f"RAOEO: Executing {len(result['orders'])} orders...")
+    show_in_result_area(display_lines + [" Executing orders... Please wait."])
+
+    exec_results = execute_orders(result['orders'], result['config'])
+
+    # Display results
+    res_lines = [" [Execution Results]"]
+    for i, res in enumerate(exec_results[:10], 1):
+        status = "OK" if res['success'] else "FAIL"
+        o = res['order']
+        res_lines.append(f" {i}. {o['type'].upper()} {o['qty']}@{o['price']} - {status}")
+
+    save_history(result)
+    res_lines.append("")
+    res_lines.append(" Saved. Press any key...")
+    show_in_result_area(res_lines)
+    msvcrt.getch()
+
+    return True
+
+
+def show_history_viewer():
+    """
+    Display history with pagination (menu option 2).
+    """
+    try:
+        if not os.path.exists(HISTORY_FILE):
+            show_in_result_area([" No history found.", "", " Press any key..."])
+            msvcrt.getch()
+            return
+
+        with open(HISTORY_FILE, 'r', encoding='utf-8') as f_hist:
+            content = f_hist.read().strip()
+            if not content:
+                show_in_result_area([" History is empty.", "", " Press any key..."])
+                msvcrt.getch()
+                return
+            history_data = json.loads(content)
+
+        all_entries = history_data.get('history', [])
+        if not all_entries:
+            show_in_result_area([" No entries in history.", "", " Press any key..."])
+            msvcrt.getch()
+            return
+
+        entries = all_entries
+        offset = 0
+        page_size = 5
+
+        while True:
+            clear_result_area()
+            total = len(entries)
+            current_page = (offset // page_size) + 1
+            total_pages = (total + page_size - 1) // page_size
+
+            display_lines = [
+                f" [RAOEO History] Page {current_page}/{total_pages} ({total} entries)",
+                " " + "-" * 100,
+                " Date       | State   | AvgPrc | CurPrc | Orders",
+                " " + "-" * 100
+            ]
+
+            page_entries = entries[offset:offset+page_size]
+            for entry in page_entries:
+                date = entry.get('date', 'N/A')
+                state = f"{entry.get('state', 'N/A'):<7}"
+                holdings = entry.get('holdings', {})
+                avg = f"{float(holdings.get('avg_price', 0)):>6.2f}"
+                cur = f"{float(holdings.get('cur_price', 0)):>6.2f}"
+
+                ord_strs = []
+                for o in entry.get('orders', []):
+                    o_type = o.get('type', 'buy').lower()
+                    o_qty = o.get('qty', 0)
+                    o_prc = float(o.get('price', 0))
+                    ord_strs.append(f"{o_type}:{o_qty}(${o_prc:.2f})")
+
+                orders_txt = ", ".join(ord_strs)
+                display_lines.append(f" {date} | {state} | {avg} | {cur} | {orders_txt}")
+
+            for _ in range(page_size - len(page_entries)):
+                display_lines.append("")
+
+            display_lines.append(" " + "-" * 100)
+            display_lines.append(" (f) Next 5 items | (g) Back to Start | (q) Back to Menu")
+
+            show_in_result_area(display_lines)
+            sys.stdout.write("\033[13;2H")
+            sys.stdout.flush()
+
+            try:
+                ch = msvcrt.getch().decode('utf-8').lower()
+            except:
+                ch = ''
+
+            if ch == 'q':
+                break
+            elif ch == 'f':
+                offset += page_size
+                if offset >= total:
+                    offset = 0
+            elif ch == 'g':
+                offset = 0
+
+    except Exception as e:
+        show_in_result_area([f" Error reading history: {e}", "", " Press any key..."])
+        msvcrt.getch()
+
+
+def raoeo_menu():
+    """RAOEO strategy menu interface using modular functions."""
+    os.system('cls' if os.name == 'nt' else 'clear')
 
     while True:
         render_ui(full_refresh=False)
 
-        # 1. Check history or calculate
-        executed_today = None
-        try:
-            if os.path.exists(HISTORY_FILE):
-                with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-                    content = f.read().strip()
-                    if content:
-                        history_data = json.loads(content)
-                        for entry in history_data.get('history', []):
-                            if entry.get('date') == today_str:
-                                executed_today = entry
-                                break
-        except Exception as e:
-            print_log(PrintLevel.ERROR, f"Error checking history: {e}")
+        # Build report using modular function
+        report = build_raoeo_report()
 
-        # Prepare result display
-        display_lines = []
-        current_result = None
-
-        if executed_today:
-            display_lines.append(f" [RAOEO Executed - {today_str}]")
-            display_lines.append(f" Target: {executed_today['config']['target']} @ {executed_today['config']['exchange']}")
-            display_lines.append(f" Holdings: {executed_today['holdings']['qty']} shares @ ${executed_today['holdings']['avg_price']:.2f}")
-            display_lines.append("")
-            display_lines.append(" Executed Orders:")
-            for i, order in enumerate(executed_today['orders'], 1):
-                display_lines.append(f"   {i}. {order['type'].upper()} {order['qty']} @ ${order['price']:.2f} ({order['order_type']}) - {order['desc']}")
-        else:
-            # Need to calculate
-            current_result = calculate_order()
-            if current_result.get('error'):
-                display_lines.append(f" Error: {current_result['error']}")
-            elif not current_result['orders']:
-                display_lines.append(f" [RAOEO Order Calculation - {current_result['date']}]")
-                display_lines.append("")
-                display_lines.append(" No orders calculated for today.")
-            else:
-                display_lines.append(f" [RAOEO Order Calculation - {current_result['date']}]")
-                display_lines.append(f" Target: {current_result['config']['target']} @ {current_result['config']['exchange']}        Current Price: ${current_result['holdings']['cur_price']:.2f}")
-                display_lines.append(f" Holdings: {current_result['holdings']['qty']} shares @ ${current_result['holdings']['avg_price']:.2f}")
-                display_lines.append("")
-                display_lines.append(" Calculated Orders:")
-                for i, order in enumerate(current_result['orders'], 1):
-                    display_lines.append(f"   {i}. {order['type'].upper()} {order['qty']} @ ${order['price']:.2f} ({order['order_type']}) - {order['desc']}")
-
-        display_lines.append("")
-        display_lines.append(" 1. Execute Orders    2. View History")
-        display_lines.append("-" * 50)
+        # Format display using modular function
+        display_lines = format_display_lines(report)
 
         show_in_result_area(display_lines)
 
@@ -397,129 +610,10 @@ def raoeo_menu():
             break
 
         elif choice == '1':
-            if executed_today:
-                show_in_result_area(display_lines + [" Strategy already executed today!"])
-                msvcrt.getch()
-                continue
-
-            if not current_result or current_result.get('error') or not current_result.get('orders'):
-                show_in_result_area(display_lines + [" No valid orders to execute."])
-                msvcrt.getch()
-                continue
-
-            # 주문 실행 확인: Select 문구를 지우고 그 자리에 프롬프트 표시 (커서 위치 수정)
-            action = input_at(input_y, 2, " Place order? (y/N): ").strip().lower()
-
-            if action == 'y':
-                print_log(PrintLevel.INFO, f"RAOEO: Executing {len(current_result['orders'])} orders...")
-                show_in_result_area(display_lines + [" Executing orders... Please wait."])
-
-                exec_results = execute_orders(current_result['orders'], current_result['config'])
-
-                # 결과 표시
-                res_lines = [" [Execution Results]"]
-                for i, res in enumerate(exec_results[:10], 1): # Limit display
-                    status = "OK" if res['success'] else "FAIL"
-                    o = res['order']
-                    res_lines.append(f" {i}. {o['type'].upper()} {o['qty']}@{o['price']} - {status}")
-
-                save_history(current_result)
-                res_lines.append("")
-                res_lines.append(" Saved. Press any key...")
-                show_in_result_area(res_lines)
-                msvcrt.getch()
-            else:
-                continue
+            prompt_order_execution(report, display_lines)
 
         elif choice == '2':
-            # View history with pagination and detailed table
-            try:
-                if not os.path.exists(HISTORY_FILE):
-                    show_in_result_area([" No history found.", "", " Press any key..."])
-                    msvcrt.getch()
-                    continue
-
-                with open(HISTORY_FILE, 'r', encoding='utf-8') as f_hist:
-                    content = f_hist.read().strip()
-                    if not content:
-                        show_in_result_area([" History is empty.", "", " Press any key..."])
-                        msvcrt.getch()
-                        continue
-                    history_data = json.loads(content)
-
-                all_entries = history_data.get('history', [])
-                if not all_entries:
-                    show_in_result_area([" No entries in history.", "", " Press any key..."])
-                    msvcrt.getch()
-                    continue
-
-                # Data is now stored newest-first in JSON
-                entries = all_entries
-                offset = 0
-                page_size = 5
-
-                while True:
-                    clear_result_area()
-                    # Calculate pagination info
-                    total = len(entries)
-                    current_page = (offset // page_size) + 1
-                    total_pages = (total + page_size - 1) // page_size
-
-                    display_lines = [
-                        f" [RAOEO History] Page {current_page}/{total_pages} ({total} entries)",
-                        " " + "-" * 100,
-                        " Date       | State   | AvgPrc | CurPrc | Orders",
-                        " " + "-" * 100
-                    ]
-
-                    page_entries = entries[offset:offset+page_size]
-                    for entry in page_entries:
-                        date = entry.get('date', 'N/A')
-                        state = f"{entry.get('state', 'N/A'):<7}"
-                        holdings = entry.get('holdings', {})
-                        avg = f"{float(holdings.get('avg_price', 0)):>6.2f}"
-                        cur = f"{float(holdings.get('cur_price', 0)):>6.2f}"
-
-                        # Format orders: buy:3($47.55)
-                        ord_strs = []
-                        for o in entry.get('orders', []):
-                            o_type = o.get('type', 'buy').lower()
-                            o_qty = o.get('qty', 0)
-                            o_prc = float(o.get('price', 0))
-                            ord_strs.append(f"{o_type}:{o_qty}(${o_prc:.2f})")
-
-                        orders_txt = ", ".join(ord_strs)
-                        display_lines.append(f" {date} | {state} | {avg} | {cur} | {orders_txt}")
-
-                    # Fill empty rows to maintain layout
-                    for _ in range(page_size - len(page_entries)):
-                        display_lines.append("")
-
-                    display_lines.append(" " + "-" * 100)
-                    display_lines.append(" (f) Next 5 items | (g) Back to Start | (q) Back to Menu")
-
-                    show_in_result_area(display_lines)
-                    # Move cursor below navigation hints (Row 13, Col 2)
-                    sys.stdout.write("\033[13;2H")
-                    sys.stdout.flush()
-
-                    # Wait for navigation input
-                    try:
-                        ch = msvcrt.getch().decode('utf-8').lower()
-                    except:
-                        ch = ''
-
-                    if ch == 'q':
-                        break
-                    elif ch == 'f':
-                        offset += page_size
-                        if offset >= total:
-                            offset = 0 # Wrap around
-                    elif ch == 'g':
-                        offset = 0
-
-            except Exception as e:
-                show_in_result_area([f" Error reading history: {e}", "", " Press any key..."])
-                msvcrt.getch()
+            show_history_viewer()
 
     render_ui(full_refresh=True)
+
