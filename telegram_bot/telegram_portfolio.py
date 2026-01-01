@@ -13,7 +13,7 @@ from portfolio import get_portfolio, calc_weight_diffs
 def format_portfolio_summary(data: dict) -> str:
     """Format portfolio summary for Telegram message."""
     if data.get("error"):
-        return f"⚠️ *Error:* {data['error']}"
+        return f"⚠️ <b>Error:</b> {data['error']}"
 
     stats = data.get("stats", {})
     total_usd = data.get("total_value_usd", 0)
@@ -21,14 +21,14 @@ def format_portfolio_summary(data: dict) -> str:
     total_krw = total_usd * rate if rate > 0 else 0
 
     lines = [
-        f"💰 *Portfolio Summary* (Rate: {rate:,.1f})",
+        f"💰 <b>Portfolio Summary</b> (Rate: {rate:,.1f})",
         "",
-        f"**Total**: **${total_usd/1000:,.1f}K** (₩{total_krw/1000000:,.1f}M)",
-        f"**Cash**: **{stats.get('total_cash_usd', 0) / total_usd * 100 if total_usd > 0 else 0:.1f}%**",
+        f"<b>Total</b>: <b>${total_usd/1000:,.1f}K</b> (₩{total_krw/1000000:,.1f}M)",
+        f"<b>Cash</b>: <b>{stats.get('total_cash_usd', 0) / total_usd * 100 if total_usd > 0 else 0:.1f}%</b>",
         "",
-        f"🇺🇸 **US Assets**: ${stats.get('us_stock_usd', 0) + stats.get('us_cash_usd', 0) / 1000:,.1f}K ({stats.get('us_pct', 0):.1f}%)",
+        f"🇺🇸 <b>US Assets</b>: ${stats.get('us_stock_usd', 0) + stats.get('us_cash_usd', 0) / 1000:,.1f}K ({stats.get('us_pct', 0):.1f}%)",
         f"  Stock: ${stats.get('us_stock_usd', 0)/1000:,.1f}K | Cash: {stats.get('us_cash_ratio', 0):.1f}%",
-        f"🇰🇷 **KR Assets**: ₩{(stats.get('kr_stock_krw', 0) + stats.get('kr_cash_krw', 0))/1000000:,.1f}M ({stats.get('kr_pct', 0):.1f}%)",
+        f"🇰🇷 <b>KR Assets</b>: ₩{(stats.get('kr_stock_krw', 0) + stats.get('kr_cash_krw', 0))/1000000:,.1f}M ({stats.get('kr_pct', 0):.1f}%)",
         f"  Stock: ₩{stats.get('kr_stock_krw', 0)/1000000:,.1f}M | Cash: {stats.get('kr_cash_ratio', 0):.1f}%"
     ]
     return "\n".join(lines)
@@ -36,7 +36,7 @@ def format_portfolio_summary(data: dict) -> str:
 def format_weight_diffs(data: dict) -> str:
     """Format weight differences for Telegram message."""
     if data.get("error"):
-        return f"⚠️ *Error:* {data['error']}"
+        return f"⚠️ <b>Error:</b> {data['error']}"
 
     merged_data = data.get("merged_data", {})
     current_weights = data.get("current_weights", {})
@@ -47,7 +47,7 @@ def format_weight_diffs(data: dict) -> str:
     diffs = calc_weight_diffs(merged_data, current_weights, targets, total_usd, rate)
 
     if not diffs:
-        return "⚖️ *Portfolio Rebalancing*\n\nEverything is balanced!"
+        return "⚖️ <b>Portfolio Rebalancing</b>\n\nEverything is balanced!"
 
     sell_lines = []
     buy_lines = []
@@ -58,29 +58,29 @@ def format_weight_diffs(data: dict) -> str:
             continue
 
         ticker = d['ticker']
-        msg = f"- **{ticker}**: {d['diff']*100:+.1f}% ({d['cur_w']*100:.1f}% -> {d['tgt_w']*100:.1f}%) | **Qty: {d['qty_diff']:+d}**"
+        msg = f"- <b>{ticker}</b>: {d['diff']*100:+.1f}% ({d['cur_w']*100:.1f}% -> {d['tgt_w']*100:.1f}%) | <b>Qty: {d['qty_diff']:+d}</b>"
 
         if d['diff'] < 0:
             sell_lines.append(msg)
         else:
             buy_lines.append(msg)
 
-    lines = [f"⚖️ *Portfolio Rebalancing* (Total: ${total_usd/1000:,.1f}K)", ""]
+    lines = [f"⚖️ <b>Portfolio Rebalancing</b> (Total: ${total_usd/1000:,.1f}K)", ""]
 
     if sell_lines:
-        lines.append("🔴 **SELL**")
+        lines.append("🔴 <b>SELL</b>")
         lines.extend(sell_lines)
         lines.append("")
 
     if buy_lines:
-        lines.append("🟢 **BUY**")
+        lines.append("🟢 <b>BUY</b>")
         lines.extend(buy_lines)
         lines.append("")
 
     if not sell_lines and not buy_lines:
         lines.append("No significant differences found (>0.5%).")
     else:
-        lines.append("_*Significant changes (>0.5%) only_")
+        lines.append("<i>Significant changes (>0.5%) only</i>")
 
     return "\n".join(lines)
 
@@ -91,7 +91,7 @@ async def cmd_portfolio_summary(update: Update, context: ContextTypes.DEFAULT_TY
     # Run silently to not interrupt main thread UI
     data = get_portfolio()
     msg = format_portfolio_summary(data)
-    await wrap_reply(update, msg, parse_mode='Markdown')
+    await wrap_reply(update, msg, parse_mode='HTML')
 
 async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio_weight."""
@@ -100,7 +100,7 @@ async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYP
     # Run silently
     data = get_portfolio()
     msg = format_weight_diffs(data)
-    await wrap_reply(update, msg, parse_mode='Markdown')
+    await wrap_reply(update, msg, parse_mode='HTML')
 
 def register_portfolio_handlers(app: Application):
     """Register Portfolio command handlers."""
@@ -110,6 +110,6 @@ def register_portfolio_handlers(app: Application):
 def get_portfolio_commands_desc() -> str:
     """Return Portfolio command descriptions for init message."""
     return (
-        "/portfolio\\_summary \\- Portfolio asset summary\n"
-        "/portfolio\\_weight \\- Rebalancing suggestions"
+        "/portfolio_summary - Portfolio asset summary\n"
+        "/portfolio_weight - Rebalancing suggestions"
     )

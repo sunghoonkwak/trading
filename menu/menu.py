@@ -68,8 +68,10 @@ def menu():
             portfolio.portfolio_menu()
         elif choice.lower() == 'q':
             import trading_state
+            from telegram_bot.telegram_bot import shutdown_telegram
             trading_state.stop_periodic_save()  # Save stock data before exit
             main.close_viewer()  # Close viewer terminal before exit
+            shutdown_telegram()  # Send final notification
             prepare_exit()
             print("Exiting...")
             os._exit(0)

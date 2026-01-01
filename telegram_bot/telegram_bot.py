@@ -12,6 +12,7 @@ import threading
 from typing import Optional
 
 # Telegram imports
+import requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -115,13 +116,13 @@ def initialize_telegram():
                 raoeo_desc = get_raoeo_commands_desc()
                 port_desc = get_portfolio_commands_desc()
                 init_text = (
-                    "🤖 *Trading Bot Initialized*\n\n"
+                    "🤖 <b>Trading Bot Initialized</b>\n\n"
                     "Commands:\n"
                     f"{raoeo_desc}\n"
                     f"{port_desc}"
                 )
                 try:
-                    await wrap_send(init_text, parse_mode='MarkdownV2')
+                    await wrap_send(init_text, parse_mode='HTML')
                 except Exception as e:
                     logging.error(f"[Telegram] Failed to send init message: {e}")
                     # Fallback to plain text
@@ -153,3 +154,23 @@ def initialize_telegram():
 
     return True
 
+def shutdown_telegram(message: str = "🛑 <b>Trading Bot Stopped</b>"):
+    """
+    Send a final message to Telegram before the program exits.
+    Uses direct API call for simplicity during shutdown.
+    """
+    global _bot_token, _chat_id
+    if not _bot_token or not _chat_id:
+        return
+
+    try:
+        url = f"https://api.telegram.org/bot{_bot_token}/sendMessage"
+        params = {
+            "chat_id": _chat_id,
+            "text": message,
+            "parse_mode": "HTML"
+        }
+        # Use a short timeout to prevent hanging the exit process
+        requests.post(url, data=params, timeout=5)
+    except Exception as e:
+        logging.error(f"[Telegram] Failed to send shutdown message: {e}")
