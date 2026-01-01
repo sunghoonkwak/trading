@@ -49,27 +49,20 @@ def load_telegram_credentials() -> tuple[Optional[str], Optional[str]]:
         return None, None
 
 
-async def wrap_reply(update: Update, text: str, parse_mode: str = None):
+async def wrap_reply(update: Update, text: str, **kwargs):
     """
-    Wrapper for update.message.reply_text that logs and alerts the first line.
-
-    Args:
-        update: Telegram Update object
-        text: Message text to send
-        parse_mode: Optional parse mode ('Markdown', 'MarkdownV2', 'HTML')
+    Wrapper for update.message.reply_text that alerts the first line.
+    Supports all reply_text arguments like parse_mode, reply_markup, etc.
     """
-    first_line = text.split('\n')[0][:50]  # First line, max 50 chars
+    if not text: return
+    first_line = text.split('\n')[0][:80]  # First line, max 80 chars
     display.add_alert(f"[TG] {first_line}", "INFO")
-    await update.message.reply_text(text, parse_mode=parse_mode)
+    return await update.message.reply_text(text, **kwargs)
 
 
-async def wrap_send(text: str, parse_mode: str = None):
+async def wrap_send(text: str, **kwargs):
     """
-    Wrapper for bot.send_message that logs and alerts the first line.
-
-    Args:
-        text: Message text to send
-        parse_mode: Optional parse mode ('Markdown', 'MarkdownV2', 'HTML')
+    Wrapper for bot.send_message that alerts the first line.
     """
     global _app, _chat_id
 
@@ -77,9 +70,26 @@ async def wrap_send(text: str, parse_mode: str = None):
         logging.warning("[TG] Bot not initialized for send_message")
         return
 
-    first_line = text.split('\n')[0][:50]  # First line, max 50 chars
+    if not text: return
+    first_line = text.split('\n')[0][:80]
     display.add_alert(f"[TG] {first_line}", "INFO")
-    await _app.bot.send_message(chat_id=_chat_id, text=text, parse_mode=parse_mode)
+    return await _app.bot.send_message(chat_id=_chat_id, text=text, **kwargs)
+
+
+async def wrap_edit(update: Update, text: str, **kwargs):
+    """
+    Wrapper for query.edit_message_text that alerts the first line.
+    Used for InlineKeyboard interactions.
+    """
+    if not text: return
+    first_line = text.split('\n')[0][:80]
+    display.add_alert(f"[TG] {first_line}", "INFO")
+
+    if update and update.callback_query:
+        return await update.callback_query.edit_message_text(text, **kwargs)
+    else:
+        logging.warning(f"[TG] wrap_edit failed: update={update}")
+        return None
 
 
 def initialize_telegram():
@@ -133,17 +143,22 @@ def initialize_telegram():
                         logging.error(f"[Telegram] Fallback also failed: {e2}")
                         display.add_alert("[TG] Init message failed", "ERROR")
 
+            # Global Error Handler (Essential for stability)
+            async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+                display.add_alert(f"[TG] ERR: {str(context.error)[:40]}", "ERROR")
+                logging.error(f"Telegram Exception: {context.error}", exc_info=context.error)
+
+            _app.add_error_handler(error_handler)
+
             loop.run_until_complete(_app.initialize())
+            loop.run_until_complete(_app.start())
+            loop.run_until_complete(_app.updater.start_polling(allowed_updates=Update.ALL_TYPES))
             loop.run_until_complete(send_init_message())
 
-            logging.info("[Telegram] Bot initialized and running")
-
-            # Run polling (blocking)
-            loop.run_until_complete(_app.updater.start_polling(allowed_updates=Update.ALL_TYPES))
-            loop.run_until_complete(_app.start())
             loop.run_forever()
 
         except Exception as e:
+            display.add_alert(f"[TG] CRITICAL ERROR: {str(e)[:40]}", "ERROR")
             logging.error(f"Telegram bot error: {e}")
         finally:
             loop.close()

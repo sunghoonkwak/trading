@@ -93,7 +93,6 @@ def format_raoeo_report(report: dict) -> str:
 
     return "\n".join(lines)
 
-    return "\n".join(lines)
 
 async def cmd_raoeo_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /raoeo_report."""

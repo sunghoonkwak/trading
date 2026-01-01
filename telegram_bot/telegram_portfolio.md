@@ -6,19 +6,22 @@
 
 | Command | Description |
 |---------|-------------|
-| `/portfolio_summary` | 현재 포트폴리오 자산 구성 요약 (국가별, 자산군별 비중) |
+| `/portfolio` | **대화형(Interactive)** 포트폴리오 관리 시작. 종목 버튼을 통해 상세 정보 조회 |
 | `/portfolio_weight` | 목표 비중 대비 현재 비중의 차이와 리밸런싱 제안 (매수/매도 수량) |
 
 ## Functions (함수)
 
-### format_portfolio_summary
-`get_portfolio()`에서 얻은 데이터를 모바일 가독성에 최적화된 형식으로 변환합니다. 총 자산($/₩), 현금 비중, 국가별 비중 등을 포함합니다.
+### cmd_portfolio
+포트폴리오 대화를 시작합니다. 인라인 버튼 형태로 종목 리스트를 제공하며 `ConversationHandler`를 통해 사용자의 다음 선택(버튼 클릭 또는 텍스트 입력)을 대기합니다.
 
-### format_weight_diffs
-`calc_weight_diffs()` 결과를 바탕으로 매수/매도 종목을 구분하여 리스트업합니다. 차이가 0.5% 이상인 종목들만 표시됩니다.
+### handle_ticker_callback
+사용자가 종목 버튼을 클릭했을 때 실시간 시세를 포함한 상세 정보를 출력합니다.
+
+### timeout_handler
+60초 동안 활동이 없을 경우 세션을 자동으로 종료하고 버튼 메시지를 업데이트합니다. `TypeHandler`를 사용하여 텔레그램 엔진이 보내는 `None` 신호를 안정적으로 처리합니다.
 
 ### register_portfolio_handlers
-텔레그램 애플리케이션 인스턴스에 포트폴리오 관련 명령어 핸들러를 등록합니다.
+텔레그램 애플리케이션 인스턴스에 포트폴리오 관련 `ConversationHandler`를 등록합니다. 입구는 `/portfolio`, 종료 조건은 `/cancel` 또는 60초 타임아웃입니다.
 
 ### get_portfolio_commands_desc
 초기화 메시지에 포함할 포트폴리오 명령어 설명을 반환합니다.

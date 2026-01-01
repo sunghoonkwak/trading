@@ -12,7 +12,7 @@
 ## Functions (함수)
 
 ### format_raoeo_report
-`build_raoeo_report()` 결과를 Telegram 메시지 형식(Markdown)으로 변환합니다.
+`build_raoeo_report()` 결과를 Telegram 메시지 형식(**HTML**)으로 변환합니다. 특수 문자 충돌을 방지하면서 가독성 높은 리포트를 생성합니다.
 
 ### register_raoeo_handlers
 텔레그램 애플리케이션 인스턴스에 RAOEO 관련 명령어 핸들러(`/raoeo_report`, `/raoeo_order`)를 등록합니다.

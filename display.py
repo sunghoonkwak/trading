@@ -62,10 +62,10 @@ log_file_path = "WebSocket_latest.log"  # Overwritten by main.py at startup
 # Order State Tracking
 # Map[order_id, OrderInfo dict]
 order_states = OrderedDict()
-MAX_ORDER_DISPLAY = 15
+MAX_ORDER_DISPLAY = 10
 
-# Alert buffer (show up to 10 recent alerts)
-alert_buffer = deque(maxlen=10)
+# Alert buffer (show up to 15 recent alerts)
+alert_buffer = deque(maxlen=15)
 
 # Thread-safe queue for alerts from background threads (e.g., Telegram bot)
 _pending_alerts: Queue = Queue()

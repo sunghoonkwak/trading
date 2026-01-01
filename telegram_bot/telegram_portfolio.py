@@ -11,8 +11,9 @@ warnings.filterwarnings("ignore", message=".*per_message.*", category=UserWarnin
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, ContextTypes,
-    ConversationHandler, CallbackQueryHandler, MessageHandler, filters
+    ConversationHandler, CallbackQueryHandler, MessageHandler, TypeHandler, filters
 )
+import display
 
 from portfolio import get_portfolio, calc_weight_diffs
 
@@ -289,9 +290,6 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
             row.append(InlineKeyboardButton(button_tickers[i+1], callback_data=f"port_{button_tickers[i+1]}"))
         keyboard.append(row)
 
-    # Add cancel button
-    keyboard.append([InlineKeyboardButton("❌ Close", callback_data="port_cancel")])
-
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -299,6 +297,7 @@ async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio - Entry point for ConversationHandler."""
     from .telegram_bot import wrap_reply
 
+    logging.info(f"[TG] Portfolio session started for user {update.effective_user.id}")
     # Get portfolio data and cache in user_data
     data = get_portfolio()
     context.user_data['portfolio_data'] = data
@@ -309,7 +308,9 @@ async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Build keyboard
     keyboard = build_ticker_keyboard(data)
 
-    await update.message.reply_text(msg, parse_mode='HTML', reply_markup=keyboard)
+    sent_msg = await wrap_reply(update, msg, parse_mode='HTML', reply_markup=keyboard)
+    if sent_msg:
+        context.user_data['last_port_msg_id'] = sent_msg.message_id
 
     return SELECT_TICKER
 
@@ -320,10 +321,12 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
 
     callback_data = query.data
+    logging.info(f"[TG] Callback: {callback_data}")
 
     # Handle cancel
     if callback_data == "port_cancel":
-        await query.edit_message_text("👋 Portfolio session closed.", parse_mode='HTML')
+        from .telegram_bot import wrap_edit
+        await wrap_edit(update, "👋 Portfolio session closed.", parse_mode='HTML')
         context.user_data.pop('portfolio_data', None)
         return ConversationHandler.END
 
@@ -346,10 +349,10 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
             break
 
     if not found_ticker:
-        # Ticker not in portfolio - show target weight info
+        from .telegram_bot import wrap_edit
         detail_msg = format_ticker_not_in_portfolio(ticker, portfolio_data)
         keyboard = build_ticker_keyboard(portfolio_data)
-        await query.edit_message_text(detail_msg, parse_mode='HTML', reply_markup=keyboard)
+        await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
         return SELECT_TICKER
 
     # Format and send ticker detail
@@ -358,7 +361,10 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
 
     # Edit message to show detail
     keyboard = build_ticker_keyboard(portfolio_data)
-    await query.edit_message_text(detail_msg, parse_mode='HTML', reply_markup=keyboard)
+    from .telegram_bot import wrap_edit
+    sent_msg = await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
+    if sent_msg:
+        context.user_data['last_port_msg_id'] = sent_msg.message_id
 
     return SELECT_TICKER
 
@@ -384,7 +390,9 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Ticker not in portfolio - show target weight info
         detail_msg = format_ticker_not_in_portfolio(ticker_input, portfolio_data)
         keyboard = build_ticker_keyboard(portfolio_data)
-        await update.message.reply_text(detail_msg, parse_mode='HTML', reply_markup=keyboard)
+        sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
+        if sent_msg:
+            context.user_data['last_port_msg_id'] = sent_msg.message_id
         return SELECT_TICKER
 
     # Format and send ticker detail
@@ -392,7 +400,9 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
     detail_msg = format_ticker_detail(found_ticker, ticker_data, portfolio_data)
 
     keyboard = build_ticker_keyboard(portfolio_data)
-    await update.message.reply_text(detail_msg, parse_mode='HTML', reply_markup=keyboard)
+    sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
+    if sent_msg:
+        context.user_data['last_port_msg_id'] = sent_msg.message_id
 
     return SELECT_TICKER
 
@@ -400,14 +410,30 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /cancel command to exit conversation."""
     context.user_data.pop('portfolio_data', None)
-    await update.message.reply_text("👋 Portfolio session closed.", parse_mode='HTML')
+    await wrap_reply(update, "👋 Portfolio session closed.", parse_mode='HTML')
     return ConversationHandler.END
 
 
 async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle conversation timeout."""
-    context.user_data.pop('portfolio_data', None)
-    # Silent timeout - no message sent
+    display.add_alert("[TG] Session Expired", "INFO")
+    logging.info("[TG] Portfolio session timed out")
+
+    try:
+        context.user_data.pop('portfolio_data', None)
+        last_msg_id = context.user_data.pop('last_port_msg_id', None)
+        if last_msg_id:
+            from .telegram_bot import _chat_id
+            if _chat_id:
+                await context.bot.edit_message_text(
+                    chat_id=_chat_id,
+                    message_id=last_msg_id,
+                    text="⏳ <b>Session Expired.</b>",
+                    parse_mode='HTML'
+                )
+    except Exception as e:
+        logging.error(f"[TG] Timeout process error: {e}")
+
     return ConversationHandler.END
 
 
@@ -430,13 +456,14 @@ def register_portfolio_handlers(app: Application):
             SELECT_TICKER: [
                 CallbackQueryHandler(handle_ticker_callback, pattern=r'^port_'),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ticker_text)
-            ]
+            ],
+            ConversationHandler.TIMEOUT: [TypeHandler(object, timeout_handler)]
         },
         fallbacks=[
             CommandHandler("cancel", cancel_handler)
         ],
-        conversation_timeout=60,  # 1 minute timeout
-        per_message=False,  # Suppress warning about CallbackQueryHandler tracking
+        conversation_timeout=60,
+        per_message=False,
     )
 
     app.add_handler(conv_handler)
