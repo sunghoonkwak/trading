@@ -11,7 +11,7 @@ import time
 from base64 import b64decode
 from collections import namedtuple
 from collections.abc import Callable
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import StringIO
 
 import pandas as pd
@@ -63,8 +63,9 @@ _cfg["my_sec"] = app_secret
 _cfg["my_htsid"] = app_hts_id
 
 _TRENV = tuple()
-_last_auth_time = datetime.now()
-_autoReAuth = False
+_token_expire_time = None
+_approval_received_time = None
+_autoReAuth = True
 _DEBUG = False
 _isPaper = False
 _smartSleep = 0.1
@@ -96,19 +97,23 @@ def read_token():
             tkg_tmp = yaml.load(f, Loader=yaml.FullLoader)
 
         # 토큰 만료 일,시간
-        exp_dt = datetime.strftime(tkg_tmp["valid-date"], "%Y-%m-%d %H:%M:%S")
-        # 현재일자,시간
-        now_dt = datetime.today().strftime("%Y-%m-%d %H:%M:%S")
+        exp_dt = tkg_tmp["valid-date"]
+        # If it's a string, convert to datetime
+        if isinstance(exp_dt, str):
+            exp_dt = datetime.strptime(exp_dt, "%Y-%m-%d %H:%M:%S")
 
-        # print('expire dt: ', exp_dt, ' vs now dt:', now_dt)
-        # 저장된 토큰 만료일자 체크 (만료일시 > 현재일시 인경우 보관 토큰 리턴)
-        if exp_dt > now_dt:
-            return tkg_tmp["token"]
+        # 현재시간 + 1시간 (Buffer)
+        now_dt_plus_buffer = datetime.now() + timedelta(hours=1)
+
+        # print('expire dt: ', exp_dt, ' vs check dt:', now_dt_plus_buffer)
+        # 저장된 토큰 만료일자 체크 (만료일시 > 현재일시+1시간 인 경우만 보관 토큰 리턴)
+        if exp_dt > now_dt_plus_buffer:
+            return tkg_tmp
         else:
-            print('\033[31mNeed new token: ', tkg_tmp['valid-date'], '\033[0m')
+            logging.info('\033[31mNeed new token (Expires soon or expired): ', tkg_tmp['valid-date'], '\033[0m')
             return None
     except Exception as e:
-        print('\033[31mread token error: ', e, '\033[0m')
+        logging.error('\033[31mread token error: ', e, '\033[0m')
         return None
 
 
@@ -202,6 +207,15 @@ def _getResultObject(json_data):
     return _tc_(**json_data)
 
 
+def _handle_critical_error(msg):
+    logging.error(msg)
+    try:
+        import display
+        display.add_alert(msg, "ERROR")
+    except ImportError:
+        pass
+
+
 # Token 발급, 유효기간 1일, 6시간 이내 발급시 기존 token값 유지, 발급시 알림톡 무조건 발송
 # 모의투자인 경우  svr='vps', 투자계좌(01)이 아닌경우 product='XX' 변경하세요 (계좌번호 뒤 2자리)
 def auth(svr="prod", product=_cfg["my_prod"], url=None):
@@ -222,12 +236,14 @@ def auth(svr="prod", product=_cfg["my_prod"], url=None):
     p["appsecret"] = _cfg[ak2]
 
     # 기존 발급된 토큰이 있는지 확인
-    saved_token = read_token()  # 기존 발급 토큰 확인
-    # print("saved_token: ", saved_token)
-    if saved_token is None:  # 기존 발급 토큰 확인이 안되면 발급처리
+    saved_token_info = read_token()  # 기존 발급 토큰 확인 (Returns dict or None)
+
+    global _token_expire_time
+
+    if saved_token_info is None:  # 기존 발급 토큰 확인이 안되면 발급처리
         url = f"{_cfg[svr]}/oauth2/tokenP"
         res = requests.post(
-            url, data=json.dumps(p), headers=_getBaseHeader()
+            url, data=json.dumps(p), headers=copy.deepcopy(_base_headers)
         )  # 토큰 발급
         rescode = res.status_code
         if rescode == 200:  # 토큰 정상 발급
@@ -236,11 +252,21 @@ def auth(svr="prod", product=_cfg["my_prod"], url=None):
                 res.json()
             ).access_token_token_expired  # 토큰값 만료일시 가져오기
             save_token(my_token, my_expired)  # 새로 발급 받은 토큰 저장
+
+            # my_expired format: "2025-01-01 12:00:00"
+            _token_expire_time = datetime.strptime(my_expired, "%Y-%m-%d %H:%M:%S")
         else:
-            print("Get Authentification token fail!\nYou have to restart your app!!!")
+            _handle_critical_error("Get Authentification token fail!\nYou have to restart your app!!!")
             return
     else:
-        my_token = saved_token  # 기존 발급 토큰 확인되어 기존 토큰 사용
+        my_token = saved_token_info["token"]  # 기존 발급 토큰 확인되어 기존 토큰 사용
+
+        valid_date = saved_token_info["valid-date"]
+        # Ensure it's a datetime object
+        if isinstance(valid_date, str):
+            valid_date = datetime.strptime(valid_date, "%Y-%m-%d %H:%M:%S")
+
+        _token_expire_time = valid_date
 
     # 발급토큰 정보 포함해서 헤더값 저장 관리, API 호출시 필요
     changeTREnv(my_token, svr, product)
@@ -249,18 +275,15 @@ def auth(svr="prod", product=_cfg["my_prod"], url=None):
     _base_headers["appkey"] = _TRENV.my_app
     _base_headers["appsecret"] = _TRENV.my_sec
 
-    global _last_auth_time
-    _last_auth_time = datetime.now()
-
-    print(f"\033[93m[{_last_auth_time}] => get Access Token completed!\033[0m")
+    logging.info(f"[{datetime.now()}] => get Access Token completed! (Exp: {_token_expire_time})")
 
 
 # end of initialize, 토큰 재발급, 토큰 발급시 유효시간 1일
-# 프로그램 실행시 _last_auth_time에 저장하여 유효시간 체크, 유효시간 만료시 토큰 발급 처리
+# 프로그램 실행시 _token_expire_time 에 저장하여 유효시간 체크, 유효시간 만료시 토큰 발급 처리
 def reAuth(svr="prod", product=_cfg["my_prod"]):
-    n2 = datetime.now()
-    if (n2 - _last_auth_time).seconds >= 86400:  # 유효시간 1일
-        auth(svr, product)
+    if _token_expire_time is not None:
+        if datetime.now() + timedelta(hours=1) >= _token_expire_time:
+            auth(svr, product)
 
 
 def getEnv():
@@ -269,7 +292,7 @@ def getEnv():
 
 async def smart_sleep_async():
     if _DEBUG:
-        print(f"[RateLimit] Sleeping {_smartSleep}s ")
+        logging.info(f"[RateLimit] Sleeping {_smartSleep}s ")
     await asyncio.sleep(_smartSleep)
 
 
@@ -289,7 +312,7 @@ def set_order_hash_key(h, p):
     if rescode == 200:
         h["hashkey"] = _getResultObject(res.json()).HASH
     else:
-        print("Error:", rescode)
+        _handle_critical_error(f"Error: {rescode}")
 
 
 # API 호출 응답에 필요한 처리 공통 함수
@@ -406,15 +429,17 @@ class APIRespError(APIResp):
         return EmptyHeader()
 
     def printAll(self):
-        print(f"=== ERROR RESPONSE ===")
-        print(f"Status Code: {self.status_code}")
-        print(f"Error Message: {self.error_text}")
-        print(f"======================")
+        logging.error(f"=== ERROR RESPONSE ===")
+        logging.error(f"Status Code: {self.status_code}")
+        logging.error(f"Error Message: {self.error_text}")
+        logging.error(f"======================")
 
     def printError(self, url=""):
-        print(f"Error Code : {self.status_code} | {self.error_text}")
+        msg = f"Error Code : {self.status_code} | {self.error_text}"
         if url:
-            print(f"URL: {url}")
+            msg += f" (URL: {url})"
+
+        _handle_critical_error(msg)
 
 
 ########### API call wrapping : API 호출 공통
@@ -504,28 +529,28 @@ def auth_ws(svr="prod", product=_cfg["my_prod"]):
     p["secretkey"] = _cfg[ak2]
 
     url = f"{_cfg[svr]}/oauth2/Approval"
-    res = requests.post(url, data=json.dumps(p), headers=_getBaseHeader())  # 토큰 발급
+    res = requests.post(url, data=json.dumps(p), headers=copy.deepcopy(_base_headers))  # 토큰 발급
     rescode = res.status_code
     if rescode == 200:  # 토큰 정상 발급
         approval_key = _getResultObject(res.json()).approval_key
     else:
-        print("Get Approval token fail!\nYou have to restart your app!!!")
+        _handle_critical_error("Get Approval token fail!\nYou have to restart your app!!!")
         return
 
     changeTREnv(None, svr, product)
 
     _base_headers_ws["approval_key"] = approval_key
 
-    global _last_auth_time
-    _last_auth_time = datetime.now()
+    global _approval_received_time
+    _approval_received_time = datetime.now()
 
-    print(f"\033[93m[{_last_auth_time}] => get Approval Key completed!\033[0m")
+    logging.info(f"[{_approval_received_time}] => get Approval Key completed!")
 
 
 def reAuth_ws(svr="prod", product=_cfg["my_prod"]):
-    n2 = datetime.now()
-    if (n2 - _last_auth_time).seconds >= 86400:
-        auth_ws(svr, product)
+    if _approval_received_time is not None:
+        if (datetime.now() - _approval_received_time).total_seconds() >= 86400:
+            auth_ws(svr, product)
 
 
 def data_fetch(tr_id, tr_type, params, appendHeaders=None) -> dict:
@@ -548,9 +573,8 @@ def data_fetch(tr_id, tr_type, params, appendHeaders=None) -> dict:
                     masked[k] = "********"
             return masked
 
-        logging.debug("< Sending Info >")
-        logging.debug(f"TR: {tr_id}")
-        logging.debug(f" <header>\n{_mask_dict(headers)}")
+        logging.debug(f"<Sending Info> TR: {tr_id}")
+        logging.debug(f"<header>\n{_mask_dict(headers)}")
 
     inp = {
         "tr_id": tr_id,

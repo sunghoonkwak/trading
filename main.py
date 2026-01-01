@@ -215,7 +215,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             msg = (f"{time_s}|MKT|{fixed_name}|{code:<6}|"
                 f"Bid:{bid_s:>9}|"
                 f"Last:{price_s:>9}({vol_s:>6})|"
-                f"Diff:{diff_s:>9}({state.get('rate', 0.0):>5.2f}%)|"
+                f"Diff:{diff_s:>6}({state.get('rate', 0.0):>5.2f}%)|"
                 f"Ask:{ask_s:>9}")
             print_log(level, msg)
             continue
@@ -278,7 +278,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             msg = (f"{time_s}|MKT|{fixed_name}|{display_code:<6}|"
                 f"Bid:{bid_s:>9}|"
                 f"Last:{price_s:>9}({vol_s:>6})|"
-                f"Diff:{diff_s:>9}({state.get('rate', 0.0):>5.2f}%)|"
+                f"Diff:{diff_s:>6}({state.get('rate', 0.0):>5.2f}%)|"
                 f"Ask:{ask_s:>9}")
             print_log(level, msg)
             continue
