@@ -47,7 +47,7 @@ def load_telegram_credentials() -> tuple[str, str]:
         return None, None
 
 
-def format_telegram_message(report: dict) -> str:
+def format_raoeo_report(report: dict) -> str:
     """
     Format RAOEO report for Telegram message.
 
@@ -133,7 +133,7 @@ async def cmd_raoeo_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Cache current_result for /raoeo_order (None if already executed today)
     _cached_result = report.get("current_result")
 
-    msg = format_telegram_message(report)
+    msg = format_raoeo_report(report)
     if msg:
         await update.message.reply_text(msg, parse_mode='Markdown')
     else:

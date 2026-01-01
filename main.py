@@ -532,7 +532,7 @@ if __name__ == "__main__":
 
     # Initialize Telegram bot (runs in background)
     try:
-        from telegram_bot import initialize_telegram
+        from telegram_bot.telegram_bot import initialize_telegram
         if initialize_telegram():
             add_alert("[TG] Bot started", level="INFO")
         else:

@@ -94,7 +94,7 @@ Windows Terminal에서 Event Viewer(event_viewer/event_viewer.py)를 별도 탭�
 ```python
 # Initialize Telegram bot (runs in background)
 try:
-    from telegram_bot import initialize_telegram
+    from telegram_bot.telegram_bot import initialize_telegram
     if initialize_telegram():
         add_alert("[TG] Bot started", level="INFO")
     else:
@@ -109,7 +109,7 @@ Telegram 봇은 별도 스레드에서 실행되며, 메인 프로그램과 독�
 
 | Module | Description |
 |--------|-------------|
-| `telegram_bot.py` | Telegram 원격 제어 |
+| `telegram_bot/telegram_bot.py` | Telegram 원격 제어 |
 | `menu/menu.py` | 메인 메뉴 UI |
 | `display.py` | 터미널 UI 렌더링 |
 | `event_viewer/` | 실시간 이벤트 뷰어 |

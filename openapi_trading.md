@@ -17,6 +17,12 @@
 ├── portfolio.py (portfolio.md)                               ## 통합 포트폴리오 관리 및 CSV 내보내기
 ├── trading_config.py (trading_config.md)                     ## 설정 및 종목 정보 관리
 ├── trading_state.py (trading_state.md)                       ## 전역 실행 상태 매니저
+├── telegram_bot/                                             ## Telegram 원격 제어 패키지
+│   ├── telegram_bot.py (telegram_bot.md)                     ## Telegram bot 메인 모듈
+│   └── telegram.txt                                          ## Telegram credentials (Git 제외)
+├── event_viewer/                                             ## 실시간 이벤트 뷰어 패키지
+│   ├── event_pipe.py (event_pipe.md)                         ## Named Pipe 통신 모듈
+│   └── event_viewer.py (event_viewer.md)                     ## 분리된 이벤트 뷰어
 ├── tests/                                                    ## 유닛 테스트 폴더
 ├── kis_api/                                                  ## KIS API 특화 패키지
 │   ├── domestic_stock/                                       ## 국내 주식 관련 모듈
