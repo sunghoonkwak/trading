@@ -1063,6 +1063,7 @@ def get_portfolio() -> dict:
     except Exception as e:
         add_alert(f"Weight calc error: {e}", "ERROR")
     result["targets"] = targets
+    result["price_map"] = current_prices
 
     return result
 
@@ -1072,7 +1073,7 @@ def portfolio_menu():
     Portfolio menu interface using modular get_portfolio() function.
     Displays summary and handles menu interactions.
     """
-    from display import show_in_result_area, input_at, render_ui, clear_result_area
+    from display import show_in_result_area, input_at, render_ui, clear_result_area, process_pending_alerts
 
     # Get portfolio data
     portfolio_data = get_portfolio()
@@ -1089,12 +1090,14 @@ def portfolio_menu():
     stats = portfolio_data["stats"]
     exchange_rate = portfolio_data["exchange_rate"]
 
+
     while True:
+        process_pending_alerts()
         clear_result_area()
 
         # Build summary lines
         lines = []
-        lines.append(f" [Portfolio] (Rate: {exchange_rate:,.2f} KRW/USD)")
+        lines.append(f" [Portfolio] (Rate: {exchange_rate:,.2f} KRW/USD) (Total: ${total_value_usd:,.0f})")
         lines.append("─" * 80)
         lines.append(f" {'':10} │ {'USD':^27} │ {'KRW':^27} │ {'%':^6}")
         lines.append("─" * 80)
@@ -1137,7 +1140,7 @@ def portfolio_menu():
         kr_cash_str = f"{stats['kr_cash_ratio']:>14.1f}        %"
         lines.append(f" {'Cash':10} │ {us_cash_str:27} │ {kr_cash_str:27} │")
         lines.append("─" * 80)
-        lines.append(" 1. Check Portfolio  2. Create Excel  q. Exit")
+        lines.append(" 1. Check Portfolio  2. Excel Export  3. Value Averaging  q. Exit")
 
         show_in_result_area(lines)
 
@@ -1149,6 +1152,83 @@ def portfolio_menu():
         elif choice == '2':
             _export_portfolio_excel(merged_data, current_weights, targets)
             input_at(13, 2, "Press Enter to continue...")
+        elif choice == '3':
+             from . import value_averaging
+             from menu.handle_account_info import fetch_price
+             from display import show_in_result_area, input_at
+
+             va_config = value_averaging.load_config()
+             target_ticker = va_config.get('target', '')
+             target_weight = 0.0
+
+             if target_ticker:
+                 target_weight = targets.get(target_ticker, 0.0)
+
+             # Get price from price_map or fetch if missing
+             price_map = portfolio_data.get("price_map", {})
+             current_price_override = price_map.get(target_ticker, 0.0)
+
+             if current_price_override == 0:
+                  print(f" [Info] Price for {target_ticker} not found in portfolio. Fetching from API...")
+                  try:
+                      current_price_override = fetch_price(target_ticker)
+                  except Exception as e:
+                      print(f" [Warning] Failed to fetch price: {e}")
+
+             # Execute Calculation with INJECTED data
+             res = value_averaging.calculate_order(merged_data, total_value_usd, target_weight, current_price_override)
+
+             # Build Display Lines
+             lines = []
+
+             # Header
+             lines.append(f" [Value Averaging] {res.get('date')}")
+             lines.append("="*50)
+
+             if res.get("error"):
+                 lines.append(f" ERROR: {res.get('error')}")
+             else:
+                 orders = res.get("orders", [])
+                 t_w_pct = res.get("target_weight", 0) * 100
+                 curr_p = res.get("current_price", 0)
+                 daily_b = res.get("daily_budget", 0)
+                 buy_amt = res.get("daily_target_amount", 0)
+
+                 lines.append(f" Target Ticker   : {target_ticker}")
+                 lines.append(f" Target Weight   : {t_w_pct:.2f}%")
+                 lines.append(f" Current Price   : ${curr_p:,.2f}")
+                 lines.append(f" Daily Budget    : ${daily_b:,.2f}")
+                 lines.append("-" * 50)
+                 lines.append(f" Total Buy Amount: ${buy_amt:,.2f}")
+                 lines.append("-" * 50)
+
+                 if curr_p == 0:
+                     lines.append(" [WARNING] Current Price is $0.00.")
+                     lines.append(" Cannot calculate buy qty. Check KIS API.")
+                 else:
+                     if orders:
+                         lines.append(f" Orders Generated: {len(orders)}")
+                         for o in orders:
+                             lines.append(f"  > {o['type']} | {o['ticker']} | {o['qty']} qty | ${o['price']:.2f} (LOC)")
+                     else:
+                         lines.append(" No orders generated (Target met).")
+
+             show_in_result_area(lines)
+
+             # Execution Prompt
+             if res.get("orders") and res.get("current_price", 0) > 0:
+                 confirm = input_at(13, 2, " Execute Orders? (y/n): ").strip().lower()
+                 if confirm == 'y':
+                      exec_res = value_averaging.execute_orders(res)
+                      lines.append("-" * 50)
+                      lines.append(" Execution Result:")
+                      for r in exec_res:
+                          status = "SUCCESS" if r['success'] else "FAILED"
+                          lines.append(f"  {status}: {r['message']}")
+                      # Refresh display with results
+                      show_in_result_area(lines)
+
+             input_at(13, 2, " Press Enter to continue...")
         elif choice == 'q':
             break
 

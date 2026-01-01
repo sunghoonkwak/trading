@@ -83,6 +83,7 @@ KIS OpenAPI를 통해 관리 가능한 한국투자증권 계좌와, OpenAPI를 
 - 실시간 환율 및 각 자산의 `cur_price`를 반영하여 요약 테이블 생성
 - `1` 키 입력 시 `_check_portfolio_balance` 실행
 - `2` 키 입력 시 `_export_portfolio_excel` 실행
+- `3` 키 입력 시 `Value Averaging` 실행 (가치 평균화 적립식 투자 계산 및 주문)
 - `q` 키 입력 시 메인 메뉴 복귀
 
 ---

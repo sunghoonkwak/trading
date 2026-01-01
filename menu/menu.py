@@ -64,7 +64,7 @@ def menu():
         elif choice.lower() == 'r':
             raoeo_menu()
         elif choice.lower() == 'p':
-            import portfolio
+            from menu.portfolio import portfolio
             portfolio.portfolio_menu()
         elif choice.lower() == 'q':
             import trading_state

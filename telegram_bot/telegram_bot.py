@@ -18,6 +18,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 from .telegram_raoeo import register_raoeo_handlers, get_raoeo_commands_desc
 from .telegram_portfolio import register_portfolio_handlers, get_portfolio_commands_desc
+from .telegram_utils import wrap_send, set_telegram_bot
 import display
 
 # Module state
@@ -49,47 +50,11 @@ def load_telegram_credentials() -> tuple[Optional[str], Optional[str]]:
         return None, None
 
 
-async def wrap_reply(update: Update, text: str, **kwargs):
-    """
-    Wrapper for update.message.reply_text that alerts the first line.
-    Supports all reply_text arguments like parse_mode, reply_markup, etc.
-    """
-    if not text: return
-    first_line = text.split('\n')[0][:80]  # First line, max 80 chars
-    display.add_alert(f"[TG] {first_line}", "INFO")
-    return await update.message.reply_text(text, **kwargs)
 
 
-async def wrap_send(text: str, **kwargs):
-    """
-    Wrapper for bot.send_message that alerts the first line.
-    """
-    global _app, _chat_id
-
-    if not _app or not _chat_id:
-        logging.warning("[TG] Bot not initialized for send_message")
-        return
-
-    if not text: return
-    first_line = text.split('\n')[0][:80]
-    display.add_alert(f"[TG] {first_line}", "INFO")
-    return await _app.bot.send_message(chat_id=_chat_id, text=text, **kwargs)
 
 
-async def wrap_edit(update: Update, text: str, **kwargs):
-    """
-    Wrapper for query.edit_message_text that alerts the first line.
-    Used for InlineKeyboard interactions.
-    """
-    if not text: return
-    first_line = text.split('\n')[0][:80]
-    display.add_alert(f"[TG] {first_line}", "INFO")
 
-    if update and update.callback_query:
-        return await update.callback_query.edit_message_text(text, **kwargs)
-    else:
-        logging.warning(f"[TG] wrap_edit failed: update={update}")
-        return None
 
 
 def initialize_telegram():
@@ -116,6 +81,9 @@ def initialize_telegram():
 
         try:
             _app = Application.builder().token(_bot_token).build()
+
+            # Pass bot instance to utils
+            set_telegram_bot(_app.bot, _chat_id)
 
             # Register strategy handlers
             register_raoeo_handlers(_app)

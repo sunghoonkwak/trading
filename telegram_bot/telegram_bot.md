@@ -4,9 +4,10 @@
 
 ## Structure (구조)
 
-- `telegram_bot.py`: 봇 초기화, 자격 증명 로드, 공통 메시징 래퍼 (`Core`)
-- `telegram_raoeo.py`: RAOEO 전략 전용 명령어 및 리포트 핸들러 (`Strategy`)
-- `__init__.py`: 패키지 노출 정의
+- `telegram_bot.py`: 봇 초기화, 자격 증명 로드 (`Core`)
+- `telegram_utils.py`: 공통 메시징 래퍼 및 유틸리티 (`Shared Utils`)
+- `telegram_raoeo.py`: RAOEO 전략 전용 명령어 (`Strategy`)
+- `telegram_portfolio.py`: 포트폴리오 조회 및 관리 커맨드 (`Strategy`)
 
 ## Dependencies (의존성)
 
@@ -28,9 +29,6 @@ BOT_TOKEN,CHAT_ID
 
 ### shutdown_telegram
 프로그램이 정상 종료될 때(`q` 입력 시) 사용자에게 하차 알림을 전송합니다. 종료 프로세스를 방해하지 않도록 동기 HTTP 요청(`requests`)과 짧은 타임아웃을 사용합니다.
-
-### wrap_reply / wrap_send
-메시지를 텔레그램으로 전송함과 동시에, 메시지의 첫 줄을 시스템 UI 알림(Alert) 영역에 표시합니다. 비동기로 동작하며, 특수 문자 충돌 방지를 위해 기본적으로 **HTML Parse Mode**를 사용합니다.
 
 ### load_telegram_credentials
 `telegram.txt` 파일로부터 봇 토큰과 채팅 ID를 로드합니다.

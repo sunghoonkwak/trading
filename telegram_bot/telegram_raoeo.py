@@ -7,6 +7,7 @@ This module handles RAOEO strategy specific Telegram commands and reporting.
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+from .telegram_utils import wrap_reply
 
 import time
 from menu.raoeo.raoeo import build_raoeo_report, execute_orders, save_history
@@ -97,7 +98,7 @@ def format_raoeo_report(report: dict) -> str:
 async def cmd_raoeo_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /raoeo_report."""
     global _cached_result
-    from .telegram_bot import wrap_reply
+    global _cached_result
 
     report = build_raoeo_report()
     _cached_result = report.get("current_result")
@@ -113,7 +114,7 @@ async def cmd_raoeo_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_raoeo_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /raoeo_order."""
     global _cached_result
-    from .telegram_bot import wrap_reply
+    global _cached_result
 
     report = build_raoeo_report()
     if report.get("executed_today"):

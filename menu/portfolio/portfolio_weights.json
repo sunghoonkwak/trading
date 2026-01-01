@@ -2,11 +2,19 @@
     "groups": [
         {
             "name": "Nasdaq100",
-            "target_score": 100,
+            "target_score": 90,
             "main_ticker": "QQQM",
             "constituents": [
                 "QQQ",
                 "379810"
+            ]
+        },
+        {
+            "name": "Nasdaq100 leverage",
+            "target_score": 10,
+            "main_ticker": "QLD",
+            "constituents": [
+                "SOXL"
             ]
         },
         {

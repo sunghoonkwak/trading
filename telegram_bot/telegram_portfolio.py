@@ -7,15 +7,17 @@ for interactive ticker selection.
 """
 import logging
 import warnings
-warnings.filterwarnings("ignore", message=".*per_message.*", category=UserWarning)
+from telegram.warnings import PTBUserWarning
+warnings.filterwarnings("ignore", category=PTBUserWarning)
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, ContextTypes,
     ConversationHandler, CallbackQueryHandler, MessageHandler, TypeHandler, filters
 )
 import display
+from .telegram_utils import wrap_reply, wrap_edit
 
-from portfolio import get_portfolio, calc_weight_diffs
+from menu.portfolio.portfolio import get_portfolio, calc_weight_diffs
 
 # Conversation states
 SELECT_TICKER = 0
@@ -295,7 +297,7 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
 
 async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio - Entry point for ConversationHandler."""
-    from .telegram_bot import wrap_reply
+    """Command handler for /portfolio - Entry point for ConversationHandler."""
 
     logging.info(f"[TG] Portfolio session started for user {update.effective_user.id}")
     # Get portfolio data and cache in user_data
@@ -325,7 +327,6 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
 
     # Handle cancel
     if callback_data == "port_cancel":
-        from .telegram_bot import wrap_edit
         await wrap_edit(update, "👋 Portfolio session closed.", parse_mode='HTML')
         context.user_data.pop('portfolio_data', None)
         return ConversationHandler.END
@@ -349,7 +350,6 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
             break
 
     if not found_ticker:
-        from .telegram_bot import wrap_edit
         detail_msg = format_ticker_not_in_portfolio(ticker, portfolio_data)
         keyboard = build_ticker_keyboard(portfolio_data)
         await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
@@ -361,7 +361,6 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
 
     # Edit message to show detail
     keyboard = build_ticker_keyboard(portfolio_data)
-    from .telegram_bot import wrap_edit
     sent_msg = await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
     if sent_msg:
         context.user_data['last_port_msg_id'] = sent_msg.message_id
@@ -371,7 +370,7 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input for ticker selection."""
-    from .telegram_bot import wrap_reply
+    """Handle text input for ticker selection."""
 
     ticker_input = update.message.text.strip().upper()
 
@@ -439,8 +438,6 @@ async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio_weight."""
-    from .telegram_bot import wrap_reply
-
     # Run silently
     data = get_portfolio()
     msg = format_weight_diffs(data)
