@@ -679,17 +679,22 @@ def _get_merged_portfolio_stat(current_prices: dict = None, exchange_rate: float
 
     return merged, total_val_usd
 
-def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targets, exchange_rate):
+def calc_weight_diffs(merged_data, current_weights, targets,
+                       total_value_usd: float, exchange_rate: float) -> list:
     """
-    Compare current weights with target weights and show top differences.
+    Calculate weight differences between current and target allocations.
+
+    Args:
+        merged_data: Merged holdings data by ticker
+        current_weights: Current weight per ticker
+        targets: Target weight per ticker
+        total_value_usd: Total portfolio value in USD
+        exchange_rate: KRW/USD exchange rate
+
+    Returns:
+        list: Sorted list of diffs (by abs_diff descending), each containing:
+            ticker, name, cur_w, tgt_w, diff, abs_diff, qty_diff
     """
-    from display import show_in_result_area, get_fixed_width_name, input_at
-
-    if total_value_usd <= 0:
-        display.add_alert("Total asset value is 0 or error.", "ERROR")
-        return
-
-    # 4. Compare
     diffs = []
 
     # We care about all tickers in either Targets OR Current
@@ -701,14 +706,24 @@ def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targ
 
         # Filter Cash
         data = merged_data.get(t, {})
-        # Check type "CASH" or ticker name string match
         if data.get("type") == "CASH" or "cash" in t.lower() or "예수금" in t:
             continue
 
-        diff = tgt_w - cur_w # Target - Current
-
-        # Create display entry
+        diff = tgt_w - cur_w  # Target - Current
         name = data.get("name", t)
+
+        # Calculate quantity diff
+        val_diff_usd = diff * total_value_usd
+        cur_price = data.get("cur_price", 0)
+        currency = data.get("currency", "USD")
+
+        qty_diff = 0
+        if cur_price > 0:
+            if currency == "KRW":
+                val_diff_krw = val_diff_usd * exchange_rate
+                qty_diff = val_diff_krw / cur_price
+            else:
+                qty_diff = val_diff_usd / cur_price
 
         diffs.append({
             "ticker": t,
@@ -716,11 +731,29 @@ def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targ
             "cur_w": cur_w,
             "tgt_w": tgt_w,
             "diff": diff,
-            "abs_diff": abs(diff)
+            "abs_diff": abs(diff),
+            "qty_diff": int(qty_diff)
         })
 
     # Sort by absolute difference descending
     diffs.sort(key=lambda x: x["abs_diff"], reverse=True)
+
+    return diffs
+
+
+def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targets, exchange_rate):
+    """
+    Display weight differences with pagination UI.
+    """
+    from display import show_in_result_area, get_fixed_width_name, input_at
+
+    if total_value_usd <= 0:
+        display.add_alert("Total asset value is 0 or error.", "ERROR")
+        return
+
+    # Calculate diffs
+    diffs = calc_weight_diffs(merged_data, current_weights, targets,
+                               total_value_usd, exchange_rate)
 
     # Pagination
     import math
@@ -739,7 +772,6 @@ def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targ
         lines.append(f" [Portfolio Check] (Total: ${total_value_usd:,.0f}) - Page {page+1}/{total_pages}")
 
         # Header
-        # Idx: 2, Ticker: 10, Name: 30, Curr%: 8, Tgt%: 8, Diff%: 9, Qty: 6
         header = f" {'#':>2} | {'Ticker':<10} | {'Name':<30} | {'Curr %':>8} | {'Tgt %':>8} | {'Diff %':>9} | {'Qty':>6}"
         sep_len = len(header)
 
@@ -756,24 +788,7 @@ def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targ
             c_p = item["cur_w"] * 100
             t_p = item["tgt_w"] * 100
             d_p = item["diff"] * 100
-
-            # Calculate Quantity Diff
-            # diff is (Tgt - Cur) weight
-            # value_diff = diff * total_value_usd
-            val_diff_usd = item["diff"] * total_value_usd
-
-            # Get stock data for price
-            m_data = merged_data.get(t, {})
-            cur_price = m_data.get("cur_price", 0)
-            currency = m_data.get("currency", "USD")
-
-            qty_diff = 0
-            if cur_price > 0:
-                if currency == "KRW":
-                    val_diff_krw = val_diff_usd * exchange_rate
-                    qty_diff = val_diff_krw / cur_price
-                else:
-                    qty_diff = val_diff_usd / cur_price
+            qty_diff = item["qty_diff"]
 
             # Qty string (int)
             qty_str = f"{int(qty_diff):+d}"
@@ -782,13 +797,8 @@ def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targ
             from display import COLOR_RED, COLOR_GREEN, COLOR_RESET
             symbol = "+" if d_p >= 0 else "-"
 
-            # Construct line manually
-            # c_p:6.2f -> " 15.00"
             c_str = f"{c_p:4.2f}%"
             t_str = f"{t_p:4.2f}%"
-
-            # d_str logic
-            # base_d_str: "+11.67%" or "+ 9.66%"
             base_d_str = f"{symbol}{abs(d_p):5.2f}%"
 
             # Color Logic
@@ -811,7 +821,7 @@ def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targ
 
         remaining_lines = page_size - len(page_items)
         for _ in range(remaining_lines):
-            lines.append("") # Empty lines to keep UI stable
+            lines.append("")  # Empty lines to keep UI stable
 
         lines.append("─" * sep_len)
         lines.append(" (Enter: Next Page, q: Return)")
