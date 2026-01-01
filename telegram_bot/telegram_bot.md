@@ -44,7 +44,7 @@ Telegram bot token과 chat ID를 `telegram.txt`에서 로드합니다.
 
 ---
 
-### format_telegram_message
+### format_raoeo_report
 `build_raoeo_report()` 결과를 Telegram 메시지 형식으로 변환합니다.
 
 #### Args
@@ -55,14 +55,22 @@ Telegram bot token과 chat ID를 `telegram.txt`에서 로드합니다.
 
 ---
 
-### send_notification
-Telegram으로 알림 메시지를 전송합니다.
+### wrap_reply
+Telegram 명령어 응답 래퍼. 메시지 첫 줄을 UI 알람에 표시합니다.
 
 #### Args
-- `message` (str): 전송할 메시지
+- `update` (Update): Telegram Update 객체
+- `text` (str): 전송할 메시지
+- `parse_mode` (str, optional): 'Markdown', 'MarkdownV2', 'HTML'
 
-#### Returns
-- `bool`: 전송 성공 여부
+---
+
+### wrap_send
+Telegram 메시지 전송 래퍼. 메시지 첫 줄을 UI 알람에 표시합니다.
+
+#### Args
+- `text` (str): 전송할 메시지
+- `parse_mode` (str, optional): 'Markdown', 'MarkdownV2', 'HTML'
 
 ---
 

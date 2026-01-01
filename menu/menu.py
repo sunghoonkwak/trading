@@ -4,7 +4,7 @@ It coordinates between the different handlers in the menu package and the displa
 """
 import os
 import display
-from display import render_ui, input_at, prepare_exit, PrintLevel, print_log
+from display import render_ui, input_at, prepare_exit, PrintLevel, print_log, process_pending_alerts, start_alert_processor
 import kis_api.kis_auth as ka
 
 # Centralized debug toggle for all menu handlers and KIS API interactions
@@ -29,7 +29,11 @@ def menu():
     sync_open_orders()
     render_ui(full_refresh=True)
 
+    # Start background alert processor for real-time updates
+    start_alert_processor()
+
     while True:
+        process_pending_alerts()  # Handle alerts from background threads (e.g., Telegram)
         render_ui(full_refresh=True)
         choice = input_at(13, 2, "Enter Choice: ").strip()  # Row 13 between separators
 

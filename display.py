@@ -15,6 +15,7 @@ import logging
 from enum import IntEnum
 from datetime import datetime
 from collections import deque, OrderedDict
+from queue import Queue
 import trading_config
 import fear_and_greed
 import time
@@ -65,6 +66,9 @@ MAX_ORDER_DISPLAY = 15
 
 # Alert buffer (show up to 10 recent alerts)
 alert_buffer = deque(maxlen=10)
+
+# Thread-safe queue for alerts from background threads (e.g., Telegram bot)
+_pending_alerts: Queue = Queue()
 
 # ANSI Escape Codes for UI
 SAVE_CURSOR = "\033[s"
@@ -181,6 +185,60 @@ def add_alert(message: str, level: str = "INFO"):
     timestamp = datetime.now().strftime("%H:%M:%S")
     alert_buffer.appendleft(f"[{timestamp}] {color}{message}{COLOR_RESET}")
     # Do not call render_ui() here - it will be called by menu loop
+
+
+def queue_alert(message: str, level: str = "INFO"):
+    """
+    Thread-safe alert queueing for background threads (e.g., Telegram bot).
+    Alerts are processed by the main thread via process_pending_alerts().
+    """
+    _pending_alerts.put((message, level))
+
+
+def process_pending_alerts():
+    """
+    Process pending alerts from background threads.
+    Should be called periodically from the main menu loop.
+    """
+    processed = False
+    while not _pending_alerts.empty():
+        try:
+            message, level = _pending_alerts.get_nowait()
+            add_alert(message, level)
+            processed = True
+        except Exception:
+            break
+    return processed
+
+
+# Background alert processor thread
+_alert_processor_running = False
+
+
+def _alert_processor_loop():
+    """Background loop that processes pending alerts and refreshes UI."""
+    global _alert_processor_running
+    while _alert_processor_running:
+        if process_pending_alerts():
+            render_ui()
+        time.sleep(0.5)  # Check every 500ms
+
+
+def start_alert_processor():
+    """Start background thread to process alerts from other threads."""
+    global _alert_processor_running
+    if _alert_processor_running:
+        return  # Already running
+
+    _alert_processor_running = True
+    processor_thread = threading.Thread(target=_alert_processor_loop, daemon=True)
+    processor_thread.start()
+
+
+def stop_alert_processor():
+    """Stop the background alert processor."""
+    global _alert_processor_running
+    _alert_processor_running = False
 
 
 def clear_all_display_data():

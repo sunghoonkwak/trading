@@ -16,6 +16,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from menu.raoeo.raoeo import build_raoeo_report, execute_orders, save_history
+import display
 
 # Module state
 _app: Optional[Application] = None
@@ -95,33 +96,37 @@ def format_raoeo_report(report: dict) -> str:
     return "\n".join(lines)
 
 
-async def send_notification(message: str) -> bool:
+async def wrap_reply(update: Update, text: str, parse_mode: str = None):
     """
-    Send a notification message via Telegram.
+    Wrapper for update.message.reply_text that logs and alerts the first line.
 
     Args:
-        message: Message to send
+        update: Telegram Update object
+        text: Message text to send
+        parse_mode: Optional parse mode ('Markdown', 'MarkdownV2', 'HTML')
+    """
+    first_line = text.split('\n')[0][:50]  # First line, max 50 chars
+    display.queue_alert(f"[TG] {first_line}", "INFO")
+    await update.message.reply_text(text, parse_mode=parse_mode)
 
-    Returns:
-        bool: True if sent successfully
+
+async def wrap_send(text: str, parse_mode: str = None):
+    """
+    Wrapper for bot.send_message that logs and alerts the first line.
+
+    Args:
+        text: Message text to send
+        parse_mode: Optional parse mode ('Markdown', 'MarkdownV2', 'HTML')
     """
     global _app, _chat_id
 
     if not _app or not _chat_id:
-        logging.warning("Telegram not initialized")
-        return False
+        logging.warning("[TG] Bot not initialized for send_message")
+        return
 
-    try:
-        await _app.bot.send_message(
-            chat_id=_chat_id,
-            text=message,
-            parse_mode='Markdown'
-        )
-        logging.info(f"Telegram message sent: {message}")
-        return True
-    except Exception as e:
-        logging.error(f"Failed to send Telegram message: {e}")
-        return False
+    first_line = text.split('\n')[0][:50]  # First line, max 50 chars
+    display.queue_alert(f"[TG] {first_line}", "INFO")
+    await _app.bot.send_message(chat_id=_chat_id, text=text, parse_mode=parse_mode)
 
 
 async def cmd_raoeo_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -135,9 +140,9 @@ async def cmd_raoeo_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = format_raoeo_report(report)
     if msg:
-        await update.message.reply_text(msg, parse_mode='Markdown')
+        await wrap_reply(update, msg, parse_mode='Markdown')
     else:
-        await update.message.reply_text("No RAOEO data available.")
+        await wrap_reply(update, "No RAOEO data available.")
 
 
 async def cmd_raoeo_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -147,24 +152,24 @@ async def cmd_raoeo_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # First check if already executed today
     report = build_raoeo_report()
     if report.get("executed_today"):
-        await update.message.reply_text("✅ Already executed today. No new orders to place.")
+        await wrap_reply(update, "✅ Already executed today. No new orders to place.")
         return
 
     if not _cached_result:
-        await update.message.reply_text("⚠️ Not calculated. Use /raoeo_report first.")
+        await wrap_reply(update, "⚠️ Not calculated. Use /raoeo_report first.")
         return
 
     if _cached_result.get('error'):
-        await update.message.reply_text(f"⚠️ Cannot execute: {_cached_result['error']}")
+        await wrap_reply(update, f"⚠️ Cannot execute: {_cached_result['error']}")
         return
 
     orders = _cached_result.get('orders', [])
     if not orders:
-        await update.message.reply_text("⚠️ No orders to execute.")
+        await wrap_reply(update, "⚠️ No orders to execute.")
         return
 
     # Execute orders
-    await update.message.reply_text(f"⏳ Executing {len(orders)} orders...")
+    await wrap_reply(update, f"⏳ Executing {len(orders)} orders...")
 
     try:
         exec_results = execute_orders(orders, _cached_result['config'])
@@ -186,11 +191,11 @@ async def cmd_raoeo_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Clear cached result after execution
         _cached_result = None
 
-        await update.message.reply_text("\n".join(lines), parse_mode='Markdown')
+        await wrap_reply(update, "\n".join(lines), parse_mode='Markdown')
 
     except Exception as e:
         logging.error(f"[Telegram] Order execution failed: {e}")
-        await update.message.reply_text(f"❌ Execution failed: {e}")
+        await wrap_reply(update, f"❌ Execution failed: {e}")
 
 
 def initialize_telegram():
@@ -230,25 +235,17 @@ def initialize_telegram():
                     "/raoeo\\_report \\- Current RAOEO status\n"
                     "/raoeo\\_order \\- Execute RAOEO orders"
                 )
-                logging.debug(f"[Telegram] Sending init message: {repr(init_text)}")
                 try:
-                    await _app.bot.send_message(
-                        chat_id=_chat_id,
-                        text=init_text,
-                        parse_mode='MarkdownV2'
-                    )
-                    logging.info("[Telegram] Init message sent successfully")
+                    await wrap_send(init_text, parse_mode='MarkdownV2')
                 except Exception as e:
                     logging.error(f"[Telegram] Failed to send init message: {e}")
                     # Fallback to plain text
                     try:
-                        await _app.bot.send_message(
-                            chat_id=_chat_id,
-                            text="🤖 Trading Bot Initialized\n\nCommands:\n/raoeo_report - Current RAOEO status\n/raoeo_order - Execute RAOEO orders"
-                        )
-                        logging.info("[Telegram] Init message sent (plain text fallback)")
+                        fallback_text = "🤖 Trading Bot Initialized\n\nCommands:\n/raoeo_report - Current RAOEO status\n/raoeo_order - Execute RAOEO orders"
+                        await wrap_send(fallback_text)
                     except Exception as e2:
                         logging.error(f"[Telegram] Fallback also failed: {e2}")
+                        display.queue_alert("[TG] Init message failed", "ERROR")
 
             loop.run_until_complete(_app.initialize())
             loop.run_until_complete(send_init_message())

@@ -71,12 +71,28 @@ Named Pipe를 통해 로그를 별도 터미널(Event Viewer)로 전송합니다
 - `None`.
 
 ### add_alert
-메인 터미널의 알림 영역에 메시지를 추가합니다.
+메인 터미널의 알림 영역에 메시지를 추가합니다. 메인 스레드에서만 호출하세요.
 #### input
 - `message` (str): 알림 메시지.
 - `level` (str): "INFO", "ERROR", "SUCCESS".
 #### output
 - `None`.
+
+### queue_alert
+백그라운드 스레드(예: Telegram bot)에서 안전하게 알람을 큐에 추가합니다.
+#### input
+- `message` (str): 알림 메시지.
+- `level` (str): "INFO", "ERROR", "SUCCESS".
+#### output
+- `None`.
+
+### process_pending_alerts
+큐에 쌓인 알람을 처리하여 `alert_buffer`에 추가합니다.
+#### output
+- `bool`: 처리된 알람이 있으면 True.
+
+### start_alert_processor
+백그라운드에서 500ms마다 큐를 체크하고 UI를 갱신하는 스레드를 시작합니다. 메뉴 시작 시 호출됩니다.
 
 ### clear_order_states
 미체결 주문 목록 데이터만 초기화합니다. 새로운 동기화 작업을 시작하기 전에 호출됩니다.
