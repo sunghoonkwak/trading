@@ -168,7 +168,7 @@ def calculate_order() -> dict:
 
         if buy_qty > 0:
             result["orders"].append({
-                "type": "buy",
+                "type": "buy_initial",
                 "price": buy_price,
                 "qty": buy_qty,
                 "order_type": "LOC",
@@ -195,7 +195,7 @@ def calculate_order() -> dict:
         sell_price = round(avg_price * (1 + sell_profit), 2)
 
         result["orders"].append({
-            "type": "sell",
+            "type": "sell_all",
             "price": sell_price,
             "qty": qty,
             "order_type": "LIMIT",
@@ -217,7 +217,7 @@ def calculate_order() -> dict:
 
         if buy_qty_1 > 0:
             result["orders"].append({
-                "type": "buy",
+                "type": "buy_guaranteed",
                 "price": buy_price_1,
                 "qty": buy_qty_1,
                 "order_type": "LOC",
@@ -230,7 +230,7 @@ def calculate_order() -> dict:
 
         if buy_qty_2 > 0:
             result["orders"].append({
-                "type": "buy",
+                "type": "buy_lower",
                 "price": buy_price_2,
                 "qty": buy_qty_2,
                 "order_type": "LOC",
@@ -268,7 +268,7 @@ def execute_orders(orders: list, config: dict) -> list:
                 pdno=target,
                 ord_qty=str(order['qty']),
                 ovrs_ord_unpr=str(order['price']),
-                ord_dv=order['type'],
+                ord_dv="buy" if "buy" in order['type'].lower() else "sell",
                 ctac_tlno="",
                 mgco_aptm_odno="",
                 ord_svr_dvsn_cd="0",
@@ -293,17 +293,24 @@ def execute_orders(orders: list, config: dict) -> list:
     return results
 
 
-def save_history(order_data: dict) -> bool:
+def save_history(order_data: dict, exec_results: list = None) -> bool:
     """
-    Save order calculation to history file.
+    Save order calculation and execution results to history file.
 
     Args:
         order_data: Result from calculate_order()
-
-    Returns:
-        bool: True if saved successfully
+        exec_results: Optional list of execution results from execute_orders()
     """
     try:
+        # Merge execution info into order_data
+        if exec_results:
+            # Match each order with its result
+            for order in order_data.get('orders', []):
+                result = next((r for r in exec_results if r['order'] == order), None)
+                if result:
+                    order['success'] = result['success']
+                    order['error'] = result.get('error')
+
         # Load existing history
         history = {"history": []}
         if os.path.exists(HISTORY_FILE):
@@ -315,12 +322,37 @@ def save_history(order_data: dict) -> bool:
             except (json.JSONDecodeError, IOError):
                 pass
 
-        # Insert new entry at the beginning (index 0) for descending order in JSON
-        history["history"].insert(0, order_data)
+        # Check if today's entry already exists
+        today_str = order_data.get('date')
+        existing_entry = None
+        for entry in history.get('history', []):
+            if entry.get('date') == today_str:
+                existing_entry = entry
+                break
+
+        if existing_entry:
+            # Update existing entry with new order results
+            for new_order in order_data.get('orders', []):
+                # match by the descriptive 'type' (which acts as ID)
+                old_matching = None
+                for old_order in existing_entry.get('orders', []):
+                    if old_order.get('type') == new_order.get('type'):
+                        old_matching = old_order
+                        break
+
+                if old_matching:
+                    if new_order.get('success'):
+                        old_matching['success'] = True
+                        old_matching['error'] = None
+                    elif not old_matching.get('success'):
+                        old_matching['error'] = new_order.get('error')
+        else:
+            # Insert new entry at the beginning
+            history["history"].insert(0, order_data)
 
         # Save
-        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump(history, f, indent=4, ensure_ascii=False)
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f_out:
+            json.dump(history, f_out, indent=4, ensure_ascii=False)
 
         return True
     except Exception as e:
@@ -368,14 +400,38 @@ def build_raoeo_report() -> dict:
         "current_result": None,
         "error": None
     }
+    tz_us = pytz.timezone('US/Eastern')
+    today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
 
-    # Check if already executed today
-    executed_today = check_today_history()
-    if executed_today:
-        report["executed_today"] = executed_today
-        return report
+    # 1. Check history first - if some failed, we prioritize retrying those EXACT orders
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:
+                    hist = json.loads(content)
+                    today_entry = next((e for e in hist.get('history', []) if e.get('date') == today_str), None)
+                    if today_entry:
+                        failed = [o for o in today_entry.get('orders', []) if not o.get('success', False)]
+                        if not failed:
+                            # Everything succeeded
+                            report["executed_today"] = today_entry
+                            return report
+                        else:
+                            # Some failed! Populate current_result with THESE failed orders for retry
+                            report["current_result"] = {
+                                "date": today_str,
+                                "config": today_entry['config'],
+                                "holdings": today_entry['holdings'],
+                                "orders": failed,
+                                "state": today_entry.get('state', 'unknown'),
+                                "is_retry": True # Flag for UI
+                            }
+                            return report
+        except Exception as e:
+            print_log(PrintLevel.ERROR, f"Error reading history for report: {e}")
 
-    # Calculate new orders
+    # 2. No history for today yet - calculate fresh orders
     current_result = calculate_order()
     if current_result.get('error'):
         report["error"] = current_result['error']
@@ -387,53 +443,81 @@ def build_raoeo_report() -> dict:
 
 
 def format_display_lines(report: dict) -> list:
-    """
-    Format report for terminal display.
-
-    Args:
-        report: Result from build_raoeo_report()
-
-    Returns:
-        list[str]: Lines to display in terminal
-    """
+    """Format report for terminal display with color-coded status."""
+    from display import COLOR_GREEN, COLOR_RED, COLOR_RESET, COLOR_YELLOW
     tz_us = pytz.timezone('US/Eastern')
     today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
     display_lines = []
 
-    if report.get("executed_today"):
-        entry = report["executed_today"]
-        display_lines.append(f" [RAOEO Executed - {today_str}]")
-        display_lines.append(f" Target: {entry['config']['target']} @ {entry['config']['exchange']}")
-        display_lines.append(f" Holdings: {entry['holdings']['qty']} shares @ ${entry['holdings']['avg_price']:.2f}")
-        display_lines.append("")
+    # Track shared info
+    config = None
+    holdings = None
+    success_orders = []
+    failed_orders = []
+
+    # 1. Gather status from history
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                hist = json.load(f)
+                today_entry = next((e for e in hist.get('history', []) if e.get('date') == today_str), None)
+                if today_entry:
+                    config = today_entry.get('config')
+                    holdings = today_entry.get('holdings')
+                    for o in today_entry.get('orders', []):
+                        if o.get('success'):
+                            success_orders.append(o)
+                        else:
+                            failed_orders.append(o)
+        except: pass
+
+    # 2. Gather status from current calculation
+    pending_orders = []
+    if report.get("current_result"):
+        res = report["current_result"]
+        config = config or res.get('config')
+        holdings = holdings or res.get('holdings')
+
+        # Only show as 'Pending' if not already listed in history (Success or Fail)
+        executed_types = {o.get('type') for o in success_orders + failed_orders}
+        for o in res.get('orders', []):
+            if o.get('type') not in executed_types:
+                pending_orders.append(o)
+
+    if not config:
+        if report.get("error"): return [f" Error: {report['error']}"]
+        return [" No RAOEO data."]
+
+    display_lines.append(f" [RAOEO Status - {today_str}]")
+    display_lines.append(f" Target: {config['target']} @ {config['exchange']} | Cur: ${holdings.get('cur_price', 0):.2f}")
+    display_lines.append(f" Holdings: {holdings['qty']} shares @ ${holdings['avg_price']:.2f}")
+    display_lines.append("")
+
+    # Executed (Success/Fail) Section
+    if success_orders or failed_orders:
         display_lines.append(" Executed Orders:")
-        for i, order in enumerate(entry['orders'], 1):
-            display_lines.append(f"   {i}. {order['type'].upper()} {order['qty']} @ ${order['price']:.2f} ({order['order_type']}) - {order['desc']}")
+        for o in success_orders:
+            display_lines.append(f"   {COLOR_GREEN}• {o['type'].upper()} {o['qty']} @ ${o['price']:.2f} ({o['order_type']}) - Success{COLOR_RESET}")
+        for o in failed_orders:
+            err = f" ({o['error'][:30]})" if o.get('error') else ""
+            display_lines.append(f"   {COLOR_RED}• {o['type'].upper()} {o['qty']} @ ${o['price']:.2f} ({o['order_type']}) - Fail{err}{COLOR_RESET}")
+        display_lines.append("")
 
-    elif report.get("error") and not report.get("current_result"):
-        display_lines.append(f" Error: {report['error']}")
+    # Pending Section
+    if pending_orders:
+        display_lines.append(" Pending Orders (To be placed):")
+        for o in pending_orders:
+            display_lines.append(f"   {COLOR_YELLOW}• {o['type'].upper()} {o['qty']} @ ${o['price']:.2f} ({o['order_type']}) - Pending{COLOR_RESET}")
+        display_lines.append("")
 
-    elif report.get("current_result"):
-        result = report["current_result"]
-        if result.get('error'):
-            display_lines.append(f" Error: {result['error']}")
-        elif not result.get('orders'):
-            display_lines.append(f" [RAOEO Order Calculation - {result['date']}]")
-            display_lines.append("")
-            display_lines.append(" No orders calculated for today.")
-        else:
-            display_lines.append(f" [RAOEO Order Calculation - {result['date']}]")
-            display_lines.append(f" Target: {result['config']['target']} @ {result['config']['exchange']}        Current Price: ${result['holdings']['cur_price']:.2f}")
-            display_lines.append(f" Holdings: {result['holdings']['qty']} shares @ ${result['holdings']['avg_price']:.2f}")
-            display_lines.append("")
-            display_lines.append(" Calculated Orders:")
-            for i, order in enumerate(result['orders'], 1):
-                display_lines.append(f"   {i}. {order['type'].upper()} {order['qty']} @ ${order['price']:.2f} ({order['order_type']}) - {order['desc']}")
+    if not pending_orders and not failed_orders:
+        display_lines.append(f" {COLOR_GREEN}✨ All orders completed for today.{COLOR_RESET}")
 
     display_lines.append("")
-    display_lines.append(" 1. Execute Orders    2. View History")
+    if pending_orders or failed_orders:
+        display_lines.append(" 1. Execute Pending/Failed Orders")
+    display_lines.append(" 2. View History")
     display_lines.append("-" * 50)
-
     return display_lines
 
 
@@ -448,10 +532,7 @@ def prompt_order_execution(report: dict, display_lines: list) -> bool:
     Returns:
         bool: True if orders were executed, False otherwise
     """
-    if report.get("executed_today"):
-        show_in_result_area(display_lines + [" Strategy already executed today!"])
-        msvcrt.getch()
-        return False
+    # Remove mandatory blocking by executed_today to allow retries of failed orders
 
     current_result = report.get("current_result")
     if not current_result or current_result.get('error') or not current_result.get('orders'):
@@ -485,15 +566,20 @@ def run_order_execution(result: dict, display_lines: list) -> bool:
     exec_results = execute_orders(result['orders'], result['config'])
 
     # Display results
+    from display import COLOR_GREEN, COLOR_RED, COLOR_RESET
     res_lines = [" [Execution Results]"]
-    for i, res in enumerate(exec_results[:10], 1):
-        status = "OK" if res['success'] else "FAIL"
+    success_count = 0
+    for i, res in enumerate(exec_results, 1):
+        status = f"{COLOR_GREEN}OK{COLOR_RESET}" if res['success'] else f"{COLOR_RED}FAIL{COLOR_RESET}"
+        if res['success']: success_count += 1
         o = res['order']
-        res_lines.append(f" {i}. {o['type'].upper()} {o['qty']}@{o['price']} - {status}")
+        err = f" ({res['error'][:30]})" if not res['success'] and res.get('error') else ""
+        res_lines.append(f" {i}. {o['type'].upper()} {o['qty']}@{o['price']} - {status}{err}")
 
-    save_history(result)
+    save_history(result, exec_results)
     res_lines.append("")
-    res_lines.append(" Saved. Press any key...")
+    res_lines.append(f" Result: {success_count}/{len(exec_results)} succeeded.")
+    res_lines.append(" Press any key...")
     show_in_result_area(res_lines)
     msvcrt.getch()
 
@@ -551,6 +637,8 @@ def show_history_viewer():
 
                 ord_strs = []
                 for o in entry.get('orders', []):
+                    if o.get('success') is False:
+                        continue
                     o_type = o.get('type', 'buy').lower()
                     o_qty = o.get('qty', 0)
                     o_prc = float(o.get('price', 0))

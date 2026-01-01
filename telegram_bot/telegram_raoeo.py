@@ -8,46 +8,90 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
+import time
 from menu.raoeo.raoeo import build_raoeo_report, execute_orders, save_history
 
 # Local cached result for RAOEO
 _cached_result = None
+_cached_time = 0
 
 def format_raoeo_report(report: dict) -> str:
-    """Format RAOEO report for Telegram message."""
+    """Format RAOEO report for Telegram with Success/Fail/Pending sections."""
     lines = []
-    if report.get("executed_today"):
-        entry = report["executed_today"]
-        lines.append(f"📊 *RAOEO Executed - {entry['date']}*")
-        lines.append(f"Target: `{entry['config']['target']}` @ {entry['config']['exchange']}")
-        lines.append(f"Holdings: {entry['holdings']['qty']} shares @ ${entry['holdings']['avg_price']:.2f}")
+    today_str = report.get("current_result", {}).get("date") or report.get("executed_today", {}).get("date", "Today")
+    lines.append(f"📊 *RAOEO Status - {today_str}*")
+
+    config = None
+    holdings = None
+
+    # 1. Gather status from history if exists
+    success_orders = []
+    failed_orders = []
+
+    # Try to find today's entry in history to show what's already happened
+    from menu.raoeo.raoeo import HISTORY_FILE
+    import json, os
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                hist = json.load(f)
+                today_entry = next((e for e in hist.get('history', []) if e.get('date') == today_str), None)
+                if today_entry:
+                    config = today_entry.get('config')
+                    holdings = today_entry.get('holdings')
+                    for o in today_entry.get('orders', []):
+                        if o.get('success'):
+                            success_orders.append(o)
+                        else:
+                            failed_orders.append(o)
+        except:
+            pass
+
+    # 2. Add Pending Section (from current_result)
+    pending_orders = []
+    if report.get("current_result"):
+        res = report["current_result"]
+        config = config or res.get('config')
+        holdings = holdings or res.get('holdings')
+        pending_orders = res.get('orders', [])
+
+    if config:
+        lines.append(f"Target: `{config['target']}` @ {config['exchange']}")
+    if holdings:
+        lines.append(f"Holdings: {holdings['qty']} @ ${holdings['avg_price']:.2f} (Cur: ${holdings.get('cur_price', 0):.2f})")
+    lines.append("")
+
+    # --- Section: Success ---
+    if success_orders:
+        lines.append("✅ *Successfully Executed:*")
+        for o in success_orders:
+            lines.append(f"  • {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}")
         lines.append("")
-        lines.append("✅ *Executed Orders:*")
-        for i, order in enumerate(entry['orders'], 1):
-            emoji = "🟢" if order['type'].lower() == 'buy' else "🔴"
-            lines.append(f"  {emoji} {order['type'].upper()} {order['qty']} @ ${order['price']:.2f}")
 
-    elif report.get("error") and not report.get("current_result"):
-        lines.append(f"⚠️ *Error:* {report['error']}")
+    # --- Section: Failed ---
+    if failed_orders:
+        lines.append("❌ *Failed Orders (Need Fix):*")
+        for o in failed_orders:
+            err = f" - _{o.get('error')}_" if o.get('error') else ""
+            lines.append(f"  • {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}{err}")
+        lines.append("")
 
-    elif report.get("current_result"):
-        result = report["current_result"]
-        if result.get('error'):
-            lines.append(f"⚠️ *Error:* {result['error']}")
-        elif not result.get('orders'):
-            lines.append(f"📊 *RAOEO - {result['date']}*")
-            lines.append("No orders calculated for today.")
-        else:
-            lines.append(f"📊 *RAOEO Order Calculation - {result['date']}*")
-            lines.append(f"Target: `{result['config']['target']}` @ {result['config']['exchange']}")
-            lines.append(f"Current Price: ${result['holdings']['cur_price']:.2f}")
-            lines.append(f"Holdings: {result['holdings']['qty']} @ ${result['holdings']['avg_price']:.2f}")
-            lines.append("")
-            lines.append("📋 *Pending Orders:*")
-            for i, order in enumerate(result['orders'], 1):
-                emoji = "🟢" if order['type'].lower() == 'buy' else "🔴"
-                lines.append(f"  {emoji} {order['type'].upper()} {order['qty']} @ ${order['price']:.2f}")
-                lines.append(f"      _{order['desc']}_")
+    # --- Section: Pending ---
+    if pending_orders:
+        lines.append("⏳ *Orders to Place (Pending):*")
+        for o in pending_orders:
+            lines.append(f"  • {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}")
+            lines.append(f"      _{o.get('desc', '')}_")
+        lines.append("")
+    elif not success_orders and not failed_orders:
+        lines.append("No orders for today.")
+
+    if failed_orders or pending_orders:
+        lines.append("💡 _Use /raoeo\\_order to execute pending items._")
+    elif success_orders:
+        lines.append("✨ _All orders completed for today._")
+
+    return "\n".join(lines)
 
     return "\n".join(lines)
 
@@ -58,6 +102,8 @@ async def cmd_raoeo_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     report = build_raoeo_report()
     _cached_result = report.get("current_result")
+    global _cached_time
+    _cached_time = time.time()
 
     msg = format_raoeo_report(report)
     if msg:
@@ -77,6 +123,12 @@ async def cmd_raoeo_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not _cached_result:
         await wrap_reply(update, "⚠️ Not calculated. Use /raoeo_report first.")
+        return
+
+    # Check cache age (max 5 minutes)
+    global _cached_time
+    if time.time() - _cached_time > 300: # 300 seconds = 5 minutes
+        await wrap_reply(update, "⏱ *Order Expired*: Calculated data is older than 5 minutes. Please run /raoeo\\_report again to get current prices.", parse_mode='Markdown')
         return
 
     if _cached_result.get('error'):
@@ -99,9 +151,10 @@ async def cmd_raoeo_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if res['success']:
                 success_count += 1
             o = res['order']
-            lines.append(f"{status} {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}")
+            err_msg = f" ({res['error']})" if not res['success'] and res.get('error') else ""
+            lines.append(f"{status} {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}{err_msg}")
 
-        save_history(_cached_result)
+        save_history(_cached_result, exec_results)
         lines.append(f"\n💾 Saved to history. ({success_count}/{len(orders)} succeeded)")
         _cached_result = None
         await wrap_reply(update, "\n".join(lines), parse_mode='Markdown')

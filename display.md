@@ -71,15 +71,13 @@ Named Pipe를 통해 로그를 별도 터미널(Event Viewer)로 전송합니다
 - `None`.
 
 ### add_alert
-메인 터미널의 알림 영역에 메시지를 추가합니다. 메인 스레드에서만 호출하세요.
-#### input
-- `message` (str): 알림 메시지.
-- `level` (str): "INFO", "ERROR", "SUCCESS".
-#### output
-- `None`.
-
-### queue_alert
-백그라운드 스레드(예: Telegram bot)에서 안전하게 알람을 큐에 추가합니다.
+```python
+def add_alert(message: str, level: str = "INFO")
+```
+알림 메시지를 화면 하단 알림 영역에 표시합니다.
+- **Thread-safe**: 모든 모듈 및 백그라운드 스레드(Telegram 등)에서 직접 호출할 수 있습니다.
+- 메시지는 내부 큐(`_pending_alerts`)를 거쳐 메인 루프에서 안전하게 화면에 렌더링됩니다.
+- `level`: "INFO" (기본), "SUCCESS" (초록), "ERROR" (빨강), "WARN" (노랑)
 #### input
 - `message` (str): 알림 메시지.
 - `level` (str): "INFO", "ERROR", "SUCCESS".

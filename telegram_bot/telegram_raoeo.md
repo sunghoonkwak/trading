@@ -1,4 +1,4 @@
-# telegram_raoeo
+# telegram_raoeo.py
 
 이 모듈은 RAOEO 무한매수 전략 전용 Telegram 명령어 및 리포팅 기능을 담당합니다.
 
@@ -21,4 +21,5 @@
 초기화 메시지에 포함할 RAOEO 명령어들에 대한 설명을 반환합니다.
 
 ## Internal State (내부 상태)
-- `_cached_result`: 최근 `/raoeo_report` 실행 시 계산된 주문 데이터를 보관하며, `/raoeo_order` 명령 시 이 데이터를 사용해 실제 주문을 진행합니다.
+- `_cached_result`: 최근 `/raoeo_report` 실행 시 계산된 주문 데이터를 보관하며, `/raoeo_order` 명령 시 이 데이터를 사용해 실제 주문을 진행합니다. (5분 경과 시 자동 만료)
+- **실패 재시도 지원**: `/raoeo_report` 실행 시 오늘 날짜의 히스토리에서 실패한 주문이 발견되면, 새 주문 대신 해당 주문들을 캐시에 담아 재전송을 준비합니다.

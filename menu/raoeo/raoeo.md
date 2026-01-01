@@ -55,11 +55,12 @@
 3. **매도**: 평단가 × (1 + sell_profit) 가격으로 보유한 주식 전체를 매도합니다.
 4. **매수**: 당일 사용가능한 자금 (seed/duration)을 아래와 같이 분배합니다.
 
-| State | Price | Ratio | Description |
-|-------|-------|-------|-------------|
-| Initial (보유 없음) | 현재가 × 110% | 100% | LOC 매수 |
-| Holding (보유 중) | 평단가 × (sell_profit - 1%) | 50% | 자전거래 방지 LOC |
-| Holding (보유 중) | 평단가 × 100% | 50% | 평단가 하락용 LOC |
+| State | Price | Ratio | Type (ID) | Description |
+|-------|-------|-------|-----------|-------------|
+| Initial (보유 없음) | 현재가 × 110% | 100% | `buy_initial` | LOC 매수 |
+| Holding (보유 중) | 평단가 × (sell_profit - 1%) | 50% | `buy_guaranteed` | 자전거래 방지 LOC |
+| Holding (보유 중) | 평단가 × 100% | 50% | `buy_lower` | 평단가 하락용 LOC |
+| Holding (보유 중) | 평단가 × (1 + profit) | 100% | `sell_all` | 전량 익절 매도 |
 
 #### Returns
 - `dict`: 당일 매수/매도 주문 정보
@@ -71,8 +72,9 @@
 
 #### Returns
 - `dict`: 다음 키 중 하나 포함
-  - `executed_today`: 오늘 이미 실행된 경우 히스토리 데이터
-  - `current_result`: 새로 계산된 주문 정보
+  - `executed_today`: 오늘 모든 주문이 성공한 경우 히스토리 데이터
+  - `current_result`: 실패한 주문이 있어 재시도가 필요하거나 새로 계산된 주문 정보
+  - `is_retry` (bool): 히스토리의 실패 주문을 다시 시도하는 경우 `True`
 
 ---
 
@@ -84,7 +86,7 @@
 - `config` (dict): 설정 정보
 
 #### Returns
-- `list`: 각 주문의 실행 결과 (`success`, `order` 포함)
+- `list`: 각 주문의 실행 결과 (`success`, `type`, `error` 포함)
 
 ---
 
@@ -95,7 +97,7 @@
 - `order_data` (dict): 당일 주문 및 전략 데이터
 
 #### Returns
-- `bool`: 저장 성공 여부
+- `bool`: 저장 성공 여부 (오늘 날짜의 기록이 이미 있으면 실패 기록을 성공으로 업데이트함)
 
 ---
 
@@ -109,13 +111,15 @@
 | `g` | 첫 페이지로 이동 |
 | `q` | 메뉴로 돌아가기 |
 
+*참고: 실패(`success: false`)한 주문은 히스토리 뷰어 테이블에 표시되지 않습니다.*
+
 ---
 
 ### raoeo_menu
 라오어 전략의 메인 컨트롤러입니다.
 
 #### Features
-- **중복 방지**: 금일 이미 주문을 실행했다면 실행 메뉴 진입 시 경고와 함께 실행을 제한합니다.
+- **유연한 재시도**: 오늘 실행 기록이 있더라도 실패한 주문이 남아 있다면 `Execute` 메뉴를 통해 언제든 다시 시도할 수 있습니다.
 - **모듈화**: `build_raoeo_report()`, `execute_orders()` 등을 호출하여 기능을 수행합니다.
 
 ## Telegram Integration

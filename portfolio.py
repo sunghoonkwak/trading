@@ -6,7 +6,11 @@ import gspread
 from google.oauth2.service_account import Credentials
 import json
 import os
+import logging
+import threading
 from datetime import datetime, timezone
+import openpyxl
+from openpyxl.styles import Font, Alignment
 import display
 try:
     from calculate_weights import calculate_target_weights, load_config
@@ -329,33 +333,34 @@ def _update_portfolio() -> tuple:
         tuple: (success: bool, kis_data: dict or None)
     """
     from menu.handle_account_info import fetch_account_data
-    from display import render_ui
+    from display import add_alert
 
     # Step 1: Fetch KIS API data
-    display.add_alert("Fetching KIS API data...", "INFO")
-    render_ui(full_refresh=True)
+    add_alert("Fetching KIS API data...", "INFO")
+
     kis_portfolio = None
+    kis_raw_data = None
     try:
-        kis_data = fetch_account_data()
-        if kis_data and not kis_data.get('error'):
-            kis_portfolio = _convert_kis_to_portfolio(kis_data)
+        kis_raw_data = fetch_account_data()
+        if kis_raw_data and not kis_raw_data.get('error'):
+            kis_portfolio = _convert_kis_to_portfolio(kis_raw_data)
             kis_count = len(kis_portfolio.get('holdings', []))
-            display.add_alert(f"KIS: {kis_count} holdings loaded", "SUCCESS")
+            add_alert(f"KIS: {kis_count} holdings loaded", "SUCCESS")
         else:
-            display.add_alert("KIS: No data or error", "WARN")
+            add_alert("KIS: No data or error", "WARN")
     except Exception as e:
-        display.add_alert(f"KIS skipped: {str(e)[:30]}", "WARN")
-    render_ui(full_refresh=True)
+        add_alert(f"KIS skipped: {str(e)[:30]}", "WARN")
+
 
     # Step 2: Fetch GSheet data
-    display.add_alert("Fetching GSheet data...", "INFO")
-    render_ui(full_refresh=True)
+    add_alert("Fetching GSheet data...", "INFO")
+
     gsheet_data = _fetch_from_gsheet()
 
     if "error" in gsheet_data:
-        display.add_alert(f"GSheet error: {gsheet_data['error']}", "ERROR")
+        add_alert(f"GSheet error: {gsheet_data['error']}", "ERROR")
         if not kis_portfolio:
-            return False
+            return False, kis_raw_data
         # Use only KIS data if GSheet fails
         gsheet_data = {"accounts": {}, "holdings": [], "asset_info": {}, "cash_holdings": []}
 
@@ -458,10 +463,10 @@ def _update_portfolio() -> tuple:
     try:
         with open(PORTFOLIO_FILE, 'w', encoding='utf-8') as f:
             json.dump(portfolio, f, ensure_ascii=False, indent=2)
-        return True, kis_data
+        return True, kis_raw_data
     except Exception as e:
-        display.add_alert(f"Failed to save portfolio: {e}", "ERROR")
-        return False, kis_data
+        notify(f"Failed to save portfolio: {e}", "ERROR")
+        return False, kis_raw_data
 
 
 def _load_portfolio() -> dict:
@@ -974,6 +979,9 @@ def get_portfolio() -> dict:
     Fetch and calculate portfolio data.
     Syncs portfolio.json and calculates weights/targets.
 
+    Args:
+        silent (bool): If True, suppress UI refreshes and use thread-safe alerts.
+
     Returns:
         dict: {
             "merged_data": dict,      # Merged holdings by ticker
@@ -985,7 +993,7 @@ def get_portfolio() -> dict:
             "error": str or None      # Error message if any
         }
     """
-    from display import render_ui
+    from display import add_alert
 
     result = {
         "merged_data": {},
@@ -998,9 +1006,11 @@ def get_portfolio() -> dict:
     }
 
     # Sync portfolio data and get KIS data
-    display.add_alert("Syncing portfolio...", "INFO")
-    render_ui(full_refresh=True)
     success, kis_data = _update_portfolio()
+
+    # If _update_portfolio failed but we have locally cached data,
+    # we might still want to proceed for display purposes if possible.
+    # But usually _update_portfolio handles the sync logic.
 
     exchange_rate = 1435.0
     current_prices = {}
@@ -1016,10 +1026,9 @@ def get_portfolio() -> dict:
             symbol = stock.get('symbol', '')
             if symbol:
                 current_prices[symbol] = stock.get('cur_price', 0)
-        display.add_alert(f"Loaded {len(current_prices)} prices", "SUCCESS")
+        add_alert(f"Loaded {len(current_prices)} prices", "SUCCESS")
 
     result["exchange_rate"] = exchange_rate
-    render_ui(full_refresh=True)
 
     # Calculate stats
     stats = _calculate_portfolio_stats(exchange_rate, current_prices)
@@ -1049,7 +1058,7 @@ def get_portfolio() -> dict:
         config = load_config(config_path)
         targets, score = calculate_target_weights(current_weights, config)
     except Exception as e:
-        display.add_alert(f"Weight calc error: {e}", "ERROR")
+        add_alert(f"Weight calc error: {e}", "ERROR")
     result["targets"] = targets
 
     return result

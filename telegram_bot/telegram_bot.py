@@ -16,6 +16,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from .telegram_raoeo import register_raoeo_handlers, get_raoeo_commands_desc
+from .telegram_portfolio import register_portfolio_handlers, get_portfolio_commands_desc
 import display
 
 # Module state
@@ -57,7 +58,7 @@ async def wrap_reply(update: Update, text: str, parse_mode: str = None):
         parse_mode: Optional parse mode ('Markdown', 'MarkdownV2', 'HTML')
     """
     first_line = text.split('\n')[0][:50]  # First line, max 50 chars
-    display.queue_alert(f"[TG] {first_line}", "INFO")
+    display.add_alert(f"[TG] {first_line}", "INFO")
     await update.message.reply_text(text, parse_mode=parse_mode)
 
 
@@ -76,7 +77,7 @@ async def wrap_send(text: str, parse_mode: str = None):
         return
 
     first_line = text.split('\n')[0][:50]  # First line, max 50 chars
-    display.queue_alert(f"[TG] {first_line}", "INFO")
+    display.add_alert(f"[TG] {first_line}", "INFO")
     await _app.bot.send_message(chat_id=_chat_id, text=text, parse_mode=parse_mode)
 
 
@@ -107,14 +108,17 @@ def initialize_telegram():
 
             # Register strategy handlers
             register_raoeo_handlers(_app)
+            register_portfolio_handlers(_app)
 
             # Send initialization message
             async def send_init_message():
                 raoeo_desc = get_raoeo_commands_desc()
+                port_desc = get_portfolio_commands_desc()
                 init_text = (
                     "🤖 *Trading Bot Initialized*\n\n"
                     "Commands:\n"
-                    f"{raoeo_desc}"
+                    f"{raoeo_desc}\n"
+                    f"{port_desc}"
                 )
                 try:
                     await wrap_send(init_text, parse_mode='MarkdownV2')
@@ -126,7 +130,7 @@ def initialize_telegram():
                         await wrap_send(fallback_text)
                     except Exception as e2:
                         logging.error(f"[Telegram] Fallback also failed: {e2}")
-                        display.queue_alert("[TG] Init message failed", "ERROR")
+                        display.add_alert("[TG] Init message failed", "ERROR")
 
             loop.run_until_complete(_app.initialize())
             loop.run_until_complete(send_init_message())

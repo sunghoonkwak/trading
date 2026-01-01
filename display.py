@@ -175,7 +175,18 @@ def update_order_state(order_id: str, ticker: str, name: str, side: str,
 
 
 def add_alert(message: str, level: str = "INFO"):
-    """Add alert message to display. Will be shown on next render_ui call."""
+    """
+    Queue an alert message for display.
+    This is thread-safe and should be used by all modules.
+    """
+    _pending_alerts.put((message, level))
+
+
+def _add_alert_internal(message: str, level: str = "INFO"):
+    """
+    Actually adds alert to the buffer.
+    Should ONLY be called by the alert processor (main thread context).
+    """
     color = COLOR_YELLOW
     if level == "ERROR":
         color = COLOR_RED
@@ -184,27 +195,17 @@ def add_alert(message: str, level: str = "INFO"):
 
     timestamp = datetime.now().strftime("%H:%M:%S")
     alert_buffer.appendleft(f"[{timestamp}] {color}{message}{COLOR_RESET}")
-    # Do not call render_ui() here - it will be called by menu loop
-
-
-def queue_alert(message: str, level: str = "INFO"):
-    """
-    Thread-safe alert queueing for background threads (e.g., Telegram bot).
-    Alerts are processed by the main thread via process_pending_alerts().
-    """
-    _pending_alerts.put((message, level))
 
 
 def process_pending_alerts():
     """
-    Process pending alerts from background threads.
-    Should be called periodically from the main menu loop.
+    Process pending alerts from the queue.
     """
     processed = False
     while not _pending_alerts.empty():
         try:
             message, level = _pending_alerts.get_nowait()
-            add_alert(message, level)
+            _add_alert_internal(message, level)
             processed = True
         except Exception:
             break
@@ -317,10 +318,9 @@ def render_ui(full_refresh=False):
     # Row 4-11: Menu (8 lines)
     # Row 12: Separator
     # Row 13: "Enter Choice:" input (handled by menu.py)
-    # Row 14: Separator
-    # Row 15+: Orders and Alerts
+    # Row 14+: Orders and Alerts
 
-    order_area_start = 15
+    order_area_start = 14
     available_rows = max(1, rows - order_area_start)
 
     with terminal_lock:
@@ -339,7 +339,6 @@ def render_ui(full_refresh=False):
             # Separators around input area
             sys.stdout.write(f"\033[12;1H{CLEAR_LINE}" + "-" * min(cols - 1, 60))
             # Row 13 is for input - handled by menu.py
-            sys.stdout.write(f"\033[14;1H{CLEAR_LINE}" + "-" * min(cols - 1, 60))
 
         # Display orders (most recent first)
         order_list = list(order_states.items())
