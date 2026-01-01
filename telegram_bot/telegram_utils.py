@@ -64,3 +64,20 @@ async def wrap_send(text: str, **kwargs):
     first_line = text.split('\n')[0][:80]
     display.add_alert(f"[TG] {first_line}", "INFO")
     return await _bot.send_message(chat_id=_chat_id, text=text, **kwargs)
+
+
+async def wrap_edit_message(chat_id: str, message_id: int, text: str, **kwargs):
+    """
+    Wrapper for bot.edit_message_text that alerts the first line.
+    Uses globally set bot.
+    """
+    global _bot
+
+    if not _bot:
+        logging.warning("[TG] Bot not initialized for edit_message_text")
+        return
+
+    if not text: return
+    first_line = text.split('\n')[0][:80]
+    display.add_alert(f"[TG] {first_line}", "INFO")
+    return await _bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, **kwargs)

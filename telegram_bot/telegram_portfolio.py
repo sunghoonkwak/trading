@@ -15,12 +15,44 @@ from telegram.ext import (
     ConversationHandler, CallbackQueryHandler, MessageHandler, TypeHandler, filters
 )
 import display
-from .telegram_utils import wrap_reply, wrap_edit
+from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
+from datetime import datetime
 
 from menu.portfolio.portfolio import get_portfolio, calc_weight_diffs
 
 # Conversation states
 SELECT_TICKER = 0
+VA_CONFIRM = 1
+
+# Portfolio Cache
+_portfolio_cache = None
+_portfolio_cache_time = None
+CACHE_EXPIRE_SECONDS = 300  # 5 minutes
+
+
+def get_portfolio_cached(force_refresh: bool = False) -> dict:
+    """
+    Get portfolio data with caching.
+    Returns cached result if within 5 minutes, otherwise fetches fresh data.
+
+    Args:
+        force_refresh: If True, ignore cache and fetch fresh data.
+    """
+    global _portfolio_cache, _portfolio_cache_time
+
+    now = datetime.now()
+
+    if not force_refresh and _portfolio_cache is not None and _portfolio_cache_time is not None:
+        elapsed = (now - _portfolio_cache_time).total_seconds()
+        if elapsed < CACHE_EXPIRE_SECONDS:
+            logging.debug(f"[TG] Using cached portfolio (age: {elapsed:.0f}s)")
+            return _portfolio_cache
+
+    # Fetch fresh data
+    logging.info("[TG] Fetching fresh portfolio data...")
+    _portfolio_cache = get_portfolio()
+    _portfolio_cache_time = now
+    return _portfolio_cache
 
 
 def format_portfolio_summary(data: dict) -> str:
@@ -297,11 +329,10 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
 
 async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio - Entry point for ConversationHandler."""
-    """Command handler for /portfolio - Entry point for ConversationHandler."""
 
     logging.info(f"[TG] Portfolio session started for user {update.effective_user.id}")
     # Get portfolio data and cache in user_data
-    data = get_portfolio()
+    data = get_portfolio_cached()
     context.user_data['portfolio_data'] = data
 
     # Format summary message
@@ -415,7 +446,6 @@ async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle conversation timeout."""
-    display.add_alert("[TG] Session Expired", "INFO")
     logging.info("[TG] Portfolio session timed out")
 
     try:
@@ -424,7 +454,7 @@ async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if last_msg_id:
             from .telegram_bot import _chat_id
             if _chat_id:
-                await context.bot.edit_message_text(
+                await wrap_edit_message(
                     chat_id=_chat_id,
                     message_id=last_msg_id,
                     text="⏳ <b>Session Expired.</b>",
@@ -439,7 +469,7 @@ async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio_weight."""
     # Run silently
-    data = get_portfolio()
+    data = get_portfolio_cached()
     msg = format_weight_diffs(data)
     await wrap_reply(update, msg, parse_mode='HTML')
 
@@ -466,10 +496,181 @@ def register_portfolio_handlers(app: Application):
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("portfolio_weight", cmd_portfolio_weight))
 
+    # ConversationHandler for /portfolio_va with 60s timeout
+    va_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("portfolio_va", cmd_portfolio_va)],
+        states={
+            VA_CONFIRM: [
+                CallbackQueryHandler(handle_va_callback, pattern=r'^va_')
+            ],
+            ConversationHandler.TIMEOUT: [TypeHandler(object, va_timeout_handler)]
+        },
+        fallbacks=[],
+        conversation_timeout=60,
+        per_message=False,
+    )
+    app.add_handler(va_conv_handler)
+
 
 def get_portfolio_commands_desc() -> str:
     """Return Portfolio command descriptions for init message."""
     return (
         "/portfolio - Portfolio check (interactive)\n"
-        "/portfolio_weight - Rebalancing suggestions"
+        "/portfolio_weight - Rebalancing suggestions\n"
+        "/portfolio_va - Value Averaging order"
     )
+
+
+# =============================================
+# Value Averaging Functions
+# =============================================
+
+def format_va_report(res: dict) -> str:
+    """Format Value Averaging calculation result for Telegram."""
+    if res.get("error"):
+        return f"⚠️ <b>Error:</b> {res['error']}"
+
+    target_ticker = res.get("target_ticker", "N/A")
+    date = res.get("date", "N/A")
+    day_count = res.get("day_count", 0)
+    daily_budget = res.get("daily_budget", 0)
+    target_weight = res.get("target_weight", 0) * 100
+    current_price = res.get("current_price", 0)
+    buy_amount = res.get("daily_target_amount", 0)
+    orders = res.get("orders", [])
+
+    lines = [
+        f"📈 <b>Value Averaging</b> ({date})",
+        "",
+        f"<b>Target:</b> <code>{target_ticker}</code>",
+        f"<b>Day:</b> {day_count} | <b>Weight:</b> {target_weight:.1f}%",
+        f"<b>Price:</b> ${current_price:,.2f} | <b>Budget:</b> ${daily_budget:,.2f}",
+        "",
+        f"💰 <b>Buy Amount:</b> ${buy_amount:,.2f}",
+        ""
+    ]
+
+    if current_price <= 0:
+        lines.append("⚠️ <i>Price unavailable. Cannot calculate order.</i>")
+    elif orders:
+        for o in orders:
+            lines.append(f"📋 <b>Order:</b> {o['qty']} qty @ ${o['price']:.2f} (LOC)")
+        lines.append("")
+        lines.append("<i>Execute this order?</i>")
+    else:
+        lines.append("✅ <i>No orders needed (target met).</i>")
+
+    return "\n".join(lines)
+
+
+def build_va_keyboard(has_orders: bool) -> InlineKeyboardMarkup:
+    """Build Yes/No keyboard for VA confirmation."""
+    if has_orders:
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Yes", callback_data="va_yes"),
+                InlineKeyboardButton("❌ No", callback_data="va_no")
+            ]
+        ]
+    else:
+        keyboard = []  # No buttons if no orders
+    return InlineKeyboardMarkup(keyboard) if keyboard else None
+
+
+async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Command handler for /portfolio_va - Value Averaging."""
+    from menu.portfolio import value_averaging
+
+    logging.info(f"[TG] /portfolio_va from user {update.effective_user.id}")
+
+    # Get portfolio data
+    data = get_portfolio_cached()
+    if data.get("error"):
+        await wrap_reply(update, f"⚠️ Error: {data['error']}")
+        return
+
+    targets = data.get("targets", {})
+    price_map = data.get("price_map", {})
+    merged_data = data.get("merged_data", {})
+    total_value_usd = data.get("total_value_usd", 0)
+
+    # Calculate order
+    res = value_averaging.calculate_order(targets, price_map, merged_data, total_value_usd)
+
+    # Cache result for callback
+    context.user_data['va_result'] = res
+
+    # Format message
+    msg = format_va_report(res)
+
+    # Build keyboard
+    has_orders = bool(res.get("orders")) and res.get("current_price", 0) > 0
+    keyboard = build_va_keyboard(has_orders)
+
+    sent_msg = await wrap_reply(update, msg, parse_mode='HTML', reply_markup=keyboard)
+    if sent_msg:
+        context.user_data['va_msg_id'] = sent_msg.message_id
+
+    return VA_CONFIRM if has_orders else ConversationHandler.END
+
+
+async def handle_va_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle Value Averaging Yes/No button clicks."""
+    from menu.portfolio import value_averaging
+
+    query = update.callback_query
+    await query.answer()
+
+    callback_data = query.data
+    logging.info(f"[TG] VA Callback: {callback_data}")
+
+    res = context.user_data.get('va_result')
+
+    if callback_data == "va_no":
+        await wrap_edit(update, "❌ <b>Order Cancelled.</b>", parse_mode='HTML')
+        context.user_data.pop('va_result', None)
+        return ConversationHandler.END
+
+    if callback_data == "va_yes":
+        if not res or not res.get('orders'):
+            await wrap_edit(update, "⚠️ No orders to execute.", parse_mode='HTML')
+            return ConversationHandler.END
+
+        # Execute orders
+        exec_results = value_averaging.execute_orders(res)
+
+        # Build result message
+        lines = [format_va_report(res), "", "─" * 20, "<b>Execution Result:</b>"]
+
+        success_count = 0
+        for r in exec_results:
+            status = "✅" if r['success'] else "❌"
+            if r['success']:
+                success_count += 1
+            lines.append(f"{status} {r['message']}")
+
+        lines.append(f"\n<b>{success_count}/{len(exec_results)} succeeded</b>")
+
+        await wrap_edit(update, "\n".join(lines), parse_mode='HTML')
+        context.user_data.pop('va_result', None)
+        return ConversationHandler.END
+
+
+async def va_timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle VA conversation timeout."""
+    logging.info("[TG] VA session timed out")
+    context.user_data.pop('va_result', None)
+    # Try to edit the message if possible
+    if 'va_msg_id' in context.user_data:
+        chat_id = update.effective_chat.id if update and update.effective_chat else context.user_data.get('chat_id')
+        try:
+            await wrap_edit_message(
+                chat_id=chat_id,
+                message_id=context.user_data.get('va_msg_id'),
+                text="⏱️ <i>VA session expired.</i>",
+                parse_mode='HTML'
+            )
+        except Exception:
+            pass
+        context.user_data.pop('va_msg_id', None)
+    return ConversationHandler.END

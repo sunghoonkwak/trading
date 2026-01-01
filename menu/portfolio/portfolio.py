@@ -1154,31 +1154,16 @@ def portfolio_menu():
             input_at(13, 2, "Press Enter to continue...")
         elif choice == '3':
              from . import value_averaging
-             from menu.handle_account_info import fetch_price
              from display import show_in_result_area, input_at
 
-             va_config = value_averaging.load_config()
-             target_ticker = va_config.get('target', '')
-             target_weight = 0.0
-
-             if target_ticker:
-                 target_weight = targets.get(target_ticker, 0.0)
-
-             # Get price from price_map or fetch if missing
+             # Get price_map from portfolio_data
              price_map = portfolio_data.get("price_map", {})
-             current_price_override = price_map.get(target_ticker, 0.0)
 
-             if current_price_override == 0:
-                  print(f" [Info] Price for {target_ticker} not found in portfolio. Fetching from API...")
-                  try:
-                      current_price_override = fetch_price(target_ticker)
-                  except Exception as e:
-                      print(f" [Warning] Failed to fetch price: {e}")
-
-             # Execute Calculation with INJECTED data
-             res = value_averaging.calculate_order(merged_data, total_value_usd, target_weight, current_price_override)
+             # Call refactored calculate_order
+             res = value_averaging.calculate_order(targets, price_map, merged_data, total_value_usd)
 
              # Build Display Lines
+             target_ticker = res.get("target_ticker", "N/A")
              lines = []
 
              # Header
