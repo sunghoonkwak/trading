@@ -149,7 +149,7 @@ def _parse_worksheet_data(worksheet, currency: str) -> dict:
     }
 
 
-def fetch_from_gsheet() -> dict:
+def _fetch_from_gsheet() -> dict:
     """
     Fetch portfolio data from Google Sheets (USD and KRW worksheets).
 
@@ -315,18 +315,18 @@ def _convert_kis_to_portfolio(kis_data: dict) -> dict:
     }
 
 
-def update_portfolio() -> bool:
+def _update_portfolio() -> tuple:
     """
     Update portfolio.json file by merging KIS API and GSheet data.
 
     Process Flow:
-    1. fetch_account_data() - KIS API data load
-    2. fetch_from_gsheet() - GSheet data load
+    1. _fetch_account_data() - KIS API data load
+    2. _fetch_from_gsheet() - GSheet data load
     3. Merge data and remove duplicates
     4. Save to portfolio.json
 
     Returns:
-        bool: True if successful, False otherwise
+        tuple: (success: bool, kis_data: dict or None)
     """
     from menu.handle_account_info import fetch_account_data
     from display import render_ui
@@ -350,7 +350,7 @@ def update_portfolio() -> bool:
     # Step 2: Fetch GSheet data
     display.add_alert("Fetching GSheet data...", "INFO")
     render_ui(full_refresh=True)
-    gsheet_data = fetch_from_gsheet()
+    gsheet_data = _fetch_from_gsheet()
 
     if "error" in gsheet_data:
         display.add_alert(f"GSheet error: {gsheet_data['error']}", "ERROR")
@@ -365,7 +365,7 @@ def update_portfolio() -> bool:
     all_accounts = {}
     if kis_portfolio:
         all_accounts.update(kis_portfolio["accounts"])
-    # GSheet accounts come from fetch_from_gsheet which already has account_list format
+    # GSheet accounts come from _fetch_from_gsheet which already has account_list format
     # We need to rebuild from the raw data
 
     # For GSheet, we need to get the raw accounts before they were converted to list
@@ -458,10 +458,10 @@ def update_portfolio() -> bool:
     try:
         with open(PORTFOLIO_FILE, 'w', encoding='utf-8') as f:
             json.dump(portfolio, f, ensure_ascii=False, indent=2)
-        return True
+        return True, kis_data
     except Exception as e:
         display.add_alert(f"Failed to save portfolio: {e}", "ERROR")
-        return False
+        return False, kis_data
 
 
 def _load_portfolio() -> dict:
@@ -584,7 +584,7 @@ def _format_currency(value: float, currency: str, short: bool = False) -> str:
 
 
 
-def get_merged_portfolio_stat(current_prices: dict = None, exchange_rate: float = 1435.0):
+def _get_merged_portfolio_stat(current_prices: dict = None, exchange_rate: float = 1435.0):
     """
     Load portfolio, merge holdings by ticker, and calculate total value.
     Returns:
@@ -679,7 +679,7 @@ def get_merged_portfolio_stat(current_prices: dict = None, exchange_rate: float 
 
     return merged, total_val_usd
 
-def check_portfolio_balance(merged_data, total_value_usd, current_weights, targets, exchange_rate):
+def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targets, exchange_rate):
     """
     Compare current weights with target weights and show top differences.
     """
@@ -826,7 +826,7 @@ def check_portfolio_balance(merged_data, total_value_usd, current_weights, targe
             page = (page + 1) % total_pages
 
 
-def export_portfolio_excel(merged_data, current_weights, targets) -> bool:
+def _export_portfolio_excel(merged_data, current_weights, targets) -> bool:
     """
     Export portfolio to Excel (.xlsx) with formatted columns.
     Requires 'openpyxl' library.
@@ -959,69 +959,113 @@ def export_portfolio_excel(merged_data, current_weights, targets) -> bool:
         return False
 
 
-def show_portfolio_summary():
+def get_portfolio() -> dict:
     """
-    Display portfolio summary UI and handle menu interactions.
-    Fetches KIS API data once at start and caches for reuse.
-    """
-    from display import show_in_result_area, input_at, render_ui, clear_result_area
-    from menu.handle_account_info import fetch_account_data
+    Fetch and calculate portfolio data.
+    Syncs portfolio.json and calculates weights/targets.
 
-    # First sync portfolio data
+    Returns:
+        dict: {
+            "merged_data": dict,      # Merged holdings by ticker
+            "total_value_usd": float, # Total portfolio value in USD
+            "current_weights": dict,  # Current weight per ticker
+            "targets": dict,          # Target weight per ticker
+            "stats": dict,            # Summary stats (us_stock_usd, etc.)
+            "exchange_rate": float,   # KRW/USD exchange rate
+            "error": str or None      # Error message if any
+        }
+    """
+    from display import render_ui
+
+    result = {
+        "merged_data": {},
+        "total_value_usd": 0.0,
+        "current_weights": {},
+        "targets": {},
+        "stats": {},
+        "exchange_rate": 1435.0,
+        "error": None
+    }
+
+    # Sync portfolio data and get KIS data
     display.add_alert("Syncing portfolio...", "INFO")
     render_ui(full_refresh=True)
-    update_portfolio()
+    success, kis_data = _update_portfolio()
 
-    # Fetch KIS API data once and cache
-    display.add_alert("Loading current prices...", "INFO")
-    render_ui(full_refresh=True)
-
-    exchange_rate = 1435.0  # Default
+    exchange_rate = 1435.0
     current_prices = {}
 
-    try:
-        kis_data = fetch_account_data()
-        if kis_data and not kis_data.get('error'):
-            exchange_rate = kis_data.get('exchange_rate', 1435.0)
-            # Cache current prices from KIS data
-            for stock in kis_data.get('domestic_stocks', []):
-                symbol = stock.get('symbol', '')
-                if symbol:
-                    current_prices[symbol] = stock.get('cur_price', 0)
-            for stock in kis_data.get('overseas_stocks', []):
-                symbol = stock.get('symbol', '')
-                if symbol:
-                    current_prices[symbol] = stock.get('cur_price', 0)
-            display.add_alert(f"Loaded {len(current_prices)} prices", "SUCCESS")
-    except Exception as e:
-        display.add_alert(f"KIS error: {str(e)[:20]}", "WARN")
+    # Extract current prices from KIS data
+    if kis_data and not kis_data.get('error'):
+        exchange_rate = kis_data.get('exchange_rate', 1435.0)
+        for stock in kis_data.get('domestic_stocks', []):
+            symbol = stock.get('symbol', '')
+            if symbol:
+                current_prices[symbol] = stock.get('cur_price', 0)
+        for stock in kis_data.get('overseas_stocks', []):
+            symbol = stock.get('symbol', '')
+            if symbol:
+                current_prices[symbol] = stock.get('cur_price', 0)
+        display.add_alert(f"Loaded {len(current_prices)} prices", "SUCCESS")
 
+    result["exchange_rate"] = exchange_rate
     render_ui(full_refresh=True)
 
-    # Calculate stats with current prices
+    # Calculate stats
     stats = _calculate_portfolio_stats(exchange_rate, current_prices)
     if "error" in stats:
-        display.add_alert(f"Stats error: {stats['error']}", "ERROR")
-        return
+        result["error"] = stats["error"]
+        return result
+    result["stats"] = stats
 
-    # --- Pre-calculate Portfolio Data (Once) ---
-    merged_data, total_value_usd = get_merged_portfolio_stat(current_prices, exchange_rate)
+    # Get merged data
+    merged_data, total_value_usd = _get_merged_portfolio_stat(current_prices, exchange_rate)
+    result["merged_data"] = merged_data
+    result["total_value_usd"] = total_value_usd
 
+    # Calculate current weights
     current_weights = {}
     if total_value_usd > 0:
         for ticker, data in merged_data.items():
             current_weights[ticker] = data["current_value_usd"] / total_value_usd
+    result["current_weights"] = current_weights
 
-    # Calculate Targets
+    # Calculate target weights
     targets = {}
     try:
         config_path = os.path.join(os.path.dirname(__file__), "portfolio_weights.json")
         if not os.path.exists(config_path):
-             config_path = "portfolio_weights.json"
+            config_path = "portfolio_weights.json"
         config = load_config(config_path)
         targets, score = calculate_target_weights(current_weights, config)
     except Exception as e:
         display.add_alert(f"Weight calc error: {e}", "ERROR")
+    result["targets"] = targets
+
+    return result
+
+
+def portfolio_menu():
+    """
+    Portfolio menu interface using modular get_portfolio() function.
+    Displays summary and handles menu interactions.
+    """
+    from display import show_in_result_area, input_at, render_ui, clear_result_area
+
+    # Get portfolio data
+    portfolio_data = get_portfolio()
+
+    if portfolio_data.get("error"):
+        display.add_alert(f"Portfolio error: {portfolio_data['error']}", "ERROR")
+        return
+
+    # Extract data
+    merged_data = portfolio_data["merged_data"]
+    total_value_usd = portfolio_data["total_value_usd"]
+    current_weights = portfolio_data["current_weights"]
+    targets = portfolio_data["targets"]
+    stats = portfolio_data["stats"]
+    exchange_rate = portfolio_data["exchange_rate"]
 
     while True:
         clear_result_area()
@@ -1038,7 +1082,6 @@ def show_portfolio_summary():
             sym1 = "$ " if curr1 == "USD" else "₩ "
             sym2 = "$ " if curr2 == "USD" else "₩ "
 
-            # Format number part
             def _get_num(v, c):
                 if c == "USD":
                     return f"{v/1000:,.1f}K" if abs(v) >= 1000 else f"{v:,.2f}"
@@ -1067,7 +1110,7 @@ def show_portfolio_summary():
         tot_krw = _align_pair(stats['total_stock_krw'], stats['total_cash_krw'], "KRW", "KRW")
         lines.append(f" {'Total':10} │ {tot_usd:^27} │ {tot_krw:^27} │")
 
-        # Cash ratio row (separate line)
+        # Cash ratio row
         us_cash_str = f"{stats['us_cash_ratio']:>14.1f}        %"
         kr_cash_str = f"{stats['kr_cash_ratio']:>14.1f}        %"
         lines.append(f" {'Cash':10} │ {us_cash_str:27} │ {kr_cash_str:27} │")
@@ -1079,20 +1122,20 @@ def show_portfolio_summary():
         choice = input_at(13, 2, "Enter Choice: ").strip().lower()
 
         if choice == '1':
-            check_portfolio_balance(merged_data, total_value_usd, current_weights, targets, exchange_rate)
+            _check_portfolio_balance(merged_data, total_value_usd, current_weights, targets, exchange_rate)
             input_at(13, 2, "Press Enter to continue...")
         elif choice == '2':
-            export_portfolio_excel(merged_data, current_weights, targets)
+            _export_portfolio_excel(merged_data, current_weights, targets)
             input_at(13, 2, "Press Enter to continue...")
         elif choice == 'q':
             break
-        else:
-            pass
+
+    render_ui(full_refresh=True)
 
 
 if __name__ == "__main__":
     # Quick test
-    result = update_portfolio()
+    result = _update_portfolio()
     if result:
         print("Portfolio sync completed successfully!")
     else:

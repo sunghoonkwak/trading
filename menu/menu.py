@@ -65,7 +65,7 @@ def menu():
             raoeo_menu()
         elif choice.lower() == 'p':
             import portfolio
-            portfolio.show_portfolio_summary()
+            portfolio.portfolio_menu()
         elif choice.lower() == 'q':
             import trading_state
             trading_state.stop_periodic_save()  # Save stock data before exit
