@@ -18,8 +18,8 @@
 - **Real-time Sync**: 웹소켓을 통한 체결 통지 즉시 UI와 데이터가 동기화됩니다.
 
 ### 📱 Telegram 원격 제어
-- **Remote Reporting**: 외출 중에도 `/raoeo_report`, `/portfolio_summary` 명령으로 현재 상태를 즉시 확인합니다.
-- **Remote Execution**: 계산된 주문을 `/raoeo_order` 명령으로 즉시 실행할 수 있습니다.
+- **Remote Reporting**: 외출 중에도 `/raoeo_report`, `/portfolio` 명령으로 현재 상태를 즉시 확인합니다.
+- **Remote Execution**: 계산된 주문을 `/raoeo_order`, `/portfolio_va` 명령으로 즉시 실행할 수 있습니다.
 - **Security**: 모든 메시지는 **HTML 모드**로 전송되어 레이아웃이 깨지지 않으며, 스레드 안정성을 보장합니다.
 
 ### 🛡️ 보안 및 안정성
@@ -36,12 +36,12 @@
 ├── menu/                       # 대화형 메뉴 시스템
 │   ├── menu.py                 # 메인 메뉴 허브
 │   ├── raoeo/                  # [Strategy] RAOEO 무한매수법 전담 모듈
+│   ├── portfolio/              # [Strategy] 포트폴리오 분석 및 Value Averaging
 │   └── handle_*.py             # 계좌/주문/관리 각 섹션 핸들러
 ├── telegram_bot/               # Telegram 봇 통합 패키지 (Portfolio, RAOEO 핸들러)
 ├── event_viewer/               # 별도 터미널 로그 뷰어 (Named Pipe 방식)
 ├── kis_api/                    # KIS OpenAPI SDK & 인증 코어
 ├── display.py                  # ANSI UI 렌더링 엔진 (Thread-safe alerts)
-├── portfolio.py                # 자산 분석 및 리밸런싱 연산 엔진
 ├── trading_state.py            # 전역 실행 상태 및 데이터 영속성 관리
 ├── stock_configuration.json    # 종목별 UI 설정 (색상, 활성 등)
 └── credentials.enc             # 암호화된 인증 데이터
@@ -72,8 +72,9 @@ python main.py
 |---------|----------|-------------|
 | `/raoeo_report` | RAOEO | 오늘 매매 대상 종목 및 현재 전략 상태 조회 |
 | `/raoeo_order` | RAOEO | 계산된 RAOEO 주문 즉시 실행 및 히스토리 저장 |
-| `/portfolio_summary` | Portfolio | 통합 자산 현황 및 국가별 비중 요약 |
+| `/portfolio` | Portfolio | 대화형 포트폴리오 조회 (종목 상세 버튼) |
 | `/portfolio_weight` | Portfolio | 목표 비중 대비 리밸런싱 제안 목록 |
+| `/portfolio_va` | Portfolio | Value Averaging 주문 계산 및 실행 (Yes/No 확인) |
 
 ---
 *각 모듈의 상세 설명은 해당 디렉토리 내 `.md` 파일을 참조하십시오.*
