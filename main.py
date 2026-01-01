@@ -488,19 +488,9 @@ if __name__ == "__main__":
         ws.subscribe(ccnl_total, watch_list_kr)
 
     if watch_list_us:
-        formatted_us_list = []
-        for ticker in watch_list_us:
-            if any(ticker.startswith(p) for p in ["DNAS", "DNYS", "DAMS"]):
-                formatted_us_list.append(ticker)
-                continue
-
-            info = trading_config.get_stock_info(ticker)
-            market = info.get("market", "").upper()
-
-            if market == "NASDAQ": formatted_us_list.append(f"DNAS{ticker}")
-            elif market == "NYSE": formatted_us_list.append(f"DNYS{ticker}")
-            elif market == "AMEX": formatted_us_list.append(f"DAMS{ticker}")
-            else: formatted_us_list.append(f"DNAS{ticker}")
+        # Use centralized utility to add DNAS/DNYS/DAMS prefix for WebSocket subscription
+        from trading_config import get_kis_market_prefix
+        formatted_us_list = [get_kis_market_prefix(ticker) for ticker in watch_list_us]
 
         ws.subscribe(asking_price, formatted_us_list)
         ws.subscribe(delayed_ccnl, formatted_us_list)

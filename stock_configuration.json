@@ -165,7 +165,8 @@
                 255,
                 50
             ],
-            "disabled": false
+            "disabled": false,
+            "telegram_button": true
         },
         {
             "ticker": "QQQ",
@@ -187,7 +188,8 @@
                 255,
                 50
             ],
-            "disabled": false
+            "disabled": false,
+            "telegram_button": true
         },
         {
             "ticker": "VOO",
@@ -199,6 +201,18 @@
                 50
             ],
             "disabled": false
+        },
+        {
+            "ticker": "QLD",
+            "name": "ProShares Ultra QQQ 2X",
+            "market": "AMEX",
+            "color": [
+                50,
+                255,
+                255
+            ],
+            "disabled": false,
+            "telegram_button": true
         },
         {
             "ticker": "SPYM",
@@ -231,7 +245,8 @@
                 255,
                 50
             ],
-            "disabled": false
+            "disabled": false,
+            "telegram_button": true
         },
         {
             "ticker": "AVGO",
@@ -242,7 +257,8 @@
                 255,
                 50
             ],
-            "disabled": false
+            "disabled": false,
+            "telegram_button": true
         },
         {
             "ticker": "GOOGL",
@@ -253,7 +269,8 @@
                 255,
                 50
             ],
-            "disabled": false
+            "disabled": false,
+            "telegram_button": true
         },
         {
             "ticker": "QCOM",
@@ -264,7 +281,8 @@
                 255,
                 50
             ],
-            "disabled": false
+            "disabled": false,
+            "telegram_button": true
         },
         {
             "ticker": "TSM",
@@ -275,7 +293,8 @@
                 160,
                 160
             ],
-            "disabled": false
+            "disabled": false,
+            "telegram_button": true
         },
         {
             "ticker": "BLK",

@@ -14,7 +14,7 @@ import sys
 import pandas as pd
 
 sys.path.extend(['../..', '.'])
-import kis_auth as ka
+import kis_api.kis_auth as ka
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
@@ -38,10 +38,10 @@ def price(
     max_depth: int = 10
 ) -> Optional[pd.DataFrame]:
     """
-    [해외주식] 기본시세 
+    [해외주식] 기본시세
     해외주식 현재체결가[v1_해외주식-009]
     해외주식 현재체결가 API를 호출하여 DataFrame으로 반환합니다.
-    
+
     Args:
         auth (str): 사용자권한정보
         excd (str): 거래소코드 (예: "NAS")
@@ -51,10 +51,10 @@ def price(
         dataframe (Optional[pd.DataFrame]): 누적 데이터프레임
         depth (int): 현재 재귀 깊이
         max_depth (int): 최대 재귀 깊이 (기본값: 10)
-        
+
     Returns:
         Optional[pd.DataFrame]: 해외주식 현재체결가 데이터
-        
+
     Example:
         >>> df = price("", "NAS", "AAPL")
         >>> print(df)
@@ -66,7 +66,7 @@ def price(
     if not excd:
         logger.error("excd is required. (e.g. 'NAS')")
         raise ValueError("excd is required. (e.g. 'NAS')")
-    
+
     if not symb:
         logger.error("symb is required. (e.g. 'AAPL')")
         raise ValueError("symb is required. (e.g. 'AAPL')")
@@ -75,7 +75,7 @@ def price(
     if depth >= max_depth:
         logger.warning("Maximum recursion depth (%d) reached. Stopping further requests.", max_depth)
         return dataframe if dataframe is not None else pd.DataFrame()
-    
+
     # TR ID 설정 (모의투자 지원 로직)
     if env_dv == "real" or env_dv == "demo":
         tr_id = "HHDFS00000300"  # 실전투자, 모의투자 공통 TR ID
@@ -100,14 +100,14 @@ def price(
             current_data = pd.DataFrame(output_data)
         else:
             current_data = pd.DataFrame()
-            
+
         if dataframe is not None:
             dataframe = pd.concat([dataframe, current_data], ignore_index=True)
         else:
             dataframe = current_data
-            
+
         tr_cont = res.getHeader().tr_cont
-        
+
         if tr_cont == "M":
             logger.info("Calling next page...")
             ka.smart_sleep()

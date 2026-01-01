@@ -25,4 +25,5 @@
 
 ## Technical Notes
 - **Thread Safety**: `get_portfolio(silent=True)`를 사용하여 터미널 UI 갱신을 방지하고, `add_alert`를 통해 스레드 안전하게 시스템 알림을 보냅니다.
+- **Price Fetching**: 시세 정보가 부족할 경우 `menu.handle_account_info.fetch_price`를 호출하여 KIS API로부터 최신가를 보충합니다. 이때 거래소 매핑은 자동으로 처리됩니다.
 - **Mobile Optimized**: 좁은 모바일 화면에서도 정보를 한눈에 파악할 수 있도록 이모지와 굵은 텍스트를 활용합니다.

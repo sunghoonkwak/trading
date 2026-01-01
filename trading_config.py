@@ -63,3 +63,33 @@ def update_stock_name(ticker: str, new_name: str):
                 json.dump(CONFIG, f, indent=4, ensure_ascii=False)
         except Exception as e:
             print(f"[Config] Error saving stock_configuration.json: {e}")
+
+def get_kis_exchange_code(ticker: str) -> str:
+    """Get KIS exchange code (NAS, NYS, AMS) for a US ticker from CONFIG."""
+    stock = get_stock_info(ticker)
+    if not stock: return "NAS"
+
+    market = stock.get("market", "NASDAQ").upper()
+    market_to_excd = {
+        "NASDAQ": "NAS", "NYSE": "NYS", "AMEX": "AMS",
+        "NAS": "NAS", "NYS": "NYS", "AMS": "AMS"
+    }
+    return market_to_excd.get(market, "NAS")
+
+def get_kis_market_prefix(ticker: str) -> str:
+    """Get KIS market prefix (DNAS, DNYS, DAMS) for a US ticker from CONFIG."""
+    # If already has prefix, return as is
+    for prefix in ["DNAS", "DNYS", "DAMS"]:
+        if ticker.startswith(prefix):
+            return ticker
+
+    stock = get_stock_info(ticker)
+    if not stock: return f"DNAS{ticker}"
+
+    market = stock.get("market", "NASDAQ").upper()
+    market_to_prefix = {
+        "NASDAQ": "DNAS", "NYSE": "DNYS", "AMEX": "DAMS",
+        "NAS": "DNAS", "NYS": "DNYS", "AMS": "DAMS"
+    }
+    prefix = market_to_prefix.get(market, "DNAS")
+    return f"{prefix}{ticker}"

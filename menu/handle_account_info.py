@@ -164,6 +164,57 @@ def fetch_overseas_balance() -> dict:
 
     return result
 
+
+def fetch_price(ticker: str, exchange: str = None) -> float:
+    """
+    Fetch current price for an overseas stock from KIS API.
+
+    Args:
+        ticker: Stock ticker symbol (e.g., 'QLD', 'SOXL')
+        exchange: Exchange code (NAS, NYS, AMS). If None, auto-mapping via config.
+
+    Returns:
+        Current price as float, or 0.0 if failed
+    """
+    if not exchange:
+        from trading_config import get_kis_exchange_code
+        exchange = get_kis_exchange_code(ticker)
+
+    from kis_api.overseas_stock.price import price as price_module
+
+    try:
+        env_dv = "demo" if ka.isPaperTrading() else "real"
+        df = price_module.price("", exchange, ticker.upper(), env_dv)
+
+        if df is not None and not df.empty:
+            row = df.iloc[0]
+
+            # Try multiple possible field names for current price
+            # 'last' is real-time price, 'base' is previous close (used when market is closed)
+            price_fields = ['last', 'base', 'ovrs_stck_prpr', 'stck_prpr', 'prpr', 'clpr']
+            for field in price_fields:
+                if field in row:
+                    val = row[field]
+                    # Skip if value is None, empty string, or falsy (but not '0')
+                    if val is None or val == '':
+                        continue
+                    try:
+                        price_val = float(val)
+                        if price_val > 0:
+                            logging.info(f"[KIS API] {ticker} price fetched: {price_val} (field: {field})")
+                            return price_val
+                    except (ValueError, TypeError):
+                        continue
+
+            # No price found
+            logging.warning(f"[KIS API] {ticker}: No valid price available in response")
+
+        return 0.0
+
+    except Exception as e:
+        logging.warning(f"Failed to fetch price from KIS API for {ticker}: {e}")
+        return 0.0
+
 def fetch_account_data():
     """Fetch all necessary data for account info."""
     kr = fetch_domestic_balance()

@@ -50,6 +50,17 @@
 #### output
 - `None` (화면 출력 및 `msvcrt.getch()`를 통한 루프 제어)
 
+### fetch_price
+해외 종목의 실시간 현재가(장 중) 또는 기준가(장 종료 후)를 KIS API를 통해 조회합니다.
+내부적으로 `trading_config.get_kis_exchange_code`를 사용하여 거래소 코드를 자동으로 찾아오므로, 호출 시 거래소 코드를 생략할 수 있습니다.
+#### input
+- `ticker` (str): 종목 티커.
+- `exchange` (str, optional): 거래소 코드 (NAS, NYS, AMS). 생략 시 자동 매핑.
+#### output
+- `float`: 현재가 또는 기준가. 실패 시 `0.0`.
+
+---
+
 ### handle_account_info
 메인 메뉴에서 호출되는 컨트롤러 함수입니다. 초기 로딩 상태를 표시하고 데이터 조회 후 출력 함수를 실행합니다.
 #### input

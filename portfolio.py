@@ -263,7 +263,8 @@ def _convert_kis_to_portfolio(kis_data: dict) -> dict:
             "ticker": ticker,
             "name": name,
             "qty": qty,
-            "avg_price": avg_price
+            "avg_price": avg_price,
+            "cur_price": float(stock.get('cur_price', 0))  # Include current price from KIS
         })
 
     # Process overseas stocks (US)
@@ -289,7 +290,8 @@ def _convert_kis_to_portfolio(kis_data: dict) -> dict:
             "ticker": ticker,
             "name": name,
             "qty": qty,
-            "avg_price": avg_price
+            "avg_price": avg_price,
+            "cur_price": float(stock.get('cur_price', 0))  # Include current price from KIS
         })
 
     # Add KRW orderable cash
@@ -1026,6 +1028,7 @@ def get_portfolio() -> dict:
             symbol = stock.get('symbol', '')
             if symbol:
                 current_prices[symbol] = stock.get('cur_price', 0)
+
         add_alert(f"Loaded {len(current_prices)} prices", "SUCCESS")
 
     result["exchange_rate"] = exchange_rate
