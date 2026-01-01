@@ -1,62 +1,79 @@
-# 자동 거래 시스템 (KIS OpenAPI Trading System)
+# 🚀 KIS Real-time Auto Trading System
 
-## 1. 목적 (Objective)
-한국투자증권(KIS) OpenAPI를 활용하여 실시간 시세 조회 및 자동 매매를 수행하는 통합 트레이딩 시스템입니다. 국내 주식 및 미국 주식(NASDAQ, NYSE, AMEX)의 실시간 시세 수신 및 계좌 통합 관리를 목표로 합니다.
+## 1. 개요 (Overview)
+본 프로젝트는 **한국투자증권(KIS) OpenAPI**를 기반으로 한 통합 트레이딩 솔루션입니다. 국내 및 미국 주식 전용 실시간 시세 조회, 정밀한 자동 매매, 그리고 **RAOEO(무한매수법)** 전략을 터미널 UI와 **Telegram**을 통해 언제 어디서나 제어할 수 있도록 설계되었습니다.
 
-## 2. 폴더 구조 (Folder Tree)
+---
+
+## 2. 주요 기능 (Key Features)
+
+### 💎 프리미엄 UI/UX
+- **ANSI Terminal UI**: 별도의 GUI 없이도 화려하고 직관적인 컬러 터미널 인터페이스를 제공합니다.
+- **Event Viewer (Dual Terminal)**: 메인 상호작용 화면과 실시간 로그(WebSocket) 화면을 Named Pipe를 통해 분리하여 모니터링 효율을 극대화했습니다.
+- **Smart Alerts**: 백그라운드 작업 및 Telegram 명령 결과를 메인 UI 알림 영역에 실시간으로 브로드캐스팅합니다.
+
+### 📈 트레이딩 & 전략
+- **RAOEO Strategy**: 무한매수법 자동화 모듈. 실패한 주문에 대한 **지능형 재시도(Retry)** 및 히스토리 관리 기능을 포함합니다.
+- **Unified Portfolio**: 국내/대외 자산을 통합하여 자산 구성, 국가별 비중, 목표 대비 리밸런싱 수량을 자동으로 계산합니다.
+- **Real-time Sync**: 웹소켓을 통한 체결 통지 즉시 UI와 데이터가 동기화됩니다.
+
+### 📱 Telegram 원격 제어
+- **Remote Reporting**: 외출 중에도 `/raoeo_report`, `/portfolio_summary` 명령으로 현재 상태를 즉시 확인합니다.
+- **Remote Execution**: 계산된 주문을 `/raoeo_order` 명령으로 즉시 실행할 수 있습니다.
+- **Security**: 모든 메시지는 **HTML 모드**로 전송되어 레이아웃이 깨지지 않으며, 스레드 안정성을 보장합니다.
+
+### 🛡️ 보안 및 안정성
+- **AES Credentials**: API 키와 민감 정보를 암호화하여 저장하며, 기동 시 비밀번호 인증을 거칩니다.
+- **Token Manager**: 1시간 버퍼 기반의 자동 토큰 갱신 로직으로 세션 끊김 없는 끊김 없는 거래를 보장합니다.
+
+---
+
+## 3. 폴더 구조 (Project Structure)
 
 ```text
 .
-├── main.py (main.md)                                         ## 엔트리 포인트 및 메인 컨트롤러
-├── menu/                                                     ## 대화형 메뉴 핸들러 패키지
-│   ├── menu.py (menu.md)                                     ## 메인 메뉴 컨트롤러 및 전역 디버그 설정
-│   ├── handle_place_order.py (handle_place_order.md)         ## 주문 실행 핸들러
-│   ├── handle_manage_orders.py (handle_manage_orders.md)     ## 미체결 주문 관리 핸들러
-│   └── handle_account_info.py (handle_account_info.md)       ## 계좌 조회 및 데이터 통합
-├── display.py (display.md)                                   ## 터미널 UI 및 컬러 로그 시스템 (출력 전담)
-├── portfolio.py (portfolio.md)                               ## 통합 포트폴리오 관리 및 CSV 내보내기
-├── trading_config.py (trading_config.md)                     ## 설정 및 종목 정보 관리
-├── trading_state.py (trading_state.md)                       ## 전역 실행 상태 매니저
-├── telegram_bot/                                             ## Telegram 원격 제어 패키지
-│   ├── telegram_bot.py (telegram_bot.md)                     ## Telegram bot 메인 모듈
-│   └── telegram.txt                                          ## Telegram credentials (Git 제외)
-├── event_viewer/                                             ## 실시간 이벤트 뷰어 패키지
-│   ├── event_pipe.py (event_pipe.md)                         ## Named Pipe 통신 모듈
-│   └── event_viewer.py (event_viewer.md)                     ## 분리된 이벤트 뷰어
-├── tests/                                                    ## 유닛 테스트 폴더
-├── kis_api/                                                  ## KIS API 특화 패키지
-│   ├── domestic_stock/                                       ## 국내 주식 관련 모듈
-│   ├── overseas_stock/                                       ## 해외 주식 관련 모듈
-│   ├── key/                                                  ## 보안 및 암호화 유틸리티
-│   │   ├── key.py (key.md)                                   ## 암호화 및 도구 라이브러리
-│   │   ├── generate_credentials.py (generate_credentials.md) ## 인증정보 생성 유틸리티
-│   │   └── validate_credentials.py (validate_credentials.md) ## 인증정보 검증 유틸리티
-│   └── kis_auth.py                                           ## 인증 및 통신 코어
-├── stock_configuration.json                                  ## 실시간 시세 관련 종목 설정 (색상, 활성여부 등)
-├── portfolio.json                                            ## 통합 포트폴리오 데이터 (Git 제외)
-├── credentials.enc                                           ## 암호화된 API 키 저장소
-└── openapi_trading.md                                        ## 프로젝트 메인 문서
+├── main.py                     # Entry point (로그 로테이션, 웹소켓 관리)
+├── menu/                       # 대화형 메뉴 시스템
+│   ├── menu.py                 # 메인 메뉴 허브
+│   ├── raoeo/                  # [Strategy] RAOEO 무한매수법 전담 모듈
+│   └── handle_*.py             # 계좌/주문/관리 각 섹션 핸들러
+├── telegram_bot/               # Telegram 봇 통합 패키지 (Portfolio, RAOEO 핸들러)
+├── event_viewer/               # 별도 터미널 로그 뷰어 (Named Pipe 방식)
+├── kis_api/                    # KIS OpenAPI SDK & 인증 코어
+├── display.py                  # ANSI UI 렌더링 엔진 (Thread-safe alerts)
+├── portfolio.py                # 자산 분석 및 리밸런싱 연산 엔진
+├── trading_state.py            # 전역 실행 상태 및 데이터 영속성 관리
+├── stock_configuration.json    # 종목별 UI 설정 (색상, 활성 등)
+└── credentials.enc             # 암호화된 인증 데이터
 ```
 
-## 3. 주요 기능 (Key Features)
+---
 
-- **보안 강화**: API 키 암호화 보관 및 실행 시 비밀번호 인증.
-- **통합 트레이딩**: 국내/해외 주식 통합 주문 인터페이스 및 잔고 조회.
-- **실시간 모니터링**: 웹소켓 기반의 실시간 시세 및 체결 통보, 스마트 로그 고정 기능.
-- **사용자 친화적 UI**: 터미널 기반의 컬러 UI, 페이지네이션 지원, 자동 정렬.
-- **강력한 오류 처리**: 자동 재접속(Backoff) 및 해외 데이터 필드 보정 레이어.
+## 4. 시작하기 (Quick Start)
 
-## 4. 사용 방법 (How to Use)
+### ⚙️ 환경 설정
+1. `kis_api/key/generate_credentials.py`를 실행하여 API 키를 암호화 저장합니다.
+2. `telegram_bot/telegram.txt`에 텔레그램 토큰과 채팅 ID를 입력합니다.
 
-1. 터미널에서 `python trading/main.py` 실행.
-2. 암호화 비밀번호 입력.
-3. 대화형 메뉴를 통해 기능 수행:
-   - `1`: 계좌 정보 조회 (Summary/US/KR 순환).
-   - `2`: 주문 실행 (US/KR 토글).
-   - `3`: 미체결 주문 관리.
-   - `r`: RAOEO 자동 주문 전략 실행.
-   - `p`: 통합 포트폴리오 현황 요약 및 CSV 내보내기.
-   - `c/q`: 시스템 초기화 및 종료.
+### 🚀 실행
+```bash
+python main.py
+```
+1. 선택한 메뉴에 따라 거래를 시작합니다.
+   - `r` : RAOEO 전략판 진입
+   - `p` : 통합 포트폴리오 분석
+   - `1~3` : 기본 자산 관리 및 주문
 
 ---
-*각 모듈의 상세 구현 사항은 폴더 구조의 (md) 파일을 참조하십시오.*
+
+## 5. Telegram 명령어 가이드
+
+| Command | Category | Description |
+|---------|----------|-------------|
+| `/raoeo_report` | RAOEO | 오늘 매매 대상 종목 및 현재 전략 상태 조회 |
+| `/raoeo_order` | RAOEO | 계산된 RAOEO 주문 즉시 실행 및 히스토리 저장 |
+| `/portfolio_summary` | Portfolio | 통합 자산 현황 및 국가별 비중 요약 |
+| `/portfolio_weight` | Portfolio | 목표 비중 대비 리밸런싱 제안 목록 |
+
+---
+*각 모듈의 상세 설명은 해당 디렉토리 내 `.md` 파일을 참조하십시오.*
