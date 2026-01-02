@@ -18,7 +18,7 @@ def menu():
     from .handle_place_order import handle_place_order
     from .handle_manage_orders import handle_manage_orders, sync_open_orders
     from .raoeo.raoeo import raoeo_menu
-    import main  # For spawn_viewer
+    from event_viewer import spawn_viewer, close_viewer
 
     os.system('cls' if os.name == 'nt' else 'clear')
     if MENU_DEBUG:
@@ -61,7 +61,7 @@ def menu():
             if event_pipe.is_connected():
                 display.add_alert("Viewer is already running!", "INFO")
             else:
-                main.spawn_viewer()
+                spawn_viewer()
                 display.add_alert("Viewer terminal launched!", "SUCCESS")
         elif choice.lower() == 'r':
             raoeo_menu()
@@ -72,7 +72,7 @@ def menu():
             import trading_state
             from telegram_bot.telegram_bot import shutdown_telegram
             trading_state.stop_periodic_save()  # Save stock data before exit
-            main.close_viewer()  # Close viewer terminal before exit
+            close_viewer()  # Close viewer terminal before exit
             shutdown_telegram()  # Send final notification
             prepare_exit()
             print("Exiting...")

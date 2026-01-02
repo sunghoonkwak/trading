@@ -8,9 +8,45 @@ import time
 import json
 import shutil
 from collections import OrderedDict
+import subprocess
+import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kis.event_pipe as event_pipe
+
+# Viewer process handle (used by spawn_viewer/close_viewer)
+_viewer_process = None
+_base_dir = os.path.dirname(os.path.abspath(__file__))
+
+
+def spawn_viewer():
+    """Spawn the Event viewer in Windows Terminal."""
+    global _viewer_process
+    viewer_path = os.path.join(_base_dir, "event_viewer.py")
+    try:
+        # Use Windows Terminal (wt) - opens in new tab with size 130x35
+        _viewer_process = subprocess.Popen(
+            ["wt", "-w", "0", "--size", "130,35", "nt", "--title", "Event Viewer",
+             "python", viewer_path],
+            cwd=_base_dir
+        )
+        logging.info("[System] Viewer terminal spawned")
+        return True
+    except Exception as e:
+        logging.error(f"[System] Failed to spawn viewer: {e}")
+        return False
+
+
+def close_viewer():
+    """Close the viewer terminal if running."""
+    global _viewer_process
+    if _viewer_process is not None:
+        try:
+            _viewer_process.terminate()
+            _viewer_process = None
+            logging.info("[System] Viewer terminal closed")
+        except:
+            pass
 
 # ANSI Color Codes
 RESET = "\033[0m"
