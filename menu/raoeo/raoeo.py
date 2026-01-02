@@ -311,6 +311,11 @@ def save_history(order_data: dict, exec_results: list = None) -> bool:
         exec_results: Optional list of execution results from execute_orders()
     """
     try:
+        # Ensure date is set
+        if not order_data.get('date'):
+            tz_us = pytz.timezone('US/Eastern')
+            order_data['date'] = datetime.now(tz_us).strftime("%Y-%m-%d")
+
         # Merge execution info into order_data
         if exec_results:
             # Match each order with its result
@@ -327,7 +332,9 @@ def save_history(order_data: dict, exec_results: list = None) -> bool:
                 with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                     content = f.read().strip()
                     if content:
-                        history = json.loads(content)
+                        loaded = json.loads(content)
+                        # Filter out entries without date
+                        history["history"] = [e for e in loaded.get('history', []) if e.get('date')]
             except (json.JSONDecodeError, IOError):
                 pass
 
@@ -365,7 +372,8 @@ def save_history(order_data: dict, exec_results: list = None) -> bool:
 
         return True
     except Exception as e:
-        display.add_alert(f"Failed to save history: {e}", "ERROR")
+        from display import add_alert
+        add_alert(f"Failed to save history: {e}", "ERROR")
         return False
 
 
@@ -402,11 +410,23 @@ def build_raoeo_report() -> dict:
         dict: Report containing:
             - executed_today: Today's execution record if exists
             - current_result: Calculated order result if not executed
+            - cur_price: Current price fetched from KIS API/WebSocket/holdings
+            - config: Config from current_result or history
+            - holdings: Holdings from current_result or history
+            - success_orders: List of successfully executed orders
+            - failed_orders: List of failed orders
+            - pending_orders: List of pending orders to be placed
             - error: Error message if any
     """
     report = {
         "executed_today": None,
         "current_result": None,
+        "cur_price": 0.0,
+        "config": None,
+        "holdings": None,
+        "success_orders": [],
+        "failed_orders": [],
+        "pending_orders": [],
         "error": None
     }
     tz_us = pytz.timezone('US/Eastern')
@@ -419,34 +439,65 @@ def build_raoeo_report() -> dict:
                 content = f.read().strip()
                 if content:
                     hist = json.loads(content)
-                    today_entry = next((e for e in hist.get('history', []) if e.get('date') == today_str), None)
+                    # Filter out entries without date and get the first one
+                    entries = [e for e in hist.get('history', []) if e.get('date')]
+                    today_entry = entries[0] if entries and entries[0].get('date') == today_str else None
                     if today_entry:
-                        failed = [o for o in today_entry.get('orders', []) if not o.get('success', False)]
-                        if not failed:
+                        report["config"] = today_entry.get('config')
+                        report["holdings"] = today_entry.get('holdings')
+
+                        # Categorize orders from history
+                        for o in today_entry.get('orders', []):
+                            if o.get('success'):
+                                report["success_orders"].append(o)
+                            else:
+                                report["failed_orders"].append(o)
+
+                        if not report["failed_orders"]:
                             # Everything succeeded
                             report["executed_today"] = today_entry
-                            return report
                         else:
                             # Some failed! Populate current_result with THESE failed orders for retry
                             report["current_result"] = {
                                 "date": today_str,
                                 "config": today_entry['config'],
                                 "holdings": today_entry['holdings'],
-                                "orders": failed,
+                                "orders": report["failed_orders"],
                                 "state": today_entry.get('state', 'unknown'),
-                                "is_retry": True # Flag for UI
+                                "is_retry": True
                             }
-                            return report
         except Exception as e:
             display.add_alert(f"Error reading history for report: {e}", "ERROR")
 
     # 2. No history for today yet - calculate fresh orders
-    current_result = calculate_order()
-    if current_result.get('error'):
-        report["error"] = current_result['error']
+    if not report["executed_today"] and not report["current_result"]:
+        current_result = calculate_order()
+        if current_result.get('error'):
+            report["error"] = current_result['error']
         report["current_result"] = current_result
-    else:
-        report["current_result"] = current_result
+        report["config"] = current_result.get('config')
+        report["holdings"] = current_result.get('holdings')
+
+    # 3. Calculate pending orders from current_result
+    # Note: failed_orders should be retried, so they go into pending_orders
+    # Only exclude orders that have already succeeded
+    if report.get("current_result"):
+        success_types = {o.get('type') for o in report["success_orders"]}
+        for o in report["current_result"].get('orders', []):
+            if o.get('type') not in success_types:
+                report["pending_orders"].append(o)
+
+    # 4. Fetch current price: KIS API -> WebSocket -> holdings
+    config = report.get("config")
+    holdings = report.get("holdings") or {}
+    if config:
+        from menu.handle_account_info import fetch_price
+        cur_price = fetch_price(config['target'])  # auto-maps exchange code
+        if cur_price <= 0:
+            cur_price = get_current_price(config['target'], config.get('exchange', 'NASD'))
+        if cur_price <= 0:
+            cur_price = holdings.get('cur_price', 0)
+        report["cur_price"] = cur_price
 
     return report
 
@@ -458,73 +509,36 @@ def format_display_lines(report: dict) -> list:
     today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
     display_lines = []
 
-    # Track shared info
-    config = None
-    holdings = None
-    success_orders = []
-    failed_orders = []
-
-    # 1. Gather status from history
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-                hist = json.load(f)
-                today_entry = next((e for e in hist.get('history', []) if e.get('date') == today_str), None)
-                if today_entry:
-                    config = today_entry.get('config')
-                    holdings = today_entry.get('holdings')
-                    for o in today_entry.get('orders', []):
-                        if o.get('success'):
-                            success_orders.append(o)
-                        else:
-                            failed_orders.append(o)
-        except: pass
-
-    # 2. Gather status from current calculation
-    pending_orders = []
-    if report.get("current_result"):
-        res = report["current_result"]
-        config = config or res.get('config')
-        holdings = holdings or res.get('holdings')
-
-        # Only show as 'Pending' if not already listed in history (Success or Fail)
-        executed_types = {o.get('type') for o in success_orders + failed_orders}
-        for o in res.get('orders', []):
-            if o.get('type') not in executed_types:
-                pending_orders.append(o)
+    # Get pre-calculated values from report
+    config = report.get("config")
+    holdings = report.get("holdings") or {}
+    cur_price = report.get("cur_price", 0)
+    success_orders = report.get("success_orders", [])
+    failed_orders = report.get("failed_orders", [])
+    pending_orders = report.get("pending_orders", [])
 
     if not config:
         if report.get("error"): return [f" Error: {report['error']}"]
         return [" No RAOEO data."]
 
-    # Get current price: KIS API -> WebSocket -> holdings
-    from menu.handle_account_info import fetch_price
-    cur_price = fetch_price(config['target'])  # auto-maps exchange code
-    if cur_price <= 0:
-        cur_price = get_current_price(config['target'], config.get('exchange', 'NASD'))
-    if cur_price <= 0:
-        cur_price = holdings.get('cur_price', 0)
-
     display_lines.append(f" [RAOEO Status - {today_str}]")
     display_lines.append(f" Target: {config['target']} @ {config['exchange']} | Cur: ${cur_price:.2f}")
-    display_lines.append(f" Holdings: {holdings['qty']} shares @ ${holdings['avg_price']:.2f}")
+    display_lines.append(f" Holdings: {holdings.get('qty', 0)} shares @ ${holdings.get('avg_price', 0):.2f}")
     display_lines.append("")
 
-    # Executed (Success/Fail) Section
-    if success_orders or failed_orders:
-        display_lines.append(" Executed Orders:")
+    # Orders Section (Success/Failed with retry indicator)
+    if success_orders or failed_orders or pending_orders:
+        display_lines.append(" Orders:")
         for o in success_orders:
             display_lines.append(f"   {COLOR_GREEN}• {o['type'].upper()} {o['qty']} @ ${o['price']:.2f} ({o['order_type']}) - Success{COLOR_RESET}")
         for o in failed_orders:
-            err = f" ({o['error'][:30]})" if o.get('error') else ""
-            display_lines.append(f"   {COLOR_RED}• {o['type'].upper()} {o['qty']} @ ${o['price']:.2f} ({o['order_type']}) - Fail{err}{COLOR_RESET}")
-        display_lines.append("")
-
-    # Pending Section
-    if pending_orders:
-        display_lines.append(" Pending Orders (To be placed):")
+            err = f" ({o['error'][:25]})" if o.get('error') else ""
+            display_lines.append(f"   {COLOR_YELLOW}• {o['type'].upper()} {o['qty']} @ ${o['price']:.2f} ({o['order_type']}) - Failed → Retry{err}{COLOR_RESET}")
+        # Show new pending orders (not from failed retry)
+        failed_types = {o.get('type') for o in failed_orders}
         for o in pending_orders:
-            display_lines.append(f"   {COLOR_YELLOW}• {o['type'].upper()} {o['qty']} @ ${o['price']:.2f} ({o['order_type']}) - Pending{COLOR_RESET}")
+            if o.get('type') not in failed_types:
+                display_lines.append(f"   {COLOR_YELLOW}• {o['type'].upper()} {o['qty']} @ ${o['price']:.2f} ({o['order_type']}) - Pending{COLOR_RESET}")
         display_lines.append("")
 
     if not pending_orders and not failed_orders:
@@ -547,10 +561,8 @@ def prompt_order_execution(report: dict, display_lines: list) -> bool:
     Returns:
         bool: True if orders were executed, False otherwise
     """
-    # Remove mandatory blocking by executed_today to allow retries of failed orders
-
-    current_result = report.get("current_result")
-    if not current_result or current_result.get('error') or not current_result.get('orders'):
+    pending_orders = report.get("pending_orders", [])
+    if not pending_orders:
         from display import add_alert
         add_alert("No pending orders to execute.", "INFO")
         return False
@@ -559,7 +571,13 @@ def prompt_order_execution(report: dict, display_lines: list) -> bool:
     action = input_at(input_y, 2, " Place order? (y/N): ").strip().lower()
 
     if action == 'y':
-        return run_order_execution(current_result, display_lines)
+        # Create a result dict for run_order_execution
+        exec_data = {
+            "config": report.get("config"),
+            "holdings": report.get("holdings"),
+            "orders": pending_orders
+        }
+        return run_order_execution(exec_data, display_lines)
 
     return False
 
@@ -575,7 +593,6 @@ def run_order_execution(result: dict, display_lines: list) -> bool:
     Returns:
         bool: True if execution successful
     """
-    display.add_alert(f"RAOEO: Executing {len(result['orders'])} orders...", "INFO")
     show_in_result_area(display_lines + [" Executing orders... Please wait."])
 
     exec_results = execute_orders(result['orders'], result['config'])
@@ -696,17 +713,17 @@ def raoeo_menu():
     os.system('cls' if os.name == 'nt' else 'clear')
 
     while True:
-        render_ui(full_refresh=False)
-
         # Build report using modular function
         report = build_raoeo_report()
 
         # Format display using modular function
         display_lines = format_display_lines(report)
 
+        # Display content first, then render Orders/Alerts below
         show_in_result_area(display_lines)
+        render_ui(full_refresh=False)
 
-        input_y = min(len(display_lines) + 1, 14)
+        input_y = min(len(display_lines) + 1, 13)
         choice = input_at(input_y, 2, " Select(q: exit): ").strip().lower()
 
         if choice == 'q':

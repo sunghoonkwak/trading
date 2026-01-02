@@ -104,10 +104,8 @@ def _build_menu_lines() -> list:
         f" {opt1}",
         f" {opt2}",
         f" {opt3}",
-        f" {DIM}[Q] Quit{RESET}",
-        f"{'-' * 60}",
-        "",  # Row 13 for input
-        ""
+        "",  # spacer
+        ""   # Row 12 for input
     ]
 
     return lines
@@ -219,7 +217,7 @@ def super_menu():
         _render_super_menu()
 
         try:
-            choice = input_at(13, 2, "Enter choice: ").strip().lower()
+            choice = input_at(12, 2, "Enter choice(Q: Exit): ").strip().lower()
         except KeyboardInterrupt:
             add_alert("[Super] Keyboard interrupt, exiting...", "INFO")
             break

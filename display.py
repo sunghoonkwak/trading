@@ -93,8 +93,7 @@ MENU_OPTIONS = [
     " r. RAOEO Strategy",
     " p. Portfolio",
     " ",
-    " c. Clear All & Sync",
-    " q. Exit"
+    " c. Clear All & Sync    q. Exit"
 ]
 
 
@@ -247,10 +246,11 @@ def clear_result_area():
 
 
 def show_in_result_area(lines):
-    """Display multiple lines in the top (1-14) area, clearing everything first."""
+    """Display multiple lines in the top (1-13) area, clearing everything first. Row 14 is reserved for Orders."""
+    assert len(lines) <= 13, f"show_in_result_area: lines ({len(lines)}) exceeds 13"
     with terminal_lock:
         sys.stdout.write(SAVE_CURSOR)
-        for i in range(14):
+        for i in range(13):
             line = lines[i] if i < len(lines) else ""
             sys.stdout.write(f"\033[{i+1};1H{CLEAR_LINE}{line}")
         sys.stdout.write(RESTORE_CURSOR)
@@ -290,9 +290,10 @@ def render_ui(full_refresh=False):
 
     # Layout:
     # Row 1-3: Header
-    # Row 4-11: Menu (8 lines)
-    # Row 12: Separator
-    # Row 13: "Enter Choice:" input (handled by menu.py)
+    # Row 4-10: Menu (7 lines)
+    # Row 11: Separator
+    # Row 12: "Enter Choice:" input (handled by menu.py)
+    # Row 13: Empty buffer
     # Row 14+: Orders and Alerts
 
     order_area_start = 14
@@ -312,8 +313,8 @@ def render_ui(full_refresh=False):
                 sys.stdout.write(f"\033[{i+4};1H{CLEAR_LINE}{opt}")
 
             # Separators around input area
-            sys.stdout.write(f"\033[12;1H{CLEAR_LINE}" + "-" * min(cols - 1, 60))
-            # Row 13 is for input - handled by menu.py
+            sys.stdout.write(f"\033[11;1H{CLEAR_LINE}" + "-" * min(cols - 1, 60))
+            # Row 12 is for input - handled by menu.py
 
         # Display orders (most recent first)
         order_list = list(order_states.items())

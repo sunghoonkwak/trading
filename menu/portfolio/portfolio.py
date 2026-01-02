@@ -314,7 +314,7 @@ def portfolio_menu():
 
         show_in_result_area(lines)
 
-        choice = input_at(13, 2, "Enter Choice: ").strip().lower()
+        choice = input_at(12, 2, "Enter Choice: ").strip().lower()
 
         if choice == '1':
             _check_portfolio_balance(merged_data, total_value_usd, current_weights, targets, exchange_rate)

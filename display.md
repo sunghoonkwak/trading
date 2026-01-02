@@ -9,15 +9,17 @@
 
 ```
 Row 1-3:     Main Header (제목, 로그 레벨, 지수)
-Row 4-11:    Menu Options (1-3, r, p, c, q - 총 8줄)
-Row 12:      -------- (구분선)
-Row 13:      Enter Choice: (입력 영역)
-Row 14:      -------- (구분선)
-Row 15:      -------------------------- Orders -------------------------- (주문 구분선)
-Row 16-25:   Order List (실시간 미체결 주문 목록, 최대 10개)
-Row 26:      -------------------------- Alerts -------------------------- (알림 구분선)
-Row 27+:     Alerts Log (최신 알림 메시지, 최대 15개)
+Row 4-10:    Menu Options (1-3, r, p, [c q 합침] - 총 7줄)
+Row 11:      -------- (구분선)
+Row 12:      Enter Choice: (입력 영역)
+Row 13:      (빈 버퍼)
+Row 14:      -------------------------- Orders -------------------------- (주문 구분선)
+Row 15-24:   Order List (실시간 미체결 주문 목록, 최대 10개)
+Row 25:      -------------------------- Alerts -------------------------- (알림 구분선)
+Row 26+:     Alerts Log (최신 알림 메시지, 최대 15개)
 ```
+
+**Note**: `show_in_result_area()`는 Row 1-13만 사용 (Row 14는 Orders용으로 예약)
 
 ## Function (기능)
 
@@ -108,9 +110,9 @@ def add_alert(message: str, level: str = "INFO")
 - `None`.
 
 ### show_in_result_area
-터미널의 지정된 "결과 영역"(1~10행)에 문자열 목록을 표시합니다.
+터미널의 지정된 "결과 영역"(Row 1-13)에 문자열 목록을 표시합니다. Row 14는 Orders용으로 예약됩니다.
 #### input
-- `lines` (list[str]): 표시할 텍스트 줄 목록.
+- `lines` (list[str]): 표시할 텍스트 줄 목록 (최대 13줄, 초과 시 AssertionError)
 #### output
 - `None`.
 

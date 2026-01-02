@@ -36,7 +36,7 @@ def menu():
     while True:
         process_pending_alerts()  # Handle alerts from background threads (e.g., Telegram)
         render_ui(full_refresh=True)
-        choice = input_at(13, 2, "Enter Choice: ").strip()  # Row 13 between separators
+        choice = input_at(12, 2, "Enter Choice: ").strip()  # Row 12 between separators
 
         if choice == '1':
             handle_account_info()

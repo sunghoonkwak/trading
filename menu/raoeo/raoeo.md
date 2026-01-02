@@ -71,10 +71,16 @@
 현재 RAOEO 상태를 조회합니다. Terminal UI와 Telegram 모두에서 사용됩니다.
 
 #### Returns
-- `dict`: 다음 키 중 하나 포함
-  - `executed_today`: 오늘 모든 주문이 성공한 경우 히스토리 데이터
-  - `current_result`: 실패한 주문이 있어 재시도가 필요하거나 새로 계산된 주문 정보
-  - `is_retry` (bool): 히스토리의 실패 주문을 다시 시도하는 경우 `True`
+- `dict`: 다음 키들을 포함
+  - `config`: RAOEO 설정 정보
+  - `holdings`: 현재 보유 수량, 평단가
+  - `cur_price`: KIS API → WebSocket → holdings 순으로 조회한 현재가
+  - `success_orders`: 오늘 성공한 주문 목록
+  - `failed_orders`: 오늘 실패한 주문 목록 (재시도 대상)
+  - `pending_orders`: 실행 대기 중인 주문 (failed + 신규)
+  - `executed_today`: 오늘 히스토리가 있는 경우 해당 데이터
+  - `current_result`: 계산된 주문 정보
+  - `error`: 에러 발생 시 메시지
 
 ---
 
@@ -91,13 +97,19 @@
 ---
 
 ### save_history
-주문 실행 성공 시 당일의 전략 상태를 `raoeo_history.json`에 저장합니다.
+주문 실행 결과를 `raoeo_history.json`에 저장합니다.
 
 #### Args
 - `order_data` (dict): 당일 주문 및 전략 데이터
+- `exec_results` (list): 주문 실행 결과 목록 (optional)
 
 #### Returns
-- `bool`: 저장 성공 여부 (오늘 날짜의 기록이 이미 있으면 실패 기록을 성공으로 업데이트함)
+- `bool`: 저장 성공 여부
+
+#### Notes
+- `date` 필드가 없으면 자동으로 현재 US Eastern 날짜 추가
+- 기존 히스토리에서 `date` 없는 항목은 자동 필터링
+- 오늘 날짜 기록이 이미 있으면 주문별 성공/실패 상태를 업데이트
 
 ---
 

@@ -1,7 +1,5 @@
 {
     "target": "QLD",
     "exchange": "AMEX",
-    "duration": 200,
-    "daily_budget": 82.08905959972455,
-    "target_weight_initial": 0.03179619660951336
+    "duration": 200
 }
