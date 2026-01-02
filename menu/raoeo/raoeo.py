@@ -137,20 +137,23 @@ def calculate_order() -> dict:
     result["daily_budget"] = round(daily_budget, 2)
 
     # 3. Fetch current holdings from portfolio data
-    portfolio = get_portfolio_data(silent=True)
+    portfolio = get_portfolio_data()
     if portfolio.get('error'):
         result["error"] = portfolio['error']
         return result
 
     # Find target stock in merged holdings
-    merged = portfolio.get('merged', {})
+    merged = portfolio.get('merged_data', {})
     target_holding = None
     for ticker, info in merged.items():
         if ticker.upper() == target.upper():
+            qty = info.get('qty', 0)
+            total_investment = info.get('total_investment', 0)
+            avg_price = total_investment / qty if qty > 0 else 0
             target_holding = {
                 'symbol': ticker,
-                'qty': info.get('qty', 0),
-                'avg_price': info.get('avg_price', 0),
+                'qty': qty,
+                'avg_price': avg_price,
                 'cur_price': info.get('cur_price', 0)
             }
             break
@@ -494,8 +497,16 @@ def format_display_lines(report: dict) -> list:
         if report.get("error"): return [f" Error: {report['error']}"]
         return [" No RAOEO data."]
 
+    # Get current price: KIS API -> WebSocket -> holdings
+    from menu.handle_account_info import fetch_price
+    cur_price = fetch_price(config['target'])  # auto-maps exchange code
+    if cur_price <= 0:
+        cur_price = get_current_price(config['target'], config.get('exchange', 'NASD'))
+    if cur_price <= 0:
+        cur_price = holdings.get('cur_price', 0)
+
     display_lines.append(f" [RAOEO Status - {today_str}]")
-    display_lines.append(f" Target: {config['target']} @ {config['exchange']} | Cur: ${holdings.get('cur_price', 0):.2f}")
+    display_lines.append(f" Target: {config['target']} @ {config['exchange']} | Cur: ${cur_price:.2f}")
     display_lines.append(f" Holdings: {holdings['qty']} shares @ ${holdings['avg_price']:.2f}")
     display_lines.append("")
 
@@ -519,10 +530,8 @@ def format_display_lines(report: dict) -> list:
     if not pending_orders and not failed_orders:
         display_lines.append(f" {COLOR_GREEN}✨ All orders completed for today.{COLOR_RESET}")
 
-    display_lines.append("")
-    if pending_orders or failed_orders:
-        display_lines.append(" 1. Execute Pending/Failed Orders")
-    display_lines.append(" 2. View History")
+    # Menu - always show both options
+    display_lines.append(" 1. Order  2. History")
     display_lines.append("-" * 50)
     return display_lines
 
@@ -542,8 +551,8 @@ def prompt_order_execution(report: dict, display_lines: list) -> bool:
 
     current_result = report.get("current_result")
     if not current_result or current_result.get('error') or not current_result.get('orders'):
-        show_in_result_area(display_lines + [" No valid orders to execute."])
-        msvcrt.getch()
+        from display import add_alert
+        add_alert("No pending orders to execute.", "INFO")
         return False
 
     input_y = min(len(display_lines) + 1, 14)
