@@ -18,8 +18,11 @@ _cached_time = 0
 
 def format_raoeo_report(report: dict) -> str:
     """Format RAOEO report for Telegram with Success/Failed sections."""
+    if not report:
+        return "⚠️ No RAOEO data available."
+
     lines = []
-    today_str = report.get("current_result", {}).get("date") or report.get("executed_today", {}).get("date", "Today")
+    today_str = (report.get("current_result") or {}).get("date") or (report.get("executed_today") or {}).get("date", "Today")
     lines.append(f"📊 <b>RAOEO Status - {today_str}</b>")
 
     # Get pre-calculated values from report
@@ -75,15 +78,23 @@ async def cmd_raoeo_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /raoeo_report."""
     global _cached_report, _cached_time
 
-    report = build_raoeo_report()
+    try:
+        report = build_raoeo_report()
+    except Exception as e:
+        logging.error(f"[Telegram] build_raoeo_report() failed: {e}", exc_info=True)
+        await wrap_reply(update, f"⚠️ Error building report: {e}")
+        return
+
+    if not report:
+        logging.warning("[Telegram] build_raoeo_report() returned None or empty")
+        await wrap_reply(update, "⚠️ RAOEO report unavailable. Check configuration.")
+        return
+
     _cached_report = report
     _cached_time = time.time()
 
     msg = format_raoeo_report(report)
-    if msg:
-        await wrap_reply(update, msg, parse_mode='HTML')
-    else:
-        await wrap_reply(update, "No RAOEO data available.")
+    await wrap_reply(update, msg, parse_mode='HTML')
 
 
 async def cmd_raoeo_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -133,11 +144,11 @@ async def cmd_raoeo_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Create result dict for save_history
         exec_data = {
-            "date": _cached_report.get("current_result", {}).get("date"),
+            "date": (_cached_report.get("current_result") or {}).get("date"),
             "config": config,
             "holdings": _cached_report.get("holdings"),
             "orders": pending_orders,
-            "state": _cached_report.get("current_result", {}).get("state", "unknown")
+            "state": (_cached_report.get("current_result") or {}).get("state", "unknown")
         }
         save_history(exec_data, exec_results)
         lines.append(f"\n💾 Saved to history. ({success_count}/{len(pending_orders)} succeeded)")

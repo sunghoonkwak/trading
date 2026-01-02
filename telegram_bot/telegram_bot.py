@@ -109,6 +109,10 @@ def initialize_telegram():
             from telegram.error import BadRequest
 
             async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+                # Ignore if no error present
+                if context.error is None:
+                    return
+
                 # Filter out benign "Message is not modified" error
                 if isinstance(context.error, BadRequest) and "Message is not modified" in str(context.error):
                     logging.warning(f"[TG] Benign error (ignored): {context.error}")
