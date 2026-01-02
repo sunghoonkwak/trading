@@ -81,3 +81,50 @@ async def wrap_edit_message(chat_id: str, message_id: int, text: str, **kwargs):
     first_line = text.split('\n')[0][:80]
     display.add_alert(f"[TG] {first_line}", "INFO")
     return await _bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, **kwargs)
+
+
+def send_notification(text: str, parse_mode: str = 'HTML'):
+    """
+    Thread-safe synchronous notification sender.
+    Can be called from any thread (e.g., WebSocket event handler).
+
+    Args:
+        text: Message text to send
+        parse_mode: Parse mode for formatting ('HTML' or 'Markdown')
+    """
+    global _bot, _chat_id
+
+    if not _bot or not _chat_id:
+        logging.warning("[TG] Bot not initialized for notification")
+        return
+
+    if not text:
+        return
+
+    import asyncio
+
+    async def _send():
+        try:
+            await _bot.send_message(
+                chat_id=_chat_id,
+                text=text,
+                parse_mode=parse_mode
+            )
+            first_line = text.split('\n')[0][:80]
+            display.add_alert(f"[TG] {first_line}", "INFO")
+        except Exception as e:
+            logging.error(f"[TG] Notification failed: {e}")
+
+    # Schedule the coroutine on the bot's event loop from any thread
+    try:
+        # Get the running loop from the bot's thread
+        loop = asyncio.get_running_loop()
+        asyncio.ensure_future(_send(), loop=loop)
+    except RuntimeError:
+        # No running event loop in current thread
+        # Use run_coroutine_threadsafe if we can find the bot's loop
+        try:
+            # Create a new loop temporarily
+            asyncio.run(_send())
+        except Exception as e:
+            logging.error(f"[TG] Failed to send notification: {e}")

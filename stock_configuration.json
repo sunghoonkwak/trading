@@ -250,7 +250,7 @@
         },
         {
             "ticker": "AVGO",
-            "name": "Broadcom",
+            "name": "브로드컴",
             "market": "NASDAQ",
             "color": [
                 255,
@@ -342,7 +342,7 @@
         },
         {
             "ticker": "VIXY",
-            "name": "ProShares VIX Short-Term Futures",
+            "name": "PROSHARES VIX SHORT TERM FUTURES",
             "market": "AMEX",
             "color": [
                 255,
