@@ -139,3 +139,4 @@ portfolio_export_*.xlsx
 portfolio.json
 telegram.txt
 logs/
+value_averaging_history.json

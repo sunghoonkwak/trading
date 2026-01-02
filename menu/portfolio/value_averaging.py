@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Dict, Any
 
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
@@ -98,7 +99,13 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
     hist_data = load_history()
     history = hist_data.get('history', [])
 
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    # Check if already executed today (US Eastern Time)
+    today_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    already_executed = False
+    for entry in history:
+        if entry.get('success') and entry.get('date', '').startswith(today_et):
+            already_executed = True
+            break
 
     # 5. Extract Target Data from Portfolio
     target_data = merged_portfolio.get(target_ticker, {})
@@ -125,7 +132,11 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
         config['target_weight_initial'] = target_weight
         save_config(config)
 
-    day_count = len([h for h in history if h.get('success')]) + 1
+    # Day count = number of successful executions
+    # If already executed today, this is the completed day count
+    # If not executed today, this is the day we are about to execute
+    success_count = len([h for h in history if h.get('success')])
+    day_count = success_count if already_executed else success_count + 1
 
     # 7. Calculate Targets
     target_value_accumulated = day_count * daily_budget
@@ -153,7 +164,7 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
 
     return {
         "status": "calculated",
-        "date": today_str,
+        "date": today_et,
         "target_ticker": target_ticker,
         "day_count": day_count,
         "daily_budget": daily_budget,
@@ -163,6 +174,7 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
         "current_price": current_price,
         "target_weight": target_weight,
         "orders": orders,
+        "already_executed": already_executed,
         "error": None
     }
 
@@ -172,6 +184,14 @@ def execute_orders(order_report):
     """
     if not order_report or not order_report.get('orders'):
         return []
+
+    # Check if already executed today (US Eastern Time)
+    today_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    hist_data = load_history()
+    for entry in hist_data.get('history', []):
+        if entry.get('success') and entry.get('date', '').startswith(today_et):
+            logging.info(f"Value Averaging already executed today ({today_et} ET). Skipping.")
+            return [{"skipped": True, "message": f"Already executed today ({today_et} ET)"}]
 
     results = []
 
@@ -221,7 +241,15 @@ def execute_orders(order_report):
             "message": msg
         })
 
-    # Trigger Save History will be handled by the caller (Telegram Bot logic usually)
-    # But for now, we just return results.
+    # Save execution results to history
+    if results:
+        hist_data = load_history()
+        history_entry = {
+            "date": datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M:%S"),
+            "results": results,
+            "success": any(r['success'] for r in results)
+        }
+        hist_data['history'].insert(0, history_entry)
+        save_history(hist_data)
 
     return results

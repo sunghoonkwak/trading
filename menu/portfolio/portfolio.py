@@ -334,54 +334,55 @@ def portfolio_menu():
 
              # Build Display Lines
              target_ticker = res.get("target_ticker", "N/A")
+             already_executed = res.get("already_executed", False)
              lines = []
 
              # Header
-             lines.append(f" [Value Averaging] {res.get('date')}")
+             status_str = "✓ Executed" if already_executed else "Pending"
+             lines.append(f" [Value Averaging] {res.get('date')} ET | {status_str}")
              lines.append("="*50)
 
              if res.get("error"):
                  lines.append(f" ERROR: {res.get('error')}")
              else:
                  orders = res.get("orders", [])
-                 t_w_pct = res.get("target_weight", 0) * 100
                  curr_p = res.get("current_price", 0)
                  daily_b = res.get("daily_budget", 0)
                  buy_amt = res.get("daily_target_amount", 0)
+                 day_count = res.get("day_count", 0)
 
-                 lines.append(f" Target Ticker   : {target_ticker}")
-                 lines.append(f" Target Weight   : {t_w_pct:.2f}%")
-                 lines.append(f" Current Price   : ${curr_p:,.2f}")
-                 lines.append(f" Daily Budget    : ${daily_b:,.2f}")
-                 lines.append("-" * 50)
-                 lines.append(f" Total Buy Amount: ${buy_amt:,.2f}")
+                 lines.append(f" Target: {target_ticker} | Day: {day_count} | Price: ${curr_p:,.2f}")
+                 lines.append(f" Budget: ${daily_b:,.2f} | Buy Amount: ${buy_amt:,.2f}")
                  lines.append("-" * 50)
 
-                 if curr_p == 0:
-                     lines.append(" [WARNING] Current Price is $0.00.")
-                     lines.append(" Cannot calculate buy qty. Check KIS API.")
+                 if already_executed:
+                     lines.append(" [INFO] Already executed today. Order will be skipped.")
+                 elif curr_p == 0:
+                     lines.append(" [WARNING] Price is $0. Cannot calculate order.")
+                 elif orders:
+                     lines.append(f" Orders: {len(orders)}")
+                     for o in orders:
+                         lines.append(f"  > {o['ticker']} | {o['qty']} qty | ${o['price']:.2f} (LOC)")
                  else:
-                     if orders:
-                         lines.append(f" Orders Generated: {len(orders)}")
-                         for o in orders:
-                             lines.append(f"  > {o['type']} | {o['ticker']} | {o['qty']} qty | ${o['price']:.2f} (LOC)")
-                     else:
-                         lines.append(" No orders generated (Target met).")
+                     lines.append(" No orders generated (Target met).")
 
              show_in_result_area(lines)
 
-             # Execution Prompt
-             if res.get("orders") and res.get("current_price", 0) > 0:
+             # Execution Prompt (only if not already executed and has orders)
+             if not already_executed and res.get("orders") and res.get("current_price", 0) > 0:
                  confirm = input_at(13, 2, " Execute Orders? (y/n): ").strip().lower()
                  if confirm == 'y':
                       exec_res = value_averaging.execute_orders(res)
-                      lines.append("-" * 50)
-                      lines.append(" Execution Result:")
+                      # Build new result lines to avoid exceeding limit
+                      result_lines = [lines[0], lines[1]]  # Keep header
+                      result_lines.append(" Execution Result:")
                       for r in exec_res:
-                          status = "SUCCESS" if r['success'] else "FAILED"
-                          lines.append(f"  {status}: {r['message']}")
-                      # Refresh display with results
-                      show_in_result_area(lines)
+                          if r.get('skipped'):
+                              result_lines.append(f"  SKIPPED: {r.get('message', 'Already executed')}")
+                          else:
+                              status = "SUCCESS" if r.get('success') else "FAILED"
+                              result_lines.append(f"  {status}: {r.get('message', 'Unknown')}")
+                      show_in_result_area(result_lines)
 
              input_at(13, 2, " Press Enter to continue...")
         elif choice == 'q':

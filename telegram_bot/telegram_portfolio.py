@@ -503,16 +503,24 @@ def format_va_report(res: dict) -> str:
         return f"⚠️ <b>Error:</b> {res['error']}"
 
     target_ticker = res.get("target_ticker", "N/A")
-    date = res.get("date", "N/A")
+    date = res.get("date", "N/A")  # Already US Eastern Time from calculate_order
     day_count = res.get("day_count", 0)
     daily_budget = res.get("daily_budget", 0)
     target_weight = res.get("target_weight", 0) * 100
     current_price = res.get("current_price", 0)
     buy_amount = res.get("daily_target_amount", 0)
     orders = res.get("orders", [])
+    already_executed = res.get("already_executed", False)
+
+    # Status indicator
+    if already_executed:
+        status_line = f"✅ <b>Today's Status:</b> Executed ({date} ET)"
+    else:
+        status_line = f"⏳ <b>Today's Status:</b> Pending ({date} ET)"
 
     lines = [
         f"📈 <b>Value Averaging</b> ({date})",
+        status_line,
         "",
         f"<b>Target:</b> <code>{target_ticker}</code>",
         f"<b>Day:</b> {day_count} | <b>Weight:</b> {target_weight:.1f}%",
@@ -522,7 +530,9 @@ def format_va_report(res: dict) -> str:
         ""
     ]
 
-    if current_price <= 0:
+    if already_executed:
+        lines.append("⏭️ <i>Already executed today. Order will be skipped.</i>")
+    elif current_price <= 0:
         lines.append("⚠️ <i>Price unavailable. Cannot calculate order.</i>")
     elif orders:
         for o in orders:
@@ -615,15 +625,22 @@ async def handle_va_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         loop = asyncio.get_running_loop()
         exec_results = await loop.run_in_executor(None, value_averaging.execute_orders, res)
 
+        # Check if skipped (already executed today)
+        if exec_results and exec_results[0].get('skipped'):
+            skip_msg = exec_results[0].get('message', 'Already executed today')
+            await wrap_edit(update, f"⏭️ <b>Skipped:</b> {skip_msg}", parse_mode='HTML')
+            context.user_data.pop('va_result', None)
+            return ConversationHandler.END
+
         # Build result message
         lines = [format_va_report(res), "", "─" * 20, "<b>Execution Result:</b>"]
 
         success_count = 0
         for r in exec_results:
-            status = "✅" if r['success'] else "❌"
-            if r['success']:
+            status = "✅" if r.get('success') else "❌"
+            if r.get('success'):
                 success_count += 1
-            lines.append(f"{status} {r['message']}")
+            lines.append(f"{status} {r.get('message', 'Unknown')}")
 
         lines.append(f"\n<b>{success_count}/{len(exec_results)} succeeded</b>")
 
