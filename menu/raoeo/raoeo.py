@@ -14,13 +14,13 @@ from datetime import datetime
 from typing import Optional
 import pytz
 
-import kis_api.kis_auth as ka
+from kis.kis_api import kis_auth as ka
 from display import (
     clear_result_area, show_in_result_area, input_at,
-    render_ui, PrintLevel, print_log
+    render_ui
 )
-from menu.handle_account_info import fetch_overseas_balance
-from kis_api.overseas_stock.order.order import order as order_overseas
+from data.data_service import get_portfolio_data
+from kis.kis_api.overseas_stock.order.order import order as order_overseas
 import trading_state
 import trading_config
 
@@ -56,10 +56,10 @@ def load_config() -> dict:
 
         return config
     except FileNotFoundError:
-        print_log(PrintLevel.ERROR, f"Config file not found: {CONFIG_FILE}")
+        display.add_alert(f"Config file not found: {CONFIG_FILE}", "ERROR")
         return {}
     except json.JSONDecodeError as e:
-        print_log(PrintLevel.ERROR, f"Invalid JSON in config: {e}")
+        display.add_alert(f"Invalid JSON in config: {e}", "ERROR")
         return {}
 
 
@@ -136,17 +136,23 @@ def calculate_order() -> dict:
     daily_budget = seed / duration
     result["daily_budget"] = round(daily_budget, 2)
 
-    # 3. Fetch current holdings
-    us_balance = fetch_overseas_balance()
-    if us_balance.get('error'):
-        result["error"] = us_balance['error']
+    # 3. Fetch current holdings from portfolio data
+    portfolio = get_portfolio_data(silent=True)
+    if portfolio.get('error'):
+        result["error"] = portfolio['error']
         return result
 
-    # Find target stock in holdings
+    # Find target stock in merged holdings
+    merged = portfolio.get('merged', {})
     target_holding = None
-    for stock in us_balance.get('stocks', []):
-        if stock.get('symbol', '').upper() == target.upper():
-            target_holding = stock
+    for ticker, info in merged.items():
+        if ticker.upper() == target.upper():
+            target_holding = {
+                'symbol': ticker,
+                'qty': info.get('qty', 0),
+                'avg_price': info.get('avg_price', 0),
+                'cur_price': info.get('cur_price', 0)
+            }
             break
 
     # 4. Get current price
@@ -356,7 +362,7 @@ def save_history(order_data: dict, exec_results: list = None) -> bool:
 
         return True
     except Exception as e:
-        print_log(PrintLevel.ERROR, f"Failed to save history: {e}")
+        display.add_alert(f"Failed to save history: {e}", "ERROR")
         return False
 
 
@@ -380,7 +386,7 @@ def check_today_history() -> Optional[dict]:
                         if entry.get('date') == today_str:
                             return entry
     except Exception as e:
-        print_log(PrintLevel.ERROR, f"Error checking history: {e}")
+        display.add_alert(f"Error checking history: {e}", "ERROR")
 
     return None
 
@@ -429,7 +435,7 @@ def build_raoeo_report() -> dict:
                             }
                             return report
         except Exception as e:
-            print_log(PrintLevel.ERROR, f"Error reading history for report: {e}")
+            display.add_alert(f"Error reading history for report: {e}", "ERROR")
 
     # 2. No history for today yet - calculate fresh orders
     current_result = calculate_order()
@@ -560,7 +566,7 @@ def run_order_execution(result: dict, display_lines: list) -> bool:
     Returns:
         bool: True if execution successful
     """
-    print_log(PrintLevel.INFO, f"RAOEO: Executing {len(result['orders'])} orders...")
+    display.add_alert(f"RAOEO: Executing {len(result['orders'])} orders...", "INFO")
     show_in_result_area(display_lines + [" Executing orders... Please wait."])
 
     exec_results = execute_orders(result['orders'], result['config'])

@@ -4,8 +4,9 @@ It coordinates between the different handlers in the menu package and the displa
 """
 import os
 import display
-from display import render_ui, input_at, prepare_exit, PrintLevel, print_log, process_pending_alerts, start_alert_processor
-import kis_api.kis_auth as ka
+from display import render_ui, input_at, prepare_exit, process_pending_alerts, start_alert_processor
+from kis.event_pipe import PrintLevel
+from kis.kis_api import kis_auth as ka
 
 # Centralized debug toggle for all menu handlers and KIS API interactions
 MENU_DEBUG = False
@@ -22,7 +23,7 @@ def menu():
     os.system('cls' if os.name == 'nt' else 'clear')
     if MENU_DEBUG:
         ka._DEBUG = True
-        print_log(PrintLevel.DEBUG, "[Menu] Debug mode (ka._DEBUG) enabled via MENU_DEBUG flag.")
+        display.add_alert("[Menu] Debug mode (ka._DEBUG) enabled via MENU_DEBUG flag.", "INFO")
 
     # Fetch initial orders on startup
     render_ui(full_refresh=True)
@@ -44,18 +45,19 @@ def menu():
         elif choice == '3':
             handle_manage_orders()
         elif choice == '0':
-            if display.print_log_level == PrintLevel.INFO:
-                display.print_log_level = PrintLevel.DEBUG
-            elif display.print_log_level == PrintLevel.DEBUG:
-                display.print_log_level = PrintLevel.ERROR
+            from kis import event_pipe
+            if event_pipe.print_log_level == PrintLevel.INFO:
+                event_pipe.print_log_level = PrintLevel.DEBUG
+            elif event_pipe.print_log_level == PrintLevel.DEBUG:
+                event_pipe.print_log_level = PrintLevel.ERROR
             else:
-                display.print_log_level = PrintLevel.INFO
-            print_log(PrintLevel.ERROR, f"Log Level Changed to: {display.print_log_level.name}")
+                event_pipe.print_log_level = PrintLevel.INFO
+            display.add_alert(f"Log Level Changed to: {event_pipe.print_log_level.name}", "INFO")
         elif choice.lower() == 'c':
             from .handle_manage_orders import sync_open_orders
             sync_open_orders()
         elif choice.lower() == 'v':
-            from event_viewer import event_pipe
+            from kis import event_pipe
             if event_pipe.is_connected():
                 display.add_alert("Viewer is already running!", "INFO")
             else:

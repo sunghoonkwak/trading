@@ -4,8 +4,8 @@ import os
 from datetime import datetime
 from typing import Dict, Any
 
-from kis_api.overseas_stock.order.order import order as order_overseas_stock
-import kis_api.kis_auth as ka
+from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
+from kis.kis_api import kis_auth as ka
 
 # Config / History File Paths
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'value_averaging.json')

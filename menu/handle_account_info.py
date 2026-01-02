@@ -5,165 +5,11 @@ It centralizes data fetching and provides an interactive terminal UI for portfol
 import msvcrt
 import logging
 import pandas as pd
-import kis_api.kis_auth as ka
+from kis.kis_api import kis_auth as ka
 from display import clear_result_area, show_in_result_area, get_fixed_width_name
-from kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_balance
-from kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import inquire_present_balance
+from kis.kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_balance
+from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import inquire_present_balance
 from .menu import MENU_DEBUG
-
-def _get_val(d, keys, default=None):
-    if hasattr(d, '_asdict'): d = d._asdict()
-    if not isinstance(d, (dict, pd.Series)): return default
-    for k in keys:
-        if k in d:
-            val = d[k]
-            # Handle cases where value might be None or 'None' string
-            if val is None or str(val).lower() == 'none': continue
-            return val
-    return default
-
-def fetch_domestic_balance() -> dict:
-    """Fetch Domestic Stock Balance and Assets (TTTC8434R)."""
-    cano = ka.getTREnv().my_acct
-    acnt_prdt_cd = ka.getTREnv().my_prod
-    env_dv = "demo" if ka.isPaperTrading() else "real"
-    if MENU_DEBUG:
-        logging.debug(f"[MenuDebug] KR Environment: {env_dv}")
-
-    result = {
-        'stocks': [],
-        'asset': {},
-        'krw_orderable': 0,
-        'error': None
-    }
-
-    df1, df2 = inquire_balance(
-        env_dv=env_dv, cano=cano, acnt_prdt_cd=acnt_prdt_cd,
-        afhr_flpr_yn="N", inqr_dvsn="02", unpr_dvsn="01",
-        fund_sttl_icld_yn="N", fncg_amt_auto_rdpt_yn="N", prcs_dvsn="00"
-    )
-
-    if MENU_DEBUG and not df1.empty:
-        logging.debug(f"[MenuDebug] KR DF1 Columns: {df1.columns.tolist()}")
-        logging.debug(f"[MenuDebug] KR DF1 Row 0: {df1.iloc[0].to_dict()}")
-    if MENU_DEBUG and not df2.empty:
-        logging.debug(f"[MenuDebug] KR DF2 Row 0: {df2.iloc[0].to_dict()}")
-
-    if not df1.empty:
-        for item in df1.to_dict('records'):
-            try:
-                # Official API might return different casing or types; use _get_val
-                mapped = {
-                    'name': _get_val(item, ['prdt_name', 'PRDT_NAME'], 'Unknown'),
-                    'qty': int(float(_get_val(item, ['hldg_qty', 'HLDG_QTY'], 0))),
-                    'cur_price': float(_get_val(item, ['prpr', 'PRPR'], 0)),
-                    'avg_price': float(_get_val(item, ['pchs_avg_pric', 'PCHS_AVG_PRIC', 'avg_unpr3'], 0)),
-                    'pnl_rate': float(_get_val(item, ['evlu_pfls_rt', 'EVLU_PFLS_RT'], 0)),
-                    'pnl_amt': float(_get_val(item, ['evlu_pfls_amt', 'EVLU_PFLS_AMT'], 0)),
-                    'symbol': _get_val(item, ['pdno', 'PDNO'], '')
-                }
-                if mapped['qty'] > 0:
-                    result['stocks'].append(mapped)
-                    if MENU_DEBUG:
-                        logging.debug(f"[MenuDebug] Mapped KR: {mapped['symbol']} {mapped['name']}")
-            except Exception as e:
-                logging.debug(f"Domestic stock mapping error: {e}")
-
-    if not df2.empty:
-        # Some API returns output2 as a single row DataFrame
-        d_asset = df2.iloc[0].to_dict()
-        result['asset'] = d_asset
-        try: result['krw_orderable'] = int(float(_get_val(d_asset, ['prvs_rcdl_excc_amt', 'PRVS_RCDL_EXCC_AMT'], 0)))
-        except: pass
-    elif df1.empty:
-        result['error'] = "No data returned from KR balance inquiry."
-
-    return result
-
-def fetch_overseas_balance() -> dict:
-    """Fetch Overseas Stock Balance and Assets (CTRP6504R)."""
-    cano = ka.getTREnv().my_acct
-    acnt_prdt_cd = ka.getTREnv().my_prod
-    env_dv = "demo" if ka.isPaperTrading() else "real"
-    if MENU_DEBUG:
-        logging.debug(f"[MenuDebug] US Environment: {env_dv}")
-
-
-    result = {
-        'stocks': [],
-        'asset': {},
-        'exchange_rate': 0.0,
-        'error': None
-    }
-
-    df1, df2, df3 = inquire_present_balance(
-        cano=cano, acnt_prdt_cd=acnt_prdt_cd,
-        wcrc_frcr_dvsn_cd="02", natn_cd="000",
-        tr_mket_cd="00", inqr_dvsn_cd="00", env_dv=env_dv
-    )
-
-    if MENU_DEBUG:
-        if not df1.empty:
-            logging.debug(f"[MenuDebug] US DF1 Columns: {df1.columns.tolist()}")
-            logging.debug(f"[MenuDebug] US DF1 Row 0: {df1.iloc[0].to_dict()}")
-        if not df2.empty:
-            logging.debug(f"[MenuDebug] US DF2 Row 0: {df2.iloc[0].to_dict()}")
-        if not df3.empty:
-            logging.debug(f"[MenuDebug] US DF3 Row 0: {df3.iloc[0].to_dict()}")
-
-
-
-    ex_rate = 0.0
-    if not df1.empty:
-        seen_ovs = set()
-        for item in df1.to_dict('records'):
-            try:
-                if ex_rate == 0.0:
-                    ex_rate = float(_get_val(item, ['bass_exrt', 'BASS_EXRT'], 0))
-
-                symbol = _get_val(item, ['pdno', 'PDNO'], '') or _get_val(item, ['ovrs_pdno', 'OVRS_PDNO'], '')
-                if not symbol or symbol in seen_ovs:
-                    continue
-
-                mapped = {
-                    'name': _get_val(item, ['prdt_name', 'PRDT_NAME', 'ovrs_prdt_name'], 'Unknown'),
-                    'qty': float(_get_val(item, ['ccld_qty_smtl1', 'CCLD_QTY_SMTL1', 'ovrs_cblc_qty', 'HLDG_QTY'], 0)),
-                    'cur_price': float(_get_val(item, ['ovrs_now_pric1', 'OVRS_NOW_PRIC1', 'prpr'], 0)),
-                    'avg_price': float(_get_val(item, ['avg_unpr3', 'pchs_avg_pric', 'PCHS_AVG_PRIC', 'avg_unpr1'], 0)),
-                    'pnl_rate': float(_get_val(item, ['evlu_pfls_rt1', 'EVLU_PFLS_RT1', 'evlu_pfls_rt'], 0)),
-                    'pnl_amt': float(_get_val(item, ['evlu_pfls_amt2', 'EVLU_PFLS_AMT2', 'evlu_pfls_amt'], 0)),
-                    'symbol': symbol,
-                    'exchange': _get_val(item, ['ovrs_excg_cd', 'OVRS_EXCG_CD'], 'US')
-                }
-                if mapped['qty'] > 0:
-                    result['stocks'].append(mapped)
-                    seen_ovs.add(symbol)
-                    if MENU_DEBUG:
-                        logging.debug(f"[MenuDebug] Mapped US: {mapped['symbol']} {mapped['name']}")
-                else:
-                    if MENU_DEBUG:
-                        logging.debug(f"[MenuDebug] Skipping US (0 qty): {symbol}")
-                    continue
-            except Exception as e:
-                logging.debug(f"Overseas stock mapping error: {e}")
-
-    asset = {}
-    if not df2.empty:
-        o2 = df2.iloc[0].to_dict()
-        asset.update(o2)
-        if ex_rate == 0.0:
-            ex_rate = float(_get_val(o2, ['frst_bltn_exrt', 'FRST_BLTN_EXRT'], 0))
-    if not df3.empty:
-        o3 = df3.iloc[0].to_dict()
-        asset.update(o3)
-
-    result['asset'] = asset
-    result['exchange_rate'] = ex_rate
-    if df1.empty and df2.empty:
-        result['error'] = "No data returned from US balance inquiry."
-
-    return result
-
 
 def fetch_price(ticker: str, exchange: str = None) -> float:
     """
@@ -180,7 +26,7 @@ def fetch_price(ticker: str, exchange: str = None) -> float:
         from trading_config import get_kis_exchange_code
         exchange = get_kis_exchange_code(ticker)
 
-    from kis_api.overseas_stock.price import price as price_module
+    from kis.kis_api.overseas_stock.price import price as price_module
 
     try:
         env_dv = "demo" if ka.isPaperTrading() else "real"
@@ -215,21 +61,6 @@ def fetch_price(ticker: str, exchange: str = None) -> float:
         logging.warning(f"Failed to fetch price from KIS API for {ticker}: {e}")
         return 0.0
 
-def fetch_account_data():
-    """Fetch all necessary data for account info."""
-    kr = fetch_domestic_balance()
-    us = fetch_overseas_balance()
-
-    # Map to the format expected by print_account_info
-    return {
-        'domestic_stocks': kr['stocks'],
-        'overseas_stocks': us['stocks'],
-        'domestic_asset': kr['asset'],
-        'overseas_asset': us['asset'],
-        'exchange_rate': us['exchange_rate'],
-        'krw_orderable': kr['krw_orderable'],
-        'error': f"{kr['error']} | {us['error']}" if (kr['error'] or us['error']) else None
-    }
 
 def print_account_info(data):
     """Render the account information UI and handle user navigation."""
@@ -371,7 +202,19 @@ def print_account_info(data):
 
 def handle_account_info():
     """Main menu controller for account information."""
+    from data.data_service import get_portfolio_data, convert_portfolio_to_account_format
+
     clear_result_area()
     show_in_result_area(["Fetching integrated account data..."])
-    data = fetch_account_data()
+
+    # Get portfolio data via cache/KIS Thread
+    portfolio = get_portfolio_data()
+
+    if portfolio.get("error"):
+        show_in_result_area([f"Error: {portfolio['error']}"])
+        return
+
+    # Convert to the format expected by print_account_info
+    data = convert_portfolio_to_account_format(portfolio)
     print_account_info(data)
+

@@ -33,17 +33,24 @@
 ```text
 .
 ├── main.py                     # Entry point (로그 로테이션, 웹소켓 관리)
+├── event_viewer.py             # 별도 터미널 로그 뷰어 (Named Pipe 방식)
+├── display.py                  # ANSI UI 렌더링 엔진 (Thread-safe alerts)
+├── thread_comm.py              # 스레드 간 통신 (Queue) 정의
+├── thread_state.py             # 스레드 공유 상태 관리
 ├── menu/                       # 대화형 메뉴 시스템
 │   ├── menu.py                 # 메인 메뉴 허브
 │   ├── raoeo/                  # [Strategy] RAOEO 무한매수법 전담 모듈
-│   ├── portfolio/              # [Strategy] 포트폴리오 분석 및 Value Averaging
+│   ├── portfolio/              # [Strategy] 포트폴리오 UI 및 연동
 │   └── handle_*.py             # 계좌/주문/관리 각 섹션 핸들러
-├── telegram_bot/               # Telegram 봇 통합 패키지 (Portfolio, RAOEO 핸들러)
-├── event_viewer/               # 별도 터미널 로그 뷰어 (Named Pipe 방식)
-├── kis_api/                    # KIS OpenAPI SDK & 인증 코어
-├── display.py                  # ANSI UI 렌더링 엔진 (Thread-safe alerts)
-├── trading_state.py            # 전역 실행 상태 및 데이터 영속성 관리
-├── stock_configuration.json    # 종목별 UI 설정 (색상, 활성 등)
+├── telegram_bot/               # Telegram 봇 통합 패키지
+├── kis/                        # KIS OpenAPI Core & Threading
+│   ├── kis_api/                # KIS SDK (인증, 주문, 시세 등)
+│   ├── kis_thread.py           # API 전담 백그라운드 스레드
+│   ├── event_pipe.py           # Named Pipe 로그/데이터 전송
+│   └── event_handler.py        # 실시간 웹소켓 이벤트 처리
+├── data/                       # 데이터 서비스 계층
+│   └── data_service.py         # 포트폴리오 데이터 캐싱 및 중앙 관리
+├── stock_configuration.json    # 종목별 UI 설정
 └── credentials.enc             # 암호화된 인증 데이터
 ```
 

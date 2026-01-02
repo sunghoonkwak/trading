@@ -12,7 +12,7 @@ import threading
 import unicodedata
 import os
 import logging
-from enum import IntEnum
+
 from datetime import datetime
 from collections import deque, OrderedDict
 from queue import Queue
@@ -48,14 +48,14 @@ def get_fear_and_greed_display():
 
 # Try to import event_pipe for separate terminal support
 try:
-    from event_viewer import event_pipe
+    from kis import event_pipe
+    from kis.event_pipe import PrintLevel
     PIPE_AVAILABLE = True
 except ImportError:
     PIPE_AVAILABLE = False
 
 # UI and Logging Configuration
-LOG_BUFFER_SIZE = 30
-log_buffer = deque(maxlen=LOG_BUFFER_SIZE)
+
 terminal_lock = threading.Lock()
 log_file_path = "WebSocket_latest.log"  # Overwritten by main.py at startup
 
@@ -97,13 +97,7 @@ MENU_OPTIONS = [
     " q. Exit"
 ]
 
-class PrintLevel(IntEnum):
-    ERROR = 0
-    INFO = 1
-    DEBUG = 2
-    MAX = 3
 
-print_log_level = PrintLevel.INFO
 
 def get_fixed_width_name(name, width=8):
     current_width = 0
@@ -130,26 +124,7 @@ def safe_write(text):
         sys.stdout.flush()
 
 
-def send_to_viewer(log: str):
-    """Send log to separate terminal via Named Pipe."""
-    if PIPE_AVAILABLE and event_pipe.is_connected():
-        event_pipe.send_log(log)
 
-
-def print_log(level, log):
-    """Log to file and send to separate terminal viewer."""
-    # Always log to file
-    if level == PrintLevel.ERROR:
-        logging.error(log)
-    elif level == PrintLevel.INFO:
-        logging.info(log)
-    elif level == PrintLevel.DEBUG:
-        logging.debug(log)
-
-    # Send to separate terminal viewer
-    if level <= print_log_level:
-        send_to_viewer(log)
-        log_buffer.appendleft(log)
 
 
 def update_order_state(order_id: str, ticker: str, name: str, side: str,
@@ -327,7 +302,7 @@ def render_ui(full_refresh=False):
         sys.stdout.write(SAVE_CURSOR)
 
         if full_refresh:
-            status_name = "ERROR" if print_log_level == PrintLevel.ERROR else "INFO" if print_log_level == PrintLevel.INFO else "DEBUG"
+            status_name = "ERROR" if event_pipe.get_log_level() == PrintLevel.ERROR else "INFO" if event_pipe.get_log_level() == PrintLevel.INFO else "DEBUG"
 
             sys.stdout.write(f"\033[1;1H{CLEAR_LINE}" + "=" * min(cols, 60))
             sys.stdout.write(f"\033[2;1H{CLEAR_LINE} KIS Real-time System (Log: {status_name}) (fear & greed: {get_fear_and_greed_display()})")

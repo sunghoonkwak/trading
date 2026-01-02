@@ -22,26 +22,7 @@
 
 ## Function (기능)
 
-### fetch_domestic_balance
-국내 주식 잔고 및 자산 현황을 조회합니다. 내부적으로 `kis_api`의 `inquire_balance` (TTTC8434R)를 호출합니다.
-#### input
-- `None`
-#### output
-- `dict`: 보유 종목 리스트(`stocks`), 자산 상세(`asset`), 주문 가능 현금(`krw_orderable`), 에러 메시지(`error`).
 
-### fetch_overseas_balance
-해외 주식 잔고, 자산 현황 및 현재 환율을 조회합니다. 내부적으로 `kis_api`의 `inquire_present_balance` (CTRP6504R)를 호출합니다.
-#### input
-- `None`
-#### output
-- `dict`: 보유 종목 리스트(`stocks`), 자산 상세(`asset`), 기준 환율(`exchange_rate`), 에러 메시지(`error`).
-
-### fetch_account_data
-내부의 `fetch_domestic_balance` 및 `fetch_overseas_balance`를 호출하여 필요한 모든 계좌 데이터를 집계합니다.
-#### input
-- `None`
-#### output
-- `dict`: 통합 계좌 정보 데이터 객체 (KR/US 주식, 자산, 환율 포함).
 
 ### print_account_info
 제공된 데이터를 바탕으로 터미널 UI를 렌더링하고 사용자의 키 입력(뷰 전환, 페이지 이동)을 처리합니다.

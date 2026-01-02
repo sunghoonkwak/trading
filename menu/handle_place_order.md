@@ -23,7 +23,7 @@
 ## Function (기능)
 
 ### fetch_balances
-계좌로부터 국내(KRW) 및 해외(USD) 주문 가능 잔고를 조회합니다.
+`data_service.get_portfolio_data`를 통해 계좌의 국내(KRW) 및 해외(USD) 주문 가능 잔고를 조회합니다.
 #### input
 - `None`
 #### output

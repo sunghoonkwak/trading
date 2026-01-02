@@ -14,45 +14,17 @@ from telegram.ext import (
     Application, CommandHandler, ContextTypes,
     ConversationHandler, CallbackQueryHandler, MessageHandler, TypeHandler, filters
 )
+import asyncio
 import display
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 from datetime import datetime
 
-from menu.portfolio.portfolio import get_portfolio, calc_weight_diffs
+from data.data_service import get_weight_diffs
+from data.data_service import get_portfolio_data
 
 # Conversation states
 SELECT_TICKER = 0
 VA_CONFIRM = 1
-
-# Portfolio Cache
-_portfolio_cache = None
-_portfolio_cache_time = None
-CACHE_EXPIRE_SECONDS = 300  # 5 minutes
-
-
-def get_portfolio_cached(force_refresh: bool = False) -> dict:
-    """
-    Get portfolio data with caching.
-    Returns cached result if within 5 minutes, otherwise fetches fresh data.
-
-    Args:
-        force_refresh: If True, ignore cache and fetch fresh data.
-    """
-    global _portfolio_cache, _portfolio_cache_time
-
-    now = datetime.now()
-
-    if not force_refresh and _portfolio_cache is not None and _portfolio_cache_time is not None:
-        elapsed = (now - _portfolio_cache_time).total_seconds()
-        if elapsed < CACHE_EXPIRE_SECONDS:
-            logging.debug(f"[TG] Using cached portfolio (age: {elapsed:.0f}s)")
-            return _portfolio_cache
-
-    # Fetch fresh data
-    logging.info("[TG] Fetching fresh portfolio data...")
-    _portfolio_cache = get_portfolio()
-    _portfolio_cache_time = now
-    return _portfolio_cache
 
 
 def format_portfolio_summary(data: dict) -> str:
@@ -81,18 +53,17 @@ def format_portfolio_summary(data: dict) -> str:
     return "\n".join(lines)
 
 
-def format_weight_diffs(data: dict) -> str:
-    """Format weight differences for Telegram message."""
-    if data.get("error"):
-        return f"⚠️ <b>Error:</b> {data['error']}"
-
-    merged_data = data.get("merged_data", {})
-    current_weights = data.get("current_weights", {})
-    targets = data.get("targets", {})
-    total_usd = data.get("total_value_usd", 0)
-    rate = data.get("exchange_rate", 0)
-
-    diffs = calc_weight_diffs(merged_data, current_weights, targets, total_usd, rate)
+def format_weight_diffs(diffs: list = None, total_usd: float = 0) -> str:
+    """
+    Format weight differences for Telegram message.
+    Args:
+        diffs: Optional list of diffs. If None, fetches fresh.
+        total_usd: Total portfolio value in USD.
+    Returns:
+        Formatted string with weight differences
+    """
+    if diffs is None:
+        diffs, total_usd = get_weight_diffs()
 
     if not diffs:
         return "⚖️ <b>Portfolio Rebalancing</b>\n\nEverything is balanced!"
@@ -332,7 +303,8 @@ async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logging.info(f"[TG] Portfolio session started for user {update.effective_user.id}")
     # Get portfolio data and cache in user_data
-    data = get_portfolio_cached()
+    loop = asyncio.get_running_loop()
+    data = await loop.run_in_executor(None, get_portfolio_data)
     context.user_data['portfolio_data'] = data
 
     # Format summary message
@@ -468,9 +440,9 @@ async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio_weight."""
-    # Run silently
-    data = get_portfolio_cached()
-    msg = format_weight_diffs(data)
+    loop = asyncio.get_running_loop()
+    diffs, total_usd = await loop.run_in_executor(None, get_weight_diffs)
+    msg = format_weight_diffs(diffs, total_usd)
     await wrap_reply(update, msg, parse_mode='HTML')
 
 
@@ -584,7 +556,8 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"[TG] /portfolio_va from user {update.effective_user.id}")
 
     # Get portfolio data
-    data = get_portfolio_cached()
+    loop = asyncio.get_running_loop()
+    data = await loop.run_in_executor(None, get_portfolio_data)
     if data.get("error"):
         await wrap_reply(update, f"⚠️ Error: {data['error']}")
         return
@@ -595,7 +568,9 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_value_usd = data.get("total_value_usd", 0)
 
     # Calculate order
-    res = value_averaging.calculate_order(targets, price_map, merged_data, total_value_usd)
+    res = await loop.run_in_executor(
+        None, value_averaging.calculate_order, targets, price_map, merged_data, total_value_usd
+    )
 
     # Cache result for callback
     context.user_data['va_result'] = res
@@ -637,7 +612,8 @@ async def handle_va_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return ConversationHandler.END
 
         # Execute orders
-        exec_results = value_averaging.execute_orders(res)
+        loop = asyncio.get_running_loop()
+        exec_results = await loop.run_in_executor(None, value_averaging.execute_orders, res)
 
         # Build result message
         lines = [format_va_report(res), "", "─" * 20, "<b>Execution Result:</b>"]

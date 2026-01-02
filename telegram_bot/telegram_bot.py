@@ -50,13 +50,6 @@ def load_telegram_credentials() -> tuple[Optional[str], Optional[str]]:
         return None, None
 
 
-
-
-
-
-
-
-
 def initialize_telegram():
     """
     Initialize Telegram bot and start polling in a background thread.
@@ -112,8 +105,17 @@ def initialize_telegram():
                         display.add_alert("[TG] Init message failed", "ERROR")
 
             # Global Error Handler (Essential for stability)
+            # Global Error Handler (Essential for stability)
+            from telegram.error import BadRequest
+
             async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-                display.add_alert(f"[TG] ERR: {str(context.error)[:40]}", "ERROR")
+                # Filter out benign "Message is not modified" error
+                if isinstance(context.error, BadRequest) and "Message is not modified" in str(context.error):
+                    logging.warning(f"[TG] Benign error (ignored): {context.error}")
+                    return
+
+                # Increase alert length to 100 chars
+                display.add_alert(f"[TG] ERR: {str(context.error)[:100]}", "ERROR")
                 logging.error(f"Telegram Exception: {context.error}", exc_info=context.error)
 
             _app.add_error_handler(error_handler)

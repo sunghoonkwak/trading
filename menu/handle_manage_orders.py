@@ -4,14 +4,14 @@ It follows a strict 6-step workflow for user interaction and API execution.
 """
 import msvcrt
 import logging
-import kis_api.kis_auth as ka
+from kis.kis_api import kis_auth as ka
 import trading_config
-from display import clear_result_area, show_in_result_area, input_at, render_ui, PrintLevel, print_log, safe_write, CLEAR_LINE, update_order_state, add_alert, clear_order_states
+from display import clear_result_area, show_in_result_area, input_at, render_ui, safe_write, CLEAR_LINE, update_order_state, add_alert, clear_order_states
 from .menu import MENU_DEBUG
-from kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl
-from kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import inquire_psbl_rvsecncl
-from kis_api.overseas_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl as order_rvsecncl_overseas
-from kis_api.overseas_stock.inquire_nccs.inquire_nccs import inquire_nccs as inquire_nccs_overseas
+from kis.kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl
+from kis.kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import inquire_psbl_rvsecncl
+from kis.kis_api.overseas_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl as order_rvsecncl_overseas
+from kis.kis_api.overseas_stock.inquire_nccs.inquire_nccs import inquire_nccs as inquire_nccs_overseas
 import threading
 import time
 
@@ -268,6 +268,6 @@ def handle_manage_orders():
         print_execution_result(df_res, err_msg)
 
     except Exception as e:
-        print_log(PrintLevel.ERROR, f"Order Manage Error: {e}")
+        add_alert(f"Order Manage Error: {e}", "ERROR")
     finally:
         render_ui(full_refresh=True)

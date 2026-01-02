@@ -4,22 +4,24 @@ It provides an interactive interface for market selection, stock picking, and pr
 """
 import msvcrt
 import logging
-import kis_api.kis_auth as ka
-from display import clear_result_area, show_in_result_area, input_at, render_ui, PrintLevel, print_log
+from kis.kis_api import kis_auth as ka
+from display import clear_result_area, show_in_result_area, input_at, render_ui, add_alert
 import trading_config
 import trading_state
 from .menu import MENU_DEBUG
-from .handle_account_info import fetch_domestic_balance, fetch_overseas_balance
-from kis_api.domestic_stock.order_cash.order_cash import order_cash
-from kis_api.overseas_stock.order.order import order as order_overseas
+from data.data_service import get_portfolio_data
+from kis.kis_api.domestic_stock.order_cash.order_cash import order_cash
+from kis.kis_api.overseas_stock.order.order import order as order_overseas
 
 def fetch_balances():
-    """Retrieve current KRW and USD balances."""
-    kr = fetch_domestic_balance()
-    us = fetch_overseas_balance()
+    """Retrieve current KRW and USD balances via data_service."""
+    portfolio = get_portfolio_data(silent=True)
+    if portfolio.get('error'):
+        return 0, 0.0
 
-    krw_bal = kr['krw_orderable']
-    usd_bal = float(us['asset'].get('frcr_drwg_psbl_amt_1', 0))
+    stats = portfolio.get('stats', {})
+    krw_bal = stats.get('kr_cash_krw', 0)
+    usd_bal = stats.get('us_cash_usd', 0.0)
     return krw_bal, usd_bal
 
 def fetch_stock_price(pdno):
@@ -219,6 +221,6 @@ def handle_place_order():
             msvcrt.getch()
 
     except Exception as e:
-        print_log(PrintLevel.ERROR, f"Order Flow Error: {e}")
+        add_alert(f"Order Flow Error: {e}", "ERROR")
     finally:
         render_ui(full_refresh=True)
