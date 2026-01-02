@@ -1,6 +1,6 @@
 {
     "config": {
-        "seed": 6000,
+        "seed": 10000,
         "target": "SOXL",
         "exchange": "AMEX",
         "duration": 40,
