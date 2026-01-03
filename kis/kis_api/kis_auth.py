@@ -824,17 +824,57 @@ class KISWebSocket:
             if show_result is True and self.on_result is not None:
                 self.on_result(ws, tr_id, df, data_map[tr_id])
 
+    # Reconnection wait times: 5s, 30s, 1m, 5m, 20m (no limit on attempts)
+    WAIT_TIMES = [5, 30, 60, 300, 1200]
+
+    def _check_server_connectivity(self, host: str, port: int, timeout: float = 10) -> dict:
+        """Test TCP connectivity to the WebSocket server."""
+        import socket
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            result = sock.connect_ex((host, port))
+            sock.close()
+            return {"reachable": result == 0, "error_code": result}
+        except Exception as e:
+            return {"reachable": False, "error": str(e)}
+
+    def _add_alert(self, message: str):
+        """Add alert to UI display."""
+        try:
+            import display
+            first_line = message.split('\n')[0][:60]
+            display.add_alert(f"[WS] {first_line}", "WARNING")
+        except Exception as e:
+            logging.debug(f"Failed to add alert: {e}")
+
+    def _send_telegram_notification(self, message: str):
+        """Send notification via Telegram (thread-safe)."""
+        try:
+            from telegram_bot.telegram_utils import send_notification
+            send_notification(message, parse_mode='HTML')
+        except Exception as e:
+            logging.warning(f"Failed to send Telegram notification: {e}")
+
     async def __runner(self):
         if len(open_map.keys()) > 40:
             raise ValueError("Subscription's max is 40")
 
         url = f"{getTREnv().my_url_ws}{self.api_url}"
+        was_connected = False  # Track if we were previously connected
 
         while True:
             try:
                 logging.info(f"Connecting to WebSocket: {url}")
                 async with websockets.connect(url, ping_interval=60, ping_timeout=120) as ws:
-                    self.retry_count = 0 # Reset on successful connection
+                    # Send reconnection success notification if we were reconnecting
+                    if self.retry_count > 0:
+                        self._send_telegram_notification(
+                            f"✅ <b>WebSocket Reconnected</b>\n"
+                            f"Successfully reconnected after {self.retry_count} attempt(s)."
+                        )
+                    self.retry_count = 0  # Reset on successful connection
+                    was_connected = True
                     logging.info("WebSocket Connected!")
 
                     # Request initial subscriptions
@@ -849,12 +889,55 @@ class KISWebSocket:
                     )
             except websockets.exceptions.ConnectionClosed as e:
                 logging.warning(f"WebSocket Connection Closed: {e}")
+                self._add_alert(f"Connection Closed (#{self.retry_count + 1}): {e}")
+                # Send disconnect notification on first disconnect
+                if self.retry_count == 0:
+                    self._send_telegram_notification(
+                        f"⚠️ <b>WebSocket Disconnected</b>\n"
+                        f"Connection closed: {e}\n"
+                        f"Attempting to reconnect..."
+                    )
             except Exception as e:
                 logging.error(f"WebSocket Connection Error: {e}")
+                self._add_alert(f"Connection Error (#{self.retry_count + 1}): {e}")
+                # Send disconnect notification on first disconnect
+                if self.retry_count == 0:
+                    self._send_telegram_notification(
+                        f"⚠️ <b>WebSocket Disconnected</b>\n"
+                        f"Error: {e}\n"
+                        f"Attempting to reconnect..."
+                    )
 
             self.retry_count += 1
-            wait_time = min(60, 2 ** self.retry_count) # Exponential backoff capped at 60s
+
+            # Check server connectivity and log result
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                host = parsed.hostname or "ops.koreainvestment.com"
+                port = parsed.port or 21000
+                conn_check = self._check_server_connectivity(host, port)
+                if conn_check.get("reachable"):
+                    logging.info(f"[Connectivity] Server {host}:{port} is reachable")
+                else:
+                    error_info = conn_check.get("error") or f"error_code={conn_check.get('error_code')}"
+                    logging.warning(f"[Connectivity] Server {host}:{port} is NOT reachable: {error_info}")
+            except Exception as e:
+                logging.warning(f"[Connectivity] Check failed: {e}")
+
+            # Custom wait times: 5s, 30s, 1m, 5m, 20m
+            wait_idx = min(self.retry_count - 1, len(self.WAIT_TIMES) - 1)
+            wait_time = self.WAIT_TIMES[max(0, wait_idx)]
             logging.info(f"Reconnecting in {wait_time} seconds (Attempt {self.retry_count})...")
+
+            # Send Telegram notification every 5 failed attempts
+            if self.retry_count % 5 == 0:
+                self._send_telegram_notification(
+                    f"❌ <b>WebSocket Reconnection Failed</b>\n"
+                    f"Attempt {self.retry_count} failed.\n"
+                    f"Next retry in {wait_time}s."
+                )
+
             await asyncio.sleep(wait_time)
 
     # func
