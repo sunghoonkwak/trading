@@ -1,4 +1,4 @@
-# telegram_raoeo.py
+# Telegram RAOEO (`telegram_raoeo.py`)
 
 이 모듈은 RAOEO 무한매수 전략 전용 Telegram 명령어 및 리포팅 기능을 담당합니다.
 

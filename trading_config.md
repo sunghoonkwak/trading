@@ -1,4 +1,4 @@
-# trading_config.md
+# Trading Config (`trading_config.py`)
 
 이 모듈은 `stock_configuration.json` 파일로부터 종목별 설정 데이터를 로드하고 관리합니다.
 

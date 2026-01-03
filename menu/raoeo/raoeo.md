@@ -1,4 +1,4 @@
-# raoeo.md
+# RAOEO Strategy (`raoeo.py`)
 
 이 모듈은 라오어 무한 매수법에 필요한 매매 계산 및 주문을 자동으로 처리하는 모듈입니다.
 

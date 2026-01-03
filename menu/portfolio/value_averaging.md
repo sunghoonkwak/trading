@@ -1,4 +1,4 @@
-# value_averaging.md
+# Value Averaging (`value_averaging.py`)
 
 이 모듈은 Value Averaging 분할매수법에 필요한 매매 계산 및 주문을 자동으로 처리합니다.
 

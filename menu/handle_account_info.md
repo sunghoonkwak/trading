@@ -1,4 +1,4 @@
-# handle_account_info.md
+# Account Info (`handle_account_info.py`)
 
 이 모듈은 통합 계좌 정보를 조회하고 표시하는 대화형 엔진과 데이터 fetching 로직을 관리합니다. 기존 `account_helper.py`의 기능을 통합하여 계좌 관련 모든 데이터 처리를 담당합니다.
 

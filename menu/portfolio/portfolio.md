@@ -1,4 +1,4 @@
-# portfolio.md
+# Portfolio (`portfolio.py`)
 
 이 모듈은 사용자의 계좌 정보를 로드하고, 계좌별로 포트폴리오를 관리합니다.
 

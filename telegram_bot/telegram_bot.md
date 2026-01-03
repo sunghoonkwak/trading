@@ -1,4 +1,4 @@
-# telegram_bot.py
+# Telegram Bot (`telegram_bot.py`)
 
 이 모듈은 Telegram bot을 통한 원격 트레이딩 제어 기능을 제공하는 코어 패키지입니다.
 

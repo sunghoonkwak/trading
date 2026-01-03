@@ -1,4 +1,4 @@
-# calculate_weights.md
+# Calculate Weights (`calculate_weights.py`)
 
 이 모듈은 `portfolio_weights.json`에 정의된 설정에 따라 포트폴리오의 **목표 비중(Target Weights)**을 동적으로 계산합니다.
 

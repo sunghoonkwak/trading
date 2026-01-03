@@ -1,4 +1,4 @@
-# telegram_utils.py
+# Telegram Utils (`telegram_utils.py`)
 
 이 모듈은 Telegram 봇에서 공통으로 사용되는 메시징 래퍼 함수들을 제공합니다.
 순환 참조 방지를 위해 `telegram_bot.py`에서 분리되었습니다.
@@ -49,6 +49,20 @@ await wrap_edit_message(chat_id, message_id, "수정 내용", parse_mode='HTML')
 ```python
 set_telegram_bot(app.bot, chat_id)
 ```
+
+---
+
+### send_notification
+**Thread-safe** 동기 알림 전송 함수입니다. 웹소켓 이벤트 핸들러 등 백그라운드 스레드에서 호출할 수 있습니다.
+
+```python
+send_notification("📈 Order Filled: SOXL 5 @ $25.00", parse_mode='HTML')
+```
+
+- **Args**: `text` (메시지 내용), `parse_mode` (기본값: 'HTML')
+- **Thread Safety**: 별도 스레드에서 비동기 루프를 생성하여 안전하게 전송
+
+---
 
 ## Technical Notes
 

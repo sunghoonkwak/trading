@@ -1,4 +1,4 @@
-# handle_place_order.md
+# Place Order (`handle_place_order.py`)
 
 이 모듈은 주식 매수 및 매도 주문을 넣는 대화형 인터페이스와 데이터 조회 로직을 처리합니다.
 

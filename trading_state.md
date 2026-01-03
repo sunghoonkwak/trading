@@ -1,4 +1,4 @@
-# trading_state.md
+# Trading State (`trading_state.py`)
 
 이 모듈은 애플리케이션의 공유 상태 저장소를 제공합니다.
 

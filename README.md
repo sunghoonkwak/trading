@@ -49,8 +49,12 @@
 │   ├── event_pipe.py           # Named Pipe 로그/데이터 전송
 │   └── event_handler.py        # 실시간 웹소켓 이벤트 처리
 ├── data/                       # 데이터 서비스 계층
-│   └── data_service.py         # 포트폴리오 데이터 캐싱 및 중앙 관리
+│   ├── data_service.py         # 포트폴리오 데이터 캐싱 및 중앙 관리
+│   └── portfolio.json          # 캐싱된 포트폴리오 데이터
+├── exports/                    # 엑셀 내보내기 파일 저장 디렉토리
+├── logs/                       # 애플리케이션 로그 파일 디렉토리
 ├── stock_configuration.json    # 종목별 UI 설정
+├── telegram.txt                # 텔레그램 봇 토큰/채팅 ID
 └── credentials.enc             # 암호화된 인증 데이터
 ```
 
@@ -59,8 +63,15 @@
 ## 4. 시작하기 (Quick Start)
 
 ### ⚙️ 환경 설정
-1. `kis_api/key/generate_credentials.py`를 실행하여 API 키를 암호화 저장합니다.
-2. `telegram_bot/telegram.txt`에 텔레그램 토큰과 채팅 ID를 입력합니다.
+1. 의존성 패키지를 설치합니다.
+```bash
+pip install -r requirements.txt
+```
+2. `kis_api/key/generate_credentials.py`를 실행하여 API 키를 암호화 저장합니다.
+3. 프로젝트 루트에 `telegram.txt` 파일을 생성하고 텔레그램 토큰과 채팅 ID를 입력합니다.
+```
+BOT_TOKEN,CHAT_ID
+```
 
 ### 🚀 실행
 ```bash
