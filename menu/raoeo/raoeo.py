@@ -158,8 +158,11 @@ def calculate_order() -> dict:
             }
             break
 
-    # 4. Get current price
-    cur_price = get_current_price(target, exchange)
+    # 4. Get current price: KIS API -> WebSocket
+    from menu.handle_account_info import fetch_price
+    cur_price = fetch_price(target)
+    if cur_price <= 0:
+        cur_price = get_current_price(target, exchange)
 
     # 5. Calculate orders based on state
     if target_holding is None or target_holding.get('qty', 0) == 0:

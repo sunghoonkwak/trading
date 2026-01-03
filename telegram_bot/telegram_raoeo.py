@@ -37,6 +37,12 @@ def format_raoeo_report(report: dict) -> str:
         lines.append(f"Target: <code>{config['target']}</code> @ {config['exchange']}")
     if holdings:
         lines.append(f"Holdings: {holdings.get('qty', 0)} @ ${holdings.get('avg_price', 0):.2f} (Cur: ${cur_price:.2f})")
+    if config:
+        # Calculate and show daily budget
+        seed = float(config.get('seed', 0))
+        duration = int(config.get('duration', 1))
+        daily_budget = seed / duration if duration > 0 else 0
+        lines.append(f"Budget: ${daily_budget:.2f}/day (${seed:,.0f} / {duration} days)")
     lines.append("")
 
     # --- Section: Success ---
