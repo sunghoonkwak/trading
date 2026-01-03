@@ -576,10 +576,11 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
     price_map = data.get("price_map", {})
     merged_data = data.get("merged_data", {})
     total_value_usd = data.get("total_value_usd", 0)
+    exchange_rate = data.get("exchange_rate")
 
     # Calculate order
     res = await loop.run_in_executor(
-        None, value_averaging.calculate_order, targets, price_map, merged_data, total_value_usd
+        None, value_averaging.calculate_order, targets, price_map, merged_data, total_value_usd, exchange_rate
     )
 
     # Cache result for callback

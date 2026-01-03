@@ -50,6 +50,7 @@
 | `price_map` | dict | 티커별 현재가 `{ticker: price}` |
 | `merged_portfolio` | dict | 병합된 포트폴리오 데이터 |
 | `total_value_usd` | float | 총 자산 가치 (USD) |
+| `exchange_rate` | float | USD/KRW 환율 (필수) |
 
 #### Strategy Logic
 1. `load_config()`로 설정 로드

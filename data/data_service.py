@@ -91,29 +91,26 @@ def _load_portfolio() -> dict:
         return {"error": str(e)}
 
 
-def _calculate_portfolio_stats(exchange_rate: float, current_prices: dict = None, portfolio_data: dict = None) -> dict:
+def _calculate_portfolio_stats(portfolio_data: dict) -> dict:
     """
     Calculate portfolio statistics with USD/KRW breakdown.
-    Uses current prices if provided, otherwise falls back to avg_price.
 
     Args:
-        exchange_rate: KRW/USD exchange rate
-        current_prices: dict of {ticker: current_price}
         portfolio_data: Full portfolio data from get_portfolio()
 
     Returns:
         dict with us_stock_usd, us_cash_usd, kr_stock_krw, kr_cash_krw, etc.
     """
     if portfolio_data is None:
-        portfolio = _load_portfolio()
-    else:
-        portfolio = portfolio_data
+        portfolio_data = _load_portfolio()
 
-    if "error" in portfolio:
-        return {"error": portfolio["error"]}
+    if "error" in portfolio_data:
+        return {"error": portfolio_data["error"]}
 
-    if current_prices is None:
-        current_prices = {}
+    # Extract exchange_rate from metadata
+    exchange_rate = portfolio_data.get("metadata", {}).get("exchange_rate")
+    if exchange_rate is None:
+        return {"error": "exchange_rate not found in portfolio metadata"}
 
     # Initialize totals
     us_stock_usd = 0.0
@@ -121,16 +118,15 @@ def _calculate_portfolio_stats(exchange_rate: float, current_prices: dict = None
     kr_stock_krw = 0.0
     kr_cash_krw = 0.0
 
-    # Calculate stock values using current prices (fall back to avg if not available)
-    asset_info = portfolio.get("asset_info", {})
-    holdings = portfolio.get("holdings", [])
+    # Calculate stock values using holdings cur_price
+    asset_info = portfolio_data.get("asset_info", {})
+    holdings = portfolio_data.get("holdings", [])
 
     for h in holdings:
         ticker = h.get("ticker", "")
         qty = h.get("qty", 0)
         avg_price = h.get("avg_price", 0)
-        # Priority: holding's cur_price > external current_prices > avg_price
-        cur_price = h.get("cur_price", current_prices.get(ticker, avg_price))
+        cur_price = h.get("cur_price", avg_price)  # Fallback to avg_price
         value = qty * cur_price
 
         # Determine currency from asset_info
@@ -143,7 +139,7 @@ def _calculate_portfolio_stats(exchange_rate: float, current_prices: dict = None
             kr_stock_krw += value
 
     # Calculate cash holdings
-    cash_holdings = portfolio.get("cash_holdings", [])
+    cash_holdings = portfolio_data.get("cash_holdings", [])
     for c in cash_holdings:
         amount = c.get("amount", 0)
         currency = c.get("currency", "USD")
@@ -191,7 +187,7 @@ def _calculate_portfolio_stats(exchange_rate: float, current_prices: dict = None
         "kr_cash_ratio": kr_cash_ratio
     }
 
-def _get_merged_portfolio_stat(current_prices: dict = None, exchange_rate: float = 1435.0, portfolio_data: dict = None):
+def _get_merged_portfolio_stat(portfolio_data: dict):
     """
     Load portfolio, merge holdings by ticker, and calculate total value.
     Returns:
@@ -206,19 +202,20 @@ def _get_merged_portfolio_stat(current_prices: dict = None, exchange_rate: float
     }
     """
     if portfolio_data is None:
-        portfolio = _load_portfolio()
-    else:
-        portfolio = portfolio_data
+        portfolio_data = _load_portfolio()
 
-    if "error" in portfolio:
+    if "error" in portfolio_data:
         return {}, 0.0
 
-    if current_prices is None:
-        current_prices = {}
+    # Extract exchange_rate from metadata
+    exchange_rate = portfolio_data.get("metadata", {}).get("exchange_rate")
+    if exchange_rate is None:
+        logging.error("exchange_rate not found in portfolio metadata")
+        return {}, 0.0
 
-    asset_info = portfolio.get("asset_info", {})
-    holdings = portfolio.get("holdings", [])
-    cash_holdings = portfolio.get("cash_holdings", [])
+    asset_info = portfolio_data.get("asset_info", {})
+    holdings = portfolio_data.get("holdings", [])
+    cash_holdings = portfolio_data.get("cash_holdings", [])
 
     merged = {}
     total_val_usd = 0.0
@@ -228,7 +225,7 @@ def _get_merged_portfolio_stat(current_prices: dict = None, exchange_rate: float
         ticker = h.get("ticker", "")
         qty = h.get("qty", 0)
         avg_price = h.get("avg_price", 0)
-        cur_price = h.get("cur_price", current_prices.get(ticker, avg_price))
+        cur_price = h.get("cur_price", avg_price)  # Fallback to avg_price
         info = asset_info.get(ticker, {})
         name = h.get("name", info.get("name", ticker))
         currency = info.get("currency", "USD")
@@ -351,13 +348,13 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
         "current_weights": {},
         "targets": {},
         "stats": {},
-        "exchange_rate": 1435.0,
+        "exchange_rate": None,
         "error": None
     }
 
     # Extract metadata and prices
     metadata = raw_portfolio.get("metadata", {})
-    exchange_rate = float(metadata.get("exchange_rate", 1435.0))
+    exchange_rate = float(metadata.get("exchange_rate", None))
     result["exchange_rate"] = exchange_rate
 
     current_prices = {}
@@ -371,15 +368,14 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
     result["price_map"] = current_prices
 
     # Calculate stats using imported helper
-    # Pass raw_portfolio as portfolio_data to avoid file I/O
-    stats = _calculate_portfolio_stats(exchange_rate, current_prices, portfolio_data=raw_portfolio)
+    stats = _calculate_portfolio_stats(raw_portfolio)
     if "error" in stats:
         result["error"] = stats["error"]
         return result
     result["stats"] = stats
 
     # Get merged data using imported helper
-    merged_data, total_value_usd = _get_merged_portfolio_stat(current_prices, exchange_rate, portfolio_data=raw_portfolio)
+    merged_data, total_value_usd = _get_merged_portfolio_stat(raw_portfolio)
     result["merged_data"] = merged_data
     result["total_value_usd"] = total_value_usd
 
@@ -443,7 +439,7 @@ def convert_portfolio_to_account_format(portfolio: dict) -> dict:
 
     merged = portfolio.get("merged_data", {})
     stats = portfolio.get("stats", {})
-    exchange_rate = portfolio.get("exchange_rate", 1435.0)
+    exchange_rate = portfolio.get("exchange_rate", None)
 
     domestic_stocks = []
     overseas_stocks = []
@@ -522,7 +518,7 @@ def get_weight_diffs():
     current_weights = portfolio_data.get("current_weights", {})
     targets = portfolio_data.get("targets", {})
     total_value_usd = portfolio_data.get("total_value_usd", 0.0)
-    exchange_rate = portfolio_data.get("exchange_rate", 1435.0)
+    exchange_rate = portfolio_data.get("exchange_rate", None)
 
     diffs = []
 

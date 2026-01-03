@@ -239,7 +239,7 @@ def remove_order_state(order_id: str):
 def clear_result_area():
     with terminal_lock:
         sys.stdout.write(SAVE_CURSOR)
-        for r in range(1, 15):
+        for r in range(1, 14):  # Row 1-13 only, Row 14 is Orders header
             sys.stdout.write(f"\033[{r};1H{CLEAR_LINE}")
         sys.stdout.write(RESTORE_CURSOR)
         sys.stdout.flush()

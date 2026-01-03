@@ -60,7 +60,7 @@ def save_history(history_data: Dict[str, Any]) -> bool:
 
 
 
-def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, total_value_usd: float):
+def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, total_value_usd: float, exchange_rate: float):
     """
     Calculate the Value Averaging order for today.
 
@@ -69,6 +69,7 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
         price_map (dict): Current prices per ticker {ticker: price}.
         merged_portfolio (dict): Portfolio data with current holdings.
         total_value_usd (float): Total asset value in USD.
+        exchange_rate (float): USD to KRW exchange rate.
 
     Returns:
         dict: Calculation result with orders, status, and metrics.
@@ -118,7 +119,7 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
     current_value_krw = target_data.get('current_value_krw', 0)
 
     is_us_stock = target_data.get('currency', 'USD') == 'USD'
-    total_asset_val = total_value_usd if is_us_stock else (total_value_usd * 1435)
+    total_asset_val = total_value_usd if is_us_stock else (total_value_usd * exchange_rate)
 
     # 6. Initialize Daily Budget if First Run
     daily_budget = config.get('daily_budget', 0)

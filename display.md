@@ -116,6 +116,13 @@ def add_alert(message: str, level: str = "INFO")
 #### output
 - `None`.
 
+### clear_result_area
+결과 영역(Row 1-13)을 지웁니다.
+#### input
+- `None`.
+#### output
+- `None`.
+
 ### input_at
 터미널의 지정된 행/열 위치에서 사용자 입력을 받습니다.
 #### input

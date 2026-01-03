@@ -396,7 +396,7 @@ def get_portfolio() -> dict:
     portfolio = {
         "metadata": {
             "last_updated": datetime.now(timezone.utc).isoformat(),
-            "exchange_rate": kis_raw_data.get('exchange_rate', 1435.0) if kis_raw_data else 1435.0
+            "exchange_rate": kis_raw_data.get('exchange_rate', None) if kis_raw_data else None
         },
         "owners": OWNERS,
         "asset_info": all_asset_info,
@@ -406,90 +406,3 @@ def get_portfolio() -> dict:
     }
 
     return portfolio
-
-
-def _get_merged_portfolio_stat(current_prices: dict = None, exchange_rate: float = 1435.0):
-    """
-    Load portfolio, merge holdings by ticker, and calculate total value.
-
-    Returns:
-        (merged_dict, total_value_usd)
-    """
-    portfolio = _load_portfolio()
-    if "error" in portfolio:
-        return {}, 0.0
-
-    if current_prices is None:
-        current_prices = {}
-
-    asset_info = portfolio.get("asset_info", {})
-    holdings = portfolio.get("holdings", [])
-    cash_holdings = portfolio.get("cash_holdings", [])
-
-    merged = {}
-    total_val_usd = 0.0
-
-    # 1. Process Stocks
-    for h in holdings:
-        ticker = h.get("ticker", "")
-        qty = h.get("qty", 0)
-        avg_price = h.get("avg_price", 0)
-        cur_price = h.get("cur_price", current_prices.get(ticker, avg_price))
-        info = asset_info.get(ticker, {})
-        name = h.get("name", info.get("name", ticker))
-        currency = info.get("currency", "USD")
-
-        if ticker not in merged:
-            merged[ticker] = {
-                "qty": 0.0,
-                "total_investment": 0.0,
-                "cur_price": cur_price,
-                "name": name,
-                "currency": currency,
-                "type": "STOCK"
-            }
-
-        # Aggregate
-        merged[ticker]["qty"] += qty
-        merged[ticker]["total_investment"] += qty * avg_price
-        if cur_price > 0:
-            merged[ticker]["cur_price"] = cur_price
-
-    # 2. Process Cash
-    usd_cash = sum(c["amount"] for c in cash_holdings if c.get("currency") == "USD")
-    krw_cash = sum(c["amount"] for c in cash_holdings if c.get("currency") == "KRW")
-
-    if usd_cash > 0:
-        merged["USD cash"] = {
-            "qty": usd_cash, "total_investment": usd_cash, "cur_price": 1.0,
-            "name": "USD cash", "currency": "USD", "type": "CASH"
-        }
-
-    if krw_cash > 0:
-        merged["KRW cash"] = {
-            "qty": krw_cash, "total_investment": krw_cash, "cur_price": 1.0,
-            "name": "KRW cash", "currency": "KRW", "type": "CASH"
-        }
-
-    # 3. Calculate Values & Total
-    for ticker, data in merged.items():
-        qty = data["qty"]
-        cur_price = data["cur_price"]
-        currency = data["currency"]
-
-        val_native = qty * cur_price
-        data["current_value_native"] = val_native
-
-        if currency == "USD":
-            val_usd = val_native
-            val_krw = val_native * exchange_rate
-        else:
-            val_krw = val_native
-            val_usd = val_native / exchange_rate if exchange_rate > 0 else 0
-
-        data["current_value_usd"] = val_usd
-        data["current_value_krw"] = val_krw
-
-        total_val_usd += val_usd
-
-    return merged, total_val_usd

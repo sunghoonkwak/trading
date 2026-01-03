@@ -268,7 +268,6 @@ def portfolio_menu():
         # Build summary lines
         lines = []
         lines.append(f" [Portfolio] (Rate: {exchange_rate:,.2f} KRW/USD) (Total: ${total_value_usd:,.0f})")
-        lines.append("─" * 80)
         lines.append(f" {'':10} │ {'USD':^27} │ {'KRW':^27} │ {'%':^6}")
         lines.append("─" * 80)
 
@@ -318,10 +317,10 @@ def portfolio_menu():
 
         if choice == '1':
             _check_portfolio_balance(merged_data, total_value_usd, current_weights, targets, exchange_rate)
-            input_at(13, 2, "Press Enter to continue...")
+            input_at(12, 2, "Press Enter to continue...")
         elif choice == '2':
             _export_portfolio_excel(merged_data, current_weights, targets)
-            input_at(13, 2, "Press Enter to continue...")
+            input_at(12, 2, "Press Enter to continue...")
         elif choice == '3':
              from . import value_averaging
              from display import show_in_result_area, input_at
@@ -330,7 +329,7 @@ def portfolio_menu():
              price_map = portfolio_data.get("price_map", {})
 
              # Call refactored calculate_order
-             res = value_averaging.calculate_order(targets, price_map, merged_data, total_value_usd)
+             res = value_averaging.calculate_order(targets, price_map, merged_data, total_value_usd, exchange_rate)
 
              # Build Display Lines
              target_ticker = res.get("target_ticker", "N/A")
@@ -384,7 +383,7 @@ def portfolio_menu():
                               result_lines.append(f"  {status}: {r.get('message', 'Unknown')}")
                       show_in_result_area(result_lines)
 
-             input_at(13, 2, " Press Enter to continue...")
+             input_at(12, 2, " Press Enter to continue...")
         elif choice == 'q':
             break
 
