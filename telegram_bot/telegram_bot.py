@@ -18,6 +18,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 from .telegram_raoeo import register_raoeo_handlers, get_raoeo_commands_desc
 from .telegram_portfolio import register_portfolio_handlers, get_portfolio_commands_desc
+from .telegram_memo import register_memo_handler, get_memo_commands_desc
 from .telegram_utils import wrap_send, set_telegram_bot
 import display
 
@@ -81,16 +82,19 @@ def initialize_telegram():
             # Register strategy handlers
             register_raoeo_handlers(_app)
             register_portfolio_handlers(_app)
+            register_memo_handler(_app)  # Saves arbitrary text messages
 
             # Send initialization message
             async def send_init_message():
                 raoeo_desc = get_raoeo_commands_desc()
                 port_desc = get_portfolio_commands_desc()
+                memo_desc = get_memo_commands_desc()
                 init_text = (
                     "🤖 <b>Trading Bot Initialized</b>\n\n"
                     "Commands:\n"
                     f"{raoeo_desc}\n"
-                    f"{port_desc}"
+                    f"{port_desc}\n"
+                    f"{memo_desc}"
                 )
                 try:
                     await wrap_send(init_text, parse_mode='HTML')

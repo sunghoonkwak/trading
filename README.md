@@ -93,6 +93,7 @@ python main.py
 | `/portfolio` | Portfolio | 대화형 포트폴리오 조회 (종목 상세 버튼) |
 | `/portfolio_weight` | Portfolio | 목표 비중 대비 리밸런싱 제안 목록 |
 | `/portfolio_va` | Portfolio | Value Averaging 주문 계산 및 실행 (Yes/No 확인) |
+| `/memo` | Memo | 최근 1주일 저장된 메모 조회 |
 
 ---
 *각 모듈의 상세 설명은 해당 디렉토리 내 `.md` 파일을 참조하십시오.*
