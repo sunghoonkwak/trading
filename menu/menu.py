@@ -58,11 +58,17 @@ def menu():
             sync_open_orders()
         elif choice.lower() == 'v':
             from kis import event_pipe
-            if event_pipe.is_connected():
-                display.add_alert("Viewer is already running!", "INFO")
+            from event_viewer import is_running
+
+            if is_running():
+                display.add_alert("[SYS] Viewer is already running!", "INFO")
             else:
+                # If pipe thinks it's connected but process is dead, reset it
+                if event_pipe.is_connected():
+                    event_pipe.reset_pipe_server()
+
                 spawn_viewer()
-                display.add_alert("Viewer terminal launched!", "SUCCESS")
+                display.add_alert("[SYS] Viewer terminal launched!", "SUCCESS")
         elif choice.lower() == 'r':
             raoeo_menu()
         elif choice.lower() == 'p':

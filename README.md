@@ -9,7 +9,7 @@
 
 ### 💎 프리미엄 UI/UX
 - **ANSI Terminal UI**: 별도의 GUI 없이도 화려하고 직관적인 컬러 터미널 인터페이스를 제공합니다.
-- **Event Viewer (Dual Terminal)**: 메인 상호작용 화면과 실시간 로그(WebSocket) 화면을 Named Pipe를 통해 분리하여 모니터링 효율을 극대화했습니다.
+- **Event Viewer (Dual Terminal)**: 메인 상호작용 화면과 분리된 별도의 터미널에서 실시간 로그(WebSocket)를 모니터링합니다. **Named Pipe** 통신과 **Windows Mutex** 기반의 프로세스 감지로 안정적인 재실행을 보장합니다.
 - **Smart Alerts**: 백그라운드 작업 및 Telegram 명령 결과를 메인 UI 알림 영역에 실시간으로 브로드캐스팅합니다.
 
 ### 📈 트레이딩 & 전략

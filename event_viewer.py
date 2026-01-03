@@ -10,6 +10,10 @@ import shutil
 from collections import OrderedDict
 import subprocess
 import logging
+import win32event
+import win32api
+import pywintypes
+import winerror
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kis.event_pipe as event_pipe
@@ -17,6 +21,8 @@ import kis.event_pipe as event_pipe
 # Viewer process handle (used by spawn_viewer/close_viewer)
 _viewer_process = None
 _base_dir = os.path.dirname(os.path.abspath(__file__))
+MUTEX_NAME = "StevenOpenAPITradingViewer"
+_mutex_handle = None
 
 
 def spawn_viewer():
@@ -35,6 +41,37 @@ def spawn_viewer():
     except Exception as e:
         logging.error(f"[System] Failed to spawn viewer: {e}")
         return False
+
+
+def acquire_mutex():
+    """Acquire named mutex to indicate viewer is running."""
+    global _mutex_handle
+    try:
+        _mutex_handle = win32event.CreateMutex(None, True, MUTEX_NAME)
+        if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+            # We got the handle, but someone else created it first.
+            # In a robust single-instance app, we might exit.
+            # Here we just keep itopen to indicate "I am running".
+            pass
+        return True
+    except Exception as e:
+        logging.error(f"[System] Failed to create mutex: {e}")
+        return False
+
+
+def is_running():
+    """Check if viewer process is actually running using Mutex."""
+    try:
+        # Try to open existing mutex.
+        # SYNCHRONIZE access is required to check state/wait,
+        # but just opening it successfully usually means it exists.
+        handle = win32event.OpenMutex(win32event.SYNCHRONIZE, False, MUTEX_NAME)
+        if handle:
+            win32api.CloseHandle(handle)
+            return True
+    except:
+        pass
+    return False
 
 
 def close_viewer():
@@ -225,6 +262,10 @@ def append_history_log(log: str, stock_config: dict):
 
 def main():
     enable_ansi_colors()
+
+    # Acquire mutex to verify we are running
+    acquire_mutex()
+
     print("Event Viewer starting...")
     print(f"Connecting to pipe: {event_pipe.PIPE_NAME}")
 

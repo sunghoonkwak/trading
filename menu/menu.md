@@ -23,7 +23,7 @@
 | `p` | Portfolio (포트폴리오) |
 | `0` | 로그 레벨 변경 (INFO → DEBUG → ERROR 순환, menu display에 미표기) |
 | `c` | 화면 초기화 및 강제 주문 동기화 (알림 이력은 유지됨) |
-| `v` | Event Viewer 열기(menu display에 미표기) |
+| `v` | Event Viewer 열기 (Mutex로 중복 실행 방지, 로그 헤더 `[SYS]` 사용) |
 | `q` | 종료 (Viewer 종료 및 Telegram 종료 알림 전송) |
 
 ## Global Configuration (전역 설정)

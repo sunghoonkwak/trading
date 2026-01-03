@@ -16,7 +16,7 @@
 
 ### WebSocket & Pipe (웹소켓 및 파이프)
 *   **`initialize_websocket_and_pipe()`**: 모든 인증이 완료된 후 호출됩니다.
-    *   WebSocket 클라이언트(`KISWebSocket`)를 생성하고 시작합니다.
+    *   WebSocket 클라이언트(`KISWebSocket`)를 생성하고 시작합니다. (자동 재접속, Approval Key 만료 관리 포함)
     *   국내/해외 종목에 대한 실시간 시세 및 체결 통보를 구독합니다.
     *   `kis.event_pipe` 서버를 생성하여 외부 뷰어 연결을 대기합니다.
 

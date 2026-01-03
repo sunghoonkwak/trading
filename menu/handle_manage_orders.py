@@ -177,7 +177,7 @@ def print_execution_result(df_res, err_msg=None):
 
 def sync_open_orders():
     """Fetch open orders from API and sync them to display state."""
-    add_alert("Syncing open orders...", "INFO")
+    add_alert("[ORD] Syncing open orders...", "INFO")
     clear_order_states() # Clear locally tracked orders before fetching fresh ones
     try:
         df, num_us, num_kr = fetch_open_orders()
@@ -186,7 +186,7 @@ def sync_open_orders():
         return False
 
     # Priority Alert Message requested by user
-    alert_msg = f"US # of orders: {num_us}       KR # of orders: {num_kr}"
+    alert_msg = f"[ORD] updated! Orders US/KR : {num_us} / {num_kr}"
     add_alert(alert_msg, "SUCCESS")
 
     if not df.empty:

@@ -58,7 +58,7 @@ API 응답 결과를 분석하여 성공/실패 여부와 메시지를 UI에 표
 #### input
 - `None`.
 #### output
-- `None`.
+- `None`. (로그: `[ORD] updated! Orders US/KR : ...`)
 
 ### SyncManager / request_sync
 주문 동기화 요청을 관리하는 클래스와 헬퍼 함수입니다. 1초의 디바운스(Debounce) 시간을 적용하여, 수많은 WebSocket 이벤트가 한꺼번에 발생하더라도 서버 API 호출은 한 번만 수행되도록 최적화하며 레이스 컨디션을 방지합니다.

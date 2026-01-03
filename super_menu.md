@@ -10,7 +10,7 @@
 ### Menu Rendering
 *   **`super_menu()`**: 메인 루프입니다. KIS 및 텔레그램 스레드의 현재 상태를 표시하고 사용자 입력을 받습니다.
 *   **`_render_super_menu()`**: 화면을 지우고 `display.show_in_result_area`를 사용하여 메뉴 UI를 그립니다. 또한 알림 프로세서를 트리거하여 로그를 표시합니다.
-*   **`_build_menu_lines()`**: 준비 상태에 따라 상태 아이콘(실행 중/중지됨/에러)과 사용 가능한 옵션을 동적으로 구성하여 메뉴 텍스트를 생성합니다.
+*   **`_build_menu_lines()`**: 준비 상태에 따라 상태 아이콘(✓ connected 등)과 사용 가능한 옵션을 동적으로 구성하여 메뉴 텍스트를 생성합니다. 텔레그램을 우선 초기화([1])하고 KIS를 후순위([2])로 배치하여 알림 수신을 보장합니다.
 
 ### Initialization Logic (초기화 로직)
 *   **`_init_kis_thread()`**:

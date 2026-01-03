@@ -9,6 +9,11 @@
 
 ## Key Features (주요 기능)
 
+### Process Detection (프로세스 감지)
+*   **Windows Named Mutex**: `StevenOpenAPITradingViewer`라는 이름의 뮤텍스(Mutex)를 사용하여 뷰어의 실행 여부를 시스템 전역에서 확실하게 감지합니다.
+*   **`acquire_mutex()`**: 뷰어 시작 시 뮤텍스를 생성하여 실행 중임을 알립니다.
+*   **`is_running()`**: 메인 프로그램은 이 뮤텍스의 존재 여부를 통해 뷰어 프로세스가 실제로 살아있는지 확인합니다. (이전의 불완전한 `subprocess` 추적 방식 대체)
+
 ### Split View Interface (분할 화면)
 *   **Sticky Area**: ANSI 이스케이프 코드를 사용하여 터미널 상단의 특정 라인을 덮어씀으로써, 활성 종목을 위한 "대시보드" 느낌을 제공합니다.
 *   **History Area**: 화면 하단에 스크롤 영역(ANSI `DECSTBM`)을 설정하여, 헤더를 방해하지 않고 과거 이벤트를 기록합니다.
@@ -24,3 +29,4 @@
 ## Dependencies (의존성)
 *   `kis.event_pipe`: 클라이언트 측 파이프 연결 함수(`connect_pipe_client`, `receive_log`)를 사용합니다.
 *   `stock_configuration.json`: 색상 설정을 위해 사용됩니다.
+*   `win32event`, `win32api`, `pywintypes`: Windows Mutex 사용을 위한 라이브러리.
