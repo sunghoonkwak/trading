@@ -190,9 +190,9 @@ def initialize_websocket_and_pipe() -> bool:
         _ws_thread = threading.Thread(target=_ws_instance.start, args=(on_result,), daemon=True)
         _ws_thread.start()
 
-        update_kis_state(ws_status=WebSocketStatus.CONNECTED)
+        update_kis_state(ws_status=WebSocketStatus.CONNECTING)
         logging.info("[KIS Thread] WebSocket started")
-        add_alert("[KIS] WebSocket connected", "SUCCESS")
+        add_alert("[KIS] WebSocket connecting...", "INFO")
 
         # Initialize Event Pipe server
         def ui_refresh():

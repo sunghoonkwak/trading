@@ -86,11 +86,12 @@ def _build_menu_lines() -> list:
     kis_icon = _get_status_icon(kis.thread_status)
     auth_icon = _get_status_icon(kis.auth_status)
     ws_auth_icon = _get_status_icon(kis.ws_auth_status)
+    ws_conn_icon = _get_status_icon(kis.ws_status)
     tg_icon = _get_status_icon(tg.thread_status)
 
     # Build menu options based on status
-    opt1 = f"{GREEN}[1] KIS Init (Ready){RESET}" if is_kis_ready() else f"{CYAN}[1] KIS API Init{RESET}"
-    opt2 = f"{GREEN}[2] Telegram Init (Ready){RESET}" if is_telegram_ready() else f"{CYAN}[2] Telegram Init{RESET}"
+    opt1 = f"{GREEN}[1] Telegram Init (Ready){RESET}" if is_telegram_ready() else f"{CYAN}[1] Telegram Init{RESET}"
+    opt2 = f"{GREEN}[2] KIS Init (Ready){RESET}" if is_kis_ready() else f"{CYAN}[2] KIS API Init{RESET}"
     opt3 = f"{GREEN}[3] Start Trading{RESET}" if is_kis_ready() else f"{DIM}[3] Start Trading (Requires KIS){RESET}"
 
     lines = [
@@ -98,7 +99,7 @@ def _build_menu_lines() -> list:
         f"{BOLD} Thread Initialization Menu{RESET}",
         f"{'=' * 60}",
         f" {kis_icon} KIS: {kis.thread_status.value:<12} | Auth: {auth_icon} {kis.auth_status.value:<15}",
-        f"    WS Auth: {ws_auth_icon} {kis.ws_auth_status.value:<12}",
+        f"    WS Auth: {ws_auth_icon} {kis.ws_auth_status.value:<12} | Conn: {ws_conn_icon} {kis.ws_status.value}",
         f" {tg_icon} Telegram: {tg.thread_status.value:<12} | Bot: {'Connected' if tg.bot_connected else 'Not connected'}",
         f"{'-' * 60}",
         f" {opt1}",
@@ -225,10 +226,10 @@ def super_menu():
             break
 
         if choice == '1':
-            _init_kis_thread()
+            _init_telegram_thread()
 
         elif choice == '2':
-            _init_telegram_thread()
+            _init_kis_thread()
 
         elif choice == '3':
             if is_kis_ready():

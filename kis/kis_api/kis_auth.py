@@ -827,7 +827,7 @@ class KISWebSocket:
     # Reconnection wait times: 5s, 30s, 1m, 5m, 20m (no limit on attempts)
     WAIT_TIMES = [5, 30, 60, 300, 1200]
 
-    def _check_server_connectivity(self, host: str, port: int, timeout: float = 10) -> dict:
+    def _check_server_connectivity(self, host: str, port: int, timeout: float = 3) -> dict:
         """Test TCP connectivity to the WebSocket server."""
         import socket
         try:
@@ -856,6 +856,22 @@ class KISWebSocket:
         except Exception as e:
             logging.warning(f"Failed to send Telegram notification: {e}")
 
+    def _update_ws_status(self, status: str):
+        """Update WebSocket connection status in thread_state."""
+        try:
+            from thread_state import update_kis_state, WebSocketStatus
+            status_map = {
+                "connected": WebSocketStatus.CONNECTED,
+                "connecting": WebSocketStatus.CONNECTING,
+                "reconnecting": WebSocketStatus.RECONNECTING,
+                "disconnected": WebSocketStatus.DISCONNECTED,
+                "error": WebSocketStatus.ERROR,
+            }
+            if status in status_map:
+                update_kis_state(ws_status=status_map[status])
+        except Exception as e:
+            logging.debug(f"Failed to update ws_status: {e}")
+
     async def __runner(self):
         if len(open_map.keys()) > 40:
             raise ValueError("Subscription's max is 40")
@@ -865,7 +881,13 @@ class KISWebSocket:
 
         while True:
             try:
-                logging.info(f"Connecting to WebSocket: {url}")
+                # Log approval key time remaining before connect attempt
+                if _approval_received_time is not None:
+                    elapsed = (datetime.now() - _approval_received_time).total_seconds()
+                    remaining_hours = max(0, (86400 - elapsed) / 3600)
+                    logging.info(f"Connecting to WebSocket: {url} (Approval key: {remaining_hours:.1f}h remaining)")
+                else:
+                    logging.info(f"Connecting to WebSocket: {url}")
                 async with websockets.connect(url, ping_interval=60, ping_timeout=120) as ws:
                     # Send reconnection success notification if we were reconnecting
                     if self.retry_count > 0:
@@ -875,7 +897,9 @@ class KISWebSocket:
                         )
                     self.retry_count = 0  # Reset on successful connection
                     was_connected = True
+                    self._update_ws_status("connected")
                     logging.info("WebSocket Connected!")
+                    self._add_alert("WebSocket Connected!")
 
                     # Request initial subscriptions
                     for name, obj in open_map.items():
@@ -888,6 +912,7 @@ class KISWebSocket:
                         self.__subscriber(ws),
                     )
             except websockets.exceptions.ConnectionClosed as e:
+                self._update_ws_status("reconnecting")
                 logging.warning(f"WebSocket Connection Closed: {e}")
                 self._add_alert(f"Connection Closed (#{self.retry_count + 1}): {e}")
                 # Send disconnect notification on first disconnect
@@ -897,7 +922,15 @@ class KISWebSocket:
                         f"Connection closed: {e}\n"
                         f"Attempting to reconnect..."
                     )
+                # Send status update every 5 failed attempts
+                elif (self.retry_count + 1) % 5 == 0:
+                    self._send_telegram_notification(
+                        f"❌ <b>WebSocket Reconnection Failed</b>\n"
+                        f"Attempt {self.retry_count + 1} failed.\n"
+                        f"Error: Connection closed"
+                    )
             except Exception as e:
+                self._update_ws_status("reconnecting")
                 logging.error(f"WebSocket Connection Error: {e}")
                 self._add_alert(f"Connection Error (#{self.retry_count + 1}): {e}")
                 # Send disconnect notification on first disconnect
@@ -907,8 +940,34 @@ class KISWebSocket:
                         f"Error: {e}\n"
                         f"Attempting to reconnect..."
                     )
+                # Send status update every 5 failed attempts
+                elif (self.retry_count + 1) % 5 == 0:
+                    self._send_telegram_notification(
+                        f"❌ <b>WebSocket Reconnection Failed</b>\n"
+                        f"Attempt {self.retry_count + 1} failed.\n"
+                        f"Error: {e}"
+                    )
 
             self.retry_count += 1
+
+            # Check and refresh approval_key if expired (24h validity)
+            try:
+                if _approval_received_time is not None:
+                    elapsed = (datetime.now() - _approval_received_time).total_seconds()
+                    if elapsed >= 86400:  # 24 hours
+                        logging.info("[Auth] Approval key expired, re-authenticating...")
+                        self._add_alert("Approval key expired, refreshing...")
+                        reAuth_ws()
+                        logging.info("[Auth] Approval key refreshed successfully")
+                        self._add_alert("Approval key refreshed successfully")
+            except Exception as e:
+                logging.error(f"[Auth] Failed to refresh approval key: {e}")
+                self._add_alert(f"Key refresh FAILED: {e}")
+                self._send_telegram_notification(
+                    f"🔑 <b>Approval Key Refresh Failed</b>\n"
+                    f"Error: {e}\n"
+                    f"Manual intervention may be required."
+                )
 
             # Check server connectivity and log result
             try:
@@ -922,6 +981,9 @@ class KISWebSocket:
                 else:
                     error_info = conn_check.get("error") or f"error_code={conn_check.get('error_code')}"
                     logging.warning(f"[Connectivity] Server {host}:{port} is NOT reachable: {error_info}")
+                    # Show alert every 5 attempts to avoid spam
+                    if self.retry_count % 5 == 0:
+                        self._add_alert(f"Server unreachable (#{self.retry_count}): {error_info}")
             except Exception as e:
                 logging.warning(f"[Connectivity] Check failed: {e}")
 
@@ -929,14 +991,6 @@ class KISWebSocket:
             wait_idx = min(self.retry_count - 1, len(self.WAIT_TIMES) - 1)
             wait_time = self.WAIT_TIMES[max(0, wait_idx)]
             logging.info(f"Reconnecting in {wait_time} seconds (Attempt {self.retry_count})...")
-
-            # Send Telegram notification every 5 failed attempts
-            if self.retry_count % 5 == 0:
-                self._send_telegram_notification(
-                    f"❌ <b>WebSocket Reconnection Failed</b>\n"
-                    f"Attempt {self.retry_count} failed.\n"
-                    f"Next retry in {wait_time}s."
-                )
 
             await asyncio.sleep(wait_time)
 
