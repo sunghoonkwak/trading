@@ -292,7 +292,7 @@ def get_portfolio() -> dict:
     )
 
     # Step 1: Fetch KIS API data
-    add_alert("Fetching KIS API data...", "INFO")
+    add_alert("[KIS] Fetching KIS API data...", "INFO")
 
     kis_portfolio = None
     kis_raw_data = None
@@ -301,14 +301,14 @@ def get_portfolio() -> dict:
         if kis_raw_data and not kis_raw_data.get('error'):
             kis_portfolio = _convert_kis_to_portfolio(kis_raw_data)
             kis_count = len(kis_portfolio.get('holdings', []))
-            add_alert(f"KIS: {kis_count} holdings loaded", "SUCCESS")
+            add_alert(f"[KIS] {kis_count} holdings loaded", "SUCCESS")
         else:
             add_alert("KIS: No data or error", "WARN")
     except Exception as e:
         add_alert(f"KIS skipped: {str(e)[:30]}", "WARN")
 
     # Step 2: Fetch GSheet data
-    add_alert("Fetching GSheet data...", "INFO")
+    add_alert("[KIS] Fetching GSheet data...", "INFO")
 
     usd_sheet = connect_google_sheet('USD')
     krw_sheet = connect_google_sheet('KRW')
