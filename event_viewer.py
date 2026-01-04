@@ -1,19 +1,29 @@
 """
-Event Viewer - Real-time market data display.
-Runs in a separate terminal window with sticky area (latest per ticker) and scrolling history.
+Event Viewer - Real-time market data and order display using Textual TUI.
+Runs in a separate terminal window with 3-panel layout:
+- Top: Orders
+- Middle: Latest quotes per ticker
+- Bottom: Scrolling log dump (MKT only)
 """
 import sys
 import os
 import time
 import json
-import shutil
-from collections import OrderedDict
 import subprocess
 import logging
+import threading
+from collections import OrderedDict
+from datetime import datetime
+
 import win32event
 import win32api
 import pywintypes
 import winerror
+
+from textual.app import App, ComposeResult
+from textual.containers import Vertical, ScrollableContainer
+from textual.widgets import Static, RichLog
+from textual.reactive import reactive
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kis.event_pipe as event_pipe
@@ -30,9 +40,8 @@ def spawn_viewer():
     global _viewer_process
     viewer_path = os.path.join(_base_dir, "event_viewer.py")
     try:
-        # Use Windows Terminal (wt) - opens in new tab with size 130x35
         _viewer_process = subprocess.Popen(
-            ["wt", "-w", "0", "--size", "130,35", "nt", "--title", "Event Viewer",
+            ["wt", "-w", "0", "--size", "130,40", "nt", "--title", "Event Viewer",
              "python", viewer_path],
             cwd=_base_dir
         )
@@ -49,9 +58,6 @@ def acquire_mutex():
     try:
         _mutex_handle = win32event.CreateMutex(None, True, MUTEX_NAME)
         if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
-            # We got the handle, but someone else created it first.
-            # In a robust single-instance app, we might exit.
-            # Here we just keep itopen to indicate "I am running".
             pass
         return True
     except Exception as e:
@@ -62,9 +68,6 @@ def acquire_mutex():
 def is_running():
     """Check if viewer process is actually running using Mutex."""
     try:
-        # Try to open existing mutex.
-        # SYNCHRONIZE access is required to check state/wait,
-        # but just opening it successfully usually means it exists.
         handle = win32event.OpenMutex(win32event.SYNCHRONIZE, False, MUTEX_NAME)
         if handle:
             win32api.CloseHandle(handle)
@@ -85,253 +88,283 @@ def close_viewer():
         except:
             pass
 
-# ANSI Color Codes
-RESET = "\033[0m"
-GRAY = "\033[90m"
-YELLOW = "\033[93m"
-RED = "\033[91m"
-GREEN = "\033[92m"
-CYAN = "\033[96m"
-
-# ANSI Cursor Control
-CLEAR_LINE = "\033[2K"
-
-# Debug mode (set to True to enable debug logging)
-DEBUG_MODE = False
-
-# State
-latest_logs = OrderedDict()
-history_start_row = 5
-
-
-def get_terminal_size():
-    return shutil.get_terminal_size()
-
 
 def load_stock_config():
     """Load stock configuration for colorization."""
     try:
-        # 1. Try relative to this script (../stock_configuration.json)
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         config_path = os.path.join(base_dir, "stock_configuration.json")
-
         if not os.path.exists(config_path):
-            # 2. Try current working directory
             config_path = "stock_configuration.json"
-
         with open(config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except Exception as e:
-        print(f"Error loading config: {e}")
+    except Exception:
         return {}
 
 
-def get_ansi_rgb(r, g, b, text):
-    """Apply RGB color to text."""
-    return f"\033[38;2;{r};{g};{b}m{text}{RESET}"
+class OrdersPanel(Static):
+    """Panel displaying active orders."""
+
+    orders_text = reactive("")
+
+    def render(self) -> str:
+        return self.orders_text or "[dim]No orders[/dim]"
+
+    def watch_orders_text(self, new_value: str) -> None:
+        """Called when orders_text changes - trigger refresh."""
+        self.refresh(layout=True)
 
 
-def colorize_log(log: str, stock_config: dict) -> str:
-    """Apply color to log based on type and ticker."""
-    parts = log.split("|")
+class QuotesPanel(Static):
+    """Panel displaying latest quotes per ticker."""
 
-    if "SYS" in log:
-        return f"{CYAN}{log}{RESET}"
+    quotes_text = reactive("")
 
-    if len(parts) >= 4:
-        ticker = parts[3].strip()
-        if len(ticker) > 6 and ticker[:4] in ["DNAS", "DNYS", "DAMS"]:
-            ticker = ticker[4:]
+    def render(self) -> str:
+        return self.quotes_text or "[dim]Waiting for quotes...[/dim]"
 
-        for market in ["KR", "US"]:
-            stocks = stock_config.get(market, [])
-            for stock in stocks:
-                if stock.get("ticker") == ticker and "color" in stock:
-                    r, g, b = stock["color"]
-                    return get_ansi_rgb(r, g, b, log)
-
-    if "ERROR" in log or "|REJ|" in log:
-        return f"{RED}{log}{RESET}"
-    elif "|MKT|" in log:
-        return f"{GRAY}{log}{RESET}"
-    elif "|ODR|" in log or "|EXE|" in log:
-        return f"{GREEN}{log}{RESET}"
-
-    return f"{YELLOW}{log}{RESET}"
+    def watch_quotes_text(self, new_value: str) -> None:
+        """Called when quotes_text changes - trigger refresh."""
+        self.refresh(layout=True)
 
 
-def enable_ansi_colors():
-    """Enable ANSI colors on Windows."""
-    if os.name == 'nt':
-        import ctypes
-        kernel32 = ctypes.windll.kernel32
-        kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+class EventViewerApp(App):
+    """Main Textual TUI application for Event Viewer."""
 
+    CSS = """
+    Screen {
+        layout: vertical;
+        background: $surface;
+    }
 
-def extract_composite_key(log: str):
-    """Extract ticker_type key from log message."""
-    code = None
-    log_type = "MKT"
+    #orders-panel {
+        height: auto;
+        min-height: 3;
+        max-height: 10;
+        border: solid $primary;
+        padding: 0 1;
+    }
 
-    parts = log.split("|")
+    #quotes-panel {
+        height: auto;
+        min-height: 3;
+        max-height: 15;
+        border: solid $secondary;
+        padding: 0 1;
+    }
 
-    if len(parts) >= 4:
-        ticker = parts[3].strip()
-        if len(ticker) > 6 and ticker[:4] in ["DNAS", "DNYS", "DAMS"]:
-            code = ticker[4:]
+    #log-panel {
+        height: 1fr;
+        border: solid $accent;
+    }
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.orders = OrderedDict()  # order_id -> order_info
+        self.latest_quotes = OrderedDict()  # ticker -> quote_info
+        self.pipe_handle = None
+        self.running = True
+
+    def compose(self) -> ComposeResult:
+        yield OrdersPanel(id="orders-panel")
+        yield QuotesPanel(id="quotes-panel")
+        yield RichLog(id="log-panel", highlight=True, markup=True, auto_scroll=True)
+
+    def on_mount(self) -> None:
+        """Start pipe connection when app mounts."""
+        self.query_one("#log-panel", RichLog).write("[bold cyan]Event Viewer Started[/bold cyan]")
+        self.query_one("#log-panel", RichLog).write(f"Connecting to pipe: {event_pipe.PIPE_NAME}")
+
+        # Start pipe reading thread
+        self.pipe_thread = threading.Thread(target=self._pipe_reader, daemon=True)
+        self.pipe_thread.start()
+
+    def _pipe_reader(self):
+        """Background thread to read from pipe."""
+        retry_count = 0
+        max_retries = 30
+
+        while self.pipe_handle is None and retry_count < max_retries and self.running:
+            self.pipe_handle = event_pipe.connect_pipe_client()
+            if self.pipe_handle is None:
+                retry_count += 1
+                self.call_from_thread(
+                    self._log_message,
+                    f"[yellow]Waiting for main.py... ({retry_count}/{max_retries})[/yellow]"
+                )
+                time.sleep(1)
+
+        if self.pipe_handle is None:
+            self.call_from_thread(
+                self._log_message,
+                "[red bold]Failed to connect to main.py. Exiting.[/red bold]"
+            )
+            return
+
+        self.call_from_thread(self._log_message, "[green]Connected to main.py![/green]")
+
+        while self.running:
+            log = event_pipe.receive_log(self.pipe_handle)
+            if log is None:
+                self.call_from_thread(
+                    self._log_message,
+                    "[red]Main program closed. Exiting...[/red]"
+                )
+                self.call_from_thread(self.exit)
+                break
+
+            self.call_from_thread(self._process_message, log)
+
+    def _log_message(self, message: str):
+        """Add message to log panel."""
+        log_panel = self.query_one("#log-panel", RichLog)
+        log_panel.write(message)
+
+    def _process_message(self, raw_message: str):
+        """Process incoming pipe message and route to correct panel.
+
+        Message formats:
+        - MKT|{time}|MKT|{name}|{ticker}|Bid:...|Last:...|Diff:...|Ask:...
+        - ODR|{ticker}|{name}|{side}|{qty}|{price}|{state}|{order_id}
+        - CLR|ORDERS - clear all orders
+        """
+        if "|" not in raw_message:
+            self._log_message(raw_message)
+            return
+
+        # First part is the message type prefix added by event_pipe.send_log
+        parts = raw_message.split("|", 1)
+        msg_type = parts[0].strip()
+        content = parts[1] if len(parts) > 1 else ""
+
+        if msg_type == "ODR":
+            self._handle_order_message(content)
+            # Don't show ODR in log dump
+        elif msg_type == "MKT":
+            self._handle_market_message(content)
+            # Show MKT in log dump
+            self._log_message(f"{content}")
+        elif msg_type == "CLR":
+            # Clear orders
+            if content.strip() == "ORDERS":
+                self.orders.clear()
+                self._update_orders_panel()
         else:
-            code = ticker
+            # Unknown type or system message
+            self._log_message(f"[red]UNKNOWN: {raw_message}[/red]")
 
-    if "|MKT|" in log:
-        log_type = "MKT"
-    elif any(x in log for x in ["|ODR|", "|COR|", "|CAN|", "|EXE|", "|REJ|"]):
-        log_type = "ODR"
+    def _handle_order_message(self, content: str):
+        """Handle order status message.
 
-    if code and code.replace(" ", ""):
-        return f"{code.strip()}_{log_type}"
-    return None
+        Format: ticker|name|side|qty|price|state|order_id
+        Or for remove: REMOVED|order_id
+        """
+        parts = content.split("|")
 
+        # Handle REMOVED message
+        if len(parts) >= 2 and parts[0].strip() == "REMOVED":
+            order_id = parts[1].strip()
+            if order_id in self.orders:
+                del self.orders[order_id]
+                self._update_orders_panel()
+            return
 
-def set_scroll_region(top: int, bottom: int):
-    """Set terminal scroll region."""
-    sys.stdout.write(f"\033[{top};{bottom}r")
-    sys.stdout.flush()
+        # Normal order update: ticker|name|side|qty|price|state|order_id
+        if len(parts) >= 6:
+            ticker = parts[0].strip()
+            name = parts[1].strip()
+            side = parts[2].strip()
+            qty = parts[3].strip()
+            price = parts[4].strip()
+            state = parts[5].strip()
+            order_id = parts[6].strip() if len(parts) > 6 else f"{ticker}_{time.time()}"
 
+            self.orders[order_id] = {
+                "time": datetime.now().strftime("%H:%M:%S"),
+                "ticker": ticker,
+                "name": name,
+                "side": side,
+                "qty": qty,
+                "price": price,
+                "state": state,
+            }
+            # Keep only last 10 orders
+            while len(self.orders) > 10:
+                self.orders.popitem(last=False)
 
-def reset_scroll_region():
-    """Reset scroll region to full screen."""
-    sys.stdout.write("\033[r")
-    sys.stdout.flush()
+            self._update_orders_panel()
 
+    def _handle_market_message(self, content: str):
+        """Handle market data message.
 
-def draw_header():
-    """Draw header (called once at startup)."""
-    cols, rows = get_terminal_size()
-    sys.stdout.write("\033[2J\033[H")
-    sys.stdout.write("=" * min(cols, 60) + "\n")
-    sys.stdout.write(" Event Viewer\n")
-    sys.stdout.write("-" * min(cols, 60) + "\n")
-    sys.stdout.flush()
+        Format: {time}|{name}|{ticker}|Bid:...|Last:...|Diff:...|Ask:...
+        """
+        parts = content.split("|")
 
+        # New format: time|name|ticker|Bid:...|...
+        # ticker is at index 2
+        ticker = None
+        if len(parts) >= 3:
+            ticker = parts[2].strip()
 
-def draw_sticky_area(stock_config: dict, debug_file=None):
-    """Update sticky logs at fixed positions."""
-    global history_start_row
-    cols, rows = get_terminal_size()
+        if ticker:
+            # Clean up ticker prefix if needed
+            if len(ticker) > 6 and ticker[:4] in ["DNAS", "DNYS", "DAMS"]:
+                ticker = ticker[4:]
 
-    num_sticky = len(latest_logs)
+            self.latest_quotes[ticker] = content
+            # Keep only last 10 tickers
+            while len(self.latest_quotes) > 10:
+                self.latest_quotes.popitem(last=False)
 
-    if debug_file:
-        debug_file.write(f"--- DRAW STICKY ---\n")
-        debug_file.write(f"num_sticky: {num_sticky}, keys: {list(latest_logs.keys())}\n")
-        debug_file.flush()
+            self._update_quotes_panel()
 
-    line_num = 4
-    for key, log in list(latest_logs.items()):
-        colored = colorize_log(log, stock_config)
-        sys.stdout.write(f"\033[{line_num};1H{CLEAR_LINE}{colored}")
-        line_num += 1
+    def _update_orders_panel(self):
+        """Update orders panel display."""
+        lines = []
+        for order_id, info in reversed(list(self.orders.items())):
+            side_upper = info["side"].upper()
+            if "BUY" in side_upper:
+                side_color = "green"
+            elif "SELL" in side_upper or "SEL" in side_upper:
+                side_color = "red"
+            else:
+                side_color = "yellow"
 
-    sys.stdout.write(f"\033[{line_num};1H{CLEAR_LINE}{GRAY}" + "-" * min(cols, 60) + f"{RESET}")
-    history_start_row = line_num
-    sys.stdout.flush()
+            name = info.get("name", "")[:24]
+            order_time = info.get("time", "")
+            lines.append(
+                f"{order_time} {info['ticker']:8}:{name:24} | "
+                f"[{side_color}]{info['side']:8}[/{side_color}] "
+                f"prc:{info['price']:>10} qty:{info['qty']:>5}"
+            )
 
+        orders_panel = self.query_one("#orders-panel", OrdersPanel)
+        orders_panel.orders_text = "\n".join(lines) if lines else ""
 
-current_history_row = 10
+    def _update_quotes_panel(self):
+        """Update quotes panel display."""
+        lines = []
+        for ticker, content in reversed(list(self.latest_quotes.items())):
+            # Format: time|name|ticker|Bid:...|Last:...|Diff:...|Ask:...
+            lines.append(f"{content}")
 
+        quotes_panel = self.query_one("#quotes-panel", QuotesPanel)
+        quotes_panel.quotes_text = "\n".join(lines) if lines else ""
 
-def append_history_log(log: str, stock_config: dict):
-    """Append log to scrolling history area."""
-    global current_history_row
-    cols, rows = get_terminal_size()
-    colored = colorize_log(log, stock_config)
-
-    if current_history_row < history_start_row + 1:
-        current_history_row = history_start_row + 1
-
-    set_scroll_region(history_start_row + 1, rows)
-
-    if current_history_row <= rows:
-        sys.stdout.write(f"\033[{current_history_row};1H{CLEAR_LINE}{colored}")
-        current_history_row += 1
-    else:
-        sys.stdout.write(f"\033[{rows};1H\n{CLEAR_LINE}{colored}")
-
-    sys.stdout.flush()
+    def on_unmount(self):
+        """Cleanup on app exit."""
+        self.running = False
+        if self.pipe_handle:
+            event_pipe.close_pipe_client(self.pipe_handle)
 
 
 def main():
-    enable_ansi_colors()
-
-    # Acquire mutex to verify we are running
+    """Main entry point for event viewer."""
     acquire_mutex()
-
-    print("Event Viewer starting...")
-    print(f"Connecting to pipe: {event_pipe.PIPE_NAME}")
-
-    handle = None
-    retry_count = 0
-    max_retries = 30
-
-    while handle is None and retry_count < max_retries:
-        handle = event_pipe.connect_pipe_client()
-        if handle is None:
-            retry_count += 1
-            print(f"Waiting for main.py... ({retry_count}/{max_retries})")
-            time.sleep(1)
-
-    if handle is None:
-        print("Failed to connect to main.py. Exiting.")
-        return
-
-    stock_config = load_stock_config()
-    draw_header()
-
-    global current_history_row
-    current_history_row = history_start_row
-
-    debug_file = open("viewer_debug.log", "w", encoding="utf-8") if DEBUG_MODE else None
-
-    last_draw_time = time.time()
-    DRAW_INTERVAL = 0.1
-    needs_redraw = False
-
-    try:
-        while True:
-            log = event_pipe.receive_log(handle)
-            if log is None:
-                reset_scroll_region()
-                print("\nMain program closed. Closing...")
-                time.sleep(1)
-                break
-
-            key = extract_composite_key(log)
-
-            if debug_file:
-                debug_file.write(f"EVENT: key={key}, log={log[:60]}...\n")
-
-            if key:
-                latest_logs[key] = log
-                if debug_file:
-                    debug_file.write(f"sticky updated: {key}\n")
-                needs_redraw = True
-
-            current_time = time.time()
-            if needs_redraw and (current_time - last_draw_time) >= DRAW_INTERVAL:
-                draw_sticky_area(stock_config, debug_file)
-                last_draw_time = current_time
-                needs_redraw = False
-
-            append_history_log(log, stock_config)
-
-    except KeyboardInterrupt:
-        reset_scroll_region()
-        print("\nExiting...")
-    finally:
-        reset_scroll_region()
-        if debug_file:
-            debug_file.close()
-        event_pipe.close_pipe_client(handle)
+    app = EventViewerApp()
+    app.run()
 
 
 if __name__ == "__main__":

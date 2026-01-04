@@ -7,14 +7,18 @@
 
 ## 2. 주요 기능 (Key Features)
 
-### 💎 프리미엄 UI/UX
-- **ANSI Terminal UI**: 별도의 GUI 없이도 화려하고 직관적인 컬러 터미널 인터페이스를 제공합니다.
-- **Event Viewer (Dual Terminal)**: 메인 상호작용 화면과 분리된 별도의 터미널에서 실시간 로그(WebSocket)를 모니터링합니다. **Named Pipe** 통신과 **Windows Mutex** 기반의 프로세스 감지로 안정적인 재실행을 보장합니다.
-- **Smart Alerts**: 백그라운드 작업 및 Telegram 명령 결과를 메인 UI 알림 영역에 실시간으로 브로드캐스팅합니다.
+### 💎 터미널 UI/UX
+- **Scroll-based Terminal**: 로그가 덮어쓰이지 않는 스크롤 기반의 메인 터미널 인터페이스를 제공합니다.
+- **Event Viewer (Textual TUI)**: 별도의 터미널에서 **3-Panel 레이아웃**으로 실시간 데이터를 모니터링합니다:
+  - **Orders Panel**: 활성 주문 목록
+  - **Quotes Panel**: 종목별 최신 시세
+  - **Log Panel**: MKT 이벤트 로그
+- **Named Pipe 통신**: 메인 프로세스와 Event Viewer 간 실시간 데이터 전송
+- **Windows Mutex**: 프로세스 감지로 안정적인 재실행을 보장합니다.
 
 ### 📈 트레이딩 & 전략
 - **RAOEO Strategy**: 무한매수법 자동화 모듈. 실패한 주문에 대한 **지능형 재시도(Retry)** 및 히스토리 관리 기능을 포함합니다.
-- **Unified Portfolio**: 국내/대외 자산을 통합하여 자산 구성, 국가별 비중, 목표 대비 리밸런싱 수량을 자동으로 계산합니다.
+- **Unified Portfolio**: 국내/해외 자산을 통합하여 자산 구성, 국가별 비중, 목표 대비 리밸런싱 수량을 자동으로 계산합니다.
 - **Real-time Sync**: 웹소켓을 통한 체결 통지 즉시 UI와 데이터가 동기화됩니다.
 
 ### 📱 Telegram 원격 제어
@@ -32,9 +36,10 @@
 
 ```text
 .
-├── main.py                     # Entry point (로그 로테이션, 웹소켓 관리)
-├── event_viewer.py             # 별도 터미널 로그 뷰어 (Named Pipe 방식)
-├── display.py                  # ANSI UI 렌더링 엔진 (Thread-safe alerts)
+├── main.py                     # Entry point (자동 시작: Telegram → Event Viewer → Super Menu)
+├── event_viewer.py             # Textual TUI 기반 3-Panel Event Viewer
+├── display.py                  # 스크롤 기반 터미널 출력 (알림, 주문 상태)
+├── super_menu.py               # 스레드 초기화 메뉴 (스크롤 기반)
 ├── thread_comm.py              # 스레드 간 통신 (Queue) 정의
 ├── thread_state.py             # 스레드 공유 상태 관리
 ├── menu/                       # 대화형 메뉴 시스템
@@ -46,7 +51,7 @@
 ├── kis/                        # KIS OpenAPI Core & Threading
 │   ├── kis_api/                # KIS SDK (인증, 주문, 시세 등)
 │   ├── kis_thread.py           # API 전담 백그라운드 스레드
-│   ├── event_pipe.py           # Named Pipe 로그/데이터 전송
+│   ├── event_pipe.py           # Named Pipe 로그/데이터 전송 (메시지 타입 프로토콜)
 │   └── event_handler.py        # 실시간 웹소켓 이벤트 처리
 ├── data/                       # 데이터 서비스 계층
 │   ├── data_service.py         # 포트폴리오 데이터 캐싱 및 중앙 관리
@@ -67,6 +72,8 @@
 ```bash
 pip install -r requirements.txt
 ```
+> **Note**: Textual TUI를 위해 `textual` 패키지가 필요합니다.
+
 2. `kis_api/key/generate_credentials.py`를 실행하여 API 키를 암호화 저장합니다.
 3. 프로젝트 루트에 `telegram.txt` 파일을 생성하고 텔레그램 토큰과 채팅 ID를 입력합니다.
 ```
@@ -77,10 +84,23 @@ BOT_TOKEN,CHAT_ID
 ```bash
 python main.py
 ```
-1. 선택한 메뉴에 따라 거래를 시작합니다.
-   - `r` : RAOEO 전략판 진입
-   - `p` : 통합 포트폴리오 분석
-   - `1~3` : 기본 자산 관리 및 주문
+
+**자동 시작 시퀀스:**
+1. Telegram 봇 초기화
+2. Event Viewer (별도 터미널) 자동 실행
+3. Super Menu 표시
+
+**Super Menu 옵션:**
+- `1` : Telegram 초기화
+- `2` : KIS API 초기화
+- `3` : 트레이딩 메뉴 진입
+- `t` : Event Viewer 테스트 (더미 데이터 전송)
+- `q` : 종료
+
+**Trading Menu 옵션:**
+- `r` : RAOEO 전략판 진입
+- `p` : 통합 포트폴리오 분석
+- `1~3` : 기본 자산 관리 및 주문
 
 ---
 
@@ -94,6 +114,34 @@ python main.py
 | `/portfolio_weight` | Portfolio | 목표 비중 대비 리밸런싱 제안 목록 |
 | `/portfolio_va` | Portfolio | Value Averaging 주문 계산 및 실행 (Yes/No 확인) |
 | `/memo` | Memo | 최근 1주일 저장된 메모 조회 |
+
+---
+
+## 6. Event Viewer
+
+별도의 터미널에서 실행되는 **Textual TUI** 기반의 실시간 모니터링 도구입니다.
+
+### 3-Panel Layout
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Orders Panel                                                │
+│ 19:26:07 AAPL :Apple Inc               | Buy    prc:$150.00 │
+│ 19:26:07 MSFT :Microsoft Corp          | Sell   prc:$380.50 │
+├─────────────────────────────────────────────────────────────┤
+│ Quotes Panel                                                │
+│ 19:26:07|Apple Inc|AAPL|Bid:150.00|Last:151.25|Diff:+1.25   │
+│ 19:26:07|Microsoft Corp|MSFT|Bid:379.50|Last:379.80|...     │
+├─────────────────────────────────────────────────────────────┤
+│ Log Panel (Scrollable)                                      │
+│ 19:26:07|Apple Inc|AAPL|Bid:150.00|Last:151.25|...          │
+│ 19:26:07|Microsoft Corp|MSFT|Bid:379.50|Last:379.80|...     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 특징
+- **자동 실행**: `main.py` 시작 시 Windows Terminal에서 자동으로 실행
+- **자동 종료**: 메인 프로그램 종료 시 함께 종료
+- **Named Pipe 통신**: 메인 프로세스와 실시간 데이터 동기화
 
 ---
 *각 모듈의 상세 설명은 해당 디렉토리 내 `.md` 파일을 참조하십시오.*

@@ -1,17 +1,18 @@
 """
 This is the main entry point of the KIS Trading System.
 It initializes authentication, WebSocket connections, and the interactive menu.
+
+Startup order:
+1. Telegram auto-init (for alert receiving)
+2. Event Viewer auto-spawn
+3. Super Menu display
 """
 import logging
 import os
 import re
 from datetime import datetime
-import pandas as pd
-import msvcrt
-import threading
 import sys
-import shutil
-import subprocess
+import time
 
 # Force-disable any global requests-cache to prevent SQLite multi-thread errors
 try:
@@ -23,21 +24,10 @@ except ImportError:
 
 # Import refactored modules
 import trading_config
-from trading_config import strip_market_prefix
 import trading_state
 import display
-from display import render_ui, show_in_result_area, safe_write, get_fixed_width_name, clear_result_area, input_at, prepare_exit, update_order_state, add_alert
+from display import add_alert
 from kis import event_pipe
-
-from menu.menu import menu
-
-# Specific KIS imports
-from kis.kis_api.domestic_stock.asking_price_total.asking_price_total import asking_price_total
-from kis.kis_api.domestic_stock.ccnl_total.ccnl_total import ccnl_total
-from kis.kis_api.overseas_stock.asking_price.asking_price import asking_price
-from menu.handle_manage_orders import sync_open_orders, request_sync
-from kis.kis_api.overseas_stock.ccnl_notice.ccnl_notice import ccnl_notice
-from kis.kis_api.overseas_stock.delayed_ccnl.delayed_ccnl import delayed_ccnl
 
 
 if __name__ == "__main__":
@@ -112,7 +102,6 @@ if __name__ == "__main__":
     root_logger.addHandler(file_handler)
     root_logger.addHandler(stream_handler)
 
-
     # Remove stream handler first, so rotation messages only go to file
     root_logger.removeHandler(stream_handler)
 
@@ -122,7 +111,60 @@ if __name__ == "__main__":
     logging.info(f"[System] Logging initialized. All system messages now directed to: {os.path.basename(log_file)}")
 
     print("=== KIS Real-time Trading System ===")
+    print("")  # Blank line for separation
 
-    # Import and run super_menu (handles thread initialization)
+    # ============================================
+    # Step 1: Auto-initialize Telegram (for alerts)
+    # ============================================
+    print("[Startup] Step 1: Initializing Telegram Bot...")
+    try:
+        from thread_state import ThreadStatus, update_telegram_state
+        from telegram_bot.telegram_bot import initialize_telegram
+
+        update_telegram_state(thread_status=ThreadStatus.STARTING)
+        if initialize_telegram():
+            update_telegram_state(thread_status=ThreadStatus.RUNNING, bot_connected=True)
+            add_alert("[Startup] Telegram Bot initialized", "SUCCESS")
+        else:
+            update_telegram_state(thread_status=ThreadStatus.ERROR, last_error="Failed")
+            add_alert("[Startup] Telegram init failed (continuing...)", "WARNING")
+    except Exception as e:
+        add_alert(f"[Startup] Telegram error: {str(e)[:50]} (continuing...)", "WARNING")
+
+    time.sleep(0.5)
+
+    # ============================================
+    # Step 2: Auto-spawn Event Viewer
+    # ============================================
+    print("[Startup] Step 2: Spawning Event Viewer...")
+    try:
+        # Create pipe server first
+        if event_pipe.create_pipe_server():
+            add_alert("[Startup] Pipe server created", "SUCCESS")
+
+            # Wait for client in background
+            import threading
+            def wait_client():
+                event_pipe.wait_for_client()
+            client_thread = threading.Thread(target=wait_client, daemon=True)
+            client_thread.start()
+
+        # Spawn viewer terminal
+        from event_viewer import spawn_viewer
+        if spawn_viewer():
+            add_alert("[Startup] Event Viewer launched", "SUCCESS")
+        else:
+            add_alert("[Startup] Event Viewer launch failed (continuing...)", "WARNING")
+    except Exception as e:
+        add_alert(f"[Startup] Viewer error: {str(e)[:50]} (continuing...)", "WARNING")
+
+    time.sleep(1)
+
+    # ============================================
+    # Step 3: Launch Super Menu
+    # ============================================
+    print("[Startup] Step 3: Starting Super Menu...")
+    print("")
+
     from super_menu import super_menu
     super_menu()

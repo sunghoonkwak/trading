@@ -3,14 +3,36 @@
 이 모듈은 애플리케이션의 최상위 초기화 메뉴를 제공하며, 백그라운드 스레드의 시작 시퀀스를 관리합니다.
 
 ## Purpose (목적)
+
 메인 트레이딩 메뉴로 진입하기 전의 진입점(Entry Point) 역할을 하며, 사용자가 KIS API 스레드와 텔레그램 봇 스레드를 독립적으로 초기화할 수 있도록 합니다.
+
+## Design (설계)
+
+### Scroll-based Output
+*   ANSI 커서 제어 없이 일반 `print()`를 사용하는 스크롤 기반 메뉴입니다.
+*   화면을 지우거나 덮어쓰지 않아 로그 추적이 용이합니다.
+
+### Startup Sequence
+`main.py`에서 호출 시 다음 순서로 자동 시작됩니다:
+1. **Telegram 초기화**: 알림 수신을 위해 먼저 시작
+2. **Event Viewer 실행**: 별도 터미널에서 Textual TUI 뷰어 자동 실행
+3. **Super Menu 표시**: 사용자 상호작용 시작
+
+## Menu Options (메뉴 옵션)
+
+| Key | Action |
+|-----|--------|
+| `1` | Telegram Bot 초기화 |
+| `2` | KIS API 스레드 초기화 |
+| `3` | 트레이딩 메뉴 진입 (KIS 인증 필요) |
+| `t` | 테스트: Event Viewer에 더미 데이터 전송 |
+| `q` | 종료 |
 
 ## Key Functions (주요 기능)
 
 ### Menu Rendering
 *   **`super_menu()`**: 메인 루프입니다. KIS 및 텔레그램 스레드의 현재 상태를 표시하고 사용자 입력을 받습니다.
-*   **`_render_super_menu()`**: 화면을 지우고 `display.show_in_result_area`를 사용하여 메뉴 UI를 그립니다. 또한 알림 프로세서를 트리거하여 로그를 표시합니다.
-*   **`_build_menu_lines()`**: 준비 상태에 따라 상태 아이콘(✓ connected 등)과 사용 가능한 옵션을 동적으로 구성하여 메뉴 텍스트를 생성합니다. 텔레그램을 우선 초기화([1])하고 KIS를 후순위([2])로 배치하여 알림 수신을 보장합니다.
+*   **`_print_super_menu()`**: 현재 스레드 상태와 메뉴 옵션을 출력합니다.
 
 ### Initialization Logic (초기화 로직)
 *   **`_init_kis_thread()`**:
@@ -23,7 +45,18 @@
     2.  `telegram_bot.initialize_telegram()`을 호출하여 봇을 시작합니다.
     3.  성공 시 상태를 `RUNNING`으로, 실패 시 `ERROR`로 업데이트합니다.
 
+### Test Function (테스트 기능)
+*   **`_send_dummy_data()`**: Event Viewer 테스트용 더미 데이터를 전송합니다.
+    *   `CLR|ORDERS`: 주문 목록 초기화
+    *   `ODR|...`: 샘플 주문 3건
+    *   `MKT|...`: 샘플 시세 2건
+
+### Shutdown (종료)
+*   KIS 스레드 정지
+*   Telegram 봇 종료
+*   Event Viewer 종료 (`close_viewer()`)
+
 ## Data Flow (데이터 흐름)
 *   `thread_state`와 상호 작용하여 전역 스레드 상태를 읽고 씁니다.
-*   `display` 모듈을 사용하여 UI 렌더링 및 알림(`add_alert`)을 처리합니다.
-*   `kis_thread` 함수를 호출하여 백그라운드 작업을 트리거합니다.
+*   `display.add_alert()`를 사용하여 알림을 메인 터미널에 표시합니다.
+*   `event_pipe.send_log()`를 사용하여 Event Viewer에 데이터를 전송합니다.

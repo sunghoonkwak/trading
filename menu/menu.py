@@ -1,42 +1,62 @@
 """
 This module centralizes the main interactive menu logic.
-It coordinates between the different handlers in the menu package and the display module.
+Scroll-based terminal output version.
 """
 import os
 import display
-from display import render_ui, input_at, prepare_exit, process_pending_alerts, start_alert_processor
+from display import add_alert
 from kis.event_pipe import PrintLevel
 from kis.kis_api import kis_auth as ka
 
-# Centralized debug toggle for all menu handlers and KIS API interactions
+# Centralized debug toggle
 MENU_DEBUG = False
+
+# ANSI Color codes
+RESET = "\033[0m"
+BOLD = "\033[1m"
+GREEN = "\033[92m"
+CYAN = "\033[96m"
+
+MENU_TEXT = """
+============================================================
+ KIS Real-time System - Trading Menu
+============================================================
+ 1. Account Info (Balance & Portfolio)
+ 2. Place Order (Buy/Sell)
+ 3. Manage Open Orders (Correct/Cancel)
+ r. RAOEO Strategy
+ p. Portfolio
+------------------------------------------------------------
+ 0. Toggle Log Level    v. Open Event Viewer
+ c. Clear & Sync        q. Back to Super Menu
+"""
+
 
 def menu():
     """Main keyboard interaction loop."""
-    # Lazy imports to avoid circular dependency with handlers importing MENU_DEBUG
     from .handle_account_info import handle_account_info
     from .handle_place_order import handle_place_order
     from .handle_manage_orders import handle_manage_orders, sync_open_orders
     from .raoeo.raoeo import raoeo_menu
-    from event_viewer import spawn_viewer, close_viewer
+    from event_viewer import spawn_viewer, close_viewer, is_running
 
-    os.system('cls' if os.name == 'nt' else 'clear')
     if MENU_DEBUG:
         ka._DEBUG = True
-        display.add_alert("[Menu] Debug mode (ka._DEBUG) enabled via MENU_DEBUG flag.", "INFO")
+        add_alert("[Menu] Debug mode enabled", "INFO")
 
     # Fetch initial orders on startup
-    render_ui(full_refresh=True)
     sync_open_orders()
-    render_ui(full_refresh=True)
-
-    # Start background alert processor for real-time updates
-    start_alert_processor()
 
     while True:
-        process_pending_alerts()  # Handle alerts from background threads (e.g., Telegram)
-        render_ui(full_refresh=True)
-        choice = input_at(12, 2, "Enter Choice: ").strip()  # Row 12 between separators
+        print(MENU_TEXT)
+
+        try:
+            choice = input("Enter Choice: ").strip()
+        except KeyboardInterrupt:
+            add_alert("[Menu] Keyboard interrupt", "INFO")
+            break
+        except EOFError:
+            break
 
         if choice == '1':
             handle_account_info()
@@ -52,36 +72,31 @@ def menu():
                 event_pipe.print_log_level = PrintLevel.ERROR
             else:
                 event_pipe.print_log_level = PrintLevel.INFO
-            display.add_alert(f"Log Level Changed to: {event_pipe.print_log_level.name}", "INFO")
+            add_alert(f"Log Level Changed to: {event_pipe.print_log_level.name}", "INFO")
         elif choice.lower() == 'c':
-            from .handle_manage_orders import sync_open_orders
             sync_open_orders()
         elif choice.lower() == 'v':
             from kis import event_pipe
-            from event_viewer import is_running
 
             if is_running():
-                display.add_alert("[SYS] Viewer is already running!", "INFO")
+                add_alert("[SYS] Viewer is already running!", "INFO")
             else:
-                # If pipe thinks it's connected but process is dead, reset it
                 if event_pipe.is_connected():
                     event_pipe.reset_pipe_server()
-
                 spawn_viewer()
-                display.add_alert("[SYS] Viewer terminal launched!", "SUCCESS")
+                add_alert("[SYS] Viewer terminal launched!", "SUCCESS")
         elif choice.lower() == 'r':
             raoeo_menu()
         elif choice.lower() == 'p':
             from menu.portfolio import portfolio
             portfolio.portfolio_menu()
         elif choice.lower() == 'q':
-            import trading_state
-            from telegram_bot.telegram_bot import shutdown_telegram
-            trading_state.stop_periodic_save()  # Save stock data before exit
-            close_viewer()  # Close viewer terminal before exit
-            shutdown_telegram()  # Send final notification
-            prepare_exit()
-            print("Exiting...")
-            os._exit(0)
+            # Return to super menu instead of exit
+            add_alert("[Menu] Returning to Super Menu...", "INFO")
+            break
         else:
             pass
+
+
+if __name__ == "__main__":
+    menu()

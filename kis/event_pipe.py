@@ -30,7 +30,7 @@ _pipe_connected = False
 _pipe_lock = threading.Lock()
 
 
-def print_viewer(level, log):
+def print_viewer(level, log, msg_type="MKT"):
     """Log to file and send to separate terminal viewer via pipe."""
     # Always log to file using standard logging
     if level == PrintLevel.ERROR:
@@ -42,7 +42,7 @@ def print_viewer(level, log):
 
     # Send to separate terminal viewer
     if level <= print_log_level:
-        send_log(log)
+        send_log(msg_type, log)
 
 
 def create_pipe_server():
@@ -81,15 +81,20 @@ def wait_for_client():
         return False
 
 
-def send_log(message: str) -> bool:
-    """Send log message through pipe. Non-blocking."""
+def send_log(msg_type: str, message: str) -> bool:
+    """Send log message through pipe. Non-blocking.
+
+    Args:
+        msg_type: Message type prefix (MKT for market data, ODR for orders)
+        message: Log message content
+    """
     global _pipe_connected
     if not _pipe_connected or _pipe_handle is None:
         return False
 
     with _pipe_lock:
         try:
-            data = (message + "\n").encode('utf-8')
+            data = (msg_type + "|" + message + "\n").encode('utf-8')
             win32file.WriteFile(_pipe_handle, data)
             return True
         except pywintypes.error as e:
@@ -192,11 +197,37 @@ def connect_pipe_client():
         return None
 
 
+# Receive buffer for incomplete messages
+_receive_buffer = ""
+
 def receive_log(handle) -> str:
-    """Receive log message from pipe. Blocking call."""
+    """Receive log message from pipe. Blocking call.
+
+    Returns one message at a time, buffering partial messages.
+    """
+    global _receive_buffer
+
+    # If we have buffered messages, return the next one
+    if "\n" in _receive_buffer:
+        line, _receive_buffer = _receive_buffer.split("\n", 1)
+        return line.strip()
+
+    # Read more data from pipe
     try:
         result, data = win32file.ReadFile(handle, PIPE_BUFFER_SIZE)
-        return data.decode('utf-8').strip()
+        _receive_buffer += data.decode('utf-8')
+
+        # Check if we have complete message(s)
+        if "\n" in _receive_buffer:
+            line, _receive_buffer = _receive_buffer.split("\n", 1)
+            return line.strip()
+        else:
+            # Incomplete message, return what we have
+            if _receive_buffer.strip():
+                msg = _receive_buffer.strip()
+                _receive_buffer = ""
+                return msg
+            return None
     except pywintypes.error as e:
         logging.error(f"[Pipe] Receive failed: {e}")
         return None
