@@ -813,9 +813,9 @@ class KISWebSocket:
                 )
 
                 if rsp.isPingPong:
-                    logging.info(f"### RECV [PINGPONG] [{raw}]")
+                    # logging.info(f"### RECV [PINGPONG] [{raw}]")
                     await ws.pong(raw)
-                    logging.info(f"### SEND [PINGPONG] [{raw}]")
+                    # logging.info(f"### SEND [PINGPONG] [{raw}]")
                     show_result = True  # Allow PINGPONG to trigger on_result for testing
 
                 if self.result_all_data:

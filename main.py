@@ -98,12 +98,16 @@ if __name__ == "__main__":
     file_handler.setFormatter(formatter)
     stream_handler.setFormatter(formatter)
 
-    root_logger.setLevel(logging.DEBUG)
+    root_logger.setLevel(logging.INFO)
     root_logger.addHandler(file_handler)
     root_logger.addHandler(stream_handler)
 
     # Remove stream handler first, so rotation messages only go to file
     root_logger.removeHandler(stream_handler)
+
+    # Suppress third-party libraries (Set to INFO as requested)
+    for lib in ["httpx", "httpcore", "telegram", "apscheduler", "websockets", "asyncio"]:
+        logging.getLogger(lib).setLevel(logging.INFO)
 
     for msg in rotation_msgs:
         logging.info(msg)
