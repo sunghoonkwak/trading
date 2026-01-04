@@ -187,7 +187,7 @@ class EventViewerApp(App):
     def compose(self) -> ComposeResult:
         yield OrdersPanel(id="orders-panel")
         yield QuotesPanel(id="quotes-panel")
-        yield RichLog(id="log-panel", highlight=False, markup=True, auto_scroll=True)
+        yield RichLog(id="log-panel", highlight=False, markup=True, auto_scroll=True, max_lines=1000)
 
     def on_mount(self) -> None:
         """Start pipe connection when app mounts."""
