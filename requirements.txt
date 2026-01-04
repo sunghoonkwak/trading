@@ -1,0 +1,9 @@
+requests
+pandas
+pyyaml
+pycryptodome
+websockets
+textual
+python-telegram-bot
+pywin32
+openpyxl
