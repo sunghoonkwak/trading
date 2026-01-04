@@ -30,7 +30,7 @@ _pipe_connected = False
 _pipe_lock = threading.Lock()
 
 
-def print_viewer(level, log, msg_type="MKT"):
+def print_viewer(msg_type, level, log):
     """Log to file and send to separate terminal viewer via pipe."""
     # Always log to file using standard logging
     if level == PrintLevel.ERROR:
@@ -43,7 +43,6 @@ def print_viewer(level, log, msg_type="MKT"):
     # Send to separate terminal viewer
     if level <= print_log_level:
         send_log(msg_type, log)
-
 
 def create_pipe_server():
     """Create Named Pipe server. Call this from main.py at startup."""

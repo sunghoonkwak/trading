@@ -109,6 +109,13 @@ def _init_kis_thread():
             add_alert("[Super] Failed to start KIS Thread", "ERROR")
             time.sleep(1)
             return
+        # Give a small delay for thread to spin up
+        time.sleep(0.5)
+
+    if is_kis_ready():
+        add_alert("[Super] KIS Thread is already running and ready", "WARNING")
+        time.sleep(1)
+        return
 
     time.sleep(0.5)
 
@@ -151,6 +158,12 @@ def _init_telegram_thread():
     from thread_state import update_telegram_state
 
     add_alert("[Super] Starting Telegram Bot...", "INFO")
+
+    if is_telegram_ready():
+        add_alert("[Super] Telegram Bot is already running", "WARNING")
+        time.sleep(1)
+        return
+
     update_telegram_state(thread_status=ThreadStatus.STARTING)
 
     try:
@@ -192,21 +205,22 @@ def _send_dummy_data():
     print("  Sent: CLR|ORDERS")
 
     # Send dummy orders (format: ticker|name|side|qty|price|state|order_id)
-    event_pipe.send_log("ODR", "AAPL|Apple Inc               |Buy|10|$150.00|PLACED|TEST001")
-    print("  Sent: ODR|AAPL|Apple Inc|Buy|10|$150.00|PLACED|TEST001")
+    # Using tickers from stock_configuration.json to test colors
+    event_pipe.send_log("ODR", "QQQM|Invesco NASDAQ 100        |Buy|10|$220.50|PLACED|TEST001")
+    print("  Sent: ODR|QQQM|Invesco NASDAQ 100|Buy|10|$220.50|PLACED|TEST001")
 
-    event_pipe.send_log("ODR", "MSFT|Microsoft Corp           |Sell|5|$380.50|PLACED|TEST002")
-    print("  Sent: ODR|MSFT|Microsoft Corp|Sell|5|$380.50|PLACED|TEST002")
+    event_pipe.send_log("ODR", "SOXL|DIREXION SEMICONDUCTOR 3X |Sell|55|$45.20|PLACED|TEST002")
+    print("  Sent: ODR|SOXL|DIREXION SEMICONDUCTOR 3X|Sell|55|$45.20|PLACED|TEST002")
 
-    event_pipe.send_log("ODR", "GOOGL|Alphabet Inc             |LOC Buy|3|$175.25|PLACED|TEST003")
-    print("  Sent: ODR|GOOGL|Alphabet Inc|LOC Buy|3|$175.25|PLACED|TEST003")
+    event_pipe.send_log("ODR", "NVDA|NVIDIA Corp                |LOC Buy|3|$950.00|PLACED|TEST003")
+    print("  Sent: ODR|NVDA|NVIDIA Corp|LOC Buy|3|$950.00|PLACED|TEST003")
 
     # Send dummy market data (format: time|name|ticker|Bid:...|Last:...|Diff:...|Ask:...)
-    event_pipe.send_log("MKT", f"{time_s}|Apple Inc               |AAPL  |Bid:  150.00|Last:  151.25(  1,200)|Diff: +1.25( 0.83%)|Ask:  151.50")
-    print(f"  Sent: MKT|{time_s}|Apple Inc|AAPL|...")
+    event_pipe.send_log("MKT", f"{time_s}|Invesco NASDAQ 100      |QQQM  |Bid:  220.40|Last:  220.50(    500)|Diff: +1.50( 0.68%)|Ask:  220.60")
+    print(f"  Sent: MKT|{time_s}|Invesco NASDAQ 100|QQQM|...")
 
-    event_pipe.send_log("MKT", f"{time_s}|Microsoft Corp           |MSFT  |Bid:  379.50|Last:  379.80(    890)|Diff: -0.70(-0.18%)|Ask:  380.00")
-    print(f"  Sent: MKT|{time_s}|Microsoft Corp|MSFT|...")
+    event_pipe.send_log("MKT", f"{time_s}|DIREXION SEMICONDUCTOR 3X|SOXL  |Bid:   45.10|Last:   45.20(  3,200)|Diff: -0.80(-1.74%)|Ask:   45.25")
+    print(f"  Sent: MKT|{time_s}|DIREXION SEMICONDUCTOR 3X|SOXL|...")
 
     add_alert("[Test] Dummy data sent!", "SUCCESS")
 

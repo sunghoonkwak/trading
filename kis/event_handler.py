@@ -77,7 +77,7 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
            f"Last:{price_s:>9}({vol_s:>6})|"
            f"Diff:{diff_s:>6}({state.get('rate', 0.0):>5.2f}%)|"
            f"Ask:{ask_s:>9}")
-    print_viewer(level, msg)
+    print_viewer("MKT", level, msg)
     return True
 
 
@@ -146,7 +146,7 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
            f"Last:{price_s:>9}({vol_s:>6})|"
            f"Diff:{diff_s:>6}({state.get('rate', 0.0):>5.2f}%)|"
            f"Ask:{ask_s:>9}")
-    print_viewer(level, msg)
+    print_viewer("MKT", level, msg)
     return True
 
 
@@ -226,7 +226,7 @@ def _handle_domestic_order(row) -> bool:
         request_sync()
         return True
     except Exception as e:
-        print_viewer(PrintLevel.ERROR, f"Error parsing H0STCNI0: {e}")
+        print_viewer("SYS", PrintLevel.ERROR, f"Error parsing H0STCNI0: {e}")
         return True
 
 
@@ -337,7 +337,7 @@ def _handle_overseas_order(tr_id: str, row) -> bool:
         request_sync()
         return True
     except Exception as e:
-        print_viewer(PrintLevel.ERROR, f"Error parsing overseas notification: {e}")
+        print_viewer("SYS", PrintLevel.ERROR, f"Error parsing overseas notification: {e}")
         return True
 
 
@@ -346,11 +346,11 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
     # Handle PINGPONG for testing (displays even when market is closed)
     if tr_id == "PINGPONG":
         time_s = datetime.now().strftime("%H:%M:%S")
-        print_viewer(PrintLevel.INFO, f"[{time_s}] [SYS] PINGPONG received")
+        print_viewer("SYS", PrintLevel.INFO, f"{time_s} PINGPONG received")
         return
 
     if df.empty:
-        print_viewer(PrintLevel.ERROR, f"System Message received for TR: {tr_id}")
+        print_viewer("SYS", PrintLevel.ERROR, f"System Message received for TR: {tr_id}")
         return
 
     tr_id = tr_id.strip()
@@ -371,4 +371,4 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
 
         else:
             if i == 0:
-                print_viewer(PrintLevel.DEBUG, f"Unhandled TR_ID: {tr_id}")
+                print_viewer("SYS", PrintLevel.DEBUG, f"Unhandled TR_ID: {tr_id}")

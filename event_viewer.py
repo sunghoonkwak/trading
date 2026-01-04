@@ -102,6 +102,26 @@ def load_stock_config():
         return {}
 
 
+# Build ticker -> color lookup (loaded once)
+_STOCK_CONFIG = load_stock_config()
+_TICKER_COLORS = {}
+for region in _STOCK_CONFIG.values():
+    for stock in region:
+        ticker = stock.get("ticker", "")
+        color = stock.get("color", None)
+        if ticker and color:
+            _TICKER_COLORS[ticker] = color
+
+
+def get_ticker_color(ticker: str) -> str:
+    """Get Textual color markup for a ticker."""
+    color = _TICKER_COLORS.get(ticker.strip())
+    if color and len(color) == 3:
+        r, g, b = color
+        return f"rgb({r},{g},{b})"
+    return None
+
+
 class OrdersPanel(Static):
     """Panel displaying active orders."""
 
@@ -139,23 +159,21 @@ class EventViewerApp(App):
 
     #orders-panel {
         height: auto;
-        min-height: 3;
+        min-height: 1;
         max-height: 10;
-        border: solid $primary;
         padding: 0 1;
     }
 
     #quotes-panel {
         height: auto;
-        min-height: 3;
+        min-height: 2;
         max-height: 15;
-        border: solid $secondary;
         padding: 0 1;
     }
 
     #log-panel {
         height: 1fr;
-        border: solid $accent;
+        padding: 0 1;
     }
     """
 
@@ -169,7 +187,7 @@ class EventViewerApp(App):
     def compose(self) -> ComposeResult:
         yield OrdersPanel(id="orders-panel")
         yield QuotesPanel(id="quotes-panel")
-        yield RichLog(id="log-panel", highlight=True, markup=True, auto_scroll=True)
+        yield RichLog(id="log-panel", highlight=False, markup=True, auto_scroll=True)
 
     def on_mount(self) -> None:
         """Start pipe connection when app mounts."""
@@ -228,6 +246,7 @@ class EventViewerApp(App):
         - MKT|{time}|MKT|{name}|{ticker}|Bid:...|Last:...|Diff:...|Ask:...
         - ODR|{ticker}|{name}|{side}|{qty}|{price}|{state}|{order_id}
         - CLR|ORDERS - clear all orders
+        - SYS|{message} - system message
         """
         if "|" not in raw_message:
             self._log_message(raw_message)
@@ -242,17 +261,20 @@ class EventViewerApp(App):
             self._handle_order_message(content)
             # Don't show ODR in log dump
         elif msg_type == "MKT":
-            self._handle_market_message(content)
+            colored_content = self._handle_market_message(content)
             # Show MKT in log dump
-            self._log_message(f"{content}")
+            self._log_message(f"{colored_content}")
+        elif msg_type == "SYS":
+            # System messages (PINGPONG, errors, etc.) - show in red
+            self._log_message(f"[red]{content}[/red]")
         elif msg_type == "CLR":
             # Clear orders
             if content.strip() == "ORDERS":
                 self.orders.clear()
                 self._update_orders_panel()
         else:
-            # Unknown type or system message
-            self._log_message(f"[red]UNKNOWN: {raw_message}[/red]")
+            # Unknown type
+            self._log_message(f"[dim]{raw_message}[/dim]")
 
     def _handle_order_message(self, content: str):
         """Handle order status message.
@@ -295,10 +317,11 @@ class EventViewerApp(App):
 
             self._update_orders_panel()
 
-    def _handle_market_message(self, content: str):
+    def _handle_market_message(self, content: str) -> str:
         """Handle market data message.
 
         Format: {time}|{name}|{ticker}|Bid:...|Last:...|Diff:...|Ask:...
+        Returns: Colorized content string
         """
         parts = content.split("|")
 
@@ -308,17 +331,51 @@ class EventViewerApp(App):
         if len(parts) >= 3:
             ticker = parts[2].strip()
 
+        colored_content = content
         if ticker:
             # Clean up ticker prefix if needed
             if len(ticker) > 6 and ticker[:4] in ["DNAS", "DNYS", "DAMS"]:
                 ticker = ticker[4:]
 
-            self.latest_quotes[ticker] = content
+            # Apply color to ticker
+            t_color = get_ticker_color(ticker)
+            if t_color:
+                parts[2] = f"[{t_color}]{parts[2]}[/{t_color}]"
+
+            # Process other parts for coloring (Last, Diff)
+            for i, part in enumerate(parts):
+                stripped_part = part.lstrip()
+                if stripped_part.startswith("Last:"):
+                    try:
+                        label, value = part.split(":", 1)
+                        # User requested "bright color" matching input
+                        parts[i] = f"{label}:[bold #ffff00]{value}[/bold #ffff00]"
+                    except ValueError:
+                        pass
+
+                elif stripped_part.startswith("Diff:"):
+                    try:
+                        label, value = part.split(":", 1)
+                        # Check for minus sign in the value part to determine color
+                        if "-" in value:
+                            color = "#ff0000" # Red
+                        else:
+                            color = "#00ffff" # Cyan
+                        parts[i] = f"{label}:[{color}]{value}[/{color}]"
+                    except ValueError:
+                        pass
+
+            colored_content = "|".join(parts)
+
+            self.latest_quotes[ticker] = colored_content
             # Keep only last 10 tickers
             while len(self.latest_quotes) > 10:
                 self.latest_quotes.popitem(last=False)
 
             self._update_quotes_panel()
+
+        return colored_content
+
 
     def _update_orders_panel(self):
         """Update orders panel display."""
@@ -334,10 +391,16 @@ class EventViewerApp(App):
 
             name = info.get("name", "")[:24]
             order_time = info.get("time", "")
+            ticker = info['ticker']
+            ticker_color = get_ticker_color(ticker)
+            ticker_disp = f"{ticker:8}"
+            if ticker_color:
+                ticker_disp = f"[{ticker_color}]{ticker_disp}[/{ticker_color}]"
+
             lines.append(
-                f"{order_time} {info['ticker']:8}:{name:24} | "
+                f"{order_time} {ticker_disp}:{name:24} | "
                 f"[{side_color}]{info['side']:8}[/{side_color}] "
-                f"prc:{info['price']:>10} qty:{info['qty']:>5}"
+                f"prc: [cyan]{info['price']:>10}[/cyan] qty: [cyan]{info['qty']:>5}[/cyan]"
             )
 
         orders_panel = self.query_one("#orders-panel", OrdersPanel)

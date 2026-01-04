@@ -9,9 +9,10 @@
 ## Message Protocol (메시지 프로토콜)
 
 ### Message Types
-*   **`MKT`**: 시세 데이터 (Market Data)
-*   **`ODR`**: 주문 정보 (Order)
-*   **`CLR`**: 명령 (Clear 등)
+*   **MKT**: Market Data (Quotes, Prices - displayed in Quotes & Log panels)
+*   **ODR**: Order Notifications (Execution, Updates - displayed in Orders panel)
+*   **SYS**: System Messages (Errors, PINGPONG - displayed in Log panel in Red)
+*   **CLR**: Control Commands (e.g., clearing order list)
 
 ### Format
 ```
@@ -29,7 +30,7 @@
 
 ### Logging Functions
 
-#### `print_viewer(level, log, msg_type="MKT")`
+#### `print_viewer(msg_type, level, log)`
 주요 로깅 인터페이스입니다.
 *   `logging` 모듈을 통해 파일에 기록합니다.
 *   `level <= print_log_level`인 경우 Named Pipe를 통해 뷰어로 전송합니다.

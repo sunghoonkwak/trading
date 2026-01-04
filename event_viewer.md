@@ -6,22 +6,26 @@
 
 **Textual TUI 프레임워크**를 활용하여 3개의 패널로 구성된 인터페이스를 제공합니다:
 
-1. **Orders Panel (상단)**: 활성 주문 목록을 실시간으로 표시합니다.
-2. **Quotes Panel (중간)**: 종목별 최신 시세 정보를 표시합니다.
-3. **Log Panel (하단)**: 모든 MKT 이벤트의 스크롤 가능한 로그를 표시합니다.
+1.  **Orders Panel (상단)**: 활성 주문 목록을 실시간으로 표시합니다.
+2.  **Quotes Panel (중간)**: 종목별 최신 시세 정보를 표시합니다.
+3.  **Log Panel (하단)**: 모든 MKT 이벤트의 스크롤 가능한 로그를 표시합니다.
 
-## Key Features (주요 기능)
-
-### 3-Panel Layout (3분할 레이아웃)
+## Key Features (주요- **Layout**: 3-Panel Vertical Split (Orders / Quotes / Log)
+- **Style**: Borderless panels with consistent padding
+- **Colors**:
+  - **Orders**: Side-specific colors (Buy: Green, Sell: Red), Cyan for Price/Qty
+  - **Quotes**: Ticker colors (from config), Last (Bright Yellow), Diff (Cyan/Red)
+  - **Log**: Standard log output with Syntax Highlighting disabled (raw color control)
 *   **OrdersPanel**: `reactive` 속성을 사용하여 주문 추가/삭제 시 자동으로 패널 크기를 조정합니다.
 *   **QuotesPanel**: 종목별로 최신 시세만 유지하며 (최대 10개), 중복 없이 업데이트됩니다.
 *   **RichLog**: Textual의 내장 위젯으로, MKT 메시지를 시간순으로 기록합니다.
 
 ### Message Protocol (메시지 프로토콜)
 Named Pipe를 통해 수신되는 메시지는 타입별로 라우팅됩니다:
-*   **`MKT|{content}`**: 시세 데이터 → Quotes 패널 + Log 패널
-*   **`ODR|{content}`**: 주문 정보 → Orders 패널만
-*   **`CLR|ORDERS`**: 주문 목록 초기화
+- **MKT**: Market Data (Time, Name, Ticker, Bid, Ask, Last, Diff)
+- **ODR**: Order Execution (Ticker, Side, Price, Qty, State)
+- **SYS**: System Messages (PINGPONG, Errors) - [Red] color
+- **CLR**: Command (e.g., CLR|ORDERS)
 
 ### Process Detection (프로세스 감지)
 *   **Windows Named Mutex**: `StevenOpenAPITradingViewer`라는 이름의 뮤텍스(Mutex)를 사용하여 뷰어의 실행 여부를 시스템 전역에서 확실하게 감지합니다.

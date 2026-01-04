@@ -56,6 +56,12 @@
 *   Telegram 봇 종료
 *   Event Viewer 종료 (`close_viewer()`)
 
+### 3. Safety Guards (안전 장치)
+*   **Duplicate Execution Prevention**:
+    *   Telegram/KIS Init 메뉴 선택 시, 이미 실행 중이면 경고 메시지만 출력하고 중복 실행을 차단합니다.
+    *   KIS Init의 경우, **Physical Thread Check**를 먼저 수행하여 스레드가 죽어있을 경우 즉시 재시작하도록 로직 순서를 최적화했습니다.
+*   **Status Check**: 각 메뉴 실행 전 필요한 전제 조건(KIS Ready 등)을 체크합니다.
+
 ## Data Flow (데이터 흐름)
 *   `thread_state`와 상호 작용하여 전역 스레드 상태를 읽고 씁니다.
 *   `display.add_alert()`를 사용하여 알림을 메인 터미널에 표시합니다.
