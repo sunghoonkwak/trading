@@ -13,6 +13,55 @@ import re
 from datetime import datetime
 import sys
 import time
+from logging.handlers import TimedRotatingFileHandler
+import shutil
+
+
+def archive_existing_log(latest_log, logs_dir):
+    """
+    Moves existing WebSocket_latest.log to logs/ directory with timestamp.
+    Returns list of status messages.
+    """
+    msgs = []
+    if not os.path.exists(latest_log):
+        msgs.append(f"[LogRotation] Fresh session. No existing log file found.")
+        return msgs
+
+    old_ts = ""
+    try:
+        with open(latest_log, "r", encoding="utf-8-sig") as f:
+            for _ in range(20):
+                line = f.readline()
+                if not line: break
+                match = re.search(r"(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})", line)
+                if match:
+                    y, m, d, hh, mm, ss = match.groups()
+                    old_ts = f"{y[2:]}_{m}_{d}_{hh}_{mm}_{ss}"
+                    break
+    except Exception as e:
+        msgs.append(f"[LogRotation] Warning: Could not read timestamp from content: {e}")
+
+    if not old_ts:
+        try:
+            mtime = os.path.getmtime(latest_log)
+            old_ts = datetime.fromtimestamp(mtime).strftime("%y_%m_%d_%H_%M_%S")
+        except:
+            old_ts = datetime.now().strftime("%y_%m_%d_%H_%M_%S")
+
+    # Archive to logs/ folder
+    archive_name = os.path.join(logs_dir, f"WebSocket_{old_ts}.log")
+    if os.path.exists(archive_name):
+        archive_name = archive_name.replace(".log", f"_{int(datetime.now().timestamp())}.log")
+
+    try:
+        shutil.move(latest_log, archive_name)
+        msgs.append(f"[LogRotation] Moved old log: WebSocket_latest.log -> logs/{os.path.basename(archive_name)}")
+    except PermissionError:
+        msgs.append(f"[LogRotation] Warning: {os.path.basename(latest_log)} is locked. Appending to existing file.")
+    except Exception as e:
+        msgs.append(f"[LogRotation] Error during move: {e}")
+
+    return msgs
 
 # Force-disable any global requests-cache to prevent SQLite multi-thread errors
 try:
@@ -42,47 +91,7 @@ if __name__ == "__main__":
     # Latest log in root, archived logs in logs/
     latest_log = os.path.join(base_dir, "WebSocket_latest.log")
 
-    rotation_msgs = []
-
-    # Log Rotation Logic: Move old log from root to logs/ folder
-    if os.path.exists(latest_log):
-        old_ts = ""
-        try:
-            with open(latest_log, "r", encoding="utf-8-sig") as f:
-                for _ in range(20):
-                    line = f.readline()
-                    if not line: break
-                    match = re.search(r"(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})", line)
-                    if match:
-                        y, m, d, hh, mm, ss = match.groups()
-                        old_ts = f"{y[2:]}_{m}_{d}_{hh}_{mm}_{ss}"
-                        break
-        except Exception as e:
-            rotation_msgs.append(f"[LogRotation] Warning: Could not read timestamp from content: {e}")
-
-        if not old_ts:
-            try:
-                mtime = os.path.getmtime(latest_log)
-                old_ts = datetime.fromtimestamp(mtime).strftime("%y_%m_%d_%H_%M_%S")
-            except:
-                old_ts = datetime.now().strftime("%y_%m_%d_%H_%M_%S")
-
-        # Archive to logs/ folder
-        archive_name = os.path.join(logs_dir, f"WebSocket_{old_ts}.log")
-        if os.path.exists(archive_name):
-            archive_name = archive_name.replace(".log", f"_{int(datetime.now().timestamp())}.log")
-
-        try:
-            import shutil
-            shutil.move(latest_log, archive_name)
-            rotation_msgs.append(f"[LogRotation] Moved old log: WebSocket_latest.log -> logs/{os.path.basename(archive_name)}")
-        except PermissionError:
-            rotation_msgs.append(f"[LogRotation] Warning: {os.path.basename(latest_log)} is locked. Appending to existing file.")
-        except Exception as e:
-            rotation_msgs.append(f"[LogRotation] Error during move: {e}")
-    else:
-        rotation_msgs.append(f"[LogRotation] Fresh session. No existing log file found.")
-
+    rotation_msgs = archive_existing_log(latest_log, logs_dir)
     log_file = latest_log
     display.log_file_path = log_file
 
@@ -92,7 +101,33 @@ if __name__ == "__main__":
         for handler in list(root_logger.handlers):
             root_logger.removeHandler(handler)
 
-    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    # file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    # Use TimedRotatingFileHandler for 6-hour rotation
+    file_handler = TimedRotatingFileHandler(
+        log_file, when='H', interval=6, encoding='utf-8'
+    )
+    file_handler.suffix = "%y_%m_%d_%H_%M_%S"
+
+    def log_namer(default_name):
+        # Transform .../WebSocket_latest.log.26_01_04_22_00_00 -> .../logs/WebSocket_26_01_04_22_00_00.log
+        base = os.path.basename(default_name)
+        parts = base.split('.')
+        # check if it matches the suffix format, usually it's appended
+        # parts: ['WebSocket_latest', 'log', '26_01_04_22_00_00']
+        if len(parts) >= 3:
+            timestamp = parts[-1]
+            return os.path.join(logs_dir, f"WebSocket_{timestamp}.log")
+        return os.path.join(logs_dir, base)
+
+    def log_rotator(source, dest):
+        if os.path.exists(source):
+            try:
+                shutil.move(source, dest)
+            except Exception as e:
+                print(f"[LogRotation] Runtime rotation error: {e}")
+
+    file_handler.namer = log_namer
+    file_handler.rotator = log_rotator
     stream_handler = logging.StreamHandler(sys.stdout)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
     file_handler.setFormatter(formatter)

@@ -47,6 +47,9 @@ def print_viewer(msg_type, level, log):
 def create_pipe_server():
     """Create Named Pipe server. Call this from main.py at startup."""
     global _pipe_handle
+    if _pipe_handle is not None:
+        return True
+
     try:
         _pipe_handle = win32pipe.CreateNamedPipe(
             PIPE_NAME,
@@ -70,12 +73,19 @@ def wait_for_client():
     global _pipe_connected
     if _pipe_handle is None:
         return False
+
+    if _pipe_connected:
+        return True
+
     try:
         win32pipe.ConnectNamedPipe(_pipe_handle, None)
         _pipe_connected = True
         logging.info("[Pipe] Client connected")
         return True
     except pywintypes.error as e:
+        if e.winerror == 535: # ERROR_PIPE_CONNECTED
+            _pipe_connected = True
+            return True
         logging.error(f"[Pipe] Client connection failed: {e}")
         return False
 
@@ -105,12 +115,6 @@ def send_log(msg_type: str, message: str) -> bool:
 
 
 _reset_scheduled = False
-_ui_refresh_callback = None
-
-def set_ui_callback(callback):
-    """Set callback function to refresh UI after pipe reconnection."""
-    global _ui_refresh_callback
-    _ui_refresh_callback = callback
 
 
 def _schedule_pipe_reset():
@@ -124,14 +128,14 @@ def _schedule_pipe_reset():
         global _reset_scheduled
         import time
         time.sleep(0.5)  # Brief delay before reset
-        reset_pipe_server(_ui_refresh_callback)
+        reset_pipe_server()
         _reset_scheduled = False
 
     reset_thread = threading.Thread(target=reset_worker, daemon=True)
     reset_thread.start()
 
 
-def reset_pipe_server(ui_refresh_callback=None):
+def reset_pipe_server():
     """Close and recreate pipe server for new client connection."""
     global _pipe_handle, _pipe_connected
     logging.info("[Pipe] Resetting pipe server for reconnection...")
@@ -152,9 +156,6 @@ def reset_pipe_server(ui_refresh_callback=None):
         def wait_reconnect():
             if wait_for_client():
                 logging.info("[Pipe] New client reconnected")
-                # Update UI if callback provided
-                if ui_refresh_callback:
-                    ui_refresh_callback()
         reconnect_thread = threading.Thread(target=wait_reconnect, daemon=True)
         reconnect_thread.start()
 

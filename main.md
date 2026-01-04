@@ -30,3 +30,4 @@
 *   **Automatic Startup**: Telegram → Event Viewer → Super Menu 순서로 자동 시작
 *   **Event Handling**: `on_result` 로직이 `kis/event_handler.py`로 이동되었습니다.
 *   **Logging**: 직접적인 로깅 정의가 제거되고 `kis.event_pipe`를 사용하도록 변경되었습니다.
+*   **Log Rotation**: 6시간마다 `TimedRotatingFileHandler`를 사용하여 로그를 순환시키고, `logs/` 디렉토리로 자동 백업합니다.

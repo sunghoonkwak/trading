@@ -42,9 +42,11 @@ def get_fixed_width_name(name, width=8):
 def add_alert(message: str, level: str = "INFO"):
     """Print alert to terminal (simple scroll-based)."""
     timestamp = datetime.now().strftime("%H:%M:%S")
-    color = COLOR_YELLOW
+    color = COLOR_GRAY
     if level == "ERROR":
         color = COLOR_RED
+    elif level == "WARNING":
+        color = COLOR_YELLOW
     elif level == "SUCCESS":
         color = COLOR_GREEN
     print(f"alert:[{timestamp}] {color}{message}{COLOR_RESET}")

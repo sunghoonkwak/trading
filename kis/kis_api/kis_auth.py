@@ -839,14 +839,14 @@ class KISWebSocket:
         except Exception as e:
             return {"reachable": False, "error": str(e)}
 
-    def _add_alert(self, message: str):
+    def _add_alert(self, message: str, level: str = "INFO"):
         """Add alert to UI display."""
         try:
             import display
             first_line = message.split('\n')[0][:60]
-            display.add_alert(f"[WS] {first_line}", "WARNING")
+            display.add_alert(f"[WS] {first_line}", level)
         except Exception as e:
-            logging.debug(f"Failed to add alert: {e}")
+            logging.error(f"Failed to add alert: {e}")
 
     def _send_telegram_notification(self, message: str):
         """Send notification via Telegram (thread-safe)."""
@@ -899,7 +899,7 @@ class KISWebSocket:
                     was_connected = True
                     self._update_ws_status("connected")
                     logging.info("WebSocket Connected!")
-                    self._add_alert("WebSocket Connected!")
+                    self._add_alert("WebSocket Connected!", "SUCCESS")
 
                     # Request initial subscriptions
                     for name, obj in open_map.items():

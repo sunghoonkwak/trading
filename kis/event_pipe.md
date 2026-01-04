@@ -40,9 +40,9 @@
 *   `msg_type|message\n` 형식으로 인코딩합니다.
 *   Thread-safe하게 `_pipe_lock`을 사용합니다.
 
-### Server-Side Functions (Main Process)
-*   **`create_pipe_server()`**: Named Pipe를 초기화합니다.
-*   **`wait_for_client()`**: 클라이언트가 연결될 때까지 대기(Block)합니다.
+### Pipe Lifecycle Management (Server-Side)
+*   **`create_pipe_server()`**: Named Pipe를 초기화합니다. (Idempotent: 이미 존재하면 재사용)
+*   **`wait_for_client()`**: 클라이언트가 연결될 때까지 대기합니다. (Idempotent)
 *   **`reset_pipe_server()`**: 연결 끊김 및 재연결 주기를 관리합니다.
 
 ### Client-Side Functions (Event Viewer)

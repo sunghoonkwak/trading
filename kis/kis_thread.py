@@ -194,19 +194,10 @@ def initialize_websocket_and_pipe() -> bool:
         logging.info("[KIS Thread] WebSocket started")
         add_alert("[KIS] WebSocket connecting...", "INFO")
 
-        # Initialize Event Pipe server
-        def ui_refresh():
-            render_ui(full_refresh=True)
-        event_pipe.set_ui_callback(ui_refresh)
-
-        if event_pipe.create_pipe_server():
-            def wait_for_viewer():
-                if event_pipe.wait_for_client():
-                    render_ui(full_refresh=True)
-            _pipe_thread = threading.Thread(target=wait_for_viewer, daemon=True)
-            _pipe_thread.start()
-            logging.info("[KIS Thread] Event pipe server started")
-            add_alert("[KIS] Event pipe ready", "SUCCESS")
+        # Pipe server is already created and managed by main.py
+        # Event pipe callback registration removed as render_ui is No-op
+        logging.info("[KIS Thread] Event pipe linked (No-op UI callback skipped)")
+        add_alert("[KIS] Event pipe linked", "SUCCESS")
 
         return True
 

@@ -18,7 +18,7 @@
 *   **`initialize_websocket_and_pipe()`**: 모든 인증이 완료된 후 호출됩니다.
     *   WebSocket 클라이언트(`KISWebSocket`)를 생성하고 시작합니다. (자동 재접속, Approval Key 만료 관리 포함)
     *   국내/해외 종목에 대한 실시간 시세 및 체결 통보를 구독합니다.
-    *   `kis.event_pipe` 서버를 생성하여 외부 뷰어 연결을 대기합니다.
+    *   `kis.event_pipe`를 통해 실시간 데이터를 Event Viewer로 전송합니다. (파이프 서버 생성은 `main.py`에 위임됨)
 
 ### Thread Management (스레드 관리)
 *   **`start_kis_thread()`**: 스레드를 시작합니다 (`_kis_thread_loop`).
