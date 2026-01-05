@@ -151,6 +151,8 @@ class QuotesPanel(Static):
 class EventViewerApp(App):
     """Main Textual TUI application for Event Viewer."""
 
+    BINDINGS = [("a", "toggle_auto_scroll", "Toggle Auto-Scroll")]
+
     CSS = """
     Screen {
         layout: vertical;
@@ -191,6 +193,11 @@ class EventViewerApp(App):
         yield OrdersPanel(id="orders-panel")
         yield QuotesPanel(id="quotes-panel")
         yield RichLog(id="log-panel", highlight=False, markup=True, auto_scroll=True, max_lines=1000)
+
+    def action_toggle_auto_scroll(self) -> None:
+        """Toggle auto-scroll for log panel."""
+        log_panel = self.query_one("#log-panel", RichLog)
+        log_panel.auto_scroll = not log_panel.auto_scroll
 
     def on_mount(self) -> None:
         """Start pipe connection when app mounts."""
