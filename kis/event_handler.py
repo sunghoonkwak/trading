@@ -363,7 +363,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
         elif tr_id in ["HDFSASP0", "HDFSCNT0"]:
             _handle_overseas_market(tr_id, row)
 
-        elif tr_id == "H0STCNI0":
+        elif tr_id in ["H0STCNI0", "H0STCNI9"]:  # Real + Demo trading
             _handle_domestic_order(row)
 
         elif tr_id in ["H0GSCNI0", "H0GSCNI9"]:
