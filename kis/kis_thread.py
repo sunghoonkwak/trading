@@ -147,8 +147,9 @@ def initialize_websocket_and_pipe() -> bool:
         # Import WebSocket subscription functions
         from kis.kis_api.domestic_stock.asking_price_total.asking_price_total import asking_price_total
         from kis.kis_api.domestic_stock.ccnl_total.ccnl_total import ccnl_total
+        from kis.kis_api.domestic_stock.ccnl_notice.ccnl_notice import ccnl_notice as ccnl_notice_kr
         from kis.kis_api.overseas_stock.asking_price.asking_price import asking_price
-        from kis.kis_api.overseas_stock.ccnl_notice.ccnl_notice import ccnl_notice
+        from kis.kis_api.overseas_stock.ccnl_notice.ccnl_notice import ccnl_notice as ccnl_notice_us
         from kis.kis_api.overseas_stock.delayed_ccnl.delayed_ccnl import delayed_ccnl
 
         # Import on_result callback from main
@@ -163,10 +164,13 @@ def initialize_websocket_and_pipe() -> bool:
         watch_list_kr = [s["ticker"] for s in trading_config.CONFIG.get("KR", []) if not s.get("disabled", False)]
         watch_list_us = [s["ticker"] for s in trading_config.CONFIG.get("US", []) if not s.get("disabled", False)]
 
-        # Personal Notifications
+        # Personal Notifications (Order notifications)
         htsid = ka.getTREnv().my_htsid
         if htsid:
-            _ws_instance.subscribe(ccnl_notice, htsid, kwargs={"env_dv": "real"})
+            # Domestic (Korean) stock order notifications
+            _ws_instance.subscribe(ccnl_notice_kr, htsid, kwargs={"env_dv": "real"})
+            # Overseas (US) stock order notifications
+            _ws_instance.subscribe(ccnl_notice_us, htsid, kwargs={"env_dv": "real"})
 
         if watch_list_kr:
             _ws_instance.subscribe(asking_price_total, watch_list_kr)
