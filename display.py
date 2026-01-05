@@ -60,8 +60,8 @@ def update_order_state(order_id: str, ticker: str, name: str, side: str,
     """
     if PIPE_AVAILABLE:
         # Include name for display in viewer
-        fixed_name = get_fixed_width_name(name, 24)
-        order_msg = f"{ticker}|{fixed_name}|{side}|{qty}|{price}|{state}|{order_id}"
+        fixed_name = get_fixed_width_name(name, 20)
+        order_msg = f"{fixed_name}|{ticker}|{side}|{qty}|{price}|{state}|{order_id}"
         event_pipe.send_log("ODR", order_msg)
 
     if notify:

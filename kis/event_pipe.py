@@ -36,7 +36,7 @@ def print_viewer(msg_type, level, log):
     if level == PrintLevel.ERROR:
         logging.error(log)
     elif level == PrintLevel.INFO:
-        logging.info(log)
+        logging.debug(log)
     elif level == PrintLevel.DEBUG:
         logging.debug(log)
 

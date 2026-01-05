@@ -159,20 +159,23 @@ class EventViewerApp(App):
 
     #orders-panel {
         height: auto;
-        min-height: 1;
+        min-height: 3;
         max-height: 10;
+        border: solid $primary;
         padding: 0 1;
     }
 
     #quotes-panel {
         height: auto;
-        min-height: 2;
+        min-height: 3;
         max-height: 15;
+        border: solid $secondary;
         padding: 0 1;
     }
 
     #log-panel {
         height: 1fr;
+        border: solid $accent;
         padding: 0 1;
     }
     """
@@ -292,10 +295,10 @@ class EventViewerApp(App):
                 self._update_orders_panel()
             return
 
-        # Normal order update: ticker|name|side|qty|price|state|order_id
+        # Normal order update: name|ticker|side|qty|price|state|order_id
         if len(parts) >= 6:
-            ticker = parts[0].strip()
-            name = parts[1].strip()
+            name = parts[0].strip()
+            ticker = parts[1].strip()
             side = parts[2].strip()
             qty = parts[3].strip()
             price = parts[4].strip()
@@ -320,16 +323,16 @@ class EventViewerApp(App):
     def _handle_market_message(self, content: str) -> str:
         """Handle market data message.
 
-        Format: {time}|{name}|{ticker}|Bid:...|Last:...|Diff:...|Ask:...
+        Format: {time} {name}|{ticker}|Bid:...|Last:...|Diff:...|Ask:...
         Returns: Colorized content string
         """
         parts = content.split("|")
 
-        # New format: time|name|ticker|Bid:...|...
-        # ticker is at index 2
+        # New format: "time name|ticker|Bid:...|..."
+        # parts[0] = "time name", parts[1] = ticker
         ticker = None
-        if len(parts) >= 3:
-            ticker = parts[2].strip()
+        if len(parts) >= 2:
+            ticker = parts[1].strip()
 
         colored_content = content
         if ticker:
@@ -340,7 +343,7 @@ class EventViewerApp(App):
             # Apply color to ticker
             t_color = get_ticker_color(ticker)
             if t_color:
-                parts[2] = f"[{t_color}]{parts[2]}[/{t_color}]"
+                parts[1] = f"[{t_color}]{parts[1]}[/{t_color}]"
 
             # Process other parts for coloring (Last, Diff)
             for i, part in enumerate(parts):
@@ -389,16 +392,16 @@ class EventViewerApp(App):
             else:
                 side_color = "yellow"
 
-            name = info.get("name", "")[:24]
+            name = info.get("name", "")[:20]
             order_time = info.get("time", "")
             ticker = info['ticker']
             ticker_color = get_ticker_color(ticker)
-            ticker_disp = f"{ticker:8}"
+            ticker_disp = f"{ticker:6}"
             if ticker_color:
                 ticker_disp = f"[{ticker_color}]{ticker_disp}[/{ticker_color}]"
 
             lines.append(
-                f"{order_time} {ticker_disp}:{name:24} | "
+                f"{order_time} {name:20}|{ticker_disp}| "
                 f"[{side_color}]{info['side']:8}[/{side_color}] "
                 f"prc: [cyan]{info['price']:>10}[/cyan] qty: [cyan]{info['qty']:>5}[/cyan]"
             )
