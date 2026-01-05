@@ -5,7 +5,7 @@ It provides an interactive interface for market selection, stock picking, and pr
 import msvcrt
 import logging
 from kis.kis_api import kis_auth as ka
-from display import clear_result_area, show_in_result_area, input_at, render_ui, add_alert
+from display import show_in_result_area, input_at, add_alert
 import trading_config
 import trading_state
 from .menu import MENU_DEBUG
@@ -75,7 +75,6 @@ def execute_place_order(target_market, ord_dv, pdno, qty, price_input, price_val
 
 def handle_place_order():
     """Main menu controller for placing orders."""
-    clear_result_area()
     target_market = "US"
 
     try:
@@ -84,7 +83,6 @@ def handle_place_order():
             market_label = "OVERSEAS (US)" if target_market == "US" else "DOMESTIC (KR)"
 
             # 1. Side Selection
-            clear_result_area()
             header = [f" [Place Order - {market_label}] Orderable KRW: {krw_bal:,} | USD: ${usd_bal:,.2f}"]
             show_in_result_area(header)
 
@@ -92,7 +90,6 @@ def handle_place_order():
             if side_input.lower() == 'q': return
             if not side_input:
                 target_market = "KR" if target_market == "US" else "US"
-                render_ui(full_refresh=True)
                 continue
 
             ord_dv = "buy" if side_input == "1" else "sell" if side_input == "2" else None
@@ -166,7 +163,6 @@ def handle_place_order():
             stock_name = stock_info.get('name', 'Unknown')
             curr_price = fetch_stock_price(pdno)
 
-            clear_result_area()
             header_lines = [
                 f" [Place Order - {market_label} - {side_label}]",
                 f" Stock : {pdno} ({stock_name})",
@@ -222,5 +218,3 @@ def handle_place_order():
 
     except Exception as e:
         add_alert(f"Order Flow Error: {e}", "ERROR")
-    finally:
-        render_ui(full_refresh=True)

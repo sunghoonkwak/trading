@@ -6,7 +6,7 @@ import msvcrt
 import logging
 import pandas as pd
 from kis.kis_api import kis_auth as ka
-from display import clear_result_area, show_in_result_area, get_fixed_width_name
+from display import show_in_result_area, get_fixed_width_name
 from kis.kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_balance
 from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import inquire_present_balance
 from .menu import MENU_DEBUG
@@ -103,7 +103,6 @@ def print_account_info(data):
     o_tot_assets_usd = o_stock_eval_usd + o_orderable_usd
 
     while True:
-        clear_result_area()
         lines = []
         SEPARATOR_LEN = 95
 
@@ -190,7 +189,6 @@ def print_account_info(data):
 
         ch = msvcrt.getch()
         if ch == b'q':
-            clear_result_area()
             break
         elif ch == b'f':
             view_mode = (view_mode + 1) % 3
@@ -204,7 +202,6 @@ def handle_account_info():
     """Main menu controller for account information."""
     from data.data_service import get_portfolio_data, convert_portfolio_to_account_format
 
-    clear_result_area()
     show_in_result_area(["Fetching integrated account data..."])
 
     # Get portfolio data via cache/KIS Thread

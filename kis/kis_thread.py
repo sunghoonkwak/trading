@@ -142,7 +142,7 @@ def initialize_websocket_and_pipe() -> bool:
     try:
         import trading_config
         from kis import event_pipe
-        from display import render_ui, add_alert
+        from display import add_alert
 
         # Import WebSocket subscription functions
         from kis.kis_api.domestic_stock.asking_price_total.asking_price_total import asking_price_total
@@ -195,7 +195,6 @@ def initialize_websocket_and_pipe() -> bool:
         add_alert("[KIS] WebSocket connecting...", "INFO")
 
         # Pipe server is already created and managed by main.py
-        # Event pipe callback registration removed as render_ui is No-op
         logging.info("[KIS Thread] Event pipe linked (No-op UI callback skipped)")
         add_alert("[KIS] Event pipe linked", "SUCCESS")
 

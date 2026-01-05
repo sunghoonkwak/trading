@@ -15,10 +15,7 @@ from typing import Optional
 import pytz
 
 from kis.kis_api import kis_auth as ka
-from display import (
-    clear_result_area, show_in_result_area, input_at,
-    render_ui
-)
+from display import show_in_result_area, input_at
 from data.data_service import get_portfolio_data
 from kis.kis_api.overseas_stock.order.order import order as order_overseas
 import trading_state
@@ -650,7 +647,6 @@ def show_history_viewer():
         page_size = 5
 
         while True:
-            clear_result_area()
             total = len(entries)
             current_page = (offset // page_size) + 1
             total_pages = (total + page_size - 1) // page_size
@@ -724,7 +720,6 @@ def raoeo_menu():
 
         # Display content first, then render Orders/Alerts below
         show_in_result_area(display_lines)
-        render_ui(full_refresh=False)
 
         input_y = min(len(display_lines) + 1, 13)
         choice = input_at(input_y, 2, " Select(q: exit): ").strip().lower()
@@ -737,6 +732,4 @@ def raoeo_menu():
 
         elif choice == '2':
             show_history_viewer()
-
-    render_ui(full_refresh=True)
 

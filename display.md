@@ -77,9 +77,6 @@ def input_at(row, col, prompt) -> str
 ```
 사용자 입력을 받습니다. `row`, `col` 인자는 호환성을 위해 무시됩니다.
 
-### render_ui / clear_result_area
-호환성을 위한 no-op 함수입니다. 실제 작업은 수행하지 않습니다.
-
 ## Integration (통합)
 
 *   **Event Viewer와 통신**: `kis.event_pipe.send_log(msg_type, message)`를 사용하여 Named Pipe로 메시지를 전송합니다.

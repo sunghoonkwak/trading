@@ -157,7 +157,7 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
                 "ticker": target_ticker,
                 "exchange": exchange,
                 "qty": buy_qty,
-                "price": round(current_price * 1.1, 2),
+                "price": round(current_price * 1.05, 2),
                 "order_type": "LOC",
                 "desc": f"Value Averaging Day {day_count}",
                 "daily_target": daily_target_amount

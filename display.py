@@ -73,21 +73,10 @@ def remove_order_state(order_id: str):
     if PIPE_AVAILABLE:
         event_pipe.send_log("ODR", f"REMOVED|{order_id}")
 
-
 def clear_order_states():
     """Clear all orders in Event Viewer."""
     if PIPE_AVAILABLE:
         event_pipe.send_log("CLR", "ORDERS")
-
-
-def render_ui(full_refresh=False):
-    """No-op: ANSI rendering removed."""
-    pass
-
-
-def clear_result_area():
-    """No-op: ANSI clearing removed."""
-    pass
 
 
 def show_in_result_area(lines):

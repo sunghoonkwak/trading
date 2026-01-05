@@ -6,7 +6,7 @@ import msvcrt
 import logging
 from kis.kis_api import kis_auth as ka
 import trading_config
-from display import clear_result_area, show_in_result_area, input_at, render_ui, safe_write, CLEAR_LINE, update_order_state, add_alert, clear_order_states
+from display import show_in_result_area, input_at, safe_write, CLEAR_LINE, update_order_state, add_alert, clear_order_states
 from .menu import MENU_DEBUG
 from kis.kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl
 from kis.kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import inquire_psbl_rvsecncl
@@ -223,7 +223,6 @@ def sync_open_orders():
 
 def handle_manage_orders():
     """Main menu controller following the 6-step structure."""
-    clear_result_area()
     try:
         # Step 1: Open order fetching
         show_in_result_area(["Fetching open orders..."])
@@ -262,12 +261,7 @@ def handle_manage_orders():
         df_res, err_msg = execute_manage_action(market, action, target_order, new_price)
 
         # Step 6: print result
-        clear_result_area()
-        # Clean terminal debris
-        for r in range(10, 15): safe_write(f"\033[{r};1H{CLEAR_LINE}")
         print_execution_result(df_res, err_msg)
 
     except Exception as e:
         add_alert(f"Order Manage Error: {e}", "ERROR")
-    finally:
-        render_ui(full_refresh=True)

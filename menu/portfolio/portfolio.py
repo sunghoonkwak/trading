@@ -242,7 +242,7 @@ def portfolio_menu():
     Portfolio menu interface using modular get_portfolio() function.
     Displays summary and handles menu interactions.
     """
-    from display import show_in_result_area, input_at, render_ui, clear_result_area, process_pending_alerts
+    from display import show_in_result_area, input_at, process_pending_alerts
     from data.data_service import get_portfolio_data
 
     # Get portfolio data
@@ -263,7 +263,6 @@ def portfolio_menu():
 
     while True:
         process_pending_alerts()
-        clear_result_area()
 
         # Build summary lines
         lines = []
@@ -386,5 +385,3 @@ def portfolio_menu():
              input_at(12, 2, " Press Enter to continue...")
         elif choice == 'q':
             break
-
-    render_ui(full_refresh=True)

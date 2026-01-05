@@ -11,16 +11,6 @@ import threading
 import time
 from datetime import datetime
 
-# Lazy import for display to avoid circular imports
-def _add_alert(message, level="INFO"):
-    """Helper to add alert and refresh UI."""
-    try:
-        from display import add_alert, render_ui
-        add_alert(message, level)
-        render_ui()  # Trigger UI refresh to show alert
-    except:
-        pass  # Display not available yet
-
 # Module directory for data file
 MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 STOCK_DATA_FILE = os.path.join(MODULE_DIR, "stock_data.json")
@@ -109,7 +99,6 @@ def _periodic_save_worker():
         time.sleep(60)  # Wait 60 seconds
         if _save_thread_running and stock_data_state:
             save_stock_data()
-            # _add_alert(f"Stock data saved ({len(stock_data_state)} items)", "INFO")
 
 
 def notify_data_received():
@@ -128,7 +117,6 @@ def notify_data_received():
     # Start background save thread
     _save_thread = threading.Thread(target=_periodic_save_worker, daemon=True)
     _save_thread.start()
-    _add_alert("Stock data auto-save started (60s)", "SUCCESS")
 
 
 def stop_periodic_save():
