@@ -96,7 +96,6 @@ def _print_super_menu():
  {opt1}
  {opt2}
  {opt3}
- {CYAN}[t] Test: Send Dummy Data{RESET}
 """)
 
 
@@ -192,39 +191,6 @@ def _init_telegram_thread():
     time.sleep(1)
 
 
-def _send_dummy_data():
-    """Send dummy ODR and MKT data for testing."""
-    from kis import event_pipe
-    from datetime import datetime
-
-    print("\n[Test] Sending dummy data to Event Viewer...")
-    time_s = datetime.now().strftime("%H:%M:%S")
-
-    # First clear existing orders
-    event_pipe.send_log("CLR", "ORDERS")
-    print("  Sent: CLR|ORDERS")
-
-    # Send dummy orders (format: ticker|name|side|qty|price|state|order_id)
-    # Using tickers from stock_configuration.json to test colors
-    event_pipe.send_log("ODR", "QQQM|Invesco NASDAQ 100        |Buy|10|$220.50|PLACED|TEST001")
-    print("  Sent: ODR|QQQM|Invesco NASDAQ 100|Buy|10|$220.50|PLACED|TEST001")
-
-    event_pipe.send_log("ODR", "SOXL|DIREXION SEMICONDUCTOR 3X |Sell|55|$45.20|PLACED|TEST002")
-    print("  Sent: ODR|SOXL|DIREXION SEMICONDUCTOR 3X|Sell|55|$45.20|PLACED|TEST002")
-
-    event_pipe.send_log("ODR", "NVDA|NVIDIA Corp                |LOC Buy|3|$950.00|PLACED|TEST003")
-    print("  Sent: ODR|NVDA|NVIDIA Corp|LOC Buy|3|$950.00|PLACED|TEST003")
-
-    # Send dummy market data (format: time|name|ticker|Bid:...|Last:...|Diff:...|Ask:...)
-    event_pipe.send_log("MKT", f"{time_s}|Invesco NASDAQ 100      |QQQM  |Bid:  220.40|Last:  220.50(    500)|Diff: +1.50( 0.68%)|Ask:  220.60")
-    print(f"  Sent: MKT|{time_s}|Invesco NASDAQ 100|QQQM|...")
-
-    event_pipe.send_log("MKT", f"{time_s}|DIREXION SEMICONDUCTOR 3X|SOXL  |Bid:   45.10|Last:   45.20(  3,200)|Diff: -0.80(-1.74%)|Ask:   45.25")
-    print(f"  Sent: MKT|{time_s}|DIREXION SEMICONDUCTOR 3X|SOXL|...")
-
-    add_alert("[Test] Dummy data sent!", "SUCCESS")
-
-
 def super_menu():
     """Main super menu loop."""
     while True:
@@ -251,9 +217,6 @@ def super_menu():
             else:
                 add_alert("[Super] KIS auth required first", "WARNING")
                 time.sleep(1)
-
-        elif choice == 't':
-            _send_dummy_data()
 
         elif choice == 'q':
             add_alert("[Super] Shutting down...", "INFO")

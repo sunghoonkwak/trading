@@ -16,8 +16,8 @@
   - **Orders**: Side-specific colors (Buy: Green, Sell: Red), Cyan for Price/Qty
   - **Quotes**: Ticker colors (from config), Last (Bright Yellow), Diff (Cyan/Red)
   - **Log**: Standard log output with Syntax Highlighting disabled (raw color control)
-*   **OrdersPanel**: `reactive` 속성을 사용하여 주문 추가/삭제 시 자동으로 패널 크기를 조정합니다.
-*   **QuotesPanel**: 종목별로 최신 시세만 유지하며 (최대 10개), 중복 없이 업데이트됩니다.
+*   **OrdersPanel**: `reactive` 속성을 사용하여 주문 추가/삭제 시 자동으로 패널 크기를 조정합니다. (최대 20개)
+*   **QuotesPanel**: 종목별로 최신 시세만 유지하며 (최대 20개), 중복 없이 업데이트됩니다.
 *   **RichLog**: Textual의 내장 위젯으로, MKT 메시지를 시간순으로 기록합니다.
 
 ### Message Protocol (메시지 프로토콜)

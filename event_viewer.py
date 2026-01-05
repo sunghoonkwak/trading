@@ -162,7 +162,7 @@ class EventViewerApp(App):
     #orders-panel {
         height: auto;
         min-height: 3;
-        max-height: 10;
+        max-height: 25;
         border: solid $primary;
         padding: 0 1;
     }
@@ -170,7 +170,7 @@ class EventViewerApp(App):
     #quotes-panel {
         height: auto;
         min-height: 3;
-        max-height: 15;
+        max-height: 25;
         border: solid $secondary;
         padding: 0 1;
     }
@@ -321,8 +321,8 @@ class EventViewerApp(App):
                 "price": price,
                 "state": state,
             }
-            # Keep only last 10 orders
-            while len(self.orders) > 10:
+            # Keep only last 20 orders
+            while len(self.orders) > 20:
                 self.orders.popitem(last=False)
 
             self._update_orders_panel()
@@ -378,8 +378,8 @@ class EventViewerApp(App):
             colored_content = "|".join(parts)
 
             self.latest_quotes[ticker] = colored_content
-            # Keep only last 10 tickers
-            while len(self.latest_quotes) > 10:
+            # Keep only last 20 tickers
+            while len(self.latest_quotes) > 20:
                 self.latest_quotes.popitem(last=False)
 
             self._update_quotes_panel()

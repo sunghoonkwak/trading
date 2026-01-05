@@ -25,7 +25,7 @@
 | `1` | Telegram Bot 초기화 |
 | `2` | KIS API 스레드 초기화 |
 | `3` | 트레이딩 메뉴 진입 (KIS 인증 필요) |
-| `t` | 테스트: Event Viewer에 더미 데이터 전송 |
+
 | `q` | 종료 |
 
 ## Key Functions (주요 기능)
@@ -45,18 +45,12 @@
     2.  `telegram_bot.initialize_telegram()`을 호출하여 봇을 시작합니다.
     3.  성공 시 상태를 `RUNNING`으로, 실패 시 `ERROR`로 업데이트합니다.
 
-### Test Function (테스트 기능)
-*   **`_send_dummy_data()`**: Event Viewer 테스트용 더미 데이터를 전송합니다.
-    *   `CLR|ORDERS`: 주문 목록 초기화
-    *   `ODR|...`: 샘플 주문 3건
-    *   `MKT|...`: 샘플 시세 2건
-
 ### Shutdown (종료)
 *   KIS 스레드 정지
 *   Telegram 봇 종료
 *   Event Viewer 종료 (`close_viewer()`)
 
-### 3. Safety Guards (안전 장치)
+### Safety Guards (안전 장치)
 *   **Duplicate Execution Prevention**:
     *   Telegram/KIS Init 메뉴 선택 시, 이미 실행 중이면 경고 메시지만 출력하고 중복 실행을 차단합니다.
     *   KIS Init의 경우, **Physical Thread Check**를 먼저 수행하여 스레드가 죽어있을 경우 즉시 재시작하도록 로직 순서를 최적화했습니다.
