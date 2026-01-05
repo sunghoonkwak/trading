@@ -2,19 +2,22 @@
 """
 Telegram RAOEO Module
 
-This module handles RAOEO strategy specific Telegram commands and reporting.
+This module handles RAOEO strategy specific Telegram commands with ConversationHandler
+for interactive order confirmation.
 """
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-from .telegram_utils import wrap_reply
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application, CommandHandler, ContextTypes,
+    ConversationHandler, CallbackQueryHandler, TypeHandler
+)
+from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 
-import time
 from menu.raoeo.raoeo import build_raoeo_report, execute_orders, save_history
 
-# Local cached report for RAOEO
-_cached_report = None
-_cached_time = 0
+# Conversation state
+RAOEO_CONFIRM = 0
+
 
 def format_raoeo_report(report: dict) -> str:
     """Format RAOEO report for Telegram with Success/Failed sections."""
@@ -73,106 +76,171 @@ def format_raoeo_report(report: dict) -> str:
         lines.append("No orders for today.")
 
     if failed_orders or pending_orders:
-        lines.append("💡 <i>Use /raoeo_order to execute.</i>")
+        lines.append("<i>Execute these orders?</i>")
     elif success_orders:
         lines.append("✨ <i>All orders completed for today.</i>")
 
     return "\n".join(lines)
 
 
-async def cmd_raoeo_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Command handler for /raoeo_report."""
-    global _cached_report, _cached_time
+def build_raoeo_keyboard(has_orders: bool) -> InlineKeyboardMarkup:
+    """Build Yes/No keyboard for RAOEO confirmation."""
+    if has_orders:
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Yes", callback_data="raoeo_yes"),
+                InlineKeyboardButton("❌ No", callback_data="raoeo_no")
+            ]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+    return None
+
+
+async def cmd_raoeo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Command handler for /raoeo - RAOEO status and order execution."""
+    logging.info(f"[TG] /raoeo from user {update.effective_user.id}")
 
     try:
         report = build_raoeo_report()
     except Exception as e:
-        logging.error(f"[Telegram] build_raoeo_report() failed: {e}", exc_info=True)
+        logging.error(f"[TG] build_raoeo_report() failed: {e}", exc_info=True)
         await wrap_reply(update, f"⚠️ Error building report: {e}")
-        return
+        return ConversationHandler.END
 
     if not report:
-        logging.warning("[Telegram] build_raoeo_report() returned None or empty")
+        logging.warning("[TG] build_raoeo_report() returned None or empty")
         await wrap_reply(update, "⚠️ RAOEO report unavailable. Check configuration.")
-        return
+        return ConversationHandler.END
 
-    _cached_report = report
-    _cached_time = time.time()
+    # Cache report in user_data
+    context.user_data['raoeo_report'] = report
 
+    # Format message
     msg = format_raoeo_report(report)
-    await wrap_reply(update, msg, parse_mode='HTML')
+
+    # Check if there are executable orders
+    pending_orders = report.get("pending_orders", [])
+    failed_orders = report.get("failed_orders", [])
+    has_orders = bool(pending_orders or failed_orders) and not report.get("executed_today")
+
+    # Build keyboard
+    keyboard = build_raoeo_keyboard(has_orders)
+
+    sent_msg = await wrap_reply(update, msg, parse_mode='HTML', reply_markup=keyboard)
+    if sent_msg:
+        context.user_data['raoeo_msg_id'] = sent_msg.message_id
+
+    return RAOEO_CONFIRM if has_orders else ConversationHandler.END
 
 
-async def cmd_raoeo_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Command handler for /raoeo_order."""
-    global _cached_report, _cached_time
+async def handle_raoeo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle RAOEO Yes/No button clicks."""
+    query = update.callback_query
+    await query.answer()
 
-    # Check if we have cached report
-    if not _cached_report:
-        await wrap_reply(update, "⚠️ Not calculated. Use /raoeo_report first.")
-        return
+    callback_data = query.data
+    logging.info(f"[TG] RAOEO Callback: {callback_data}")
 
-    # Check cache age (max 5 minutes)
-    if time.time() - _cached_time > 300:
-        await wrap_reply(update, "⏱ <b>Order Expired</b>: Calculated data is older than 5 minutes. Please run /raoeo_report again to get current prices.", parse_mode='HTML')
-        return
+    report = context.user_data.get('raoeo_report')
 
-    # Check if already executed today
-    if _cached_report.get("executed_today"):
-        await wrap_reply(update, "✅ Already executed today. No new orders to place.")
-        return
+    if callback_data == "raoeo_no":
+        await wrap_edit(update, "❌ <b>Order Cancelled.</b>", parse_mode='HTML')
+        context.user_data.pop('raoeo_report', None)
+        context.user_data.pop('raoeo_msg_id', None)
+        return ConversationHandler.END
 
-    # Check for errors
-    if _cached_report.get("error"):
-        await wrap_reply(update, f"⚠️ Cannot execute: {_cached_report['error']}")
-        return
+    if callback_data == "raoeo_yes":
+        if not report:
+            await wrap_edit(update, "⚠️ Session expired. Please run /raoeo again.", parse_mode='HTML')
+            return ConversationHandler.END
 
-    # Get pending orders
-    pending_orders = _cached_report.get("pending_orders", [])
-    if not pending_orders:
-        await wrap_reply(update, "⚠️ No pending orders to execute.")
-        return
+        # Get pending orders (include failed orders for retry)
+        pending_orders = report.get("pending_orders", [])
+        if not pending_orders:
+            await wrap_edit(update, "⚠️ No orders to execute.", parse_mode='HTML')
+            context.user_data.pop('raoeo_report', None)
+            return ConversationHandler.END
 
-    await wrap_reply(update, f"⏳ Executing {len(pending_orders)} orders...")
+        # Execute orders
+        try:
+            config = report.get("config")
+            exec_results = execute_orders(pending_orders, config)
 
-    try:
-        config = _cached_report.get("config")
-        exec_results = execute_orders(pending_orders, config)
-        lines = ["📋 <b>Execution Results:</b>"]
-        success_count = 0
-        for i, res in enumerate(exec_results, 1):
-            status = "✅" if res['success'] else "❌"
-            if res['success']:
-                success_count += 1
-            o = res['order']
-            err_msg = f" ({res['error']})" if not res['success'] and res.get('error') else ""
-            lines.append(f"{status} {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}{err_msg}")
+            lines = [format_raoeo_report(report), "", "─" * 20, "<b>Execution Result:</b>"]
+            success_count = 0
 
-        # Create result dict for save_history
-        exec_data = {
-            "date": (_cached_report.get("current_result") or {}).get("date"),
-            "config": config,
-            "holdings": _cached_report.get("holdings"),
-            "orders": pending_orders,
-            "state": (_cached_report.get("current_result") or {}).get("state", "unknown")
-        }
-        save_history(exec_data, exec_results)
-        lines.append(f"\n💾 Saved to history. ({success_count}/{len(pending_orders)} succeeded)")
-        _cached_report = None
-        await wrap_reply(update, "\n".join(lines), parse_mode='HTML')
+            for res in exec_results:
+                status = "✅" if res['success'] else "❌"
+                if res['success']:
+                    success_count += 1
+                o = res['order']
+                err_msg = f" ({res['error']})" if not res['success'] and res.get('error') else ""
+                lines.append(f"{status} {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}{err_msg}")
 
-    except Exception as e:
-        logging.error(f"[Telegram] RAOEO Order execution failed: {e}")
-        await wrap_reply(update, f"❌ Execution failed: {e}")
+            # Save to history
+            exec_data = {
+                "date": (report.get("current_result") or {}).get("date"),
+                "config": config,
+                "holdings": report.get("holdings"),
+                "orders": pending_orders,
+                "state": (report.get("current_result") or {}).get("state", "unknown")
+            }
+            save_history(exec_data, exec_results)
+            lines.append(f"\n💾 Saved. <b>{success_count}/{len(pending_orders)} succeeded</b>")
+
+            await wrap_edit(update, "\n".join(lines), parse_mode='HTML')
+
+        except Exception as e:
+            logging.error(f"[TG] RAOEO Order execution failed: {e}", exc_info=True)
+            await wrap_edit(update, f"❌ Execution failed: {e}", parse_mode='HTML')
+
+        context.user_data.pop('raoeo_report', None)
+        context.user_data.pop('raoeo_msg_id', None)
+        return ConversationHandler.END
+
+    return RAOEO_CONFIRM
+
+
+async def raoeo_timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle RAOEO conversation timeout."""
+    logging.info("[TG] RAOEO session timed out")
+    context.user_data.pop('raoeo_report', None)
+
+    # Try to edit the message if possible
+    if 'raoeo_msg_id' in context.user_data:
+        try:
+            from .telegram_bot import _chat_id
+            if _chat_id:
+                await wrap_edit_message(
+                    chat_id=_chat_id,
+                    message_id=context.user_data.get('raoeo_msg_id'),
+                    text="⏱️ <i>RAOEO session expired.</i>",
+                    parse_mode='HTML'
+                )
+        except Exception:
+            pass
+        context.user_data.pop('raoeo_msg_id', None)
+
+    return ConversationHandler.END
+
 
 def register_raoeo_handlers(app: Application):
     """Register RAOEO command handlers to the application."""
-    app.add_handler(CommandHandler("raoeo_report", cmd_raoeo_report))
-    app.add_handler(CommandHandler("raoeo_order", cmd_raoeo_order))
+    raoeo_conv_handler = ConversationHandler(
+        entry_points=[CommandHandler("raoeo", cmd_raoeo)],
+        states={
+            RAOEO_CONFIRM: [
+                CallbackQueryHandler(handle_raoeo_callback, pattern=r'^raoeo_')
+            ],
+            ConversationHandler.TIMEOUT: [TypeHandler(object, raoeo_timeout_handler)]
+        },
+        fallbacks=[],
+        conversation_timeout=60,
+        per_message=False,
+    )
+    app.add_handler(raoeo_conv_handler)
+
 
 def get_raoeo_commands_desc() -> str:
     """Return RAOEO command descriptions for init message."""
-    return (
-        "/raoeo_report - Current RAOEO status\n"
-        "/raoeo_order - Execute RAOEO orders"
-    )
+    return "/raoeo - RAOEO status & order"
