@@ -216,7 +216,7 @@ def _handle_domestic_order(row) -> bool:
 
         # Send to Telegram
         emoji = {"ODR": "📝", "EXE": "✅", "CAN": "❌", "COR": "✏️", "REJ": "🚫"}.get(tag, "📌")
-        send_notification(f"{emoji} <b>{tag}</b> {side} {code}\nQty: {qty} @ {price}")
+        send_notification(f"{emoji} <b>{tag}</b> {side} {name}\nQty: {qty} @ {price}")
 
         # Immediate UI update: remove from list if canceled or executed
         if tag in ["CAN", "EXE"]:

@@ -77,7 +77,9 @@ def format_weight_diffs(diffs: list = None, total_usd: float = 0) -> str:
             continue
 
         ticker = d['ticker']
-        msg = f"- <b>{ticker}</b>: {d['diff']*100:+.1f}% ({d['cur_w']*100:.1f}% -> {d['tgt_w']*100:.1f}%) | <b>Qty: {d['qty_diff']:+d}</b>"
+        # For Korean stocks (numeric ticker), show name instead
+        display_name = d.get('name', ticker) if ticker.isdigit() else ticker
+        msg = f"- <b>{display_name}</b>: {d['diff']*100:+.1f}% ({d['cur_w']*100:.1f}% -> {d['tgt_w']*100:.1f}%) | <b>Qty: {d['qty_diff']:+d}</b>"
 
         if d['diff'] < 0:
             sell_lines.append(msg)
