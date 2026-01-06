@@ -56,7 +56,9 @@
 │   └── event_handler.py        # 실시간 웹소켓 이벤트 처리
 ├── data/                       # 데이터 서비스 계층
 │   ├── data_service.py         # 포트폴리오 데이터 캐싱 및 중앙 관리
-│   └── portfolio.json          # 캐싱된 포트폴리오 데이터
+│   ├── calculate_weights.py    # 목표 비중 계산 로직
+│   ├── portfolio.json          # 캐싱된 포트폴리오 데이터
+│   └── portfolio_weights.json  # 포트폴리오 비중 설정 파일
 ├── exports/                    # 엑셀 내보내기 파일 저장 디렉토리
 ├── logs/                       # 애플리케이션 로그 파일 디렉토리
 ├── stock_configuration.json    # 종목별 UI 설정

@@ -24,6 +24,7 @@
 
 ### fetch_balances
 `data_service.get_portfolio_data`를 통해 계좌의 국내(KRW) 및 해외(USD) 주문 가능 잔고를 조회합니다.
+(자세한 데이터 구조는 [`data/data_service.md`](../data/data_service.md) 참조)
 #### input
 - `None`
 #### output

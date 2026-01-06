@@ -1,6 +1,6 @@
-# Calculate Weights (`calculate_weights.py`)
+# Calculate Weights (`data/calculate_weights.py`)
 
-이 모듈은 `portfolio_weights.json`에 정의된 설정에 따라 포트폴리오의 **목표 비중(Target Weights)**을 동적으로 계산합니다.
+이 모듈은 `data/portfolio_weights.json`에 정의된 설정에 따라 포트폴리오의 **목표 비중(Target Weights)**을 동적으로 계산합니다.
 
 ## Purpose (목적)
 
@@ -10,7 +10,7 @@
 3. **VIX Strategy**: VIX 지수에 따라 VIX 관련 상품(VIXY 등)의 비중을 동적으로 조절합니다.
 4. **Dividend Strategy**: '국내 배당주' 그룹의 비중을 세부 구성 종목들의 내부 비율에 따라 자동 분배합니다.
 
-## Configuration (portfolio_weights.json)
+## Configuration (data/portfolio_weights.json)
 
 계산의 기준이 되는 설정 파일입니다.
 

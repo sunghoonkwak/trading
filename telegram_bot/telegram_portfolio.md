@@ -7,7 +7,7 @@
 | Command | Description |
 |---------|-------------|
 | `/portfolio` | **대화형(Interactive)** 포트폴리오 관리 시작. 종목 버튼을 통해 상세 정보 조회 |
-| `/portfolio_weight` | 목표 비중 대비 현재 비중의 차이와 리밸런싱 제안 (매수/매도 수량) |
+| `/portfolio_weight` | 목표 비중 대비 리밸런싱 제안. **보유하지 않은 종목(수량 0)도** 실시간 시세/API 조회를 통해 매수 수량을 계산하여 제안합니다. |
 | `/portfolio_va` | Value Averaging 주문 계산 및 실행 (Yes/No 확인, 60초 타임아웃) |
 
 ## Functions (함수)
@@ -63,5 +63,5 @@ Yes/No 버튼 클릭 시:
 ## Technical Notes
 
 - **Caching**: `get_portfolio_cached()`를 사용하여 5분 내 중복 API 호출을 방지합니다.
-- **Price Fetching**: 시세 정보가 부족할 경우 `menu.handle_account_info.fetch_price`를 호출하여 KIS API로부터 최신가를 보충합니다.
+- **Price Fetching**: 비중 계산 시 현재가가 없는 종목(수량 0)은 1) WebSocket, 2) KIS API (`fetch_price` or `inquire_price`) 순서로 시세를 조회하여 정확한 매수 수량을 계산합니다.
 - **Mobile Optimized**: 좁은 모바일 화면에서도 정보를 한눈에 파악할 수 있도록 이모지와 굵은 텍스트를 활용합니다.

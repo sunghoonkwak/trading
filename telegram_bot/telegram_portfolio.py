@@ -377,7 +377,6 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input for ticker selection."""
-    """Handle text input for ticker selection."""
 
     ticker_input = update.message.text.strip().upper()
 

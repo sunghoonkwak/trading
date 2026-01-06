@@ -10,9 +10,8 @@ KIS OpenAPI를 통해 관리 가능한 한국투자증권 계좌와, OpenAPI를 
 
 ## Workflow (동작 프로세스)
 
-1. **Integrated Data Fetching**: `data.data_service.get_portfolio_data()`를 호출하여 `portfolio.json` 생성 및 로드 과정을 위임합니다.
+1. **Integrated Data Fetching**: `data.data_service.get_portfolio_data()`를 호출하여 데이터를 로드합니다. (상세 로직: [`data_service.md`](../../data/data_service.md))
    - 내부적으로 KIS API (국내/해외 잔고)와 Google Sheets 데이터를 병합합니다.
-   - 캐싱된 데이터가 유효하면 즉시 반환하고, 아니면 새로 갱신합니다.
 2. **Dashboard Rendering**: `portfolio_menu()`가 수신한 통합 데이터를 기반으로 요약 대시보드를 출력합니다.
    - 국가별/자산군별 비중, 총 자산 가치, 환율 정보 등을 시각화합니다.
 3. **User Action**:
@@ -21,7 +20,7 @@ KIS OpenAPI를 통해 관리 가능한 한국투자증권 계좌와, OpenAPI를 
    - **VA**: `value_averaging` 모듈을 통한 적립식 매수 계산
 
 ### portfolio data format (portfolio.json)
-`data/data_service.py` 및 `portfolio.json` 파일 참조. (공통 데이터 구조 사용)
+상세 데이터 구조 및 처리 로직은 [`data/data_service.md`](../../data/data_service.md)를 참조하십시오.
 
 ## Public API
 
@@ -41,6 +40,7 @@ KIS OpenAPI를 통해 관리 가능한 한국투자증권 계좌와, OpenAPI를 
 ### _check_portfolio_balance
 현재 포트폴리오 비중과 목표 비중을 비교하여 리밸런싱 필요 내역을 UI로 표시합니다.
 `data_service.get_weight_diffs()`를 사용하여 계산된 비중 차이 정보를 가져옵니다.
+이때, **보유하지 않은 종목(수량 0)**도 WebSocket, 국내/해외 시세 API를 자동 조회하여 정확한 매수 수량을 계산합니다.
 
 **Features**:
 - **Color Coding**: 매수 필요(Green), 매도 필요(Red) 색상 구분.

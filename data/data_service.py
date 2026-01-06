@@ -389,20 +389,16 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
     # Calculate target weights
     targets = {}
     try:
-        # Try importing from menu.portfolio or local if possible
         try:
-            from menu.portfolio.calculate_weights import calculate_target_weights, load_config
+            from data.calculate_weights import calculate_target_weights, load_config
         except ImportError:
-            try:
-                from calculate_weights import calculate_target_weights, load_config
-            except ImportError:
-                def calculate_target_weights(c, cfg, v=None): return {}, 0
-                def load_config(p): return {}
+            def calculate_target_weights(c, cfg, v=None): return {}, 0
+            def load_config(p): return {}
 
         # Path resolution for weights config
         import os
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # trading/
-        config_path = os.path.join(base_dir, "menu", "portfolio", "portfolio_weights.json")
+        config_path = os.path.join(base_dir, "data", "portfolio_weights.json")
 
         if not os.path.exists(config_path):
             config_path = "portfolio_weights.json" # Fallback
@@ -541,6 +537,48 @@ def get_weight_diffs():
         val_diff_usd = diff * total_value_usd
         cur_price = data.get("cur_price", 0)
         currency = data.get("currency", "USD")
+
+        # Fallback: Fetch price if not in portfolio
+        if cur_price <= 0:
+            try:
+                # 1. Try WebSocket (fastest)
+                try:
+                    from menu.raoeo.raoeo import get_current_price
+                    cur_price = get_current_price(t)
+                except ImportError:
+                    pass
+
+                # 2. Determine market (KR vs US)
+                from trading_config import get_stock_info
+                stock_info = get_stock_info(t)
+                is_kr = False
+                if t.isdigit():
+                    is_kr = True
+                elif stock_info:
+                    mkt = stock_info.get("market", "").upper()
+                    if mkt in ["KOSPI", "KOSDAQ", "KONEX", "KRX"]:
+                        is_kr = True
+
+                # 3. Fetch from API if still 0
+                if cur_price <= 0:
+                    if is_kr:
+                        from kis.kis_api.domestic_stock.inquire_price.inquire_price import inquire_price
+                        from kis.kis_api import kis_auth as ka
+                        env_dv = "demo" if ka.isPaperTrading() else "real"
+                        # "J" is generic for KRX
+                        df = inquire_price(env_dv, "J", t)
+                        if df is not None and not df.empty and 'stck_prpr' in df.columns:
+                            cur_price = float(df.iloc[0]['stck_prpr'])
+                    else:
+                        from menu.handle_account_info import fetch_price
+                        cur_price = fetch_price(t)
+
+                # 4. Set appropriate currency if fetching succeeded
+                if cur_price > 0:
+                    currency = "KRW" if is_kr else "USD"
+
+            except Exception as e:
+                logging.warning(f"Failed to fetch fallback price for {t}: {e}")
 
         qty_diff = 0
         if cur_price > 0:
