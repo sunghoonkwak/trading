@@ -22,14 +22,8 @@
 
 ## Functions (기능)
 
-### get_fixed_width_name
-문자열의 시각적 너비를 계산하고(한글 등 동아시아 문자는 2단위로 처리), 고정된 너비에 맞게 패딩하거나 자릅니다.
-
-**Parameters**:
-- `name` (str): 포맷할 문자열.
-- `width` (int): 대상 시각적 너비 (기본값: 8).
-
-**Returns**: 고정된 시각적 너비로 조정된 문자열.
+### get_fixed_width
+`get_fixed_width` 함수는 `trading/utils.py`로 이동되었습니다. (구 `get_fixed_width_name`)
 
 ### add_alert
 ```python

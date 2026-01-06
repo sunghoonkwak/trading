@@ -6,7 +6,8 @@ import msvcrt
 import logging
 import pandas as pd
 from kis.kis_api import kis_auth as ka
-from display import show_in_result_area, get_fixed_width_name
+from display import show_in_result_area
+from utils import get_fixed_width
 from kis.kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_balance
 from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import inquire_present_balance
 from .menu import MENU_DEBUG
@@ -138,7 +139,7 @@ def print_account_info(data):
 
             # Header
             header_fmt = " {:<6} | {} | {:>6} | {:>9} | {:>9} | {:>9} | {:>7}"
-            hdr_name = get_fixed_width_name("Name", 20)
+            hdr_name = get_fixed_width("Name", 20)
             lines.append(header_fmt.format("Ticker", hdr_name, "Qty", "Avg", "Cur", "P/L", "P/L%"))
             lines.append("=" * SEPARATOR_LEN)
 
@@ -152,7 +153,7 @@ def print_account_info(data):
             else:
                 for item in page_items:
                     ticker = str(item.get('symbol', ''))[:6]
-                    name = get_fixed_width_name(item['name'], 20)
+                    name = get_fixed_width(item['name'], 20)
                     if is_us:
                         q_val = item['qty']
                         qty = f"{int(q_val):,}" if q_val.is_integer() else f"{q_val:,.2f}"

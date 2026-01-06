@@ -14,7 +14,6 @@ import logging
 import threading
 from collections import OrderedDict
 from datetime import datetime
-import unicodedata
 
 import win32event
 import win32api
@@ -28,6 +27,7 @@ from textual.reactive import reactive
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kis.event_pipe as event_pipe
+from utils import get_fixed_width
 
 # Viewer process handle (used by spawn_viewer/close_viewer)
 _viewer_process = None
@@ -121,19 +121,6 @@ def get_ticker_color(ticker: str) -> str:
         r, g, b = color
         return f"rgb({r},{g},{b})"
     return None
-
-
-def get_fixed_width(text: str, width: int) -> str:
-    """Get fixed-width display text for CJK characters."""
-    current_width = 0
-    result = ""
-    for char in text:
-        w = 2 if unicodedata.east_asian_width(char) in ('W', 'F') else 1
-        if current_width + w > width:
-            break
-        result += char
-        current_width += w
-    return result + (" " * (width - current_width))
 
 
 class OrdersPanel(Static):

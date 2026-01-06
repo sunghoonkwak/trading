@@ -12,7 +12,8 @@ import trading_config
 from trading_config import strip_market_prefix
 from kis import event_pipe
 from kis.event_pipe import PrintLevel, print_viewer
-from display import get_fixed_width_name, add_alert, remove_order_state
+from display import add_alert, remove_order_state
+from utils import get_fixed_width, safe_int_format
 from menu.handle_manage_orders import request_sync
 from telegram_bot.telegram_utils import send_notification
 
@@ -64,7 +65,7 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
         return True
 
     name = cfg.get("name", "Unknown")
-    fixed_name = get_fixed_width_name(name, 20)
+    fixed_name = get_fixed_width(name, 20)
     bid_s = format(state.get('bid', 0), ",")
     ask_s = format(state.get('ask', 0), ",")
     price_v = state.get('price', 0)
@@ -131,7 +132,7 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
         return True
 
     name = cfg.get("name", "Unknown")
-    fixed_name = get_fixed_width_name(name, 20)
+    fixed_name = get_fixed_width(name, 20)
     display_code = strip_market_prefix(code)
     bid_s = format(state.get('bid', 0.0), ",.2f") if state.get('bid', 0) > 0 else "0"
     ask_s = format(state.get('ask', 0.0), ",.2f") if state.get('ask', 0) > 0 else "0"
@@ -166,14 +167,6 @@ def _handle_domestic_order(row) -> bool:
 
         cfg = trading_config.get_stock_info(code)
 
-        def safe_int_format(val):
-            try:
-                if not val or str(val).strip() == "":
-                    return "0"
-                return format(int(float(val)), ",")
-            except:
-                return "0"
-
         price = safe_int_format(str(row.get('CNTG_UNPR', '0')).strip())
         qty = safe_int_format(row['CNTG_QTY'])
 
@@ -196,7 +189,7 @@ def _handle_domestic_order(row) -> bool:
                 order_val = "OTH"
 
         name = cfg.get("name", row.get('CNTG_ISNM40', 'Unknown')).strip()
-        fixed_name = get_fixed_width_name(name, 20)
+        fixed_name = get_fixed_width(name, 20)
         side_code = "BUY" if row['SELN_BYOV_CLS'] == '02' else "SEL"
 
         msg = (f"{time_s}|{side_code}|{order_val}|{fixed_name}|{code:<6}|"
@@ -315,7 +308,7 @@ def _handle_overseas_order(tr_id: str, row) -> bool:
                 side = base_side
 
         name = cfg.get("name", row.get('CNTG_ISNM', 'Unknown')).strip()
-        fixed_name = get_fixed_width_name(name, 20)
+        fixed_name = get_fixed_width(name, 20)
 
         msg = (f"{time_s}|{side}|{order_val}|{fixed_name}|{code:<8}|"
                f"Qty:{qty:>6}|Prc:{price:>9}|No:{order_no}")

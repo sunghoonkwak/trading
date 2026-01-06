@@ -6,7 +6,8 @@ def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targ
     """
     Display weight differences with pagination UI.
     """
-    from display import show_in_result_area, get_fixed_width_name, input_at
+    from display import show_in_result_area, input_at
+    from utils import get_fixed_width
     from data.data_service import get_weight_diffs
 
     if total_value_usd <= 0:
@@ -44,7 +45,7 @@ def _check_portfolio_balance(merged_data, total_value_usd, current_weights, targ
             t = item["ticker"]
 
             # Truncate/Pad name for display (width 30)
-            n = get_fixed_width_name(item['name'], 30)
+            n = get_fixed_width(item['name'], 30)
             c_p = item["cur_w"] * 100
             t_p = item["tgt_w"] * 100
             d_p = item["diff"] * 100

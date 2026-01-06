@@ -6,7 +6,7 @@ import msvcrt
 import logging
 from kis.kis_api import kis_auth as ka
 import trading_config
-from display import show_in_result_area, input_at, safe_write, CLEAR_LINE, update_order_state, add_alert, clear_order_states
+from display import show_in_result_area, input_at, safe_write, update_order_state, add_alert, clear_order_states
 from .menu import MENU_DEBUG
 from kis.kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl
 from kis.kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import inquire_psbl_rvsecncl

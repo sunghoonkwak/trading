@@ -40,6 +40,7 @@
 ├── main.py                     # Entry point (자동 시작: Telegram → Event Viewer → Super Menu)
 ├── event_viewer.py             # Textual TUI 기반 3-Panel Event Viewer
 ├── display.py                  # 스크롤 기반 터미널 출력 (알림, 주문 상태)
+├── utils.py                    # [Util] 공통 유틸리티 (문자열 정렬, 안전한 형변환)
 ├── super_menu.py               # 스레드 초기화 메뉴 (스크롤 기반)
 ├── thread_comm.py              # 스레드 간 통신 (Queue) 정의
 ├── thread_state.py             # 스레드 공유 상태 관리

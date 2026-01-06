@@ -4,7 +4,7 @@ All ANSI cursor control removed for reliable log visibility.
 Orders are sent to Event Viewer via Named Pipe.
 """
 import sys
-import unicodedata
+import sys
 from datetime import datetime
 
 # Try to import event_pipe for order forwarding
@@ -25,19 +25,7 @@ COLOR_YELLOW = "\033[93m"
 COLOR_CYAN = "\033[96m"
 COLOR_GRAY = "\033[90m"
 
-
-def get_fixed_width_name(name, width=8):
-    """Get fixed-width display name for CJK characters."""
-    current_width = 0
-    result = ""
-    for char in name:
-        w = 2 if unicodedata.east_asian_width(char) in ('W', 'F') else 1
-        if current_width + w > width:
-            break
-        result += char
-        current_width += w
-    return result + (" " * (width - current_width))
-
+from utils import get_fixed_width
 
 def add_alert(message: str, level: str = "INFO"):
     """Print alert to terminal (simple scroll-based)."""
@@ -60,7 +48,7 @@ def update_order_state(order_id: str, ticker: str, name: str, side: str,
     """
     if PIPE_AVAILABLE:
         # Include name for display in viewer
-        fixed_name = get_fixed_width_name(name, 20)
+        fixed_name = get_fixed_width(name, 20)
         order_msg = f"{fixed_name}|{ticker}|{side}|{qty}|{price}|{state}|{order_id}"
         event_pipe.send_log("ODR", order_msg)
 
@@ -95,7 +83,3 @@ def safe_write(text):
     """Write text to stdout."""
     sys.stdout.write(text)
     sys.stdout.flush()
-
-
-# Keep CLEAR_LINE for backward compatibility
-CLEAR_LINE = "\033[2K"
