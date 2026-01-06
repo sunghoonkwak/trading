@@ -14,6 +14,7 @@ import logging
 import threading
 from collections import OrderedDict
 from datetime import datetime
+import unicodedata
 
 import win32event
 import win32api
@@ -120,6 +121,19 @@ def get_ticker_color(ticker: str) -> str:
         r, g, b = color
         return f"rgb({r},{g},{b})"
     return None
+
+
+def get_fixed_width(text: str, width: int) -> str:
+    """Get fixed-width display text for CJK characters."""
+    current_width = 0
+    result = ""
+    for char in text:
+        w = 2 if unicodedata.east_asian_width(char) in ('W', 'F') else 1
+        if current_width + w > width:
+            break
+        result += char
+        current_width += w
+    return result + (" " * (width - current_width))
 
 
 class OrdersPanel(Static):
@@ -391,10 +405,10 @@ class EventViewerApp(App):
         """Update orders panel display."""
         lines = []
         for order_id, info in reversed(list(self.orders.items())):
-            side_upper = info["side"].upper()
-            if "BUY" in side_upper:
+            side_val = info["side"]
+            if "BUY" in side_val.upper() or "매수" in side_val:
                 side_color = "green"
-            elif "SELL" in side_upper or "SEL" in side_upper:
+            elif "SELL" in side_val.upper() or "SEL" in side_val.upper() or "매도" in side_val:
                 side_color = "red"
             else:
                 side_color = "yellow"
@@ -409,7 +423,7 @@ class EventViewerApp(App):
 
             lines.append(
                 f"{order_time} {name:20}|{ticker_disp}| "
-                f"[{side_color}]{info['side']:8}[/{side_color}] "
+                f"[{side_color}]{get_fixed_width(info['side'], 8)}[/{side_color}] "
                 f"prc: [cyan]{info['price']:>10}[/cyan] qty: [cyan]{info['qty']:>5}[/cyan]"
             )
 
