@@ -34,10 +34,11 @@ data = get_portfolio_cached(force_refresh=False)
 
 ### cmd_portfolio_va
 Value Averaging 주문 계산 결과를 보여주고 Yes/No 인라인 버튼으로 실행 여부를 확인합니다.
+**다중 종목을 지원**하여 여러 전략의 결과를 한 메시지에 표시합니다.
 
 ### handle_va_callback
 Yes/No 버튼 클릭 시:
-- **Yes**: 주문 실행 후 결과로 메시지 업데이트
+- **Yes**: 모든 종목의 주문 실행 후 결과로 메시지 업데이트
 - **No**: "Order Cancelled" 메시지로 업데이트
 
 ### va_timeout_handler
@@ -47,6 +48,7 @@ Yes/No 버튼 클릭 시:
 
 ### format_va_report
 `value_averaging.calculate_order()` 결과를 Telegram HTML 형식으로 포맷팅합니다.
+**다중 종목**의 Day, Weight, Price, Order 정보를 한 메시지에 표시합니다.
 
 ---
 

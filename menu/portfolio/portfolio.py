@@ -327,59 +327,68 @@ def portfolio_menu():
              # Get price_map from portfolio_data
              price_map = portfolio_data.get("price_map", {})
 
-             # Call refactored calculate_order
+             # Call refactored calculate_order (returns multi-strategy results)
              res = value_averaging.calculate_order(targets, price_map, merged_data, total_value_usd, exchange_rate)
 
              # Build Display Lines
-             target_ticker = res.get("target_ticker", "N/A")
-             already_executed = res.get("already_executed", False)
              lines = []
+             date = res.get("date", "N/A")
+             results = res.get("results", [])
+             total_orders = res.get("total_orders", [])
 
              # Header
-             status_str = "✓ Executed" if already_executed else "Pending"
-             lines.append(f" [Value Averaging] {res.get('date')} ET | {status_str}")
-             lines.append("="*50)
+             lines.append(f" [Value Averaging] {date} ET")
+             lines.append("=" * 50)
 
              if res.get("error"):
                  lines.append(f" ERROR: {res.get('error')}")
+             elif not results:
+                 lines.append(" No strategies configured.")
              else:
-                 orders = res.get("orders", [])
-                 curr_p = res.get("current_price", 0)
-                 daily_b = res.get("daily_budget", 0)
-                 buy_amt = res.get("daily_target_amount", 0)
-                 day_count = res.get("day_count", 0)
+                 for r in results:
+                     if r.get("error"):
+                         lines.append(f" {r.get('target_ticker', 'Unknown')}: {r['error']}")
+                         continue
 
-                 lines.append(f" Target: {target_ticker} | Day: {day_count} | Price: ${curr_p:,.2f}")
-                 lines.append(f" Budget: ${daily_b:,.2f} | Buy Amount: ${buy_amt:,.2f}")
-                 lines.append("-" * 50)
+                     target_ticker = r.get("target_ticker", "N/A")
+                     already_executed = r.get("already_executed", False)
+                     curr_p = r.get("current_price", 0)
+                     daily_b = r.get("daily_budget", 0)
+                     buy_amt = r.get("daily_target_amount", 0)
+                     day_count = r.get("day_count", 0)
+                     orders = r.get("orders", [])
 
-                 if already_executed:
-                     lines.append(" [INFO] Already executed today. Order will be skipped.")
-                 elif curr_p == 0:
-                     lines.append(" [WARNING] Price is $0. Cannot calculate order.")
-                 elif orders:
-                     lines.append(f" Orders: {len(orders)}")
-                     for o in orders:
-                         lines.append(f"  > {o['ticker']} | {o['qty']} qty | ${o['price']:.2f} (LOC)")
-                 else:
-                     lines.append(" No orders generated (Target met).")
+                     status_str = "✓" if already_executed else " "
+                     lines.append(f" {status_str} {target_ticker} | Day: {day_count} | Price: ${curr_p:,.2f}")
+                     lines.append(f"   Budget: ${daily_b:,.2f} | Buy: ${buy_amt:,.2f}")
+
+                     if already_executed:
+                         lines.append("   [Executed today]")
+                     elif curr_p == 0:
+                         lines.append("   [Price unavailable]")
+                     elif orders:
+                         for o in orders:
+                             lines.append(f"   > {o['qty']} qty @ ${o['price']:.2f} (LOC)")
+                     else:
+                         lines.append("   [No order needed]")
+                     lines.append("-" * 50)
 
              show_in_result_area(lines)
 
-             # Execution Prompt (only if not already executed and has orders)
-             if not already_executed and res.get("orders") and res.get("current_price", 0) > 0:
-                 confirm = input_at(13, 2, " Execute Orders? (y/n): ").strip().lower()
+             # Execution Prompt (only if has orders)
+             if total_orders:
+                 confirm = input_at(13, 2, f" Execute {len(total_orders)} order(s)? (y/n): ").strip().lower()
                  if confirm == 'y':
                       exec_res = value_averaging.execute_orders(res)
-                      # Build new result lines to avoid exceeding limit
                       result_lines = [lines[0], lines[1]]  # Keep header
                       result_lines.append(" Execution Result:")
                       for r in exec_res:
+                          ticker = r.get('ticker', 'Unknown')
                           if r.get('skipped'):
-                              result_lines.append(f"  SKIPPED: {r.get('message', 'Already executed')}")
+                              result_lines.append(f"  ⏭️ {ticker}: {r.get('message', 'Skipped')}")
                           else:
-                              status = "SUCCESS" if r.get('success') else "FAILED"
-                              result_lines.append(f"  {status}: {r.get('message', 'Unknown')}")
+                              status = "✓" if r.get('success') else "✗"
+                              result_lines.append(f"  {status} {ticker}: {r.get('message', 'Unknown')}")
                       show_in_result_area(result_lines)
 
              input_at(12, 2, " Press Enter to continue...")

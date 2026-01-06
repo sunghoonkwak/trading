@@ -2,7 +2,7 @@
     "groups": [
         {
             "name": "Nasdaq100",
-            "target_score": 90,
+            "target_score": 85,
             "main_ticker": "QQQM",
             "constituents": [
                 "QQQ",
@@ -10,12 +10,16 @@
             ]
         },
         {
-            "name": "Nasdaq100 leverage",
+            "name": "Nasdaq100 leverage x2",
             "target_score": 10,
             "main_ticker": "QLD",
-            "constituents": [
-                "SOXL"
-            ]
+            "constituents": []
+        },
+        {
+            "name": "Nasdaq100 leverage x3",
+            "target_score": 5,
+            "main_ticker": "TQQQ",
+            "constituents": []
         },
         {
             "name": "S&P500",
@@ -35,6 +39,10 @@
         }
     ],
     "individual_stocks": [
+        {
+            "ticker": "SOXL",
+            "ratio": 0.03
+        },
         {
             "ticker": "TSM",
             "ratio": 0.06

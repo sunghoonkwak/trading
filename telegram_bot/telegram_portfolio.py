@@ -562,51 +562,66 @@ def get_portfolio_commands_desc() -> str:
 # =============================================
 
 def format_va_report(res: dict) -> str:
-    """Format Value Averaging calculation result for Telegram."""
+    """Format Value Averaging calculation result for Telegram (supports multiple strategies)."""
     if res.get("error"):
         return f"⚠️ <b>Error:</b> {res['error']}"
 
-    target_ticker = res.get("target_ticker", "N/A")
-    date = res.get("date", "N/A")  # Already US Eastern Time from calculate_order
-    day_count = res.get("day_count", 0)
-    daily_budget = res.get("daily_budget", 0)
-    target_weight = res.get("target_weight", 0) * 100
-    current_price = res.get("current_price", 0)
-    buy_amount = res.get("daily_target_amount", 0)
-    orders = res.get("orders", [])
-    already_executed = res.get("already_executed", False)
+    date = res.get("date", "N/A")
+    results = res.get("results", [])
+    total_orders = res.get("total_orders", [])
 
-    # Status indicator
-    if already_executed:
-        status_line = f"✅ <b>Today's Status:</b> Executed ({date} ET)"
-    else:
-        status_line = f"⏳ <b>Today's Status:</b> Pending ({date} ET)"
+    if not results:
+        return "⚠️ <b>No strategies configured.</b>"
 
     lines = [
         f"📈 <b>Value Averaging</b> ({date})",
-        status_line,
-        "",
-        f"<b>Target:</b> <code>{target_ticker}</code>",
-        f"<b>Day:</b> {day_count} | <b>Weight:</b> {target_weight:.1f}%",
-        f"<b>Price:</b> ${current_price:,.2f} | <b>Budget:</b> ${daily_budget:,.2f}",
-        "",
-        f"💰 <b>Buy Amount:</b> ${buy_amount:,.2f}",
         ""
     ]
 
-    if already_executed:
-        lines.append("⏭️ <i>Already executed today. Order will be skipped.</i>")
-    elif current_price <= 0:
-        lines.append("⚠️ <i>Price unavailable. Cannot calculate order.</i>")
-    elif orders:
-        for o in orders:
-            lines.append(f"📋 <b>Order:</b> {o['qty']} qty @ ${o['price']:.2f} (LOC)")
+    for r in results:
+        if r.get("error"):
+            lines.append(f"⚠️ <b>{r.get('target_ticker', 'Unknown')}:</b> {r['error']}")
+            lines.append("")
+            continue
+
+        target_ticker = r.get("target_ticker", "N/A")
+        day_count = r.get("day_count", 0)
+        daily_budget = r.get("daily_budget", 0)
+        target_weight = r.get("target_weight", 0) * 100
+        current_price = r.get("current_price", 0)
+        buy_amount = r.get("daily_target_amount", 0)
+        orders = r.get("orders", [])
+        already_executed = r.get("already_executed", False)
+
+        lines.append(f"── <b>{target_ticker}</b> ──")
+
+        if already_executed:
+            lines.append(f"✅ <i>Executed today</i>")
+        else:
+            lines.append(f"Day: {day_count} | Weight: {target_weight:.1f}%")
+            lines.append(f"Price: ${current_price:,.2f} | Budget: ${daily_budget:,.2f}")
+            lines.append(f"Buy Amount: <b>${buy_amount:,.2f}</b>")
+
+            if current_price <= 0:
+                lines.append("⚠️ <i>Price unavailable</i>")
+            elif orders:
+                for o in orders:
+                    lines.append(f"📋 {o['qty']} qty @ ${o['price']:.2f} (LOC)")
+            else:
+                lines.append("✅ <i>No order needed</i>")
+
         lines.append("")
-        lines.append("<i>Execute this order?</i>")
+
+    # Summary
+    if total_orders:
+        lines.append(f"<b>Total: {len(total_orders)} order(s)</b>")
+        lines.append("")
+        lines.append("<i>Execute orders?</i>")
     else:
-        lines.append("✅ <i>No orders needed (target met).</i>")
+        lines.append("<i>No orders to execute.</i>")
 
     return "\n".join(lines)
+
 
 
 def build_va_keyboard(has_orders: bool) -> InlineKeyboardMarkup:
@@ -654,7 +669,7 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = format_va_report(res)
 
     # Build keyboard
-    has_orders = bool(res.get("orders")) and res.get("current_price", 0) > 0
+    has_orders = bool(res.get("total_orders"))
     keyboard = build_va_keyboard(has_orders)
 
     sent_msg = await wrap_reply(update, msg, parse_mode='HTML', reply_markup=keyboard)
@@ -682,7 +697,7 @@ async def handle_va_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
 
     if callback_data == "va_yes":
-        if not res or not res.get('orders'):
+        if not res or not res.get('total_orders'):
             await wrap_edit(update, "⚠️ No orders to execute.", parse_mode='HTML')
             return ConversationHandler.END
 
@@ -702,10 +717,14 @@ async def handle_va_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         success_count = 0
         for r in exec_results:
+            if r.get('skipped'):
+                lines.append(f"⏭️ {r.get('ticker')}: {r.get('message')}")
+                continue
             status = "✅" if r.get('success') else "❌"
             if r.get('success'):
                 success_count += 1
-            lines.append(f"{status} {r.get('message', 'Unknown')}")
+            ticker = r.get('ticker', 'Unknown')
+            lines.append(f"{status} {ticker}: {r.get('message', 'Unknown')}")
 
         lines.append(f"\n<b>{success_count}/{len(exec_results)} succeeded</b>")
 

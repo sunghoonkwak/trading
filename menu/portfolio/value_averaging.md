@@ -1,10 +1,6 @@
 # Value Averaging (`value_averaging.py`)
 
-이 모듈은 Value Averaging 분할매수법에 필요한 매매 계산 및 주문을 자동으로 처리합니다.
-
-## Purpose (목적)
-
-장기 적립식 투자를 위한 Value Averaging 전략을 구현합니다. 매일 누적 목표 가치에 도달하기 위해 필요한 매수량을 계산하고 LOC 주문을 생성합니다.
+이 모듈은 **다중 종목 Value Averaging** 분할매수법에 필요한 매매 계산 및 주문을 자동으로 처리합니다.
 
 ## Configuration (설정)
 
@@ -12,68 +8,64 @@
 
 ```json
 {
-    "target": "QLD",
-    "exchange": "AMEX",
-    "duration": 120,
-    "daily_budget": 150.0,
-    "target_weight_initial": 0.05
+    "default_settings": {
+        "duration": 200
+    },
+    "strategies": [
+        {
+            "enabled": true,
+            "target": "QLD",
+            "exchange": "AMEX",
+            "daily_budget": 84.34,
+            "target_weight_initial": 0.0325
+        },
+        {
+            "enabled": true,
+            "target": "TQQQ",
+            "exchange": "AMEX",
+            "daily_budget": 41.68,
+            "target_weight_initial": 0.016,
+            "duration": 250
+        }
+    ]
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `default_settings` | obj | 모든 전략에 적용되는 기본값 |
+| `strategies[]` | array | 종목별 전략 배열 |
+| `enabled` | bool | 전략 활성화 여부 |
 | `target` | str | 대상 종목 심볼 |
 | `exchange` | str | 거래소 코드 (AMEX, NASD 등) |
-| `duration` | int | 투자 기간 (일) |
+| `duration` | int | 투자 기간 (일) - 개별 override 가능 |
 | `daily_budget` | float | 일별 투자 예산 (자동 계산됨) |
 | `target_weight_initial` | float | 초기 목표 비중 (0.0 - 1.0) |
 
+---
+
 ## Functions (함수)
 
-### load_config / save_config
-`value_averaging.json` 설정 파일을 읽고 씁니다.
-
----
-
-### load_history / save_history
-`value_averaging_history.json` 히스토리 파일을 읽고 씁니다.
-
----
-
 ### calculate_order
-당일에 매수해야 하는 주문을 계산합니다.
-
-#### Args
-| Arg | Type | Description |
-|-----|------|-------------|
-| `targets` | dict | 티커별 목표 비중 `{ticker: weight}` |
-| `price_map` | dict | 티커별 현재가 `{ticker: price}` |
-| `merged_portfolio` | dict | 병합된 포트폴리오 데이터 |
-| `total_value_usd` | float | 총 자산 가치 (USD) |
-| `exchange_rate` | float | USD/KRW 환율 (필수) |
+당일에 매수해야 하는 주문을 계산합니다 (다중 종목 지원).
 
 #### Strategy Logic
-1. `load_config()`로 설정 로드
-2. `targets`에서 목표 비중, `price_map`에서 현재가 조회 (없으면 `fetch_price` 폴백)
-3. 초기 실행 시 `daily_budget` 계산: `(총자산 × 목표비중) / duration`
-4. 누적 목표 가치 계산: `day_count × daily_budget`
-5. 금일 매수 목표액: `누적 목표 - 현재 보유 평가액`
-6. 매수 수량 계산 및 **LOC 주문** 생성 (가격: 현재가 × 105%, 소수점 2자리)
+1. `enabled: true`인 모든 전략을 순회
+2. 종목별로 `default_settings`와 병합 (전략 값이 우선)
+3. 누적 목표 가치 계산: `day_count × daily_budget`
+4. 금일 매수 목표액: `누적 목표 - 현재 보유 평가액`
+5. 매수 수량 계산 및 **LOC 주문** 생성 (가격: 현재가 × 105%)
 
 #### Returns
 ```python
 {
     "status": "calculated",
-    "date": "2026-01-01",
-    "target_ticker": "QLD",
-    "day_count": 5,
-    "daily_budget": 150.0,
-    "target_value_accumulated": 750.0,
-    "current_value": 600.0,
-    "daily_target_amount": 150.0,
-    "current_price": 85.50,
-    "target_weight": 0.05,
-    "orders": [...],
+    "date": "2026-01-06",
+    "results": [
+        {"target_ticker": "QLD", "day_count": 4, "orders": [...], ...},
+        {"target_ticker": "TQQQ", "day_count": 1, "orders": [], ...}
+    ],
+    "total_orders": [...],  # 모든 종목의 orders 합산
     "error": None
 }
 ```
@@ -81,41 +73,39 @@
 ---
 
 ### execute_orders
-계산된 주문을 KIS API를 통해 실행합니다.
+계산된 주문을 KIS API를 통해 실행하고 **모든 종목에 대해 히스토리를 기록**합니다.
 
-#### Args
-- `order_report` (dict): `calculate_order()`의 반환값
-
-#### Returns
-- `list`: 각 주문의 실행 결과 (`order`, `success`, `message` 포함)
+> **Day 누적 방식**: 주문이 없어도(수량 0) 히스토리에 기록되어 day_count가 증가합니다.
+> 예: 가격이 비싸서 1주도 못 살 때 → 다음날 누적분으로 2주 이상 구매 가능
 
 ---
 
 ## History File (히스토리 파일)
 
-`value_averaging_history.json` 구조:
+`value_averaging_history.json` - **종목별 분리 저장**:
 
 ```json
 {
-    "history": [
+    "QLD": [
         {
-            "date": "2026-01-01",
-            "success": true,
-            "orders": [
-                {
-                    "type": "buy_value_averaging",
-                    "ticker": "QLD",
-                    "qty": 2,
-                    "price": 94.05,
-                    "order_type": "LOC"
-                }
-            ]
+            "date": "2026-01-06 09:08:43",
+            "results": [{"ticker": "QLD", "order": {...}, "success": true, "message": "Order Placed"}],
+            "success": true
+        }
+    ],
+    "TQQQ": [
+        {
+            "date": "2026-01-06 09:15:18",
+            "results": [{"ticker": "TQQQ", "order": null, "success": true, "message": "No order needed (insufficient qty)"}],
+            "success": true
         }
     ]
 }
 ```
 
 히스토리는 **최신 순** (index 0이 가장 최근)으로 저장됩니다.
+
+---
 
 ## Integration
 
