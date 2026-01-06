@@ -21,6 +21,8 @@ from datetime import datetime
 
 from data.data_service import get_weight_diffs
 from data.data_service import get_portfolio_data
+from menu.handle_manage_orders import fetch_open_orders
+import trading_config
 
 # Conversation states
 SELECT_TICKER = 0
@@ -440,6 +442,64 @@ async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+def format_placed_orders(df, num_us: int, num_kr: int) -> str:
+    """Format open orders for Telegram message."""
+    if df.empty:
+        return "📋 <b>Open Orders</b>\n\nNo open orders."
+
+    lines = [
+        f"📋 <b>Open Orders</b> (US: {num_us} / KR: {num_kr})",
+        ""
+    ]
+
+    for idx, (_, row) in enumerate(df.iterrows()):
+        market = row.get('_market', 'US')
+        row_lower = {k.lower(): v for k, v in row.items()}
+
+        # Get ticker and name
+        pdno = row_lower.get('pdno', row_lower.get('stck_shrn_iscd', 'Unknown'))
+        api_name = row_lower.get('prdt_name', row_lower.get('stck_nm', row_lower.get('stck_nm40', 'Unknown')))
+        stock_info = trading_config.get_stock_info(pdno)
+        display_name = stock_info.get('name', api_name)
+
+        if market == "KR":
+            side_emoji = "🟢" if row_lower.get('sll_buy_dvsn_cd') == '02' else "🔴"
+            side = "Buy" if row_lower.get('sll_buy_dvsn_cd') == '02' else "Sell"
+            price = f"₩{int(float(row_lower.get('ord_unpr', '0'))):,}"
+            qty = str(row_lower.get('psbl_qty', 0))
+        else:
+            is_buy = row_lower.get('sll_buy_dvsn_cd') == '02'
+            side_emoji = "🟢" if is_buy else "🔴"
+            # Use sll_buy_dvsn_cd_name which contains LOC info (e.g. "LOC매수")
+            side_text = str(row_lower.get('sll_buy_dvsn_cd_name', row_lower.get('sll_buy_dvsn_name', ''))).strip()
+            if side_text and side_text not in ['?', 'nan', 'None', '']:
+                side = side_text
+            else:
+                side = "Buy" if is_buy else "Sell"
+            p_val = row_lower.get('ft_ord_unpr3', row_lower.get('ft_ord_unpr4', row_lower.get('ovrs_ord_unpr', row_lower.get('ord_unpr', '0'))))
+            price = f"${float(p_val):,.2f}" if float(p_val) > 0 else "Market"
+            q_val = row_lower.get('nccs_qty', row_lower.get('ft_ord_qty4', row_lower.get('ord_qty', 0)))
+            qty = str(int(float(q_val)))
+
+        lines.append(f"{side_emoji} <b>{display_name}</b> ({pdno})")
+        lines.append(f"   {side} | {price} x {qty}")
+        if idx >= 9:
+            lines.append(f"\n<i>...and {len(df) - 10} more</i>")
+            break
+
+    return "\n".join(lines)
+
+
+async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Command handler for /placed_orders - Show open orders."""
+    logging.info(f"[TG] /placed_orders from user {update.effective_user.id}")
+
+    loop = asyncio.get_running_loop()
+    df, num_us, num_kr = await loop.run_in_executor(None, fetch_open_orders)
+    msg = format_placed_orders(df, num_us, num_kr)
+    await wrap_reply(update, msg, parse_mode='HTML')
+
+
 async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio_weight."""
     loop = asyncio.get_running_loop()
@@ -469,6 +529,7 @@ def register_portfolio_handlers(app: Application):
 
     app.add_handler(conv_handler)
     app.add_handler(CommandHandler("portfolio_weight", cmd_portfolio_weight))
+    app.add_handler(CommandHandler("placed_orders", cmd_placed_orders))
 
     # ConversationHandler for /portfolio_va with 60s timeout
     va_conv_handler = ConversationHandler(
@@ -491,7 +552,8 @@ def get_portfolio_commands_desc() -> str:
     return (
         "/portfolio - Portfolio check (interactive)\n"
         "/portfolio_weight - Rebalancing suggestions\n"
-        "/portfolio_va - Value Averaging order"
+        "/portfolio_va - Value Averaging order\n"
+        "/placed_orders - Show open orders"
     )
 
 
