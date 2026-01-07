@@ -13,7 +13,7 @@
         {
             "enabled": true,
             "target": "TQQQ",
-            "exchange": "AMEX",
+            "exchange": "NASD",
             "daily_budget": 41.67522577414323,
             "target_weight_initial": 0.01600665877004834
         }

@@ -155,10 +155,10 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
         # Get ticker-specific history
         ticker_history = hist_data.get(target_ticker, [])
 
-        # Check if already executed today (regardless of success)
+        # Check if already executed today with SUCCESS (not failed attempts)
         already_executed = False
         for entry in ticker_history:
-            if entry.get('date', '').startswith(today_et):
+            if entry.get('date', '').startswith(today_et) and entry.get('success', False):
                 already_executed = True
                 break
 
@@ -193,18 +193,19 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
                     config_updated = True
                     break
 
-        # Day count calculation (count all history entries, not just success)
-        history_count = len(ticker_history)
-        day_count = history_count if already_executed else history_count + 1
+        # Day count calculation (count only SUCCESSFUL history entries)
+        # Failed attempts should not count toward the day progression
+        success_count = sum(1 for entry in ticker_history if entry.get('success', False))
+        day_count = success_count if already_executed else success_count + 1
 
         # Calculate targets
         target_value_accumulated = day_count * daily_budget
         current_value = current_value_usd if is_us_stock else current_value_krw
         daily_target_amount = target_value_accumulated - current_value
 
-        # Determine orders
+        # Determine orders (skip if already executed today)
         orders = []
-        if daily_target_amount > 0 and current_price > 0:
+        if not already_executed and daily_target_amount > 0 and current_price > 0:
             buy_qty = int(daily_target_amount / current_price)
             if buy_qty > 0:
                 order = {
@@ -283,19 +284,19 @@ def execute_orders(order_report):
         if not ticker:
             continue
 
-        # Skip if already processed today
+        # Skip if already processed today with SUCCESS (failed attempts should retry)
         ticker_history = hist_data.get(ticker, [])
-        already_today = any(
-            entry.get('date', '').startswith(today_et)
+        already_success_today = any(
+            entry.get('date', '').startswith(today_et) and entry.get('success', False)
             for entry in ticker_history
         )
 
-        if already_today:
-            logging.info(f"Value Averaging for {ticker} already recorded today ({today_et} ET). Skipping.")
+        if already_success_today:
+            logging.info(f"Value Averaging for {ticker} already succeeded today ({today_et} ET). Skipping.")
             exec_results.append({
                 "ticker": ticker,
                 "skipped": True,
-                "message": f"Already recorded today ({today_et} ET)"
+                "message": f"Already succeeded today ({today_et} ET)"
             })
             continue
 

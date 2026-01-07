@@ -22,7 +22,7 @@
         {
             "enabled": true,
             "target": "TQQQ",
-            "exchange": "AMEX",
+            "exchange": "NASD",
             "daily_budget": 41.68,
             "target_weight_initial": 0.016,
             "duration": 250
@@ -77,6 +77,8 @@
 
 > **Day 누적 방식**: 주문이 없어도(수량 0) 히스토리에 기록되어 day_count가 증가합니다.
 > 예: 가격이 비싸서 1주도 못 살 때 → 다음날 누적분으로 2주 이상 구매 가능
+
+> **실패 시 재시도**: `success: false`인 기록은 day_count에 포함되지 않으며, 같은 날 다시 시도할 수 있습니다.
 
 ---
 
