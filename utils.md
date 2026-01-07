@@ -22,6 +22,15 @@
     - `default`: 변환 실패 시 반환할 값
 - **Returns**: 변환된 값 또는 기본값
 
+### `is_market_holiday(name="NYSE", date=None) -> bool`
+지정된 시장이 휴장일인지 확인합니다.
+이름을 지정하지 않으면 기본적으로 'NYSE'를 기준으로 확인합니다.
+
+- **Args**:
+    - `name`: 시장 이름 (예: 'NYSE', 'NASDAQ'). 기본값은 'NYSE'.
+    - `date`: 확인할 날짜 (datetime.date 객체 또는 YYYY-MM-DD 형식의 문자열). 기본값은 오늘 날짜.
+- **Returns**: 휴장일이면 `True`, 아니면 `False`
+
 ### `format_number(val, default="0") -> str`
 숫자 값을 천 단위 콤마와 함께 포맷팅합니다. 정수와 소수점 모두 처리하며, 이미 `$`나 `,`가 포함된 경우 그대로 반환합니다.
 
