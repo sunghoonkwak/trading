@@ -215,6 +215,18 @@
             "telegram_button": true
         },
         {
+            "ticker": "TQQQ",
+            "name": "PROSHARES QQQ 3X",
+            "market": "NASDAQ",
+            "color": [
+                50,
+                255,
+                255
+            ],
+            "disabled": false,
+            "telegram_button": true
+        },
+        {
             "ticker": "SPYM",
             "name": "SPYM",
             "market": "AMEX",
