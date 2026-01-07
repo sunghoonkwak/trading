@@ -138,10 +138,14 @@
 
 이 모듈의 함수들은 Telegram 봇에서도 사용됩니다:
 
-| Telegram Command | Function Called |
-|------------------|-----------------|
-| `/raoeo_report` | `build_raoeo_report()` |
-| `/raoeo_order` | `execute_orders()`, `save_history()` |
+| Telegram Command | Handler | Functions Called |
+|------------------|---------|------------------|
+| `/raoeo` | `ConversationHandler` | `build_raoeo_report()` → Yes/No 선택 → `execute_orders()`, `save_history()` |
+
+**Flow:**
+1. `/raoeo` 입력 → 현재 상태 리포트 + Yes/No 버튼 표시
+2. **Yes** 선택 → 주문 실행 및 히스토리 저장
+3. **No** 선택 → 취소
 
 ## History File (히스토리 파일)
 
