@@ -1045,7 +1045,18 @@ class KISWebSocket:
             data: list | str,
             kwargs: dict = None,
     ):
-        add_open_map(request.__name__, request, data, kwargs)
+        # Generate unique key by combining module, function name, and kwargs
+        # This prevents conflicts when same function name exists in different modules
+        # e.g., domestic_stock.ccnl_notice vs overseas_stock.ccnl_notice
+        module = getattr(request, '__module__', '')
+        base_name = f"{module}.{request.__name__}" if module else request.__name__
+        if kwargs:
+            # Sort keys for consistent naming
+            kwargs_str = "_".join(f"{k}={v}" for k, v in sorted(kwargs.items()))
+            unique_name = f"{base_name}_{kwargs_str}"
+        else:
+            unique_name = base_name
+        add_open_map(unique_name, request, data, kwargs)
 
     def unsubscribe(
             self,
