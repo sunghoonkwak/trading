@@ -279,10 +279,13 @@ class EventViewerApp(App):
             # System messages (PINGPONG, errors, etc.) - show in red
             self._log_message(f"[red]{content}[/red]")
         elif msg_type == "CLR":
-            # Clear orders
+            # Clear orders or quotes
             if content.strip() == "ORDERS":
                 self.orders.clear()
                 self._update_orders_panel()
+            elif content.strip() == "QUOTES":
+                self.latest_quotes.clear()
+                self._update_quotes_panel()
         else:
             # Unknown type
             self._log_message(f"[dim]{raw_message}[/dim]")

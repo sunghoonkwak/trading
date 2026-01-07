@@ -66,6 +66,11 @@ def clear_order_states():
     if PIPE_AVAILABLE:
         event_pipe.send_log("CLR", "ORDERS")
 
+def clear_quotes():
+    """Clear all quotes in Event Viewer."""
+    if PIPE_AVAILABLE:
+        event_pipe.send_log("CLR", "QUOTES")
+
 
 def show_in_result_area(lines):
     """Print lines to terminal (scroll-based)."""

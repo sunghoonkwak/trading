@@ -74,6 +74,8 @@ def menu():
                 event_pipe.print_log_level = PrintLevel.INFO
             add_alert(f"Log Level Changed to: {event_pipe.print_log_level.name}", "INFO")
         elif choice.lower() == 'c':
+            from display import clear_quotes
+            clear_quotes()
             sync_open_orders()
         elif choice.lower() == 'v':
             from kis import event_pipe

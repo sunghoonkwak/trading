@@ -59,6 +59,9 @@ def update_order_state(order_id, ticker, name, side, price, qty, state, notify=T
 ### clear_order_states
 Event Viewer의 주문 목록을 초기화합니다 (`CLR|ORDERS`).
 
+### clear_quotes
+Event Viewer의 시세 목록을 초기화합니다 (`CLR|QUOTES`).
+
 ### show_in_result_area
 ```python
 def show_in_result_area(lines: list[str])
@@ -77,4 +80,4 @@ def input_at(row, col, prompt) -> str
 *   **Message Types**:
     - `"ODR"`: 주문 정보
     - `"MKT"`: 시세 정보
-    - `"CLR"`: 명령 (예: `ORDERS` 초기화)
+    - `"CLR"`: 명령 (`ORDERS` 또는 `QUOTES` 초기화)
