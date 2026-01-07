@@ -96,21 +96,29 @@ def save_history(history_data: Dict[str, List]) -> bool:
         return False
 
 
-def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, total_value_usd: float, exchange_rate: float):
+def calculate_order():
     """
     Calculate the Value Averaging orders for today (supports multiple strategies).
 
     Args:
-        targets (dict): Target weights per ticker {ticker: weight}.
-        price_map (dict): Current prices per ticker {ticker: price}.
-        merged_portfolio (dict): Portfolio data with current holdings.
-        total_value_usd (float): Total asset value in USD.
-        exchange_rate (float): USD to KRW exchange rate.
+        None
 
     Returns:
         dict: Calculation result with results per ticker and aggregated orders.
     """
     from menu.handle_account_info import fetch_price
+    from data.data_service import get_portfolio_data
+
+    # Fetch portfolio data internally
+    portfolio_data = get_portfolio_data()
+    if portfolio_data.get('error'):
+        return {"error": portfolio_data['error']}
+
+    targets = portfolio_data.get('targets', {})
+    price_map = portfolio_data.get('price_map', {})
+    merged_portfolio = portfolio_data.get('merged_data', {})
+    total_value_usd = portfolio_data.get('total_value_usd', 0)
+    exchange_rate = portfolio_data.get('exchange_rate', 0)
 
     config = load_config()
     strategies = config.get('strategies', [])

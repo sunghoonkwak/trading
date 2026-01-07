@@ -651,22 +651,10 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logging.info(f"[TG] /portfolio_va from user {update.effective_user.id}")
 
-    # Get portfolio data
-    loop = asyncio.get_running_loop()
-    data = await loop.run_in_executor(None, get_portfolio_data)
-    if data.get("error"):
-        await wrap_reply(update, f"⚠️ Error: {data['error']}")
-        return
-
-    targets = data.get("targets", {})
-    price_map = data.get("price_map", {})
-    merged_data = data.get("merged_data", {})
-    total_value_usd = data.get("total_value_usd", 0)
-    exchange_rate = data.get("exchange_rate")
-
     # Calculate order
+    loop = asyncio.get_running_loop()
     res = await loop.run_in_executor(
-        None, value_averaging.calculate_order, targets, price_map, merged_data, total_value_usd, exchange_rate
+        None, value_averaging.calculate_order
     )
 
     # Cache result for callback

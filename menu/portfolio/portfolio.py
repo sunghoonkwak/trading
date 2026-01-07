@@ -243,7 +243,7 @@ def portfolio_menu():
     Portfolio menu interface using modular get_portfolio() function.
     Displays summary and handles menu interactions.
     """
-    from display import show_in_result_area, input_at, process_pending_alerts
+    from display import show_in_result_area, input_at
     from data.data_service import get_portfolio_data
 
     # Get portfolio data
@@ -263,8 +263,6 @@ def portfolio_menu():
 
 
     while True:
-        process_pending_alerts()
-
         # Build summary lines
         lines = []
         lines.append(f" [Portfolio] (Rate: {exchange_rate:,.2f} KRW/USD) (Total: ${total_value_usd:,.0f})")
@@ -325,11 +323,8 @@ def portfolio_menu():
             from . import value_averaging
             from display import show_in_result_area, input_at
 
-            # Get price_map from portfolio_data
-            price_map = portfolio_data.get("price_map", {})
-
             # Call refactored calculate_order (returns multi-strategy results)
-            res = value_averaging.calculate_order(targets, price_map, merged_data, total_value_usd, exchange_rate)
+            res = value_averaging.calculate_order()
 
             # Build Display Lines
             lines = []
