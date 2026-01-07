@@ -238,6 +238,61 @@ def _export_portfolio_excel(merged_data, current_weights, targets) -> bool:
         return False
 
 
+def _print_portfolio_summary(stats, exchange_rate, total_value_usd):
+    """
+    Print the portfolio summary table.
+    """
+    from display import show_in_result_area
+
+    # Build summary lines
+    lines = []
+    lines.append(f" [Portfolio] (Rate: {exchange_rate:,.2f} KRW/USD) (Total: ${total_value_usd:,.0f})")
+    lines.append(f" {'':10} │ {'USD':^27} │ {'KRW':^27} │ {'%':^6}")
+    lines.append("─" * 80)
+
+    def _align_pair(val1, val2, curr1, curr2, width=6):
+        """Format and align two currency values for a table cell."""
+        sym1 = "$ " if curr1 == "USD" else "₩ "
+        sym2 = "$ " if curr2 == "USD" else "₩ "
+
+        def _get_num(v, c):
+            if c == "USD":
+                return f"{v/1000:,.1f}K" if abs(v) >= 1000 else f"{v:,.2f}"
+            else:
+                if abs(v) >= 1000000: return f"{v/1000000:,.1f}M"
+                return f"{v/1000:,.0f}K" if abs(v) >= 1000 else f"{v:,.0f}"
+
+        s1 = f"{sym1}{_get_num(val1, curr1).rjust(width)}"
+        s2 = f"{sym2}{_get_num(val2, curr2).rjust(width)}"
+        return f"{s1} / {s2}"
+
+    # US Assets row
+    us_usd = _align_pair(stats['us_stock_usd'], stats['us_cash_usd'], "USD", "USD")
+    us_krw = _align_pair(stats['us_stock_krw'], stats['us_cash_krw'], "KRW", "KRW")
+    lines.append(f" {'US Assets':10} │ {us_usd:^27} │ {us_krw:^27} │ {stats['us_pct']:5.1f}%")
+
+    # KR Assets row
+    kr_usd = _align_pair(stats['kr_stock_usd'], stats['kr_cash_usd'], "USD", "USD")
+    kr_krw = _align_pair(stats['kr_stock_krw'], stats['kr_cash_krw'], "KRW", "KRW")
+    lines.append(f" {'KR Assets':10} │ {kr_usd:^27} │ {kr_krw:^27} │ {stats['kr_pct']:5.1f}%")
+
+    lines.append("─" * 80)
+
+    # Total row
+    tot_usd = _align_pair(stats['total_stock_usd'], stats['total_cash_usd'], "USD", "USD")
+    tot_krw = _align_pair(stats['total_stock_krw'], stats['total_cash_krw'], "KRW", "KRW")
+    lines.append(f" {'Total':10} │ {tot_usd:^27} │ {tot_krw:^27} │")
+
+    # Cash ratio row
+    us_cash_str = f"{stats['us_cash_ratio']:>14.1f}        %"
+    kr_cash_str = f"{stats['kr_cash_ratio']:>14.1f}        %"
+    lines.append(f" {'Cash':10} │ {us_cash_str:27} │ {kr_cash_str:27} │")
+    lines.append("─" * 80)
+    lines.append(" 1. Check Portfolio  2. Excel Export  3. Value Averaging  q. Exit")
+
+    show_in_result_area(lines)
+
+
 def portfolio_menu():
     """
     Portfolio menu interface using modular get_portfolio() function.
@@ -261,55 +316,8 @@ def portfolio_menu():
     stats = portfolio_data["stats"]
     exchange_rate = portfolio_data["exchange_rate"]
 
-
     while True:
-        # Build summary lines
-        lines = []
-        lines.append(f" [Portfolio] (Rate: {exchange_rate:,.2f} KRW/USD) (Total: ${total_value_usd:,.0f})")
-        lines.append(f" {'':10} │ {'USD':^27} │ {'KRW':^27} │ {'%':^6}")
-        lines.append("─" * 80)
-
-        def _align_pair(val1, val2, curr1, curr2, width=6):
-            """Format and align two currency values for a table cell."""
-            sym1 = "$ " if curr1 == "USD" else "₩ "
-            sym2 = "$ " if curr2 == "USD" else "₩ "
-
-            def _get_num(v, c):
-                if c == "USD":
-                    return f"{v/1000:,.1f}K" if abs(v) >= 1000 else f"{v:,.2f}"
-                else:
-                    if abs(v) >= 1000000: return f"{v/1000000:,.1f}M"
-                    return f"{v/1000:,.0f}K" if abs(v) >= 1000 else f"{v:,.0f}"
-
-            s1 = f"{sym1}{_get_num(val1, curr1).rjust(width)}"
-            s2 = f"{sym2}{_get_num(val2, curr2).rjust(width)}"
-            return f"{s1} / {s2}"
-
-        # US Assets row
-        us_usd = _align_pair(stats['us_stock_usd'], stats['us_cash_usd'], "USD", "USD")
-        us_krw = _align_pair(stats['us_stock_krw'], stats['us_cash_krw'], "KRW", "KRW")
-        lines.append(f" {'US Assets':10} │ {us_usd:^27} │ {us_krw:^27} │ {stats['us_pct']:5.1f}%")
-
-        # KR Assets row
-        kr_usd = _align_pair(stats['kr_stock_usd'], stats['kr_cash_usd'], "USD", "USD")
-        kr_krw = _align_pair(stats['kr_stock_krw'], stats['kr_cash_krw'], "KRW", "KRW")
-        lines.append(f" {'KR Assets':10} │ {kr_usd:^27} │ {kr_krw:^27} │ {stats['kr_pct']:5.1f}%")
-
-        lines.append("─" * 80)
-
-        # Total row
-        tot_usd = _align_pair(stats['total_stock_usd'], stats['total_cash_usd'], "USD", "USD")
-        tot_krw = _align_pair(stats['total_stock_krw'], stats['total_cash_krw'], "KRW", "KRW")
-        lines.append(f" {'Total':10} │ {tot_usd:^27} │ {tot_krw:^27} │")
-
-        # Cash ratio row
-        us_cash_str = f"{stats['us_cash_ratio']:>14.1f}        %"
-        kr_cash_str = f"{stats['kr_cash_ratio']:>14.1f}        %"
-        lines.append(f" {'Cash':10} │ {us_cash_str:27} │ {kr_cash_str:27} │")
-        lines.append("─" * 80)
-        lines.append(" 1. Check Portfolio  2. Excel Export  3. Value Averaging  q. Exit")
-
-        show_in_result_area(lines)
+        _print_portfolio_summary(stats, exchange_rate, total_value_usd)
 
         choice = input_at(12, 2, "Enter Choice: ").strip().lower()
 

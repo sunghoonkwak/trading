@@ -37,6 +37,9 @@ KIS OpenAPI를 통해 관리 가능한 한국투자증권 계좌와, OpenAPI를 
 
 ## Internal Functions (Private)
 
+### _print_portfolio_summary
+포트폴리오 요약 테이블(자산 현황, 현금 비중 등)을 화면에 출력합니다. `portfolio_menu`에서 호출됩니다.
+
 ### _check_portfolio_balance
 현재 포트폴리오 비중과 목표 비중을 비교하여 리밸런싱 필요 내역을 UI로 표시합니다.
 `data_service.get_weight_diffs()`를 사용하여 계산된 비중 차이 정보를 가져옵니다.

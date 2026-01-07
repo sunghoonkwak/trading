@@ -36,4 +36,6 @@ trigger: always_on
 ```
 2. Follow 72/50 rule.
 
-3. commit message 요청시 그냥 보여줘 commit command run할 준비하지마, 그리고 md파일 수정 안했으면 수정해
+3. 절대 파일명을 넣지마
+
+4. commit message 요청시 그냥 보여줘 commit command run할 준비하지마, 그리고 md파일 수정 안했으면 수정해
