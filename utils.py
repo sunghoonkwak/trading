@@ -43,21 +43,31 @@ def safe_cast(val, to_type, default=None):
         return default
 
 
-def safe_int_format(val, default="0") -> str:
+def format_number(val, default="0") -> str:
     """
-    Safely format a value as an integer string with thousands separators.
+    Format a numeric value with thousands separators.
+
+    Handles both integer and decimal values. Skips formatting if
+    value already contains $ or comma.
 
     Args:
-        val: The value to format.
+        val: The price value to format (str, int, or float).
         default: The default string to return if formatting fails.
 
     Returns:
-        Formatted string (e.g., "1,234") or default.
+        Formatted string (e.g., "53,900" or "57.32").
     """
+    price_str = str(val).strip()
+
+    # Skip if already formatted or contains currency symbol
+    if '$' in price_str or ',' in price_str or not price_str:
+        return price_str if price_str else default
+
     try:
-        if not val or str(val).strip() == "":
-            return default
-        # Handle cases where val might be a float string like "1234.56"
-        return format(int(float(val)), ",")
+        price_val = float(price_str)
+        if price_val == int(price_val):
+            return f"{int(price_val):,}"
+        else:
+            return f"{price_val:,.2f}"
     except (ValueError, TypeError):
         return default

@@ -27,7 +27,7 @@ from textual.reactive import reactive
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kis.event_pipe as event_pipe
-from utils import get_fixed_width
+from utils import get_fixed_width, format_number
 
 # Viewer process handle (used by spawn_viewer/close_viewer)
 _viewer_process = None
@@ -411,10 +411,12 @@ class EventViewerApp(App):
             if ticker_color:
                 ticker_disp = f"[{ticker_color}]{ticker_disp}[/{ticker_color}]"
 
+            price_str = format_number(info['price'])
+
             lines.append(
                 f"{order_time} {name:20}|{ticker_disp}| "
                 f"[{side_color}]{get_fixed_width(info['side'], 8)}[/{side_color}] "
-                f"prc: [cyan]{info['price']:>10}[/cyan] qty: [cyan]{info['qty']:>5}[/cyan]"
+                f"prc: [cyan]{price_str:>10}[/cyan] qty: [cyan]{info['qty']:>5}[/cyan]"
             )
 
         orders_panel = self.query_one("#orders-panel", OrdersPanel)

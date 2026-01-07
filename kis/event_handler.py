@@ -13,7 +13,7 @@ from trading_config import strip_market_prefix
 from kis import event_pipe
 from kis.event_pipe import PrintLevel, print_viewer
 from display import add_alert, remove_order_state
-from utils import get_fixed_width, safe_int_format
+from utils import get_fixed_width, format_number
 from menu.handle_manage_orders import request_sync
 from telegram_bot.telegram_utils import send_notification
 
@@ -167,8 +167,8 @@ def _handle_domestic_order(row) -> bool:
 
         cfg = trading_config.get_stock_info(code)
 
-        price = safe_int_format(str(row.get('CNTG_UNPR', '0')).strip())
-        qty = safe_int_format(row['CNTG_QTY'])
+        price = format_number(str(row.get('CNTG_UNPR', '0')).strip())
+        qty = format_number(row['CNTG_QTY'])
 
         extra_info = ""
         if rfus_yn in ['Y', '1']:
