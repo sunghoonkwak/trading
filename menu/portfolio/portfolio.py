@@ -322,76 +322,76 @@ def portfolio_menu():
             _export_portfolio_excel(merged_data, current_weights, targets)
             input_at(12, 2, "Press Enter to continue...")
         elif choice == '3':
-             from . import value_averaging
-             from display import show_in_result_area, input_at
+            from . import value_averaging
+            from display import show_in_result_area, input_at
 
-             # Get price_map from portfolio_data
-             price_map = portfolio_data.get("price_map", {})
+            # Get price_map from portfolio_data
+            price_map = portfolio_data.get("price_map", {})
 
-             # Call refactored calculate_order (returns multi-strategy results)
-             res = value_averaging.calculate_order(targets, price_map, merged_data, total_value_usd, exchange_rate)
+            # Call refactored calculate_order (returns multi-strategy results)
+            res = value_averaging.calculate_order(targets, price_map, merged_data, total_value_usd, exchange_rate)
 
-             # Build Display Lines
-             lines = []
-             date = res.get("date", "N/A")
-             results = res.get("results", [])
-             total_orders = res.get("total_orders", [])
+            # Build Display Lines
+            lines = []
+            date = res.get("date", "N/A")
+            results = res.get("results", [])
+            total_orders = res.get("total_orders", [])
 
-             # Header
-             lines.append(f" [Value Averaging] {date} ET")
-             lines.append("=" * 50)
+            # Header
+            lines.append(f" [Value Averaging] {date} ET")
+            lines.append("=" * 50)
 
-             if res.get("error"):
-                 lines.append(f" ERROR: {res.get('error')}")
-             elif not results:
-                 lines.append(" No strategies configured.")
-             else:
-                 for r in results:
-                     if r.get("error"):
-                         lines.append(f" {r.get('target_ticker', 'Unknown')}: {r['error']}")
-                         continue
+            if res.get("error"):
+                lines.append(f" ERROR: {res.get('error')}")
+            elif not results:
+                lines.append(" No strategies configured.")
+            else:
+                for r in results:
+                    if r.get("error"):
+                        lines.append(f" {r.get('target_ticker', 'Unknown')}: {r['error']}")
+                        continue
 
-                     target_ticker = r.get("target_ticker", "N/A")
-                     already_executed = r.get("already_executed", False)
-                     curr_p = r.get("current_price", 0)
-                     daily_b = r.get("daily_budget", 0)
-                     buy_amt = r.get("daily_target_amount", 0)
-                     day_count = r.get("day_count", 0)
-                     orders = r.get("orders", [])
+                    target_ticker = r.get("target_ticker", "N/A")
+                    already_executed = r.get("already_executed", False)
+                    curr_p = r.get("current_price", 0)
+                    daily_b = r.get("daily_budget", 0)
+                    buy_amt = r.get("daily_target_amount", 0)
+                    day_count = r.get("day_count", 0)
+                    orders = r.get("orders", [])
 
-                     status_str = "✓" if already_executed else " "
-                     lines.append(f" {status_str} {target_ticker} | Day: {day_count} | Price: ${curr_p:,.2f}")
-                     lines.append(f"   Budget: ${daily_b:,.2f} | Buy: ${buy_amt:,.2f}")
+                    status_str = "✓" if already_executed else " "
+                    lines.append(f" {status_str} {target_ticker} | Day: {day_count} | Price: ${curr_p:,.2f}")
+                    lines.append(f"   Budget: ${daily_b:,.2f} | Buy: ${buy_amt:,.2f}")
 
-                     if already_executed:
-                         lines.append("   [Executed today]")
-                     elif curr_p == 0:
-                         lines.append("   [Price unavailable]")
-                     elif orders:
-                         for o in orders:
-                             lines.append(f"   > {o['qty']} qty @ ${o['price']:.2f} (LOC)")
-                     else:
-                         lines.append("   [No order needed]")
-                     lines.append("-" * 50)
+                    if already_executed:
+                        lines.append("   [Executed today]")
+                    elif curr_p == 0:
+                        lines.append("   [Price unavailable]")
+                    elif orders:
+                        for o in orders:
+                            lines.append(f"   > {o['qty']} qty @ ${o['price']:.2f} (LOC)")
+                    else:
+                        lines.append("   [No order needed]")
+                    lines.append("-" * 50)
 
-             show_in_result_area(lines)
+            show_in_result_area(lines)
 
-             # Execution Prompt (only if has orders)
-             if total_orders:
-                 confirm = input_at(13, 2, f" Execute {len(total_orders)} order(s)? (y/n): ").strip().lower()
-                 if confirm == 'y':
-                      exec_res = value_averaging.execute_orders(res)
-                      result_lines = [lines[0], lines[1]]  # Keep header
-                      result_lines.append(" Execution Result:")
-                      for r in exec_res:
-                          ticker = r.get('ticker', 'Unknown')
-                          if r.get('skipped'):
-                              result_lines.append(f"  ⏭️ {ticker}: {r.get('message', 'Skipped')}")
-                          else:
-                              status = "✓" if r.get('success') else "✗"
-                              result_lines.append(f"  {status} {ticker}: {r.get('message', 'Unknown')}")
-                      show_in_result_area(result_lines)
+            # Execution Prompt (only if has orders)
+            if total_orders:
+                confirm = input_at(13, 2, f" Execute {len(total_orders)} order(s)? (y/n): ").strip().lower()
+                if confirm == 'y':
+                    exec_res = value_averaging.execute_orders(res)
+                    result_lines = [lines[0], lines[1]]  # Keep header
+                    result_lines.append(" Execution Result:")
+                    for r in exec_res:
+                        ticker = r.get('ticker', 'Unknown')
+                        if r.get('skipped'):
+                            result_lines.append(f"  ⏭️ {ticker}: {r.get('message', 'Skipped')}")
+                        else:
+                            status = "✓" if r.get('success') else "✗"
+                            result_lines.append(f"  {status} {ticker}: {r.get('message', 'Unknown')}")
+                    show_in_result_area(result_lines)
 
-             input_at(12, 2, " Press Enter to continue...")
+            input_at(12, 2, " Press Enter to continue...")
         elif choice == 'q':
             break
