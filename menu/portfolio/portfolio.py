@@ -365,6 +365,12 @@ def portfolio_menu():
 
                     if already_executed:
                         lines.append("   [Executed today]")
+                        executed_orders = r.get("executed_orders", [])
+                        for o in executed_orders:
+                            o_qty = o.get('qty', 0)
+                            o_price = o.get('price', 0)
+                            o_type = o.get('order_type', 'LOC')
+                            lines.append(f"   > {o_qty} qty @ ${o_price:.2f} ({o_type})")
                     elif curr_p == 0:
                         lines.append("   [Price unavailable]")
                     elif orders:

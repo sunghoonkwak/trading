@@ -157,9 +157,17 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
 
         # Check if already executed today with SUCCESS (not failed attempts)
         already_executed = False
+        executed_orders = []
         for entry in ticker_history:
             if entry.get('date', '').startswith(today_et) and entry.get('success', False):
                 already_executed = True
+                # Extract executed order details if available
+                results_list = entry.get('results', [])
+                if results_list:
+                    # In new format, results is a list of dicts
+                    for res in results_list:
+                        if res.get('order'):
+                            executed_orders.append(res['order'])
                 break
 
         # Extract target data from portfolio
@@ -233,6 +241,7 @@ def calculate_order(targets: dict, price_map: dict, merged_portfolio: dict, tota
             "target_weight": target_weight,
             "orders": orders,
             "already_executed": already_executed,
+            "executed_orders": executed_orders,
             "error": None
         })
 

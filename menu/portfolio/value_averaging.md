@@ -62,8 +62,8 @@
     "status": "calculated",
     "date": "2026-01-06",
     "results": [
-        {"target_ticker": "QLD", "day_count": 4, "orders": [...], ...},
-        {"target_ticker": "TQQQ", "day_count": 1, "orders": [], ...}
+        {"target_ticker": "QLD", "day_count": 4, "orders": [...], "executed_orders": [...], ...},
+        {"target_ticker": "TQQQ", "day_count": 1, "orders": [], "executed_orders": [], ...}
     ],
     "total_orders": [...],  # 모든 종목의 orders 합산
     "error": None

@@ -596,6 +596,14 @@ def format_va_report(res: dict) -> str:
 
         if already_executed:
             lines.append(f"✅ <i>Executed today</i>")
+            executed_orders = r.get("executed_orders", [])
+            for o in executed_orders:
+                # o has qty, price, type, order_type
+                # Example: > 10 qty @ $150.00 (LOC)
+                o_qty = o.get('qty', 0)
+                o_price = o.get('price', 0)
+                o_type = o.get('order_type', 'LOC')
+                lines.append(f"   > {o_qty} qty @ ${o_price:,.2f} ({o_type})")
         else:
             lines.append(f"Day: {day_count} | Weight: {target_weight:.1f}%")
             lines.append(f"Price: ${current_price:,.2f} | Budget: ${daily_budget:,.2f}")
