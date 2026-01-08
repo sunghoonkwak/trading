@@ -91,21 +91,17 @@
     "QLD": [
         {
             "date": "2026-01-06 09:08:43",
-            "results": [{"ticker": "QLD", "order": {...}, "success": true, "message": "Order Placed"}],
-            "success": true
-        }
-    ],
-    "TQQQ": [
-        {
-            "date": "2026-01-06 09:15:18",
-            "results": [{"ticker": "TQQQ", "order": null, "success": true, "message": "No order needed (insufficient qty)"}],
+            "day_count": 3,
+            "results": [{...}],
             "success": true
         }
     ]
 }
 ```
 
-히스토리는 **최신 순** (index 0이 가장 최근)으로 저장됩니다.
+- `day_count`: 해당 주문의 Day 번호 (명시적으로 저장)
+- 히스토리는 **최신 순** (index 0이 가장 최근)으로 저장됩니다
+- Day 계산 시 가장 최근 성공 기록의 `day_count`를 읽어 +1 합니다
 
 ---
 

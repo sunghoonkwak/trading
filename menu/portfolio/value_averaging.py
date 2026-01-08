@@ -209,10 +209,15 @@ def calculate_order():
                     config_updated = True
                     break
 
-        # Day count calculation (count only SUCCESSFUL history entries)
-        # Failed attempts should not count toward the day progression
-        success_count = sum(1 for entry in ticker_history if entry.get('success', False))
-        day_count = success_count if already_executed else success_count + 1
+        # Day count calculation: get last successful day_count from history
+        # If no history, start at day 1
+        last_day_count = 0
+        for entry in ticker_history:
+            if entry.get('success', False):
+                last_day_count = entry.get('day_count', 0)
+                break  # History is sorted newest first
+
+        day_count = last_day_count if already_executed else last_day_count + 1
 
         # Calculate targets
         target_value_accumulated = day_count * daily_budget
@@ -290,8 +295,9 @@ def execute_orders(order_report):
     cano = ka.getTREnv().my_acct
     acnt_prdt_cd = ka.getTREnv().my_prod
 
-    # Build order map for quick lookup
+    # Build order map and day_count map for quick lookup
     order_map = {o['ticker']: o for o in total_orders}
+    day_count_map = {r['target_ticker']: r.get('day_count', 0) for r in results if r.get('target_ticker')}
 
     for r in results:
         if r.get('error'):
@@ -375,6 +381,7 @@ def execute_orders(order_report):
 
         history_entry = {
             "date": datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M:%S"),
+            "day_count": day_count_map.get(ticker, 0),
             "results": [result],
             "success": result.get('success', False)
         }
