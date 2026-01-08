@@ -19,6 +19,7 @@ UI 모듈(`portfolio.py`, `handle_account_info.py`)과 데이터 소스(`KIS Thr
     - 메모리 캐시 유효(기본 5분) 시 캐시 반환.
     - `force_refresh=True` 또는 캐시 만료 시 `KIS Thread`에 요청 전송.
     - `KIS Thread` 응답 대기 및 수신 후 `portfolio.json` 저장 및 캐시 갱신.
+    - **GSheet/KIS 에러 시**: `metadata`에 `gsheet_error` 또는 `kis_error`가 있으면 **캐시하지 않음** (불완전한 데이터 재사용 방지).
 - **Data Processing**:
     - `merged_data`: 국내/해외 종목을 티커 키 기반으로 통합.
     - `stats`: 국가별 자산 총액, 비중, 현금 비중 등 통계 계산.

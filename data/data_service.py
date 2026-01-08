@@ -411,10 +411,22 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
 
     result["targets"] = targets
 
-    # Cache the PROCESSED result
-    set_portfolio_cache(result)
+    # Check if data is complete (no GSheet/KIS errors)
+    has_gsheet_error = metadata.get("gsheet_error")
+    has_kis_error = metadata.get("kis_error")
 
-    add_alert("[Data] Portfolio loaded", "SUCCESS")
+    if has_gsheet_error or has_kis_error:
+        # Log which data source failed
+        if has_gsheet_error:
+            add_alert(f"[Data] GSheet error: {has_gsheet_error}", "WARN")
+        if has_kis_error:
+            add_alert(f"[Data] KIS error: {has_kis_error}", "WARN")
+        add_alert("[Data] Portfolio loaded (partial - not cached)", "WARN")
+        # Do NOT cache incomplete data
+    else:
+        # Cache only complete data
+        set_portfolio_cache(result)
+        add_alert("[Data] Portfolio loaded", "SUCCESS")
     logging.info("[DataService] Portfolio data cached successfully")
 
     return result

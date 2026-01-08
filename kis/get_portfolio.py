@@ -317,6 +317,7 @@ def get_portfolio() -> dict:
     gsheet_holdings = []
     gsheet_asset_info = {}
     gsheet_cash = []
+    gsheet_error = None  # Track GSheet connection errors
 
     if usd_sheet:
         usd_data = parse_worksheet_data(usd_sheet, "USD")
@@ -334,8 +335,15 @@ def get_portfolio() -> dict:
 
     if not usd_sheet and not krw_sheet:
         add_alert("GSheet error: Failed to connect", "ERROR")
+        gsheet_error = "Failed to connect to both USD and KRW sheets"
         if not kis_portfolio:
-            return False, kis_raw_data
+            return {"error": gsheet_error}
+    elif not usd_sheet:
+        gsheet_error = "Failed to connect to USD sheet"
+        add_alert(f"GSheet warning: {gsheet_error}", "WARN")
+    elif not krw_sheet:
+        gsheet_error = "Failed to connect to KRW sheet"
+        add_alert(f"GSheet warning: {gsheet_error}", "WARN")
 
     # Step 3: Merge data
     all_accounts = {}
@@ -393,11 +401,19 @@ def get_portfolio() -> dict:
     all_cash.extend(gsheet_cash)
 
     # Build final portfolio
+    metadata = {
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+        "exchange_rate": kis_raw_data.get('exchange_rate', None) if kis_raw_data else None
+    }
+
+    # Add error info if any data source failed
+    if gsheet_error:
+        metadata["gsheet_error"] = gsheet_error
+    if kis_raw_data and kis_raw_data.get('error'):
+        metadata["kis_error"] = kis_raw_data.get('error')
+
     portfolio = {
-        "metadata": {
-            "last_updated": datetime.now(timezone.utc).isoformat(),
-            "exchange_rate": kis_raw_data.get('exchange_rate', None) if kis_raw_data else None
-        },
+        "metadata": metadata,
         "owners": OWNERS,
         "asset_info": all_asset_info,
         "accounts": account_list,
