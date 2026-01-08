@@ -184,7 +184,8 @@ if __name__ == "__main__":
             # Wait for client in background
             import threading
             def wait_client():
-                event_pipe.wait_for_client()
+                if event_pipe.wait_for_client():
+                    event_pipe.start_writer_thread()
             client_thread = threading.Thread(target=wait_client, daemon=True)
             client_thread.start()
 

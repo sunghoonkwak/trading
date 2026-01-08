@@ -1,12 +1,15 @@
 """
 Named Pipe IPC module for WebSocket log communication between main process and viewer.
 Works on Windows only using win32pipe.
+Uses async write queue to prevent blocking when Event Viewer is unresponsive.
 """
 import win32pipe
 import win32file
 import pywintypes
 import threading
 import logging
+import queue
+import time
 
 from enum import IntEnum
 
@@ -23,11 +26,19 @@ def get_log_level():
 
 PIPE_NAME = r'\\.\pipe\kis_websocket_log'
 PIPE_BUFFER_SIZE = 65536
+WRITE_QUEUE_SIZE = 1000  # Max queued messages before dropping
+WRITE_TIMEOUT = 2.0  # Seconds to wait for write before considering it stuck
 
 # Server side (main.py)
 _pipe_handle = None
 _pipe_connected = False
 _pipe_lock = threading.Lock()
+
+# Async write queue
+_write_queue = queue.Queue(maxsize=WRITE_QUEUE_SIZE)
+_writer_thread = None
+_writer_running = False
+_last_write_warning = 0  # Timestamp of last warning to avoid spam
 
 
 def print_viewer(msg_type, level, log):
@@ -91,12 +102,30 @@ def wait_for_client():
 
 
 def send_log(msg_type: str, message: str) -> bool:
-    """Send log message through pipe. Non-blocking.
+    """Send log message through pipe. Non-blocking via queue.
 
     Args:
         msg_type: Message type prefix (MKT for market data, ODR for orders)
         message: Log message content
     """
+    global _last_write_warning
+    if not _pipe_connected or _pipe_handle is None:
+        return False
+
+    try:
+        _write_queue.put_nowait((msg_type, message))
+        return True
+    except queue.Full:
+        # Log warning at most once per 5 seconds to avoid spam
+        now = time.time()
+        if now - _last_write_warning > 5.0:
+            logging.warning("[Pipe] Write queue full - Event Viewer may be unresponsive")
+            _last_write_warning = now
+        return False
+
+
+def _do_write(msg_type: str, message: str) -> bool:
+    """Actually write to pipe. Called from writer thread."""
     global _pipe_connected
     if not _pipe_connected or _pipe_handle is None:
         return False
@@ -107,11 +136,43 @@ def send_log(msg_type: str, message: str) -> bool:
             win32file.WriteFile(_pipe_handle, data)
             return True
         except pywintypes.error as e:
-            logging.warning(f"[Pipe] Send failed: {e}")
+            logging.warning(f"[Pipe] Write failed: {e}")
             _pipe_connected = False
-            # Trigger pipe reset for reconnection
             _schedule_pipe_reset()
             return False
+
+
+def _writer_worker():
+    """Background thread to write messages to pipe."""
+    global _writer_running
+    while _writer_running:
+        try:
+            msg_type, message = _write_queue.get(timeout=0.5)
+            _do_write(msg_type, message)
+        except queue.Empty:
+            continue
+        except Exception as e:
+            logging.error(f"[Pipe] Writer thread error: {e}")
+
+
+def start_writer_thread():
+    """Start the background writer thread."""
+    global _writer_thread, _writer_running
+    if _writer_thread is not None and _writer_thread.is_alive():
+        return
+
+    _writer_running = True
+    _writer_thread = threading.Thread(target=_writer_worker, daemon=True, name="PipeWriter")
+    _writer_thread.start()
+    logging.info("[Pipe] Writer thread started")
+
+
+def stop_writer_thread():
+    """Stop the background writer thread."""
+    global _writer_running
+    _writer_running = False
+    if _writer_thread is not None:
+        _writer_thread.join(timeout=2.0)
 
 
 _reset_scheduled = False
@@ -156,6 +217,7 @@ def reset_pipe_server():
         def wait_reconnect():
             if wait_for_client():
                 logging.info("[Pipe] New client reconnected")
+                start_writer_thread()
         reconnect_thread = threading.Thread(target=wait_reconnect, daemon=True)
         reconnect_thread.start()
 
