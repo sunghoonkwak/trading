@@ -372,8 +372,7 @@ def save_history(order_data: dict, exec_results: list = None) -> bool:
 
         return True
     except Exception as e:
-        from display import add_alert
-        add_alert(f"Failed to save history: {e}", "ERROR")
+        display.add_alert(f"Failed to save history: {e}", "ERROR")
         return False
 
 
@@ -561,10 +560,15 @@ def prompt_order_execution(report: dict, display_lines: list) -> bool:
     Returns:
         bool: True if orders were executed, False otherwise
     """
+    # Holiday check - block orders
+    from utils import is_market_holiday
+    if is_market_holiday("NYSE"):
+        display.add_alert("🚫 휴장일 - 주문 불가", "WARN")
+        return False
+
     pending_orders = report.get("pending_orders", [])
     if not pending_orders:
-        from display import add_alert
-        add_alert("No pending orders to execute.", "INFO")
+        display.add_alert("No pending orders to execute.", "INFO")
         return False
 
     input_y = min(len(display_lines) + 1, 14)

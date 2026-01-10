@@ -23,6 +23,7 @@ from data.data_service import get_weight_diffs
 from data.data_service import get_portfolio_data
 from menu.handle_manage_orders import fetch_open_orders
 import trading_config
+from utils import is_market_holiday
 
 # Conversation states
 SELECT_TICKER = 0
@@ -665,6 +666,12 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Build keyboard
     has_orders = bool(res.get("total_orders"))
+
+    # Holiday check - show warning and disable orders
+    if is_market_holiday("NYSE"):
+        msg += "\n\n🚫 <b>휴장일</b> - 주문 비활성화"
+        has_orders = False
+
     keyboard = build_va_keyboard(has_orders)
 
     sent_msg = await wrap_reply(update, msg, parse_mode='HTML', reply_markup=keyboard)

@@ -109,3 +109,5 @@
 
 - **Terminal UI**: `portfolio_menu` Option 3에서 호출
 - **Telegram**: `/portfolio_va` 명령어에서 호출
+
+> **휴장일**: `is_market_holiday("NYSE")`로 휴장일/주말에는 계산 결과만 표시되고 주문이 차단됩니다.

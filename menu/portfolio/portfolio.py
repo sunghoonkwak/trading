@@ -387,19 +387,24 @@ def portfolio_menu():
 
             # Execution Prompt (only if has orders)
             if total_orders:
-                confirm = input_at(13, 2, f" Execute {len(total_orders)} order(s)? (y/n): ").strip().lower()
-                if confirm == 'y':
-                    exec_res = value_averaging.execute_orders(res)
-                    result_lines = [lines[0], lines[1]]  # Keep header
-                    result_lines.append(" Execution Result:")
-                    for r in exec_res:
-                        ticker = r.get('ticker', 'Unknown')
-                        if r.get('skipped'):
-                            result_lines.append(f"  ⏭️ {ticker}: {r.get('message', 'Skipped')}")
-                        else:
-                            status = "✓" if r.get('success') else "✗"
-                            result_lines.append(f"  {status} {ticker}: {r.get('message', 'Unknown')}")
-                    show_in_result_area(result_lines)
+                from utils import is_market_holiday
+                if is_market_holiday("NYSE"):
+                    lines.append(" 🚫 휴장일 - 주문 불가")
+                    show_in_result_area(lines)
+                else:
+                    confirm = input_at(13, 2, f" Execute {len(total_orders)} order(s)? (y/n): ").strip().lower()
+                    if confirm == 'y':
+                        exec_res = value_averaging.execute_orders(res)
+                        result_lines = [lines[0], lines[1]]  # Keep header
+                        result_lines.append(" Execution Result:")
+                        for r in exec_res:
+                            ticker = r.get('ticker', 'Unknown')
+                            if r.get('skipped'):
+                                result_lines.append(f"  ⏭️ {ticker}: {r.get('message', 'Skipped')}")
+                            else:
+                                status = "✓" if r.get('success') else "✗"
+                                result_lines.append(f"  {status} {ticker}: {r.get('message', 'Unknown')}")
+                        show_in_result_area(result_lines)
 
             input_at(12, 2, " Press Enter to continue...")
         elif choice == 'q':

@@ -2,6 +2,15 @@
 Common utility functions for the trading application.
 """
 import unicodedata
+from datetime import datetime
+import pandas as pd
+import logging
+
+try:
+    import pandas_market_calendars as mcal
+except ImportError:
+    mcal = None
+    logging.warning("pandas_market_calendars not found. Holiday check will be disabled.")
 
 def get_fixed_width(text: str, width: int = 8) -> str:
     """
@@ -71,3 +80,34 @@ def format_number(val, default="0") -> str:
             return f"{price_val:,.2f}"
     except (ValueError, TypeError):
         return default
+
+
+def is_market_holiday(name="NYSE", date=None) -> bool:
+    """
+    Check if the specified market is on holiday on the given date.
+
+    Args:
+        name: Market name (e.g., 'NYSE', 'NASDAQ'). Default is 'NYSE'.
+        date: datetime object or str(YYYYMMDD). Default is current UTC time.
+
+    Returns:
+        True if it's a holiday or weekend, False otherwise.
+    """
+    if mcal is None:
+        return False
+
+    if date is None:
+        date = datetime.utcnow()
+    elif isinstance(date, str):
+        try:
+            date = datetime.strptime(date, "%Y%m%d")
+        except ValueError:
+            return False
+
+    try:
+        cal = mcal.get_calendar(name)
+        schedule = cal.schedule(start_date=date, end_date=date)
+        return schedule.empty
+    except Exception as e:
+        logging.error(f"Error checking {name} holiday: {e}")
+        return False

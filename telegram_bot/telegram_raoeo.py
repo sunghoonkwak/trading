@@ -14,6 +14,7 @@ from telegram.ext import (
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 
 from menu.raoeo.raoeo import build_raoeo_report, execute_orders, save_history
+from utils import is_market_holiday
 
 # Conversation state
 RAOEO_CONFIRM = 0
@@ -122,6 +123,11 @@ async def cmd_raoeo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pending_orders = report.get("pending_orders", [])
     failed_orders = report.get("failed_orders", [])
     has_orders = bool(pending_orders or failed_orders) and not report.get("executed_today")
+
+    # Holiday check - show warning and disable orders
+    if is_market_holiday("NYSE"):
+        msg += "\n\n🚫 <b>휴장일</b> - 주문 비활성화"
+        has_orders = False
 
     # Build keyboard
     keyboard = build_raoeo_keyboard(has_orders)
