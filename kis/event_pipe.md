@@ -36,9 +36,25 @@
 *   `level <= print_log_level`인 경우 Named Pipe를 통해 뷰어로 전송합니다.
 
 #### `send_log(msg_type, message)`
-메시지를 Named Pipe로 전송합니다.
-*   `msg_type|message\n` 형식으로 인코딩합니다.
-*   Thread-safe하게 `_pipe_lock`을 사용합니다.
+메시지를 Write Queue에 추가합니다 (Non-blocking).
+*   Queue가 가득 차면 오래된 메시지를 버리고 새 메시지를 추가합니다.
+*   항상 최신 이벤트가 전달되도록 보장합니다.
+
+### Async Write System (비동기 쓰기 시스템)
+
+#### Write Queue
+*   `WRITE_QUEUE_SIZE = 1000`: 최대 대기 메시지 수
+*   Queue가 가득 차면 최대 100개의 오래된 메시지를 버립니다.
+
+#### Overlapped I/O
+*   `FILE_FLAG_OVERLAPPED`를 사용하여 non-blocking 쓰기를 구현합니다.
+*   `WRITE_TIMEOUT_MS = 500`: 쓰기 타임아웃 (ms)
+*   타임아웃 시 메시지를 버리고 writer thread가 blocking되지 않도록 합니다.
+
+#### Writer Thread
+*   **`start_writer_thread()`**: 백그라운드 writer thread를 시작합니다.
+*   **`stop_writer_thread()`**: writer thread를 중지합니다.
+*   Queue에서 메시지를 꺼내 `_do_write()`로 전송합니다.
 
 ### Pipe Lifecycle Management (Server-Side)
 *   **`create_pipe_server()`**: Named Pipe를 초기화합니다. (Idempotent: 이미 존재하면 재사용)
@@ -53,3 +69,4 @@
 
 ## Concurrency (동시성)
 *   `threading.Lock` (`_pipe_lock`)을 사용하여 여러 스레드(예: KIS Thread, Main Thread)에서 파이프에 동시에 쓰는 것을 안전하게 처리합니다.
+*   Write Queue와 Overlapped I/O를 통해 Event Viewer가 느려져도 메인 프로그램이 blocking되지 않습니다.

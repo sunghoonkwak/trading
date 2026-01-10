@@ -5,6 +5,8 @@ Uses async write queue to prevent blocking when Event Viewer is unresponsive.
 """
 import win32pipe
 import win32file
+import win32event
+import win32con
 import pywintypes
 import threading
 import logging
@@ -27,7 +29,7 @@ def get_log_level():
 PIPE_NAME = r'\\.\pipe\kis_websocket_log'
 PIPE_BUFFER_SIZE = 65536
 WRITE_QUEUE_SIZE = 1000  # Max queued messages before dropping
-WRITE_TIMEOUT = 2.0  # Seconds to wait for write before considering it stuck
+WRITE_TIMEOUT_MS = 500  # Milliseconds to wait for write before dropping
 
 # Server side (main.py)
 _pipe_handle = None
@@ -64,7 +66,7 @@ def create_pipe_server():
     try:
         _pipe_handle = win32pipe.CreateNamedPipe(
             PIPE_NAME,
-            win32pipe.PIPE_ACCESS_OUTBOUND,
+            win32pipe.PIPE_ACCESS_OUTBOUND | win32file.FILE_FLAG_OVERLAPPED,
             win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_WAIT,
             1,  # Max instances
             PIPE_BUFFER_SIZE,
@@ -104,6 +106,9 @@ def wait_for_client():
 def send_log(msg_type: str, message: str) -> bool:
     """Send log message through pipe. Non-blocking via queue.
 
+    When queue is full, drops oldest messages to make room for new ones.
+    This ensures the latest events are always delivered.
+
     Args:
         msg_type: Message type prefix (MKT for market data, ODR for orders)
         message: Log message content
@@ -116,26 +121,77 @@ def send_log(msg_type: str, message: str) -> bool:
         _write_queue.put_nowait((msg_type, message))
         return True
     except queue.Full:
+        # Drop oldest messages to make room for new one
+        dropped = 0
+        while dropped < 100:  # Drop up to 100 old messages to make space
+            try:
+                _write_queue.get_nowait()
+                dropped += 1
+            except queue.Empty:
+                break
+
         # Log warning at most once per 5 seconds to avoid spam
         now = time.time()
         if now - _last_write_warning > 5.0:
-            logging.warning("[Pipe] Write queue full - Event Viewer may be unresponsive")
+            logging.warning(f"[Pipe] Queue full - dropped {dropped} old messages")
             _last_write_warning = now
-        return False
+
+        # Try adding new message again
+        try:
+            _write_queue.put_nowait((msg_type, message))
+            return True
+        except queue.Full:
+            return False
 
 
 def _do_write(msg_type: str, message: str) -> bool:
-    """Actually write to pipe. Called from writer thread."""
+    """Actually write to pipe using overlapped I/O with timeout.
+
+    If the write doesn't complete within WRITE_TIMEOUT_MS, the message is dropped
+    to prevent blocking the writer thread when Event Viewer is unresponsive.
+    """
     global _pipe_connected
     if not _pipe_connected or _pipe_handle is None:
         return False
 
     with _pipe_lock:
+        overlapped = pywintypes.OVERLAPPED()
+        overlapped.hEvent = win32event.CreateEvent(None, True, False, None)
+
         try:
             data = (msg_type + "|" + message + "\n").encode('utf-8')
-            win32file.WriteFile(_pipe_handle, data)
-            return True
+            err_code, _ = win32file.WriteFile(_pipe_handle, data, overlapped)
+
+            if err_code == 0:  # Completed immediately
+                win32event.CloseHandle(overlapped.hEvent)
+                return True
+
+            if err_code == win32con.ERROR_IO_PENDING:
+                # Wait with timeout
+                result = win32event.WaitForSingleObject(
+                    overlapped.hEvent, WRITE_TIMEOUT_MS
+                )
+                win32event.CloseHandle(overlapped.hEvent)
+
+                if result == win32event.WAIT_OBJECT_0:
+                    return True
+                else:
+                    # Timeout - cancel the pending write
+                    try:
+                        win32file.CancelIo(_pipe_handle)
+                    except:
+                        pass
+                    return False
+
+            # Other error
+            win32event.CloseHandle(overlapped.hEvent)
+            return False
+
         except pywintypes.error as e:
+            try:
+                win32event.CloseHandle(overlapped.hEvent)
+            except:
+                pass
             logging.warning(f"[Pipe] Write failed: {e}")
             _pipe_connected = False
             _schedule_pipe_reset()
