@@ -163,7 +163,7 @@ def _do_write(msg_type: str, message: str) -> bool:
             err_code, _ = win32file.WriteFile(_pipe_handle, data, overlapped)
 
             if err_code == 0:  # Completed immediately
-                win32event.CloseHandle(overlapped.hEvent)
+                win32file.CloseHandle(overlapped.hEvent)
                 return True
 
             if err_code == win32con.ERROR_IO_PENDING:
@@ -171,7 +171,7 @@ def _do_write(msg_type: str, message: str) -> bool:
                 result = win32event.WaitForSingleObject(
                     overlapped.hEvent, WRITE_TIMEOUT_MS
                 )
-                win32event.CloseHandle(overlapped.hEvent)
+                win32file.CloseHandle(overlapped.hEvent)
 
                 if result == win32event.WAIT_OBJECT_0:
                     return True
@@ -184,12 +184,12 @@ def _do_write(msg_type: str, message: str) -> bool:
                     return False
 
             # Other error
-            win32event.CloseHandle(overlapped.hEvent)
+            win32file.CloseHandle(overlapped.hEvent)
             return False
 
         except pywintypes.error as e:
             try:
-                win32event.CloseHandle(overlapped.hEvent)
+                win32file.CloseHandle(overlapped.hEvent)
             except:
                 pass
             logging.warning(f"[Pipe] Write failed: {e}")
