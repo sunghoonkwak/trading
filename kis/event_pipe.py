@@ -7,6 +7,7 @@ import win32pipe
 import win32file
 import win32event
 import win32con
+import winerror
 import pywintypes
 import threading
 import logging
@@ -166,7 +167,7 @@ def _do_write(msg_type: str, message: str) -> bool:
                 win32file.CloseHandle(overlapped.hEvent)
                 return True
 
-            if err_code == win32con.ERROR_IO_PENDING:
+            if err_code == winerror.ERROR_IO_PENDING:
                 # Wait with timeout
                 result = win32event.WaitForSingleObject(
                     overlapped.hEvent, WRITE_TIMEOUT_MS
