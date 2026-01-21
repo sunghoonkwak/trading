@@ -31,6 +31,7 @@ PIPE_NAME = r'\\.\pipe\kis_websocket_log'
 PIPE_BUFFER_SIZE = 65536
 WRITE_QUEUE_SIZE = 1000  # Max queued messages before dropping
 WRITE_TIMEOUT_MS = 500  # Milliseconds to wait for write before dropping
+MAX_CONSECUTIVE_FAILURES = 10  # Reset pipe after this many consecutive write failures
 
 # Server side (main.py)
 _pipe_handle = None
@@ -42,6 +43,7 @@ _write_queue = queue.Queue(maxsize=WRITE_QUEUE_SIZE)
 _writer_thread = None
 _writer_running = False
 _last_write_warning = 0  # Timestamp of last warning to avoid spam
+_consecutive_failures = 0  # Track consecutive write failures
 
 
 def print_viewer(msg_type, level, log):
@@ -199,13 +201,40 @@ def _do_write(msg_type: str, message: str) -> bool:
             return False
 
 
+def _clear_queue():
+    """Clear all pending messages from the write queue."""
+    cleared = 0
+    while True:
+        try:
+            _write_queue.get_nowait()
+            cleared += 1
+        except queue.Empty:
+            break
+    if cleared > 0:
+        logging.info(f"[Pipe] Cleared {cleared} pending messages from queue")
+
+
 def _writer_worker():
     """Background thread to write messages to pipe."""
-    global _writer_running
+    global _writer_running, _consecutive_failures
     while _writer_running:
         try:
             msg_type, message = _write_queue.get(timeout=0.5)
-            _do_write(msg_type, message)
+            success = _do_write(msg_type, message)
+
+            if success:
+                _consecutive_failures = 0
+            else:
+                _consecutive_failures += 1
+                if _consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                    logging.warning(
+                        f"[Pipe] {_consecutive_failures} consecutive write failures, "
+                        f"clearing queue ({_write_queue.qsize()} items) and resetting pipe"
+                    )
+                    # Clear the queue to prevent CPU spinning on failed writes
+                    _clear_queue()
+                    _consecutive_failures = 0
+                    _schedule_pipe_reset()
         except queue.Empty:
             continue
         except Exception as e:

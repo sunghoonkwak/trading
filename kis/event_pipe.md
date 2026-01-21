@@ -56,6 +56,13 @@
 *   **`stop_writer_thread()`**: writer thread를 중지합니다.
 *   Queue에서 메시지를 꺼내 `_do_write()`로 전송합니다.
 
+#### Failure Recovery (실패 복구)
+*   `MAX_CONSECUTIVE_FAILURES = 10`: 연속 쓰기 실패 임계치
+*   연속 10회 쓰기 실패 시:
+    1.  `_clear_queue()`: Queue의 모든 메시지를 비웁니다.
+    2.  `_schedule_pipe_reset()`: 파이프를 리셋하고 재연결을 대기합니다.
+*   Event Viewer가 응답하지 않아도 무한 루프에 빠지지 않고 자동 복구됩니다.
+
 ### Pipe Lifecycle Management (Server-Side)
 *   **`create_pipe_server()`**: Named Pipe를 초기화합니다. (Idempotent: 이미 존재하면 재사용)
 *   **`wait_for_client()`**: 클라이언트가 연결될 때까지 대기합니다. (Idempotent)
