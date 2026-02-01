@@ -13,8 +13,8 @@
   - **Orders Panel**: 활성 주문 목록
   - **Quotes Panel**: 종목별 최신 시세
   - **Log Panel**: MKT 이벤트 로그
-- **Named Pipe 통신**: 메인 프로세스와 Event Viewer 간 실시간 데이터 전송
-- **Windows Mutex**: 프로세스 감지로 안정적인 재실행을 보장합니다.
+- **IPC 통신**: 메인 프로세스와 Event Viewer 간 실시간 데이터 전송 (Windows: Named Pipe, Linux: Unix Socket)
+- **Process Lock**: 프로세스 감지로 안정적인 재실행을 보장합니다. (Windows: Mutex, Linux: File Lock)
 - **Log Rotation**: 6시간 주기로 로그 파일 자동 순환 및 백업 (`logs/`)하여 디스크 사용량 관리.
 
 ### 📈 트레이딩 & 전략
@@ -71,18 +71,29 @@
 
 ## 4. 시작하기 (Quick Start)
 
+### 🖥️ 플랫폼 지원
+
+| Platform | IPC 방식 | Process Lock | Terminal Spawn |
+|----------|----------|--------------|----------------|
+| **Windows** | Named Pipe | Windows Mutex | Windows Terminal |
+| **Linux** | Unix Domain Socket | File Lock (fcntl) | gnome-terminal, xterm, konsole |
+
 ### ⚙️ 환경 설정
 1. 의존성 패키지를 설치합니다.
 ```bash
+# Linux
 pip install -r requirements.txt
+
+# Windows (pywin32 포함)
+pip install -r requirements-windows.txt
 ```
 > **Note**: Textual TUI를 위해 `textual` 패키지가 필요합니다.
 
-2. `kis_api/key/generate_credentials.py`를 실행하여 API 키를 암호화 저장합니다.
-3. 프로젝트 루트에 `telegram.txt` 파일을 생성하고 텔레그램 토큰과 채팅 ID를 입력합니다.
-```
-BOT_TOKEN,CHAT_ID
-```
+2. KIS 설정 파일을 준비합니다. (`~/steven/KIS_config/` 폴더)
+   - `kis_devlp.yaml`: KIS API 설정
+   - `password.txt`: 복호화 비밀번호
+   - `credentials.enc`: 암호화된 API 키 (`kis_api/key/generate_credentials.py`로 생성)
+   - `telegram.txt`: 텔레그램 봇 토큰/채팅 ID (`BOT_TOKEN,CHAT_ID`)
 
 ### 🚀 실행
 ```bash
@@ -143,9 +154,13 @@ python main.py
 ```
 
 ### 특징
-- **자동 실행**: `main.py` 시작 시 Windows Terminal에서 자동으로 실행
+- **자동 실행**: `main.py` 시작 시 터미널에서 자동으로 실행
+  - Windows: Windows Terminal (`wt`)
+  - Linux: `gnome-terminal`, `xterm`, `konsole`
 - **자동 종료**: 메인 프로그램 종료 시 함께 종료
-- **Named Pipe 통신**: 메인 프로세스와 실시간 데이터 동기화
+- **IPC 통신**: 메인 프로세스와 실시간 데이터 동기화
+  - Windows: Named Pipe
+  - Linux: Unix Domain Socket
 
 ---
 *각 모듈의 상세 설명은 해당 디렉토리 내 `.md` 파일을 참조하십시오.*

@@ -5,6 +5,6 @@ pycryptodome
 websockets
 textual
 python-telegram-bot
-pywin32
 openpyxl
 pandas-market-calendars
+cryptography

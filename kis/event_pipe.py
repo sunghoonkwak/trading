@@ -1,20 +1,29 @@
 """
 Named Pipe IPC module for WebSocket log communication between main process and viewer.
-Works on Windows only using win32pipe.
+Works on Windows (Named Pipes) and Linux (Unix Domain Sockets).
 Uses async write queue to prevent blocking when Event Viewer is unresponsive.
 """
-import win32pipe
-import win32file
-import win32event
-import win32con
-import winerror
-import pywintypes
+import sys
 import threading
 import logging
 import queue
 import time
+import os
 
 from enum import IntEnum
+
+# Platform detection
+IS_WINDOWS = sys.platform == "win32"
+
+if IS_WINDOWS:
+    import win32pipe
+    import win32file
+    import win32event
+    import win32con
+    import winerror
+    import pywintypes
+else:
+    import socket
 
 class PrintLevel(IntEnum):
     ERROR = 0
@@ -27,7 +36,11 @@ print_log_level = PrintLevel.INFO
 def get_log_level():
     return print_log_level
 
+# Windows Named Pipe
 PIPE_NAME = r'\\.\pipe\kis_websocket_log'
+# Linux Unix Domain Socket
+SOCKET_PATH = '/tmp/kis_websocket_log.sock'
+
 PIPE_BUFFER_SIZE = 65536
 WRITE_QUEUE_SIZE = 1000  # Max queued messages before dropping
 WRITE_TIMEOUT_MS = 500  # Milliseconds to wait for write before dropping
@@ -35,6 +48,8 @@ MAX_CONSECUTIVE_FAILURES = 10  # Reset pipe after this many consecutive write fa
 
 # Server side (main.py)
 _pipe_handle = None
+_socket_server = None
+_client_socket = None
 _pipe_connected = False
 _pipe_lock = threading.Lock()
 
@@ -60,64 +75,97 @@ def print_viewer(msg_type, level, log):
     if level <= print_log_level:
         send_log(msg_type, log)
 
-def create_pipe_server():
-    """Create Named Pipe server. Call this from main.py at startup."""
-    global _pipe_handle
-    if _pipe_handle is not None:
-        return True
 
-    try:
-        _pipe_handle = win32pipe.CreateNamedPipe(
-            PIPE_NAME,
-            win32pipe.PIPE_ACCESS_OUTBOUND | win32file.FILE_FLAG_OVERLAPPED,
-            win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_WAIT,
-            1,  # Max instances
-            PIPE_BUFFER_SIZE,
-            PIPE_BUFFER_SIZE,
-            0,  # Default timeout
-            None  # Security attributes
-        )
-        logging.info(f"[Pipe] Server created: {PIPE_NAME}")
-        return True
-    except pywintypes.error as e:
-        logging.error(f"[Pipe] Failed to create server: {e}")
-        return False
+def create_pipe_server():
+    """Create Named Pipe server (Windows) or Unix Domain Socket server (Linux)."""
+    global _pipe_handle, _socket_server
+
+    if IS_WINDOWS:
+        if _pipe_handle is not None:
+            return True
+        try:
+            _pipe_handle = win32pipe.CreateNamedPipe(
+                PIPE_NAME,
+                win32pipe.PIPE_ACCESS_OUTBOUND | win32file.FILE_FLAG_OVERLAPPED,
+                win32pipe.PIPE_TYPE_MESSAGE | win32pipe.PIPE_WAIT,
+                1,  # Max instances
+                PIPE_BUFFER_SIZE,
+                PIPE_BUFFER_SIZE,
+                0,  # Default timeout
+                None  # Security attributes
+            )
+            logging.info(f"[Pipe] Server created: {PIPE_NAME}")
+            return True
+        except pywintypes.error as e:
+            logging.error(f"[Pipe] Failed to create server: {e}")
+            return False
+    else:
+        # Linux: Unix Domain Socket
+        if _socket_server is not None:
+            return True
+        try:
+            # Remove existing socket file
+            if os.path.exists(SOCKET_PATH):
+                os.unlink(SOCKET_PATH)
+
+            _socket_server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            _socket_server.bind(SOCKET_PATH)
+            _socket_server.listen(1)
+            _socket_server.setblocking(False)
+            logging.info(f"[Pipe] Server created: {SOCKET_PATH}")
+            return True
+        except Exception as e:
+            logging.error(f"[Pipe] Failed to create server: {e}")
+            return False
 
 
 def wait_for_client():
     """Wait for client to connect. Blocking call."""
-    global _pipe_connected
-    if _pipe_handle is None:
-        return False
+    global _pipe_connected, _client_socket
 
-    if _pipe_connected:
-        return True
-
-    try:
-        win32pipe.ConnectNamedPipe(_pipe_handle, None)
-        _pipe_connected = True
-        logging.info("[Pipe] Client connected")
-        return True
-    except pywintypes.error as e:
-        if e.winerror == 535: # ERROR_PIPE_CONNECTED
-            _pipe_connected = True
+    if IS_WINDOWS:
+        if _pipe_handle is None:
+            return False
+        if _pipe_connected:
             return True
-        logging.error(f"[Pipe] Client connection failed: {e}")
-        return False
+        try:
+            win32pipe.ConnectNamedPipe(_pipe_handle, None)
+            _pipe_connected = True
+            logging.info("[Pipe] Client connected")
+            return True
+        except pywintypes.error as e:
+            if e.winerror == 535:  # ERROR_PIPE_CONNECTED
+                _pipe_connected = True
+                return True
+            logging.error(f"[Pipe] Client connection failed: {e}")
+            return False
+    else:
+        # Linux: Accept connection on Unix Domain Socket
+        if _socket_server is None:
+            return False
+        if _pipe_connected and _client_socket:
+            return True
+        try:
+            # Set blocking for accept
+            _socket_server.setblocking(True)
+            _client_socket, _ = _socket_server.accept()
+            _pipe_connected = True
+            logging.info("[Pipe] Client connected")
+            return True
+        except Exception as e:
+            logging.error(f"[Pipe] Client connection failed: {e}")
+            return False
 
 
 def send_log(msg_type: str, message: str) -> bool:
-    """Send log message through pipe. Non-blocking via queue.
-
-    When queue is full, drops oldest messages to make room for new ones.
-    This ensures the latest events are always delivered.
-
-    Args:
-        msg_type: Message type prefix (MKT for market data, ODR for orders)
-        message: Log message content
-    """
+    """Send log message through pipe. Non-blocking via queue."""
     global _last_write_warning
-    if not _pipe_connected or _pipe_handle is None:
+    if not _pipe_connected:
+        return False
+
+    if IS_WINDOWS and _pipe_handle is None:
+        return False
+    if not IS_WINDOWS and _client_socket is None:
         return False
 
     try:
@@ -126,20 +174,18 @@ def send_log(msg_type: str, message: str) -> bool:
     except queue.Full:
         # Drop oldest messages to make room for new one
         dropped = 0
-        while dropped < 100:  # Drop up to 100 old messages to make space
+        while dropped < 100:
             try:
                 _write_queue.get_nowait()
                 dropped += 1
             except queue.Empty:
                 break
 
-        # Log warning at most once per 5 seconds to avoid spam
         now = time.time()
         if now - _last_write_warning > 5.0:
             logging.warning(f"[Pipe] Queue full - dropped {dropped} old messages")
             _last_write_warning = now
 
-        # Try adding new message again
         try:
             _write_queue.put_nowait((msg_type, message))
             return True
@@ -148,56 +194,62 @@ def send_log(msg_type: str, message: str) -> bool:
 
 
 def _do_write(msg_type: str, message: str) -> bool:
-    """Actually write to pipe using overlapped I/O with timeout.
+    """Actually write to pipe/socket."""
+    global _pipe_connected, _client_socket
 
-    If the write doesn't complete within WRITE_TIMEOUT_MS, the message is dropped
-    to prevent blocking the writer thread when Event Viewer is unresponsive.
-    """
-    global _pipe_connected
-    if not _pipe_connected or _pipe_handle is None:
+    if not _pipe_connected:
         return False
 
     with _pipe_lock:
-        overlapped = pywintypes.OVERLAPPED()
-        overlapped.hEvent = win32event.CreateEvent(None, True, False, None)
-
         try:
             data = (msg_type + "|" + message + "\n").encode('utf-8')
-            err_code, _ = win32file.WriteFile(_pipe_handle, data, overlapped)
 
-            if err_code == 0:  # Completed immediately
-                win32file.CloseHandle(overlapped.hEvent)
-                return True
-
-            if err_code == winerror.ERROR_IO_PENDING:
-                # Wait with timeout
-                result = win32event.WaitForSingleObject(
-                    overlapped.hEvent, WRITE_TIMEOUT_MS
-                )
-                win32file.CloseHandle(overlapped.hEvent)
-
-                if result == win32event.WAIT_OBJECT_0:
-                    return True
-                else:
-                    # Timeout - cancel the pending write
+            if IS_WINDOWS:
+                if _pipe_handle is None:
+                    return False
+                overlapped = pywintypes.OVERLAPPED()
+                overlapped.hEvent = win32event.CreateEvent(None, True, False, None)
+                try:
+                    err_code, _ = win32file.WriteFile(_pipe_handle, data, overlapped)
+                    if err_code == 0:
+                        win32file.CloseHandle(overlapped.hEvent)
+                        return True
+                    if err_code == winerror.ERROR_IO_PENDING:
+                        result = win32event.WaitForSingleObject(overlapped.hEvent, WRITE_TIMEOUT_MS)
+                        win32file.CloseHandle(overlapped.hEvent)
+                        if result == win32event.WAIT_OBJECT_0:
+                            return True
+                        try:
+                            win32file.CancelIo(_pipe_handle)
+                        except:
+                            pass
+                        return False
+                    win32file.CloseHandle(overlapped.hEvent)
+                    return False
+                except pywintypes.error as e:
                     try:
-                        win32file.CancelIo(_pipe_handle)
+                        win32file.CloseHandle(overlapped.hEvent)
                     except:
                         pass
+                    logging.warning(f"[Pipe] Write failed: {e}")
+                    _pipe_connected = False
+                    _schedule_pipe_reset()
                     return False
-
-            # Other error
-            win32file.CloseHandle(overlapped.hEvent)
-            return False
-
-        except pywintypes.error as e:
-            try:
-                win32file.CloseHandle(overlapped.hEvent)
-            except:
-                pass
-            logging.warning(f"[Pipe] Write failed: {e}")
-            _pipe_connected = False
-            _schedule_pipe_reset()
+            else:
+                # Linux: Write to Unix socket
+                if _client_socket is None:
+                    return False
+                try:
+                    _client_socket.sendall(data)
+                    return True
+                except (BrokenPipeError, ConnectionResetError, OSError) as e:
+                    logging.warning(f"[Pipe] Write failed: {e}")
+                    _pipe_connected = False
+                    _client_socket = None
+                    _schedule_pipe_reset()
+                    return False
+        except Exception as e:
+            logging.error(f"[Pipe] Write error: {e}")
             return False
 
 
@@ -231,7 +283,6 @@ def _writer_worker():
                         f"[Pipe] {_consecutive_failures} consecutive write failures, "
                         f"clearing queue ({_write_queue.qsize()} items) and resetting pipe"
                     )
-                    # Clear the queue to prevent CPU spinning on failed writes
                     _clear_queue()
                     _consecutive_failures = 0
                     _schedule_pipe_reset()
@@ -273,8 +324,7 @@ def _schedule_pipe_reset():
 
     def reset_worker():
         global _reset_scheduled
-        import time
-        time.sleep(0.5)  # Brief delay before reset
+        time.sleep(0.5)
         reset_pipe_server()
         _reset_scheduled = False
 
@@ -284,22 +334,34 @@ def _schedule_pipe_reset():
 
 def reset_pipe_server():
     """Close and recreate pipe server for new client connection."""
-    global _pipe_handle, _pipe_connected
+    global _pipe_handle, _pipe_connected, _socket_server, _client_socket
     logging.info("[Pipe] Resetting pipe server for reconnection...")
 
-    # Close existing pipe
-    if _pipe_handle:
-        try:
-            win32pipe.DisconnectNamedPipe(_pipe_handle)
-            win32file.CloseHandle(_pipe_handle)
-        except:
-            pass
-        _pipe_handle = None
+    if IS_WINDOWS:
+        if _pipe_handle:
+            try:
+                win32pipe.DisconnectNamedPipe(_pipe_handle)
+                win32file.CloseHandle(_pipe_handle)
+            except:
+                pass
+            _pipe_handle = None
+            _pipe_connected = False
+    else:
+        if _client_socket:
+            try:
+                _client_socket.close()
+            except:
+                pass
+            _client_socket = None
+        if _socket_server:
+            try:
+                _socket_server.close()
+            except:
+                pass
+            _socket_server = None
         _pipe_connected = False
 
-    # Recreate pipe server
     if create_pipe_server():
-        # Wait for new client in background
         def wait_reconnect():
             if wait_for_client():
                 logging.info("[Pipe] New client reconnected")
@@ -310,14 +372,34 @@ def reset_pipe_server():
 
 def close_pipe_server():
     """Close pipe server."""
-    global _pipe_handle, _pipe_connected
-    if _pipe_handle:
-        try:
-            win32file.CloseHandle(_pipe_handle)
-        except:
-            pass
-        _pipe_handle = None
-        _pipe_connected = False
+    global _pipe_handle, _pipe_connected, _socket_server, _client_socket
+
+    if IS_WINDOWS:
+        if _pipe_handle:
+            try:
+                win32file.CloseHandle(_pipe_handle)
+            except:
+                pass
+            _pipe_handle = None
+    else:
+        if _client_socket:
+            try:
+                _client_socket.close()
+            except:
+                pass
+            _client_socket = None
+        if _socket_server:
+            try:
+                _socket_server.close()
+            except:
+                pass
+            _socket_server = None
+        if os.path.exists(SOCKET_PATH):
+            try:
+                os.unlink(SOCKET_PATH)
+            except:
+                pass
+    _pipe_connected = False
 
 
 def is_connected() -> bool:
@@ -328,55 +410,65 @@ def is_connected() -> bool:
 # Client side (websocket_viewer.py)
 def connect_pipe_client():
     """Connect to pipe server. Call this from websocket_viewer.py."""
-    try:
-        handle = win32file.CreateFile(
-            PIPE_NAME,
-            win32file.GENERIC_READ,
-            0,  # No sharing
-            None,  # Security
-            win32file.OPEN_EXISTING,
-            0,  # Flags
-            None
-        )
-        logging.info("[Pipe] Connected to server")
-        return handle
-    except pywintypes.error as e:
-        logging.error(f"[Pipe] Connection failed: {e}")
-        return None
+    if IS_WINDOWS:
+        try:
+            handle = win32file.CreateFile(
+                PIPE_NAME,
+                win32file.GENERIC_READ,
+                0,
+                None,
+                win32file.OPEN_EXISTING,
+                0,
+                None
+            )
+            logging.info("[Pipe] Connected to server")
+            return handle
+        except pywintypes.error as e:
+            logging.error(f"[Pipe] Connection failed: {e}")
+            return None
+    else:
+        try:
+            client_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            client_sock.connect(SOCKET_PATH)
+            logging.info("[Pipe] Connected to server")
+            return client_sock
+        except Exception as e:
+            logging.error(f"[Pipe] Connection failed: {e}")
+            return None
 
 
 # Receive buffer for incomplete messages
 _receive_buffer = ""
 
 def receive_log(handle) -> str:
-    """Receive log message from pipe. Blocking call.
-
-    Returns one message at a time, buffering partial messages.
-    """
+    """Receive log message from pipe. Blocking call."""
     global _receive_buffer
 
-    # If we have buffered messages, return the next one
     if "\n" in _receive_buffer:
         line, _receive_buffer = _receive_buffer.split("\n", 1)
         return line.strip()
 
-    # Read more data from pipe
     try:
-        result, data = win32file.ReadFile(handle, PIPE_BUFFER_SIZE)
-        _receive_buffer += data.decode('utf-8')
+        if IS_WINDOWS:
+            result, data = win32file.ReadFile(handle, PIPE_BUFFER_SIZE)
+            _receive_buffer += data.decode('utf-8')
+        else:
+            # Linux: Read from socket
+            data = handle.recv(PIPE_BUFFER_SIZE)
+            if not data:
+                return None
+            _receive_buffer += data.decode('utf-8')
 
-        # Check if we have complete message(s)
         if "\n" in _receive_buffer:
             line, _receive_buffer = _receive_buffer.split("\n", 1)
             return line.strip()
         else:
-            # Incomplete message, return what we have
             if _receive_buffer.strip():
                 msg = _receive_buffer.strip()
                 _receive_buffer = ""
                 return msg
             return None
-    except pywintypes.error as e:
+    except Exception as e:
         logging.error(f"[Pipe] Receive failed: {e}")
         return None
 
@@ -385,6 +477,9 @@ def close_pipe_client(handle):
     """Close pipe client."""
     if handle:
         try:
-            win32file.CloseHandle(handle)
+            if IS_WINDOWS:
+                win32file.CloseHandle(handle)
+            else:
+                handle.close()
         except:
             pass

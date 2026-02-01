@@ -5,13 +5,17 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.fernet import Fernet
 
+# Config directory (same as kis_auth.py)
+config_root = os.path.join(os.path.expanduser("~"), "steven", "KIS_config")
+
 def get_secrets_from_password() -> tuple[str, str, str]:
     print("--- API Key loading ---")
 
     # Get password to decrypt the file
     # password = getpass.getpass("Enter your encryption password: ")
     # read password from file
-    with open("password.txt", "r") as f:
+    password_path = os.path.join(config_root, "password.txt")
+    with open(password_path, "r") as f:
         password = f.read().strip()
 
     try:
@@ -20,11 +24,12 @@ def get_secrets_from_password() -> tuple[str, str, str]:
         f = Fernet(key)
 
         # Load and decrypt the file
-        if not os.path.exists("credentials.enc"):
-            print("Error: credentials.enc file not found.")
+        credentials_path = os.path.join(config_root, "credentials.enc")
+        if not os.path.exists(credentials_path):
+            print(f"Error: {credentials_path} file not found.")
             return None, None, None
 
-        with open("credentials.enc", "rb") as file:
+        with open(credentials_path, "rb") as file:
             encrypted_data = file.read()
 
         decrypted_data = f.decrypt(encrypted_data).decode()

@@ -15,10 +15,16 @@ import threading
 from collections import OrderedDict
 from datetime import datetime
 
-import win32event
-import win32api
-import pywintypes
-import winerror
+# Platform-specific imports
+IS_WINDOWS = sys.platform == "win32"
+
+if IS_WINDOWS:
+    import win32event
+    import win32api
+    import pywintypes
+    import winerror
+else:
+    import fcntl
 
 from textual.app import App, ComposeResult
 from textual.containers import Vertical, ScrollableContainer
@@ -34,18 +40,39 @@ _viewer_process = None
 _base_dir = os.path.dirname(os.path.abspath(__file__))
 MUTEX_NAME = "StevenOpenAPITradingViewer"
 _mutex_handle = None
+_lock_file = None  # For Linux file-based locking
 
 
 def spawn_viewer():
-    """Spawn the Event viewer in Windows Terminal."""
+    """Spawn the Event viewer in a new terminal."""
     global _viewer_process
     viewer_path = os.path.join(_base_dir, "event_viewer.py")
     try:
-        _viewer_process = subprocess.Popen(
-            ["wt", "-w", "0", "--size", "130,40", "nt", "--title", "Event Viewer",
-             "python", viewer_path],
-            cwd=_base_dir
-        )
+        if IS_WINDOWS:
+            _viewer_process = subprocess.Popen(
+                ["wt", "-w", "0", "--size", "130,40", "nt", "--title", "Event Viewer",
+                 "python", viewer_path],
+                cwd=_base_dir
+            )
+        else:
+            # Linux: Try common terminal emulators
+            terminals = [
+                ["gnome-terminal", "--title=Event Viewer", "--", "python3", viewer_path],
+                ["xterm", "-title", "Event Viewer", "-e", "python3", viewer_path],
+                ["konsole", "--title", "Event Viewer", "-e", "python3", viewer_path],
+            ]
+            for term_cmd in terminals:
+                try:
+                    _viewer_process = subprocess.Popen(term_cmd, cwd=_base_dir)
+                    break
+                except FileNotFoundError:
+                    continue
+            else:
+                # Fallback: run in background without new terminal
+                _viewer_process = subprocess.Popen(
+                    ["python3", viewer_path],
+                    cwd=_base_dir
+                )
         logging.info("[System] Viewer terminal spawned")
         return True
     except Exception as e:
@@ -54,25 +81,45 @@ def spawn_viewer():
 
 
 def acquire_mutex():
-    """Acquire named mutex to indicate viewer is running."""
-    global _mutex_handle
+    """Acquire named mutex/lock to indicate viewer is running."""
+    global _mutex_handle, _lock_file
     try:
-        _mutex_handle = win32event.CreateMutex(None, True, MUTEX_NAME)
-        if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
-            pass
+        if IS_WINDOWS:
+            _mutex_handle = win32event.CreateMutex(None, True, MUTEX_NAME)
+            if win32api.GetLastError() == winerror.ERROR_ALREADY_EXISTS:
+                pass
+        else:
+            # Linux: Use file-based locking
+            lock_path = os.path.join("/tmp", f"{MUTEX_NAME}.lock")
+            _lock_file = open(lock_path, "w")
+            fcntl.flock(_lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         return True
     except Exception as e:
-        logging.error(f"[System] Failed to create mutex: {e}")
+        logging.error(f"[System] Failed to create mutex/lock: {e}")
         return False
 
 
 def is_running():
-    """Check if viewer process is actually running using Mutex."""
+    """Check if viewer process is actually running using Mutex/Lock."""
     try:
-        handle = win32event.OpenMutex(win32event.SYNCHRONIZE, False, MUTEX_NAME)
-        if handle:
-            win32api.CloseHandle(handle)
-            return True
+        if IS_WINDOWS:
+            handle = win32event.OpenMutex(win32event.SYNCHRONIZE, False, MUTEX_NAME)
+            if handle:
+                win32api.CloseHandle(handle)
+                return True
+        else:
+            # Linux: Try to acquire lock
+            lock_path = os.path.join("/tmp", f"{MUTEX_NAME}.lock")
+            if os.path.exists(lock_path):
+                test_file = open(lock_path, "w")
+                try:
+                    fcntl.flock(test_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    fcntl.flock(test_file.fileno(), fcntl.LOCK_UN)
+                    test_file.close()
+                    return False  # Lock acquired = not running
+                except (IOError, OSError):
+                    test_file.close()
+                    return True  # Lock failed = already running
     except:
         pass
     return False
@@ -80,12 +127,19 @@ def is_running():
 
 def close_viewer():
     """Close the viewer terminal if running."""
-    global _viewer_process
+    global _viewer_process, _lock_file
     if _viewer_process is not None:
         try:
             _viewer_process.terminate()
             _viewer_process = None
             logging.info("[System] Viewer terminal closed")
+        except:
+            pass
+    if _lock_file is not None:
+        try:
+            fcntl.flock(_lock_file.fileno(), fcntl.LOCK_UN)
+            _lock_file.close()
+            _lock_file = None
         except:
             pass
 
