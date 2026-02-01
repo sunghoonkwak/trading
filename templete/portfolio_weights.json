@@ -1,0 +1,131 @@
+{
+    "groups": [
+        {
+            "name": "Nasdaq100",
+            "target_score": 85,
+            "main_ticker": "QQQM",
+            "constituents": [
+                "QQQ",
+                "379810"
+            ]
+        },
+        {
+            "name": "Nasdaq100 leverage x2",
+            "target_score": 10,
+            "main_ticker": "QLD",
+            "constituents": []
+        },
+        {
+            "name": "Nasdaq100 leverage x3",
+            "target_score": 5,
+            "main_ticker": "TQQQ",
+            "constituents": []
+        },
+        {
+            "name": "S&P500",
+            "target_score": 50,
+            "main_ticker": "VOO",
+            "constituents": [
+                "379800"
+            ]
+        },
+        {
+            "name": "Dividend",
+            "target_score": 15,
+            "main_ticker": "SCHD",
+            "constituents": [
+                "490490"
+            ]
+        }
+    ],
+    "individual_stocks": [
+        {
+            "ticker": "SOXL",
+            "ratio": 0.03
+        },
+        {
+            "ticker": "TSM",
+            "ratio": 0.06
+        },
+        {
+            "ticker": "GOOGL",
+            "ratio": 0.03
+        },
+        {
+            "ticker": "NVDA",
+            "ratio": 0.03
+        },
+        {
+            "ticker": "AVGO",
+            "ratio": 0.03
+        },
+        {
+            "ticker": "QCOM",
+            "ratio": 0.10
+        },
+        {
+            "ticker": "KR_DIV",
+            "ratio": 0.20
+        },
+        {
+            "ticker": "TLT",
+            "ratio": 0.10
+        },
+        {
+            "ticker": "453850",
+            "ratio": 0.00
+        },
+        {
+            "ticker": "USD cash",
+            "ratio": 0.20
+        },
+        {
+            "ticker": "KRW cash",
+            "ratio": 0.10
+        }
+    ],
+    "kr_dividend_strategy": {
+        "source_ticker": "KR_DIV",
+        "constituents": [
+            {
+                "ticker": "005385",
+                "weight": 2
+            },
+            {
+                "ticker": "016360",
+                "weight": 2
+            },
+            {
+                "ticker": "017670",
+                "weight": 2
+            },
+            {
+                "ticker": "030200",
+                "weight": 2
+            },
+            {
+                "ticker": "086790",
+                "weight": 3
+            },
+            {
+                "ticker": "088980",
+                "weight": 1
+            },
+            {
+                "ticker": "138040",
+                "weight": 1
+            },
+            {
+                "ticker": "105560",
+                "weight": 3
+            }
+        ]
+    },
+    "vix_strategy": {
+        "ticker": "VIXY",
+        "max": 17,
+        "limit": 5,
+        "scale": 5
+    },
+    "fixed_scores": []
+}

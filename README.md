@@ -23,7 +23,7 @@
 - Docker & Docker Compose (Docker 실행 시 선택 사항)
 - **설정 파일** (`~/KIS_config/` 디렉토리 또는 볼륨 마운트 필요):
 ### 📁 외부 설정 디렉토리 (`~/KIS_config/`)
-모든 민감한 설정 파일은 프로젝트 외부에 저장됩니다:
+모든 민감한 설정 파일은 프로젝트 외부에 저장됩니다. `templete/` 디렉토리에 있는 예제 파일들을 `~/KIS_config/`로 복사하여 설정할 수 있습니다:
 ```
 ~/KIS_config/
 ├── kis_devlp.yaml               # KIS API 설정 (모의/실전)
