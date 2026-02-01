@@ -256,9 +256,18 @@ if __name__ == "__main__":
 
     time.sleep(0.5)
 
-    # Step 3: Start Web Event Viewer
+    # Step 3: Start Scheduler
+    print("[Startup] Step 2.5: Starting Scheduler Service...")
+    try:
+        from scheduler_service import start_scheduler
+        start_scheduler()
+    except Exception as e:
+        print(f"[Startup] ✗ Scheduler error: {e}")
+        logging.error(f"[Startup] Scheduler error: {e}")
+
+    # Step 4: Start Web Event Viewer
     print("")
-    print("[Startup] Step 3: Starting Web Event Viewer...")
+    print("[Startup] Step 4: Starting Web Event Viewer...")
     print("[Startup] Access at: http://<server-ip>:8080")
     print("")
 
@@ -274,14 +283,9 @@ if __name__ == "__main__":
 
     time.sleep(1)
 
-    # Step 4: Launch Super Menu
+    # Step 5: Launch Trading Menu
     print("")
-    print("[Startup] Step 4: Starting Super Menu...")
-    print("")
-
-    # Step 4: Launch Trading Menu
-    print("")
-    print("[Startup] Step 4: Starting Trading Menu...")
+    print("[Startup] Step 5: Starting Trading Menu...")
     print("")
 
     try:

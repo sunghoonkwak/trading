@@ -22,6 +22,7 @@
 - **Pipe Server 생성**: 백엔드와 웹서버/이벤트뷰어 간 통신을 위한 파이프를 생성합니다.
 - **WebSocket 연결**: KIS 증권사 서버와 웹소켓 연결을 맺습니다.
 - **주문 동기화 (Order Sync)**: 미체결 주문 내역을 조회하여 메모리에 동기화합니다.
+- **스케줄러 시작 (Scheduler Start)**: 일일 리포트 자동 생성을 위한 스케줄러를 시작합니다.
 
 ### 3. 웹 Event Viewer 시작 (Web Server Start)
 - `web_server.py`를 **백그라운드 데몬 스레드**로 실행합니다.

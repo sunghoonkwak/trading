@@ -33,6 +33,9 @@ BOT_TOKEN,CHAT_ID
 ### load_telegram_credentials
 `telegram.txt` 파일로부터 봇 토큰과 채팅 ID를 로드합니다.
 
+### cmd_daily_report
+`/daily_report [YYYYMMDD]` 명령어를 통해 과거에 생성된 일일 포트폴리오 리포트를 조회합니다. 날짜를 생략하면 가장 최근 리포트를 보여줍니다.
+
 ## Extensibility (확장성)
 새로운 트레이딩 전략을 텔레그램에 추가하려면 다음 단계를 따릅니다:
 1. `telegram_전략명.py` 모듈 생성

@@ -19,7 +19,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 from .telegram_raoeo import register_raoeo_handlers, get_raoeo_commands_desc
 from .telegram_portfolio import register_portfolio_handlers, get_portfolio_commands_desc
 from .telegram_memo import register_memo_handler, get_memo_commands_desc
-from .telegram_utils import wrap_send, set_telegram_bot
+from .telegram_utils import wrap_send, set_telegram_bot, wrap_reply
 import display
 
 # Module state
@@ -50,6 +50,55 @@ def load_telegram_credentials() -> tuple[Optional[str], Optional[str]]:
     except Exception as e:
         logging.error(f"Error loading Telegram credentials: {e}")
         return None, None
+
+
+
+async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Command handler for /daily_report [YYYYMMDD]
+    Retrieves and displays a past portfolio report.
+    """
+    args = context.args
+    target_date = ""
+
+    # Determine target date
+    if args:
+        target_date = args[0].replace("-", "")  # Allow 2024-02-01 format
+    else:
+        # Default to latest report
+        try:
+            from scheduler_service import REPORTS_DIR
+            import glob
+            list_of_files = glob.glob(os.path.join(REPORTS_DIR, "report_*.txt"))
+            if list_of_files:
+                latest_file = max(list_of_files, key=os.path.getctime)
+                # Extract date from filename: report_YYYYMMDD.txt
+                base = os.path.basename(latest_file)
+                target_date = base.replace("report_", "").replace(".txt", "")
+        except Exception as e:
+            logging.error(f"[TG] Failed to find latest report: {e}")
+
+    if not target_date:
+        await wrap_reply(update, "⚠️ No reports found or invalid date.", parse_mode='HTML')
+        return
+
+    # Read Report
+    try:
+        from scheduler_service import REPORTS_DIR
+        report_path = os.path.join(REPORTS_DIR, f"report_{target_date}.txt")
+
+        if not os.path.exists(report_path):
+             await wrap_reply(update, f"⚠️ Report not found for {target_date}", parse_mode='HTML')
+             return
+
+        with open(report_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        header = f"📄 <b>Daily Report Archive ({target_date})</b>\n\n"
+        await wrap_reply(update, header + content, parse_mode='HTML')
+
+    except Exception as e:
+        await wrap_reply(update, f"⚠️ Error reading report: {e}", parse_mode='HTML')
 
 
 def initialize_telegram():
@@ -85,6 +134,9 @@ def initialize_telegram():
             register_portfolio_handlers(_app)
             register_memo_handler(_app)  # Saves arbitrary text messages
 
+            # Register Global Commands
+            _app.add_handler(CommandHandler("daily_report", cmd_daily_report))
+
             # Send initialization message
             async def send_init_message():
                 raoeo_desc = get_raoeo_commands_desc()
@@ -95,7 +147,8 @@ def initialize_telegram():
                     "Commands:\n"
                     f"{raoeo_desc}\n"
                     f"{port_desc}\n"
-                    f"{memo_desc}"
+                    f"{memo_desc}\n"
+                    "/daily_report [date] - View past reports"
                 )
                 try:
                     await wrap_send(init_text, parse_mode='HTML')
