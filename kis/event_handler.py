@@ -338,8 +338,7 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
     """Main WebSocket result handler - routes to specific handlers by tr_id."""
     # Handle PINGPONG for testing (displays even when market is closed)
     if tr_id == "PINGPONG":
-        time_s = datetime.now().strftime("%H:%M:%S")
-        print_viewer("SYS", PrintLevel.INFO, f"{time_s} PINGPONG received")
+        print_viewer("SYS", PrintLevel.INFO, "PINGPONG received")
         return
 
     if df.empty:
