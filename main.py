@@ -286,7 +286,13 @@ if __name__ == "__main__":
 
     try:
         from menu.menu import menu
-        menu()
+        if os.environ.get("ENV_MODE") == "docker":
+            print("[System] Docker mode detected. Running in daemon mode (no menu).")
+            print("[System] Logs are being piped to stdout/file. Use 'docker logs -f' to view.")
+            while True:
+                time.sleep(3600)
+        else:
+            menu()
     except KeyboardInterrupt:
         print("\n[Shutdown] Keyboard Interrupt")
     except Exception as e:

@@ -40,37 +40,34 @@
 └── memo.json                    # 텔레그램 메모 저장소
 ```
 
-### 설치 (Installation)
-
-```bash
-# Linux
-pip install -r requirements.txt
-
-# Windows (pywin32 포함)
-pip install -r requirements-windows.txt
-```
-
 ### 설치 및 실행
 
-1. **Python 직접 실행 (권장)**
-   ```bash
-   # 가상환경 활성화 (선택 사항)
-   source venv/bin/activate
-
-   # 실행
-   python main.py
-   ```
-
-2. **Docker로 실행 (선택 사항)**
-   *현재 검증 진행 중입니다.*
+1. **Docker로 실행 (권장)**
+   환경 설정 없이 바로 실행할 수 있는 가장 간편한 방법입니다.
    ```bash
    # 데몬 모드(백그라운드)로 빌드 및 실행
-   docker-compose up -d --build
+   docker compose up -d
 
    # 로그 확인
-   docker-compose logs -f
+   docker logs -f my-trading-bot
    ```
-   *참고: 로컬에서 WebSocket 접속을 위해 `host` 네트워크 모드 사용을 권장합니다.*
+   *참고: Docker 모드에서는 터미널 메뉴가 비활성화되며 자동으로 데몬 모드로 전환됩니다. `host` 네트워크 모드 사용을 권장합니다.*
+
+2. **Python 직접 실행 (고급 사용자)**
+   개발 목적으로 소스 코드를 직접 수정하며 실행할 때 적합합니다.
+   ```bash
+   # 1. 가상환경 활성화 (선택 사항)
+   source venv/bin/activate
+
+   # 2. 필수 라이브러리 설치
+   # Linux
+   pip install -r requirements.txt
+   # Windows
+   # pip install -r requirements-windows.txt
+
+   # 3. 실행
+   python main.py
+   ```
 
 ## 📱 Telegram 봇 명령어
 
