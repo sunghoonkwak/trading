@@ -2,10 +2,12 @@ import json
 import os
 import unicodedata
 
-def load_config(config_path="portfolio_weights.json"):
+def load_config(config_path=None):
     """Loads the portfolio configuration from a JSON file."""
-    # Resolve absolute path if necessary, or assume relative to script
-    if not os.path.isabs(config_path):
+    if config_path is None:
+        # Default path: ~/KIS_config/portfolio_weights.json
+        config_path = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_weights.json")
+    elif not os.path.isabs(config_path):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         config_path = os.path.join(script_dir, config_path)
 

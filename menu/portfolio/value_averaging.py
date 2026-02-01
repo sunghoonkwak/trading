@@ -8,9 +8,10 @@ from typing import Dict, Any, List
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
 from kis.kis_api import kis_auth as ka
 
-# Config / History File Paths
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'value_averaging.json')
-HISTORY_FILE = os.path.join(os.path.dirname(__file__), 'value_averaging_history.json')
+# Config / History File Paths (same as kis_auth.py)
+CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
+CONFIG_FILE = os.path.join(CONFIG_ROOT, 'value_averaging.json')
+HISTORY_FILE = os.path.join(CONFIG_ROOT, 'value_averaging_history.json')
 
 
 def load_config() -> Dict[str, Any]:

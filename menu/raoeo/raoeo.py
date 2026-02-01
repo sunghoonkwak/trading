@@ -9,22 +9,22 @@ import os
 import sys
 import json
 import logging
-import msvcrt
+from utils import getch, getch_str
 from datetime import datetime
 from typing import Optional
 import pytz
 
 from kis.kis_api import kis_auth as ka
-from display import show_in_result_area, input_at
+from display import show_in_result_area, input_at, add_alert
 from data.data_service import get_portfolio_data
 from kis.kis_api.overseas_stock.order.order import order as order_overseas
 import trading_state
 import trading_config
 
-# Module directory for config files
-MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(MODULE_DIR, "raoeo.json")
-HISTORY_FILE = os.path.join(MODULE_DIR, "raoeo_history.json")
+# Config directory (same as kis_auth.py)
+CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
+CONFIG_FILE = os.path.join(CONFIG_ROOT, "raoeo.json")
+HISTORY_FILE = os.path.join(CONFIG_ROOT, "raoeo_history.json")
 
 # LOC order type code for US stocks
 LOC_ORDER_TYPE = "34"
@@ -53,10 +53,10 @@ def load_config() -> dict:
 
         return config
     except FileNotFoundError:
-        display.add_alert(f"Config file not found: {CONFIG_FILE}", "ERROR")
+        add_alert(f"Config file not found: {CONFIG_FILE}", "ERROR")
         return {}
     except json.JSONDecodeError as e:
-        display.add_alert(f"Invalid JSON in config: {e}", "ERROR")
+        add_alert(f"Invalid JSON in config: {e}", "ERROR")
         return {}
 
 
@@ -372,7 +372,7 @@ def save_history(order_data: dict, exec_results: list = None) -> bool:
 
         return True
     except Exception as e:
-        display.add_alert(f"Failed to save history: {e}", "ERROR")
+        add_alert(f"Failed to save history: {e}", "ERROR")
         return False
 
 
@@ -396,7 +396,7 @@ def check_today_history() -> Optional[dict]:
                         if entry.get('date') == today_str:
                             return entry
     except Exception as e:
-        display.add_alert(f"Error checking history: {e}", "ERROR")
+        add_alert(f"Error checking history: {e}", "ERROR")
 
     return None
 
@@ -466,7 +466,7 @@ def build_raoeo_report() -> dict:
                                 "is_retry": True
                             }
         except Exception as e:
-            display.add_alert(f"Error reading history for report: {e}", "ERROR")
+            add_alert(f"Error reading history for report: {e}", "ERROR")
 
     # 2. No history for today yet - calculate fresh orders
     if not report["executed_today"] and not report["current_result"]:
@@ -563,12 +563,12 @@ def prompt_order_execution(report: dict, display_lines: list) -> bool:
     # Holiday check - block orders
     from utils import is_market_holiday
     if is_market_holiday("NYSE"):
-        display.add_alert("🚫 휴장일 - 주문 불가", "WARN")
+        add_alert("🚫 휴장일 - 주문 불가", "WARN")
         return False
 
     pending_orders = report.get("pending_orders", [])
     if not pending_orders:
-        display.add_alert("No pending orders to execute.", "INFO")
+        add_alert("No pending orders to execute.", "INFO")
         return False
 
     input_y = min(len(display_lines) + 1, 14)
@@ -617,7 +617,7 @@ def run_order_execution(result: dict, display_lines: list) -> bool:
     res_lines.append(f" Result: {success_count}/{len(exec_results)} succeeded.")
     res_lines.append(" Press any key...")
     show_in_result_area(res_lines)
-    msvcrt.getch()
+    getch()
 
     return True
 
@@ -629,21 +629,21 @@ def show_history_viewer():
     try:
         if not os.path.exists(HISTORY_FILE):
             show_in_result_area([" No history found.", "", " Press any key..."])
-            msvcrt.getch()
+            getch()
             return
 
         with open(HISTORY_FILE, 'r', encoding='utf-8') as f_hist:
             content = f_hist.read().strip()
             if not content:
                 show_in_result_area([" History is empty.", "", " Press any key..."])
-                msvcrt.getch()
+                getch()
                 return
             history_data = json.loads(content)
 
         all_entries = history_data.get('history', [])
         if not all_entries:
             show_in_result_area([" No entries in history.", "", " Press any key..."])
-            msvcrt.getch()
+            getch()
             return
 
         entries = all_entries
@@ -693,7 +693,7 @@ def show_history_viewer():
             sys.stdout.flush()
 
             try:
-                ch = msvcrt.getch().decode('utf-8').lower()
+                ch = getch_str().lower()
             except:
                 ch = ''
 
@@ -708,7 +708,7 @@ def show_history_viewer():
 
     except Exception as e:
         show_in_result_area([f" Error reading history: {e}", "", " Press any key..."])
-        msvcrt.getch()
+        getch()
 
 
 def raoeo_menu():

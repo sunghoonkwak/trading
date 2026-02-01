@@ -2,8 +2,8 @@
 This module handles the management of open orders (cancellation and correction).
 It follows a strict 6-step workflow for user interaction and API execution.
 """
-import msvcrt
 import logging
+from utils import getch
 from kis.kis_api import kis_auth as ka
 import trading_config
 from display import show_in_result_area, input_at, safe_write, update_order_state, add_alert, clear_order_states
@@ -173,7 +173,7 @@ def print_execution_result(df_res, err_msg=None):
         " Press any key to return..."
     ]
     show_in_result_area(final_lines)
-    msvcrt.getch()
+    getch()
 
 def sync_open_orders():
     """Fetch open orders from API and sync them to display state."""
@@ -233,7 +233,7 @@ def handle_manage_orders():
 
         if df.empty:
             show_in_result_area(["No open orders found.", "Press any key to return..."])
-            msvcrt.getch()
+            getch()
             return
 
         display_lines = print_open_orders_list(df)

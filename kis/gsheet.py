@@ -5,11 +5,14 @@ Google Sheets Integration Module
 This module handles all Google Sheets connectivity and data parsing
 for portfolio management.
 """
+import os
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timezone
 
-SERVICE_ACCOUNT_FILE = 'C:\\Users\\Lara\\steven\\service-account.json'
+# Config directory (same as kis_auth.py)
+CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
+SERVICE_ACCOUNT_FILE = os.path.join(CONFIG_ROOT, "service-account.json")
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive.readonly'

@@ -2,8 +2,8 @@
 This module handles the order placement workflow for KR and US markets.
 It provides an interactive interface for market selection, stock picking, and price/quantity input.
 """
-import msvcrt
 import logging
+from utils import getch
 from kis.kis_api import kis_auth as ka
 from display import show_in_result_area, input_at, add_alert
 import trading_config
@@ -106,7 +106,7 @@ def handle_place_order():
 
             if not fav_list:
                 show_in_result_area(header + ["No favorites found for this market.", "Press any key to toggle..."])
-                msvcrt.getch()
+                getch()
                 target_market = "KR" if target_market == "US" else "US"
                 continue
 
@@ -199,7 +199,7 @@ def handle_place_order():
             confirm = input_at(len(recap)+1, 2, " Submit Order? (y/n): ").strip().lower()
             if confirm != 'y':
                 show_in_result_area(recap + ["Order Cancelled."])
-                msvcrt.getch()
+                getch()
                 continue
 
             # 4. Execution
@@ -214,7 +214,7 @@ def handle_place_order():
 
             result_txt = "SUCCESS" if is_success else f"FAILED: {err_msg if err_msg else 'Unknown Error'}"
             show_in_result_area(recap + [f"Result: {result_txt}", "Press any key..."])
-            msvcrt.getch()
+            getch()
 
     except Exception as e:
         add_alert(f"Order Flow Error: {e}", "ERROR")

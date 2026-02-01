@@ -2,12 +2,11 @@
 This module handles integrated account information inquiry for both KR and US markets.
 It centralizes data fetching and provides an interactive terminal UI for portfolio monitoring.
 """
-import msvcrt
 import logging
 import pandas as pd
 from kis.kis_api import kis_auth as ka
 from display import show_in_result_area
-from utils import get_fixed_width
+from utils import get_fixed_width, getch
 from kis.kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_balance
 from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import inquire_present_balance
 from .menu import MENU_DEBUG
@@ -188,7 +187,7 @@ def print_account_info(data):
 
         show_in_result_area(lines)
 
-        ch = msvcrt.getch()
+        ch = getch()
         if ch == b'q':
             break
         elif ch == b'f':

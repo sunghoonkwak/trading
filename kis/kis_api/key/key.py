@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.fernet import Fernet
 
 # Config directory (same as kis_auth.py)
-config_root = os.path.join(os.path.expanduser("~"), "steven", "KIS_config")
+config_root = os.path.join(os.path.expanduser("~"), "KIS_config")
 
 def get_secrets_from_password() -> tuple[str, str, str]:
     print("--- API Key loading ---")

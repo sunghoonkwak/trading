@@ -16,7 +16,7 @@
 
 ## Configuration (설정)
 
-`raoeo.json` 파일 구조:
+`~/KIS_config/raoeo.json` 파일 구조:
 
 ```json
 {
@@ -152,7 +152,7 @@
 
 ## History File (히스토리 파일)
 
-`raoeo_history.json` 구조:
+`~/KIS_config/raoeo_history.json` 구조:
 
 ```json
 {

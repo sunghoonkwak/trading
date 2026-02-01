@@ -16,8 +16,9 @@ from telegram.ext import Application, MessageHandler, CommandHandler, filters, C
 from .telegram_utils import wrap_reply
 import display
 
-# Path to memo.json in telegram_bot folder
-MEMO_FILE = os.path.join(os.path.dirname(__file__), "memo.json")
+# Path to memo.json in KIS_config folder
+CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
+MEMO_FILE = os.path.join(CONFIG_ROOT, "memo.json")
 
 
 def load_messages() -> dict:

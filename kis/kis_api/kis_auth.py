@@ -32,7 +32,7 @@ from Crypto.Util.Padding import unpad
 clearConsole = lambda: os.system("cls" if os.name in ("nt", "dos") else "clear")
 
 key_bytes = 32
-config_root = os.path.join(os.path.expanduser("~"), "steven", "KIS_config")
+config_root = os.path.join(os.path.expanduser("~"), "KIS_config")
 # config_root = "$HOME/KIS/config/"  # Folder where the token file is stored; set a path difficult for others to find.
 # token_tmp = config_root + 'KIS000000'  # File name for local token storage; avoid names that make the token value predictable.
 # token_tmp = config_root + 'KIS' + datetime.today().strftime("%Y%m%d%H%M%S")  # Token filename with timestamp (YYYYMMDDHHMMSS)

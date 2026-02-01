@@ -1,6 +1,7 @@
 """
 Common utility functions for the trading application.
 """
+import sys
 import unicodedata
 from datetime import datetime
 import pandas as pd
@@ -11,6 +12,45 @@ try:
 except ImportError:
     mcal = None
     logging.warning("pandas_market_calendars not found. Holiday check will be disabled.")
+
+# Platform-specific getch implementation
+IS_WINDOWS = sys.platform == "win32"
+
+if IS_WINDOWS:
+    import msvcrt
+
+    def getch() -> bytes:
+        """Read a single keypress from the terminal (Windows)."""
+        return msvcrt.getch()
+
+    def getch_str() -> str:
+        """Read a single keypress and return as string (Windows)."""
+        return msvcrt.getch().decode('utf-8', errors='ignore')
+else:
+    import tty
+    import termios
+
+    def getch() -> bytes:
+        """Read a single keypress from the terminal (Linux/Mac)."""
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+            return ch.encode('utf-8')
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+    def getch_str() -> str:
+        """Read a single keypress and return as string (Linux/Mac)."""
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+            return ch
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 def get_fixed_width(text: str, width: int = 8) -> str:
     """

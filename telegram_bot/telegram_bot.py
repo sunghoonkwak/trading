@@ -36,10 +36,11 @@ def load_telegram_credentials() -> tuple[Optional[str], Optional[str]]:
         tuple[str, str]: (bot_token, chat_id)
     """
     try:
-        # Load telegram credentials file
-        telegram_file_info = os.path.join(os.path.dirname(__file__), "telegram.txt")
+        # Load telegram credentials file from KIS_config directory
+        config_root = os.path.join(os.path.expanduser("~"), "KIS_config")
+        telegram_file_info = os.path.join(config_root, "telegram.txt")
         if not os.path.exists(telegram_file_info):
-            logging.error("telegram.txt not found")
+            logging.error(f"telegram.txt not found at {telegram_file_info}")
             return None, None
 
         with open(telegram_file_info, "r") as file:

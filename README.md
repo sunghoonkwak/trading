@@ -57,14 +57,30 @@
 │   └── event_handler.py        # 실시간 웹소켓 이벤트 처리
 ├── data/                       # 데이터 서비스 계층
 │   ├── data_service.py         # 포트폴리오 데이터 캐싱 및 중앙 관리
-│   ├── calculate_weights.py    # 목표 비중 계산 로직
-│   ├── portfolio.json          # 캐싱된 포트폴리오 데이터
-│   └── portfolio_weights.json  # 포트폴리오 비중 설정 파일
+│   └── calculate_weights.py    # 목표 비중 계산 로직
 ├── exports/                    # 엑셀 내보내기 파일 저장 디렉토리
 ├── logs/                       # 애플리케이션 로그 파일 디렉토리
-├── stock_configuration.json    # 종목별 UI 설정
+├── templete/                   # 설정 파일 템플릿
+│   └── raoeo.json              # RAOEO 전략 설정 템플릿
+└── stock_configuration.json    # 종목별 UI 설정
+```
+
+### 📁 외부 설정 디렉토리 (`~/KIS_config/`)
+모든 민감한 설정 파일은 프로젝트 외부에 저장됩니다:
+```
+~/KIS_config/
+├── kis_devlp.yaml              # KIS API 설정
+├── password.txt                # 복호화 비밀번호
+├── credentials.enc             # 암호화된 API 키
 ├── telegram.txt                # 텔레그램 봇 토큰/채팅 ID
-└── credentials.enc             # 암호화된 인증 데이터
+├── service-account.json        # Google Sheets 서비스 계정
+├── portfolio.json              # 캐싱된 포트폴리오 데이터
+├── portfolio_weights.json      # 포트폴리오 비중 설정
+├── raoeo.json                  # RAOEO 전략 설정
+├── raoeo_history.json          # RAOEO 히스토리
+├── value_averaging.json        # Value Averaging 설정
+├── value_averaging_history.json # Value Averaging 히스토리
+└── memo.json                   # 텔레그램 메모
 ```
 
 ---
@@ -89,11 +105,12 @@ pip install -r requirements-windows.txt
 ```
 > **Note**: Textual TUI를 위해 `textual` 패키지가 필요합니다.
 
-2. KIS 설정 파일을 준비합니다. (`~/steven/KIS_config/` 폴더)
+2. KIS 설정 파일을 준비합니다. (`~/KIS_config/` 폴더)
    - `kis_devlp.yaml`: KIS API 설정
    - `password.txt`: 복호화 비밀번호
    - `credentials.enc`: 암호화된 API 키 (`kis_api/key/generate_credentials.py`로 생성)
    - `telegram.txt`: 텔레그램 봇 토큰/채팅 ID (`BOT_TOKEN,CHAT_ID`)
+   - `service-account.json`: Google Sheets 서비스 계정 (선택사항)
 
 ### 🚀 실행
 ```bash

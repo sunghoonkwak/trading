@@ -166,8 +166,9 @@ import json
 import os
 from datetime import datetime, timezone
 
-# Path to portfolio.json - relative to this module's location
-PORTFOLIO_FILE = os.path.join(os.path.dirname(__file__), '..', '..', 'menu', 'portfolio', 'portfolio.json')
+# Path to portfolio.json - in KIS_config directory
+CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
+PORTFOLIO_FILE = os.path.join(CONFIG_ROOT, 'portfolio.json')
 
 # Owner definitions
 OWNERS = [

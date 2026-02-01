@@ -75,4 +75,5 @@ UI 모듈(`portfolio.py`, `handle_account_info.py`)과 데이터 소스(`KIS Thr
 ## Dependencies
 - **Source**: `kis.kis_thread` (API communication)
 - **Calculation**: `calculate_weights.py` (Target weights)
-- **Config**: `portfolio_weights.json` (Rebalancing rules)
+- **Config**: `~/KIS_config/portfolio_weights.json` (Rebalancing rules)
+- **Cache**: `~/KIS_config/portfolio.json` (Cached portfolio data)

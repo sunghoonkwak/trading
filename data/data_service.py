@@ -20,8 +20,9 @@ from display import add_alert
 import json
 import os
 
-# Path to portfolio.json - relative to this module
-PORTFOLIO_FILE = os.path.join(os.path.dirname(__file__), 'portfolio.json')
+# Path to portfolio.json - in KIS_config directory
+CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
+PORTFOLIO_FILE = os.path.join(CONFIG_ROOT, 'portfolio.json')
 
 # =============================================================================
 # Portfolio Cache
@@ -395,13 +396,12 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
             def calculate_target_weights(c, cfg, v=None): return {}, 0
             def load_config(p): return {}
 
-        # Path resolution for weights config
+        # Path resolution for weights config (in KIS_config directory)
         import os
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # trading/
-        config_path = os.path.join(base_dir, "data", "portfolio_weights.json")
+        config_path = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_weights.json")
 
         if not os.path.exists(config_path):
-            config_path = "portfolio_weights.json" # Fallback
+            logging.warning(f"[Data] portfolio_weights.json not found at {config_path}")
 
         config = load_config(config_path)
         targets, score = calculate_target_weights(current_weights, config)

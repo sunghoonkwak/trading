@@ -132,14 +132,4 @@ cython_debug/
 .vscode/
 
 # Project specific ignores
-credentials.enc
-password.txt
-stock_data.json
-portfolio_export_*.xlsx
-portfolio.json
-telegram.txt
 logs/
-value_averaging_history.json
-raoeo_history.json
-raoeo.json
-memo.json
