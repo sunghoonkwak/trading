@@ -27,8 +27,8 @@ MENU_TEXT = """
  r. RAOEO Strategy
  p. Portfolio
 ------------------------------------------------------------
- 0. Toggle Log Level    v. Open Event Viewer
- c. Clear & Sync        q. Back to Super Menu
+ 0. Toggle Log Level
+ c. Clear & Sync        q. Quit System
 """
 
 
@@ -38,7 +38,6 @@ def menu():
     from .handle_place_order import handle_place_order
     from .handle_manage_orders import handle_manage_orders, sync_open_orders
     from .raoeo.raoeo import raoeo_menu
-    from event_viewer import spawn_viewer, close_viewer, is_running
 
     if MENU_DEBUG:
         ka._DEBUG = True
@@ -77,24 +76,13 @@ def menu():
             from display import clear_quotes
             clear_quotes()
             sync_open_orders()
-        elif choice.lower() == 'v':
-            from kis import event_pipe
-
-            if is_running():
-                add_alert("[SYS] Viewer is already running!", "INFO")
-            else:
-                if event_pipe.is_connected():
-                    event_pipe.reset_pipe_server()
-                spawn_viewer()
-                add_alert("[SYS] Viewer terminal launched!", "SUCCESS")
         elif choice.lower() == 'r':
             raoeo_menu()
         elif choice.lower() == 'p':
             from menu.portfolio import portfolio
             portfolio.portfolio_menu()
         elif choice.lower() == 'q':
-            # Return to super menu instead of exit
-            add_alert("[Menu] Returning to Super Menu...", "INFO")
+            add_alert("[Menu] Exiting...", "INFO")
             break
         else:
             pass

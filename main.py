@@ -15,6 +15,7 @@ import sys
 import time
 from logging.handlers import TimedRotatingFileHandler
 import shutil
+import threading
 
 
 def archive_existing_log(latest_log, logs_dir):
@@ -153,8 +154,12 @@ if __name__ == "__main__":
     print("")  # Blank line for separation
 
     # ============================================
-    # Step 1: Auto-initialize Telegram (for alerts)
+    # Auto-initialize everything, then start Event Viewer server
     # ============================================
+    print("[Startup] System initializing...")
+    print("")
+
+    # Step 1: Initialize Telegram
     print("[Startup] Step 1: Initializing Telegram Bot...")
     try:
         from thread_state import ThreadStatus, update_telegram_state
@@ -163,25 +168,67 @@ if __name__ == "__main__":
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram():
             update_telegram_state(thread_status=ThreadStatus.RUNNING, bot_connected=True)
-            add_alert("[Startup] Telegram Bot initialized", "SUCCESS")
+            logging.info("[Startup] Telegram Bot initialized")
+            print("[Startup] ✓ Telegram Bot initialized")
         else:
             update_telegram_state(thread_status=ThreadStatus.ERROR, last_error="Failed")
-            add_alert("[Startup] Telegram init failed (continuing...)", "WARNING")
+            logging.warning("[Startup] Telegram init failed")
+            print("[Startup] ✗ Telegram init failed (continuing...)")
     except Exception as e:
-        add_alert(f"[Startup] Telegram error: {str(e)[:50]} (continuing...)", "WARNING")
+        logging.warning(f"[Startup] Telegram error: {e}")
+        print(f"[Startup] ✗ Telegram error: {str(e)[:50]} (continuing...)")
 
     time.sleep(0.5)
 
-    # ============================================
-    # Step 2: Auto-spawn Event Viewer
-    # ============================================
-    print("[Startup] Step 2: Spawning Event Viewer...")
+    # Step 2: Initialize KIS API
+    print("[Startup] Step 2: Initializing KIS API...")
     try:
-        # Create pipe server first
-        if event_pipe.create_pipe_server():
-            add_alert("[Startup] Pipe server created", "SUCCESS")
+        from kis.kis_thread import (
+            start_kis_thread, is_kis_thread_running,
+            request_kis_auth, request_kis_ws_auth, wait_for_response,
+            initialize_websocket_and_pipe
+        )
 
-            # Wait for client in background
+        # Start KIS thread
+        if not is_kis_thread_running():
+            if start_kis_thread():
+                logging.info("[Startup] KIS Thread started")
+                print("[Startup] ✓ KIS Thread started")
+            else:
+                logging.error("[Startup] Failed to start KIS Thread")
+                print("[Startup] ✗ KIS Thread failed")
+
+        time.sleep(0.5)
+
+        # REST API Auth
+        print("[Startup]   - Authenticating REST API...")
+        auth_id = request_kis_auth()
+        response = wait_for_response(auth_id, timeout=30.0)
+        if response and response.success:
+            logging.info("[Startup] KIS REST API authenticated")
+            print("[Startup] ✓ REST API authenticated")
+        else:
+            error = response.error if response else "Timeout"
+            logging.error(f"[Startup] REST Auth failed: {error}")
+            print(f"[Startup] ✗ REST Auth failed: {error}")
+
+        # WebSocket Auth
+        print("[Startup]   - Authenticating WebSocket...")
+        ws_auth_id = request_kis_ws_auth()
+        response = wait_for_response(ws_auth_id, timeout=30.0)
+        if response and response.success:
+            logging.info("[Startup] KIS WebSocket authenticated")
+            print("[Startup] ✓ WebSocket authenticated")
+        else:
+            error = response.error if response else "Timeout"
+            logging.error(f"[Startup] WS Auth failed: {error}")
+            print(f"[Startup] ✗ WS Auth failed: {error}")
+
+        # Initialize WebSocket & Pipe
+        print("[Startup]   - Starting WebSocket connection...")
+        if event_pipe.create_pipe_server():
+            logging.info("[Startup] Pipe server created")
+
             import threading
             def wait_client():
                 if event_pipe.wait_for_client():
@@ -189,22 +236,77 @@ if __name__ == "__main__":
             client_thread = threading.Thread(target=wait_client, daemon=True)
             client_thread.start()
 
-        # Spawn viewer terminal
-        from event_viewer import spawn_viewer
-        if spawn_viewer():
-            add_alert("[Startup] Event Viewer launched", "SUCCESS")
+        if initialize_websocket_and_pipe():
+            logging.info("[Startup] KIS fully initialized")
+            print("[Startup] ✓ KIS fully initialized")
         else:
-            add_alert("[Startup] Event Viewer launch failed (continuing...)", "WARNING")
+            logging.warning("[Startup] KIS init had issues")
+            print("[Startup] ✗ KIS init had issues")
+
+        # Sync orders
+        print("[Startup]   - Syncing open orders...")
+        from menu.handle_manage_orders import sync_open_orders
+        sync_open_orders()
+        logging.info("[Startup] Orders synced")
+        print("[Startup] ✓ Orders synced")
+
     except Exception as e:
-        add_alert(f"[Startup] Viewer error: {str(e)[:50]} (continuing...)", "WARNING")
+        logging.error(f"[Startup] KIS error: {e}")
+        print(f"[Startup] ✗ KIS error: {str(e)[:50]}")
+
+    time.sleep(0.5)
+
+    # Step 3: Start Web Event Viewer
+    print("")
+    print("[Startup] Step 3: Starting Web Event Viewer...")
+    print("[Startup] Access at: http://<server-ip>:8080")
+    print("")
+
+    try:
+        from web_server import start_web_server
+        # Run web server in background thread to not block the menu
+        web_thread = threading.Thread(target=start_web_server, kwargs={"host": "0.0.0.0", "port": 8080}, daemon=True)
+        web_thread.start()
+        print("[Startup] ✓ Web Event Viewer started in background")
+    except Exception as e:
+        logging.error(f"[System] Web server error: {e}")
+        print(f"[Error] Failed to start web server: {e}")
 
     time.sleep(1)
 
-    # ============================================
-    # Step 3: Launch Super Menu
-    # ============================================
-    print("[Startup] Step 3: Starting Super Menu...")
+    # Step 4: Launch Super Menu
+    print("")
+    print("[Startup] Step 4: Starting Super Menu...")
     print("")
 
-    from super_menu import super_menu
-    super_menu()
+    # Step 4: Launch Trading Menu
+    print("")
+    print("[Startup] Step 4: Starting Trading Menu...")
+    print("")
+
+    try:
+        from menu.menu import menu
+        menu()
+    except KeyboardInterrupt:
+        print("\n[Shutdown] Keyboard Interrupt")
+    except Exception as e:
+        print(f"[Error] Menu crashed: {e}")
+        logging.error(f"[System] Menu crash: {e}", exc_info=True)
+    finally:
+        # Shutdown sequence
+        print("\n[System] Shutting down...")
+        try:
+            from kis.kis_thread import stop_kis_thread
+            stop_kis_thread()
+            print("[System] KIS thread stopped")
+        except:
+            pass
+
+        try:
+            from telegram_bot.telegram_bot import shutdown_telegram
+            shutdown_telegram()
+            print("[System] Telegram shutdown signal sent")
+        except:
+            pass
+
+        print("[System] Goodbye!")

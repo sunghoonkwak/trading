@@ -4,7 +4,7 @@ All ANSI cursor control removed for reliable log visibility.
 Orders are sent to Event Viewer via Named Pipe.
 """
 import sys
-import sys
+import logging
 from datetime import datetime
 
 # Try to import event_pipe for order forwarding
@@ -13,9 +13,6 @@ try:
     PIPE_AVAILABLE = True
 except ImportError:
     PIPE_AVAILABLE = False
-
-# Log file path (overwritten by main.py)
-log_file_path = "WebSocket_latest.log"
 
 # Colors (still useful for terminal output)
 COLOR_RESET = "\033[0m"
@@ -30,6 +27,9 @@ from utils import get_fixed_width
 def add_alert(message: str, level: str = "INFO"):
     """Print alert to terminal (simple scroll-based)."""
     timestamp = datetime.now().strftime("%H:%M:%S")
+
+    logging.info(f"[Alert] [{level}] {message}")
+
     color = COLOR_GRAY
     if level == "ERROR":
         color = COLOR_RED
@@ -39,6 +39,9 @@ def add_alert(message: str, level: str = "INFO"):
         color = COLOR_GREEN
     print(f"alert:[{timestamp}] {color}{message}{COLOR_RESET}")
 
+    # Also send to web dashboard via event_pipe if available
+    if PIPE_AVAILABLE:
+        event_pipe.send_log("ALT", f"[{level}] {message}")
 
 def update_order_state(order_id: str, ticker: str, name: str, side: str,
                        price: str, qty: str, state: str, notify: bool = True):

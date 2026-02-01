@@ -1,83 +1,23 @@
-# Display (`display.py`)
+# Display Module (`display.py`)
 
-이 모듈은 메인 터미널에서 알림 및 주문 상태를 표시하기 위한 단순화된 출력 시스템을 제공합니다.
+## 개요
+터미널 출력과 시스템 알림을 처리하는 모듈입니다.
+웹 기반 Event Viewer 도입으로 인해 역할이 축소 및 변경되었습니다.
 
-## Purpose (목적)
+## 주요 기능
 
-**스크롤 기반 출력**을 제공하여 로그가 덮어쓰이지 않고 추적 가능하도록 합니다. ANSI 커서 제어가 제거되어 터미널 호환성이 향상되었습니다.
+### `add_alert(message, level="INFO")`
+시스템 알림을 발생시킵니다.
+1. **Log File**: `WebSocket_latest.log`에 즉시 기록합니다.
+2. **Web Viewer**: `kis.event_pipe`가 연결되어 있다면 `ALT` 메시지를 전송하여 웹 대시보드 System Log에 표시합니다.
+3. **Terminal Output**:
+   - 모든 알림 메시지는 터미널에도 컬러 텍스트로 **항상 출력**됩니다.
+   - Web Viewer 및 로그 파일에도 동일하게 기록됩니다.
 
-> **Note**: 실시간 시세 및 주문 모니터링은 별도의 **Event Viewer** (`event_viewer.py`)에서 Textual TUI로 처리됩니다.
+### `update_order_state(...)`
+주문 상태 변경 시 호출됩니다.
+- 변경 내역을 `kis.event_pipe`를 통해 웹 뷰어로 전송합니다 (`ODR` 메시지).
+- 터미널에는 별도로 출력하지 않습니다 (웹 뷰어 확인 권장).
 
-## UI Design (UI 설계)
-
-### Main Terminal (Scroll-based)
-*   메뉴 및 사용자 입력은 일반적인 `print()`와 `input()`을 사용합니다.
-*   알림은 `alert:[HH:MM:SS] 메시지` 형식으로 출력됩니다.
-*   화면을 지우거나 커서를 이동하지 않습니다.
-
-### Event Viewer (Textual TUI)
-*   **Orders Panel**: 실시간 주문 목록
-*   **Quotes Panel**: 종목별 최신 시세
-*   **Log Panel**: MKT 이벤트 로그
-
-## Functions (기능)
-
-### get_fixed_width
-`get_fixed_width` 함수는 `trading/utils.py`로 이동되었습니다. (구 `get_fixed_width_name`)
-
-### add_alert
-```python
-def add_alert(message: str, level: str = "INFO")
-```
-알림 메시지를 메인 터미널에 출력합니다.
-
-**Parameters**:
-- `message` (str): 알림 메시지.
-- `level` (str): "INFO" (노랑), "SUCCESS" (초록), "ERROR" (빨강).
-
-### update_order_state
-```python
-def update_order_state(order_id, ticker, name, side, price, qty, state, notify=True)
-```
-주문 정보를 Event Viewer로 전송합니다.
-
-**Parameters**:
-- `order_id` (str): 주문 번호.
-- `ticker` (str): 종목 코드.
-- `name` (str): 종목명.
-- `side` (str): "Buy" 또는 "Sell".
-- `price` (str): 주문 가격.
-- `qty` (str): 수량.
-- `state` (str): 주문 상태 (PLACED, EXECUTED 등).
-- `notify` (bool): 메인 터미널에 알림 표시 여부.
-
-**Effect**: Named Pipe를 통해 `ODR|...` 메시지를 Event Viewer로 전송합니다.
-
-### remove_order_state
-주문 제거 메시지를 Event Viewer로 전송합니다.
-
-### clear_order_states
-Event Viewer의 주문 목록을 초기화합니다 (`CLR|ORDERS`).
-
-### clear_quotes
-Event Viewer의 시세 목록을 초기화합니다 (`CLR|QUOTES`).
-
-### show_in_result_area
-```python
-def show_in_result_area(lines: list[str])
-```
-여러 줄의 텍스트를 출력합니다 (스크롤 기반).
-
-### input_at
-```python
-def input_at(row, col, prompt) -> str
-```
-사용자 입력을 받습니다. `row`, `col` 인자는 호환성을 위해 무시됩니다.
-
-## Integration (통합)
-
-*   **Event Viewer와 통신**: `kis.event_pipe.send_log(msg_type, message)`를 사용하여 Named Pipe로 메시지를 전송합니다.
-*   **Message Types**:
-    - `"ODR"`: 주문 정보
-    - `"MKT"`: 시세 정보
-    - `"CLR"`: 명령 (`ORDERS` 또는 `QUOTES` 초기화)
+### `clear_quotes()`
+웹 뷰어의 시세(Quote) 목록을 초기화하라는 신호를 보냅니다 (`CLR` 메시지).

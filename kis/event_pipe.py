@@ -60,6 +60,17 @@ _writer_running = False
 _last_write_warning = 0  # Timestamp of last warning to avoid spam
 _consecutive_failures = 0  # Track consecutive write failures
 
+# Web broadcast callback (for web_server.py)
+_web_broadcast_callback = None
+
+
+def set_web_broadcast_callback(callback):
+    """Set callback function for web broadcast. Called by web_server.py."""
+    global _web_broadcast_callback
+    _web_broadcast_callback = callback
+    logging.info("[Pipe] Web broadcast callback registered")
+
+
 
 def print_viewer(msg_type, level, log):
     """Log to file and send to separate terminal viewer via pipe."""
@@ -160,6 +171,14 @@ def wait_for_client():
 def send_log(msg_type: str, message: str) -> bool:
     """Send log message through pipe. Non-blocking via queue."""
     global _last_write_warning
+
+    # Always try web broadcast first (works even without pipe connection)
+    if _web_broadcast_callback:
+        try:
+            _web_broadcast_callback(msg_type, message)
+        except Exception as e:
+            logging.debug(f"[Pipe] Web broadcast failed: {e}")
+
     if not _pipe_connected:
         return False
 

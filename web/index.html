@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Event Viewer</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <h1>
+                <span class="logo">📈</span>
+                Trading Event Viewer
+            </h1>
+            <div class="connection-status" id="connection-status">
+                <span class="status-dot disconnected"></span>
+                <span class="status-text">Disconnected</span>
+            </div>
+        </header>
+
+        <!-- Main Content - 2 Columns (7:3) -->
+        <main class="main-content">
+            <!-- Left Column: Orders & Quotes (70%) -->
+            <div class="col-left">
+                <!-- Orders Panel -->
+                <section class="viewer-section orders-section">
+                    <div class="section-header">
+                        <h3>📋 Orders</h3>
+                        <span class="section-count" id="orders-count">0</span>
+                    </div>
+                    <div class="section-content" id="orders-panel">
+                        <div class="empty-state">No orders</div>
+                    </div>
+                </section>
+
+                <!-- Quotes Panel -->
+                <section class="viewer-section quotes-section">
+                    <div class="section-header">
+                        <h3>📈 Quotes</h3>
+                        <span class="section-count" id="quotes-count">0</span>
+                    </div>
+                    <div class="section-content" id="quotes-panel">
+                        <div class="empty-state">Waiting for quotes...</div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Right Column: System Log (30%) -->
+            <div class="col-right">
+                <!-- System Log Panel -->
+                <section class="viewer-section log-section">
+                    <div class="section-header">
+                        <h3>📜 System Log</h3>
+                        <div class="log-controls">
+                            <span class="section-count" id="log-count">0</span>
+                            <button class="control-btn" id="btn-auto-scroll" onclick="toggleAutoScroll()">
+                                Auto-Scroll: ON
+                            </button>
+                            <button class="control-btn" onclick="clearLogs()">
+                                Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="section-content log-content" id="log-panel">
+                        <div class="log-entry info">[System] Event Viewer Ready</div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

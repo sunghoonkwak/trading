@@ -1,33 +1,38 @@
-# Main Application (`main.py`)
+# Main Entry Point (`main.py`)
 
-이 파일은 트레이딩 애플리케이션의 진입점(Entry Point)입니다.
+## 개요
+프로그램의 진입점으로, 시스템 초기화, 인증, 서비스 시작을 순차적으로 수행합니다.
+모든 과정은 자동화되어 있으며, 사용자 개입 없이 실행 즉시 트레이딩 준비 상태가 됩니다.
 
-## Responsibilities (역할)
-애플리케이션의 역할이 단순화되어 고수준의 관리자(Orchestrator) 역할을 수행합니다:
-1.  **Environment Setup (환경 설정)**:
-    *   스레드 안전성 문제를 방지하기 위해 `requests_cache`를 비활성화합니다.
-    *   메인 `asyncio` 이벤트 루프를 설정합니다.
-2.  **Automated Startup Sequence (자동 시작 시퀀스)**:
-    *   **Step 1**: Telegram 봇 초기화 (알림 수신 준비)
-    *   **Step 2**: Event Viewer를 새 터미널 창에서 자동 실행
-    *   **Step 3**: Super Menu 표시
-3.  **Super Menu Delegation (위임)**:
-    *   `super_menu.super_menu()`를 호출하여 스레드 초기화(KIS, Telegram) 및 사용자 상호 작용을 처리합니다.
+## 실행 프로세스 (Startup Sequence)
 
-## Logic Flow (로직 흐름)
-1.  **Startup**:
-    *   `main()`이 호출됩니다.
-    *   Telegram 봇이 먼저 초기화됩니다.
-    *   `event_viewer.spawn_viewer()`가 Event Viewer를 실행합니다.
-    *   `super_menu()`로 제어권이 넘어갑니다.
-2.  **Menu Loop**:
-    *   제어권이 `super_menu()`로 넘어가며, 종료 시까지 애플리케이션 수명 주기를 관리합니다.
-3.  **Concurrency (동시성)**:
-    *   `main.py`는 **Main Thread**를 실행하며, UI 루프와 텔레그램 봇 처리를 담당합니다.
-    *   백그라운드 스레드(KIS Thread)는 `super_menu`와 `kis_thread`에 의해 생성 및 관리됩니다.
+### 0. 로깅 설정 (Logging Setup)
+- `WebSocket_latest.log` 파일에 로그를 기록합니다.
+- 기존 로그 파일이 있는 경우 `logs/` 디렉토리로 타임스탬프를 붙여 아카이빙합니다 (Log Rotation).
+- 서드파티 라이브러리(httpx, telegram 등)의 로그 레벨을 INFO로 설정하여 노이즈를 줄입니다.
 
-## Key Changes (리팩토링 변경 사항)
-*   **Automatic Startup**: Telegram → Event Viewer → Super Menu 순서로 자동 시작
-*   **Event Handling**: `on_result` 로직이 `kis/event_handler.py`로 이동되었습니다.
-*   **Logging**: 직접적인 로깅 정의가 제거되고 `kis.event_pipe`를 사용하도록 변경되었습니다.
-*   **Log Rotation**: 6시간마다 `TimedRotatingFileHandler`를 사용하여 로그를 순환시키고, `logs/` 디렉토리로 자동 백업합니다.
+### 1. 텔레그램 초기화 (Telegram Auto-init)
+- `telegram_bot` 모듈을 초기화하고 봇 연결을 시도합니다.
+- 실패 시에도 경고 메시지를 출력하고 다음 단계로 진행합니다.
+
+### 2. KIS API 초기화 (KIS API Init)
+- **KIS Thread 시작**: API 요청을 처리할 데몬 스레드를 시작합니다.
+- **REST API 인증**: 토큰 발급 및 접근 권한을 확인합니다.
+- **WebSocket 인증**: 실시간 시세 수신을 위한 웹소켓 키를 발급받습니다.
+- **Pipe Server 생성**: 백엔드와 웹서버/이벤트뷰어 간 통신을 위한 파이프를 생성합니다.
+- **WebSocket 연결**: KIS 증권사 서버와 웹소켓 연결을 맺습니다.
+- **주문 동기화 (Order Sync)**: 미체결 주문 내역을 조회하여 메모리에 동기화합니다.
+
+### 3. 웹 Event Viewer 시작 (Web Server Start)
+- `web_server.py`를 **백그라운드 데몬 스레드**로 실행합니다.
+- 메인 스레드를 차단하지 않으면서 `http://<ip>:8080` 포트에서 웹 UI를 제공합니다.
+
+### 4. 트레이딩 메뉴 실행 (Trading Menu Launch)
+- 모든 초기화가 완료되면 터미널 메인 스레드에서 **Trading Menu** (`menu/menu.py`)를 바로 실행합니다.
+- 슈퍼 메뉴 단계가 생략되어 더 빠르게 트레이딩 기능을 사용할 수 있습니다.
+- `q` 입력 시 안전하게 시스템을 종료합니다.
+
+## Web Mode vs Terminal Mode
+이전 버전과 달리 **단일 모드**로 통합되었습니다.
+- **항상** 웹 서버와 터미널 메뉴가 동시에 실행됩니다.
+- 모든 알림은 웹과 터미널 양쪽에 동시에 출력됩니다.
