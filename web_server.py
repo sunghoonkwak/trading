@@ -127,22 +127,42 @@ async def websocket_endpoint(websocket: WebSocket):
         await manager.disconnect(websocket)
 
 
-def start_web_server(host: str = "0.0.0.0", port: int = 8080):
-    """Start the web server with logging redirected to file."""
+def start_web_server(host: str = "0.0.0.0", port: int = 8080, use_ssl: bool = True):
+    """Start the web server with optional HTTPS support."""
     # Configure uvicorn to log to the same file as main app
     log_config = uvicorn.config.LOGGING_CONFIG
     log_config["handlers"]["default"]["stream"] = "ext://sys.stdout"
     log_config["handlers"]["access"]["stream"] = "ext://sys.stdout"
 
-    logging.info(f"[WebServer] Starting on http://{host}:{port}")
+    # SSL certificate paths
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    cert_file = os.path.join(base_dir, "certs", "cert.pem")
+    key_file = os.path.join(base_dir, "certs", "key.pem")
 
-    uvicorn.run(
-        app,
-        host=host,
-        port=port,
-        log_level="warning",  # Reduce HTTP log noise
-        access_log=False      # Disable access logging to console
-    )
+    ssl_enabled = use_ssl and os.path.exists(cert_file) and os.path.exists(key_file)
+    protocol = "https" if ssl_enabled else "http"
+    logging.info(f"[WebServer] Starting on {protocol}://{host}:{port}")
+
+    if ssl_enabled:
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            ssl_certfile=cert_file,
+            ssl_keyfile=key_file,
+            log_level="warning",
+            access_log=False
+        )
+    else:
+        if use_ssl:
+            logging.warning("[WebServer] SSL requested but certs not found, falling back to HTTP")
+        uvicorn.run(
+            app,
+            host=host,
+            port=port,
+            log_level="warning",
+            access_log=False
+        )
 
 
 if __name__ == "__main__":

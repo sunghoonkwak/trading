@@ -268,7 +268,7 @@ if __name__ == "__main__":
     # Step 4: Start Web Event Viewer
     print("")
     print("[Startup] Step 4: Starting Web Event Viewer...")
-    print("[Startup] Access at: http://<server-ip>:8080")
+    print("[Startup] Access at: https://<server-ip>:8080")
     print("")
 
     try:
