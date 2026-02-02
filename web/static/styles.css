@@ -82,6 +82,35 @@ body {
     font-size: 1.5rem;
 }
 
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.toggle-btn {
+    padding: var(--space-xs) var(--space-md);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.toggle-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--text-primary);
+}
+
+.toggle-btn.active {
+    background: rgba(6, 182, 212, 0.2);
+    border-color: var(--accent-info);
+    color: var(--accent-info);
+}
+
 .connection-status {
     display: flex;
     align-items: center;
@@ -131,7 +160,7 @@ body {
 
 /* Columns */
 .col-left {
-    flex: 7;
+    flex: 50;
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--border-color);
@@ -139,7 +168,7 @@ body {
 }
 
 .col-right {
-    flex: 3;
+    flex: 50;
     display: flex;
     flex-direction: column;
     overflow: hidden;

@@ -65,3 +65,15 @@ Uvicorn 서버를 실행합니다.
 - `SYS`: 시스템 로그 (System Log)
 - `ALT`: 알림 및 에러 메시지 (System Log에 표시됨)
 - `CLR`: 화면 클리어 명령
+
+## 주문 동기화 (Order Sync)
+
+### `sync_orders_to_client(websocket)`
+클라이언트가 `sync_orders` 메시지를 보내면 호출됩니다.
+- 현재 미체결 주문을 KIS API에서 조회하여 클라이언트에 전송합니다.
+- 페이지 새로고침 시 기존 주문을 표시하는 데 사용됩니다.
+
+### `_fetch_orders_for_sync()`
+미체결 주문을 조회하여 WebSocket 메시지 형식으로 변환합니다.
+- `menu.handle_manage_orders.fetch_open_orders()` 호출
+- 국내/해외 주문을 ODR 형식으로 포맷팅하여 반환

@@ -73,11 +73,11 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
     vol_s = format(state.get('vol', 0), ",")
     diff_s = format(state.get('change', 0), ',')
 
-    msg = (f"{time_s} {fixed_name}|{code:<6}|"
-           f"Bid:{bid_s:>9}|"
-           f"Last:{price_s:>9}({vol_s:>6})|"
-           f"Diff:{diff_s:>6}({state.get('rate', 0.0):>5.2f}%)|"
-           f"Ask:{ask_s:>9}")
+    msg = (f"{fixed_name}|{code:<6}|"
+           f"{bid_s:>9}|"
+           f"{price_s:>9}({vol_s:>6})|"
+           f"{diff_s:>6}({state.get('rate', 0.0):>5.2f}%)|"
+           f"{ask_s:>9}")
     print_viewer("MKT", level, msg)
     return True
 
@@ -142,11 +142,11 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
     vol_s = format(vol_v, ",.0f") if vol_v > 0 else "0"
     diff_s = format(state.get('change', 0.0), ',.2f')
 
-    msg = (f"{time_s} {fixed_name}|{display_code:<6}|"
-           f"Bid:{bid_s:>9}|"
-           f"Last:{price_s:>9}({vol_s:>6})|"
-           f"Diff:{diff_s:>6}({state.get('rate', 0.0):>5.2f}%)|"
-           f"Ask:{ask_s:>9}")
+    msg = (f"{fixed_name}|{display_code:<6}|"
+           f"{bid_s:>9}|"
+           f"{price_s:>9}({vol_s:>6})|"
+           f"{diff_s:>6}({state.get('rate', 0.0):>5.2f}%)|"
+           f"{ask_s:>9}")
     print_viewer("MKT", level, msg)
     return True
 

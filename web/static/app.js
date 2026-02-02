@@ -8,6 +8,7 @@ let ws = null;
 let reconnectAttempts = 0;
 let maxReconnectAttempts = 10;
 let autoScroll = true;
+let showMktLogs = false;
 
 // Data stores
 const orders = new Map();
@@ -27,11 +28,13 @@ const elements = {
     logPanel: null,
     logCount: null,
     btnAutoScroll: null,
+    mktToggle: null,
 };
 
 // Initialize on DOM load
 document.addEventListener('DOMContentLoaded', () => {
     initElements();
+    initMktToggle();
     connectWebSocket();
 });
 
@@ -46,6 +49,16 @@ function initElements() {
     elements.logPanel = document.getElementById('log-panel');
     elements.logCount = document.getElementById('log-count');
     elements.btnAutoScroll = document.getElementById('btn-auto-scroll');
+    elements.mktToggle = document.getElementById('mkt-toggle');
+}
+
+function initMktToggle() {
+    if (elements.mktToggle) {
+        elements.mktToggle.addEventListener('click', () => {
+            showMktLogs = !showMktLogs;
+            elements.mktToggle.classList.toggle('active', showMktLogs);
+        });
+    }
 }
 
 // WebSocket Connection
@@ -59,6 +72,8 @@ function connectWebSocket() {
         updateConnectionStatus(true);
         reconnectAttempts = 0;
         addLog('Connected to server', 'success');
+        // Request existing orders on connection
+        ws.send('sync_orders');
     };
 
     ws.onclose = () => {
@@ -209,12 +224,12 @@ function updateOrdersPanel() {
             const sideClass = order.side.toUpperCase().includes('BUY') ? 'buy' : 'sell';
             return `
                 <div class="order-entry ${sideClass}">
-                    <span class="time">${order.time}</span>
-                    <span style="width:150px;overflow:hidden;text-overflow:ellipsis">${order.name}</span>
-                    <span style="width:60px">${order.ticker}</span>
-                    <span style="width:60px;color:${sideClass === 'buy' ? 'var(--accent-success)' : 'var(--accent-danger)'}">${order.side}</span>
-                    <span style="width:80px;text-align:right">${formatNumber(order.price)}</span>
-                    <span style="width:50px;text-align:right">${order.qty}</span>
+                    <span class="time" style="margin-right:8px">${order.time}</span>
+                    <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block">${order.name}</span>
+                    <span style="width:55px;display:inline-block">${order.ticker}</span>
+                    <span style="width:70px;display:inline-block;color:${sideClass === 'buy' ? 'var(--accent-success)' : 'var(--accent-danger)'}">${order.side}</span>
+                    <span style="width:70px;text-align:right;display:inline-block">${formatNumber(order.price)}</span>
+                    <span style="width:40px;text-align:right;display:inline-block">${order.qty}</span>
                     <span style="margin-left:auto;color:var(--text-dim)">${order.state}</span>
                 </div>`;
         }).join('');
@@ -233,13 +248,49 @@ function updateQuotesPanel() {
     } else {
         const entries = Array.from(quotes.entries()).reverse();
         elements.quotesPanel.innerHTML = entries.map(([ticker, quote]) => {
-            return `<div class="quote-entry">${colorizeQuote(quote.content)}</div>`;
+            return `<div class="quote-entry">${formatQuoteColumns(quote.content, quote.time)}</div>`;
         }).join('');
     }
 
     if (elements.quotesCount) {
         elements.quotesCount.textContent = quotes.size;
     }
+}
+
+function formatQuoteColumns(content, time) {
+    // Parse quote format: "Name|Ticker|Bid|Last(Vol)|Diff(Rate%)|Ask"
+    const parts = content.split('|');
+    if (parts.length < 6) {
+        return colorizeQuote(content);
+    }
+
+    const name = escapeHtml(parts[0]?.trim() || '');
+    const ticker = escapeHtml(parts[1]?.trim() || '');
+    const bid = parts[2]?.trim() || '';
+    const last = parts[3]?.trim() || '';
+    const diff = parts[4]?.trim() || '';
+    const ask = parts[5]?.trim() || '';
+
+    // Colorize diff
+    let diffHtml = escapeHtml(diff);
+    if (diff.includes('-')) {
+        diffHtml = `<span class="value-down">${escapeHtml(diff)}</span>`;
+    } else {
+        diffHtml = `<span class="value-up">${escapeHtml(diff)}</span>`;
+    }
+
+    // Colorize last
+    let lastHtml = `<span class="value-neutral">${escapeHtml(last)}</span>`;
+
+    return `
+        <span class="time" style="margin-right:8px">${time}</span>
+        <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block">${name}</span>
+        <span style="width:55px;display:inline-block">${ticker}</span>
+        <span style="width:80px;display:inline-block">${escapeHtml(bid)}</span>
+        <span style="width:140px;display:inline-block">${lastHtml}</span>
+        <span style="width:140px;display:inline-block">${diffHtml}</span>
+        <span style="display:inline-block">${escapeHtml(ask)}</span>
+    `;
 }
 
 function colorizeQuote(content) {
@@ -252,6 +303,9 @@ function colorizeQuote(content) {
 
 function addLog(message, level = 'info', time = null) {
     if (!elements.logPanel) return;
+
+    // Filter MKT logs if toggle is off
+    if (level === 'mkt' && !showMktLogs) return;
 
     const timestamp = time || new Date().toLocaleTimeString('en-US', { hour12: false });
     const entry = document.createElement('div');
