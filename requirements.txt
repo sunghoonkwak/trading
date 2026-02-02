@@ -4,7 +4,7 @@ pyyaml
 pycryptodome
 websockets
 textual
-python-telegram-bot
+python-telegram-bot[job-queue]
 openpyxl
 pandas-market-calendars
 cryptography
