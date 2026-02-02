@@ -380,6 +380,11 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
     result["merged_data"] = merged_data
     result["total_value_usd"] = total_value_usd
 
+    # Include raw lists for consumers (e.g. web_server)
+    result["holdings"] = raw_portfolio.get("holdings", [])
+    result["accounts"] = raw_portfolio.get("accounts", [])
+    result["metadata"] = raw_portfolio.get("metadata", {})
+
     # Calculate current weights
     current_weights = {}
     if total_value_usd > 0:

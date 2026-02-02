@@ -81,6 +81,30 @@
         </main>
     </div>
 
+    <!-- Ticker Detail Modal -->
+    <div id="ticker-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeTickerModal()">&times;</button>
+            <div class="modal-header">
+                <h2 id="modal-title">Ticker Details</h2>
+                <div class="modal-badges" id="modal-badges"></div>
+            </div>
+
+            <div class="modal-body">
+                <!-- Top: TradingView Chart -->
+                <div class="chart-container" id="tv-chart-container">
+                    <!-- TradingView Widget will be injected here -->
+                </div>
+
+                <!-- Bottom: Holdings Info -->
+                <div class="holdings-container" id="modal-holdings">
+                    <div class="loading-holdings">Loading holdings data...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://s3.tradingview.com/tv.js"></script>
     <script src="/static/app.js"></script>
 </body>
 

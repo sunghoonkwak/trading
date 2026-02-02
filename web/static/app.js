@@ -226,7 +226,7 @@ function updateOrdersPanel() {
                 <div class="order-entry ${sideClass}">
                     <span class="time" style="margin-right:8px">${order.time}</span>
                     <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block">${order.name}</span>
-                    <span style="width:55px;display:inline-block">${order.ticker}</span>
+                    <span style="width:55px;display:inline-block" class="ticker-link" onclick="openTickerModal('${order.ticker}')">${order.ticker}</span>
                     <span style="width:70px;display:inline-block;color:${sideClass === 'buy' ? 'var(--accent-success)' : 'var(--accent-danger)'}">${order.side}</span>
                     <span style="width:70px;text-align:right;display:inline-block">${formatNumber(order.price)}</span>
                     <span style="width:40px;text-align:right;display:inline-block">${order.qty}</span>
@@ -285,7 +285,7 @@ function formatQuoteColumns(content, time) {
     return `
         <span class="time" style="margin-right:8px">${time}</span>
         <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block">${name}</span>
-        <span style="width:55px;display:inline-block">${ticker}</span>
+        <span style="width:55px;display:inline-block" class="ticker-link" onclick="openTickerModal('${escapeHtml(ticker)}')">${escapeHtml(ticker)}</span>
         <span style="width:80px;display:inline-block">${escapeHtml(bid)}</span>
         <span style="width:140px;display:inline-block">${lastHtml}</span>
         <span style="width:140px;display:inline-block">${diffHtml}</span>
@@ -355,3 +355,174 @@ function formatNumber(value) {
     if (isNaN(num)) return value;
     return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
 }
+
+
+// --- Modal & TradingView Logic ---
+
+function openTickerModal(ticker) {
+    if (!ticker) return;
+
+    const modal = document.getElementById('ticker-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.getElementById('modal-title').textContent = ticker;
+
+        loadTradingViewChart(ticker);
+        loadHoldingsData(ticker);
+    }
+}
+
+function closeTickerModal() {
+    const modal = document.getElementById('ticker-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        // Clear chart to stop resource usage?
+        // document.getElementById('tv-chart-container').innerHTML = '';
+        // Keeping it might be faster if re-opened. Let's leave it.
+    }
+}
+
+function loadTradingViewChart(ticker) {
+    const containerId = 'tv-chart-container';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    container.innerHTML = ''; // Clear previous
+
+    // Determine exchange (heuristic)
+    let symbol = ticker;
+    if (/^\d{6}$/.test(ticker)) {
+        // Korean stock usually 6 digits
+        symbol = `KRX:${ticker}`;
+    } else {
+        // For US/Overseas, simply use the ticker. TradingView is smart enough to find the main listing.
+        // This solves issues where ETFs are on NYSE Arca (e.g. SOXL) instead of NASDAQ.
+        symbol = ticker;
+    }
+
+    new TradingView.widget({
+        "autosize": true,
+        "symbol": symbol,
+        "interval": "D",
+        "timezone": "Asia/Seoul",
+        "theme": "dark",
+        "style": "1",
+        "locale": "en",
+        "enable_publishing": false,
+        "allow_symbol_change": true,
+        "container_id": containerId,
+        "studies": [
+            { "id": "MASimple@tv-basicstudies", "inputs": { "length": 5 } },
+            { "id": "MASimple@tv-basicstudies", "inputs": { "length": 20 } },
+            { "id": "MASimple@tv-basicstudies", "inputs": { "length": 100 } },
+            { "id": "MASimple@tv-basicstudies", "inputs": { "length": 125 } },
+            { "id": "MASimple@tv-basicstudies", "inputs": { "length": 200 } }
+        ]
+    });
+}
+
+async function loadHoldingsData(ticker) {
+    const container = document.getElementById('modal-holdings');
+    if (!container) return;
+
+    container.innerHTML = '<div class="loading-holdings">Loading holdings data...</div>';
+
+    try {
+        const response = await fetch(`/api/holdings/${ticker}`);
+        const data = await response.json();
+
+        if (data.error || !data.found) {
+            container.innerHTML = '<div class="empty-state">No holdings found for this asset.</div>';
+            return;
+        }
+
+        // Build Table Structure
+        let html = `
+            <table class="holdings-table">
+                <thead>
+                    <tr>
+                        <th>Account</th>
+                        <th>Total Value</th>
+                        <th>Avg Price</th>
+                        <th>Quantity</th>
+                        <th>P/L</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        // 1. Summary Row
+        const pnlColor = data.pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)';
+        html += `
+            <tr class="summary-row">
+                <td>Total</td>
+                <td>${formatPrice(data.total_val, data.currency)}</td>
+                <td>${formatPrice(data.avg_price, data.currency)}</td>
+                <td>${data.qty}</td>
+                <td><span style="color:${pnlColor}">${formatPrice(data.pnl, data.currency)} (${data.pnl_rate.toFixed(2)}%)</span></td>
+            </tr>
+        `;
+
+        // 2. Account Rows
+        if (data.accounts && data.accounts.length > 0) {
+            data.accounts.forEach(acc => {
+                const qty = acc.qty || 0;
+                const avg = acc.avg_price || 0;
+                const cur = data.cur_price || 0; // Use aggregate current price
+
+                const val = qty * cur;
+                const invest = qty * avg;
+                const pnl = val - invest;
+                const pnlRate = invest > 0 ? (pnl / invest * 100) : 0;
+                const accPnlColor = pnl >= 0 ? 'var(--accent-success)' : 'var(--accent-danger)';
+
+                html += `
+                    <tr>
+                        <td>${acc.account_name || acc.account_id || 'Unknown'}</td>
+                        <td>${formatPrice(val, data.currency)}</td>
+                        <td>${formatPrice(avg, data.currency)}</td>
+                        <td>${qty}</td>
+                        <td><span style="color:${accPnlColor}">${formatPrice(pnl, data.currency)} (${pnlRate.toFixed(2)}%)</span></td>
+                    </tr>
+                `;
+            });
+        }
+
+        html += `
+                </tbody>
+            </table>
+        `;
+
+        container.innerHTML = html;
+
+    } catch (e) {
+        container.innerHTML = `<div class="log-entry error">Error loading data: ${e.message}</div>`;
+    }
+}
+
+function createCard(label, value) {
+    return `
+        <div class="holding-card">
+            <span class="label">${label}</span>
+            <span class="value">${value}</span>
+        </div>
+    `;
+}
+
+function formatPrice(val, currency) {
+    // Simple formatter, can be improved based on currency properties
+    if (typeof val !== 'number') return val;
+    return val.toLocaleString('en-US', {
+        style: 'currency',
+        currency: currency || 'USD',
+        minimumFractionDigits: 2
+    });
+}
+
+// Close modal on outside click
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('ticker-modal');
+    if (e.target === modal) {
+        closeTickerModal();
+    }
+});

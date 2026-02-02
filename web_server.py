@@ -14,6 +14,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
+import json
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -109,6 +110,81 @@ async def get_index():
     if os.path.exists(index_path):
         return FileResponse(index_path, media_type="text/html")
     return {"error": "index.html not found"}
+
+
+@app.get("/api/holdings/{ticker}")
+async def get_holdings_data(ticker: str):
+    """Fetch holdings data for a specific ticker from portfolio.json."""
+    try:
+        # Use data_service to get portfolio data (handles caching and freshness)
+        from data.data_service import get_portfolio_data
+
+        loop = asyncio.get_running_loop()
+        data_result = await loop.run_in_executor(None, get_portfolio_data)
+
+        if data_result.get('error'):
+             logging.warning(f"[WebServer] Portfolio data error: {data_result['error']}")
+             # Return error immediately if data service fails, or return empty?
+             # For now, let's proceed with empty list so at least 'found: False' is returned properly
+             pass
+
+        holdings = data_result.get('holdings', [])
+
+        # Filter for the specific ticker (case-insensitive)
+        matches = [h for h in holdings if h.get('ticker', '').upper() == ticker.upper()]
+
+        if not matches:
+            # Try case-insensitive name match as fallback
+            matches = [h for h in holdings if h.get('name', '').upper() == ticker.upper()]
+
+        if not matches:
+            return {"found": False}
+
+        # Calculate aggregates
+        total_qty = sum(h.get('qty', 0) for h in matches)
+        total_stk_eval = sum(h.get('cur_price', 0) * h.get('qty', 0) for h in matches)
+        total_invest = sum(h.get('avg_price', 0) * h.get('qty', 0) for h in matches)
+
+        avg_price = total_invest / total_qty if total_qty > 0 else 0
+        cur_price = matches[0].get('cur_price', 0) # Assume same current price for same ticker
+
+        pnl = total_stk_eval - total_invest
+        pnl_rate = (pnl / total_invest * 100) if total_invest > 0 else 0
+
+        # Determine currency (Heuristic: 6 digits = KRW, others = USD)
+        currency = "KRW" if ticker.isdigit() and len(ticker) == 6 else "USD"
+
+        # Map account IDs to names
+        accounts_list = data_result.get('accounts', [])
+        acc_map = {acc['id']: acc['name'] for acc in accounts_list}
+
+        # Enrich matches with account names
+        start_breakdown = []
+        for m in matches:
+            # Create a copy to avoid modifying original data if that matters (it stays in scope though)
+            item = m.copy()
+            acc_id = item.get('account_id')
+            item['account_name'] = acc_map.get(acc_id, acc_id) # Fallback to ID if name not found
+            start_breakdown.append(item)
+
+        return {
+            "found": True,
+            "ticker": matches[0].get('ticker'),
+            "name": matches[0].get('name'),
+            "qty": total_qty,
+            "avg_price": avg_price,
+            "cur_price": cur_price,
+            "total_val": total_stk_eval,
+            "invested": total_invest,
+            "pnl": pnl,
+            "pnl_rate": pnl_rate,
+            "currency": currency,
+            "accounts": start_breakdown # Return enriched breakdown
+        }
+
+    except Exception as e:
+        logging.error(f"[WebServer] detailed holdings error: {e}")
+        return {"error": str(e)}
 
 
 @app.websocket("/ws")

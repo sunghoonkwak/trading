@@ -134,3 +134,4 @@ cython_debug/
 # Project specific ignores
 logs/
 stock_data.json
+WebSocket_latest.log
