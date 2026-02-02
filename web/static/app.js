@@ -313,8 +313,11 @@ function formatLogContent(message) {
 
         if (parts.length >= 6) { // Market data format
             if (index === 0) width = '180px'; // Name
-            else if (index === 1) width = '55px';  // Ticker
-            else if (index >= 2) { width = '85px'; textAlign = 'right'; } // Prices/Numbers
+            else if (index === 1) width = '45px';  // Ticker
+            else if (index === 2) { width = '85px'; textAlign = 'right'; } // Bid
+            else if (index === 3) { width = '130px'; textAlign = 'right'; } // Last(Vol) (Further Increased)
+            else if (index === 4) { width = '135px'; textAlign = 'right'; } // Diff(Rate) (Further Increased)
+            else if (index === 5) { width = '85px'; textAlign = 'right'; } // Ask
         } else {
             // Generic pipe-delimited (Orders, Sync)
             if (index === 0) width = '100px';
