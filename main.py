@@ -259,7 +259,7 @@ if __name__ == "__main__":
     # Step 3: Start Scheduler
     print("[Startup] Step 2.5: Starting Scheduler Service...")
     try:
-        from scheduler_service import start_scheduler
+        from scheduler.scheduler import start_scheduler
         start_scheduler()
     except Exception as e:
         print(f"[Startup] ✗ Scheduler error: {e}")

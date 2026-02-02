@@ -401,7 +401,7 @@ def check_today_history() -> Optional[dict]:
     return None
 
 
-def build_raoeo_report() -> dict:
+def get_daily_report() -> dict:
     """
     Build RAOEO status report for both terminal and Telegram.
 
@@ -717,7 +717,7 @@ def raoeo_menu():
 
     while True:
         # Build report using modular function
-        report = build_raoeo_report()
+        report = get_daily_report()
 
         # Format display using modular function
         display_lines = format_display_lines(report)

@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 
-from menu.raoeo.raoeo import build_raoeo_report, execute_orders, save_history
+from menu.raoeo.raoeo import get_daily_report, execute_orders, save_history
 from utils import is_market_holiday
 
 # Conversation state
@@ -102,7 +102,7 @@ async def cmd_raoeo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"[TG] /raoeo from user {update.effective_user.id}")
 
     try:
-        report = build_raoeo_report()
+        report = get_daily_report()
     except Exception as e:
         logging.error(f"[TG] build_raoeo_report() failed: {e}", exc_info=True)
         await wrap_reply(update, f"⚠️ Error building report: {e}")

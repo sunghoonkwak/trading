@@ -655,7 +655,7 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Calculate order
     loop = asyncio.get_running_loop()
     res = await loop.run_in_executor(
-        None, value_averaging.calculate_order
+        None, value_averaging.get_daily_report
     )
 
     # Cache result for callback

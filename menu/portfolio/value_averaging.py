@@ -97,7 +97,7 @@ def save_history(history_data: Dict[str, List]) -> bool:
         return False
 
 
-def calculate_order():
+def get_daily_report():
     """
     Calculate the Value Averaging orders for today (supports multiple strategies).
 

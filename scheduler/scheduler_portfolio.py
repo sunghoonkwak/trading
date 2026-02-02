@@ -1,12 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Scheduler Service
-Handles scheduled tasks for daily portfolio summary and other periodic jobs.
+Portfolio Report Service
+Handles daily portfolio summary and reporting logic (typically for 7 AM).
 """
 import logging
-import time
-import threading
-import schedule
 import os
 import json
 import glob
@@ -16,6 +13,7 @@ from typing import Optional
 from kis.get_portfolio import get_portfolio
 from telegram_bot.telegram_portfolio import format_portfolio_summary
 from telegram_bot.telegram_utils import send_notification
+from data.data_service import get_portfolio_data
 
 # Configuration
 CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
@@ -140,8 +138,6 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
                 past_total = get_total_equity(past_data)
                 diff_val, diff_pct = calculate_diff(current_total, past_total)
 
-                emoji = "🔺" if diff_pct > 0 else "Vk" if diff_pct < 0 else "➖"
-                if diff_pct < 0: emoji = "vk" # Typo fix: 🔻
                 emoji = "🔺" if diff_pct > 0 else "🔻" if diff_pct < 0 else "➖"
 
                 comparison_lines.append(f"{emoji} <b>{label}:</b> {diff_pct:+.2f}% ({diff_val/10000:,.0f}만)")
@@ -184,12 +180,12 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
     return "\n".join(comparison_lines)
 
 
-def job_daily_7am():
+def run_daily_portfolio_report():
     """
-    Daily job at 7 AM.
+    Execute daily portfolio reporting routine (typically scheduled for morning).
     - Tue-Sat: Collect Data (Save JSON).
     - Mon-Sat: Send Notification (Backup Report).
-    - Sun: Rest.
+    - Sun: Skip.
     """
     now = datetime.now()
     weekday = now.weekday() # Mon=0, Sun=6
@@ -216,13 +212,9 @@ def job_daily_7am():
 
     current_file_path = os.path.join(HISTORY_DIR, f"portfolio_{date_str}.json")
 
-    # Always fetch fresh data to show current state, even if not saving (e.g. Monday morning showing Friday close? or weekend news?)
-    # Actually KIS API might return Fri close on Mon morning?
-    # Usually Mon morning 7AM = Sunday data (Market closed).
-    # But user wants notification Mon-Sat.
-    # Let's fetch.
     try:
-        portfolio_data = get_portfolio()
+        # Use rich data service for both saving and display
+        portfolio_data = get_portfolio_data()
     except Exception as e:
         error_msg = f"[Scheduler] Failed to get portfolio: {e}"
         logging.error(error_msg)
@@ -242,58 +234,12 @@ def job_daily_7am():
 
     if should_notify:
         try:
-            # Basic Summary
-            # We need to adapt data structure for format_portfolio_summary?
-            # get_portfolio returns structure compatible with what format_portfolio_summary expects?
-            # format_portfolio_summary expects dict with keys like 'stats', 'total_value_usd' which are calculated in data_service.get_portfolio_data
-            # But get_portfolio.get_portfolio returns raw structural data (holdings, accounts...).
-            # We need data_service.process_portfolio_data logic equivalent.
-            # OR we simply import get_portfolio_data from data_service if safe to use here?
-            # get_portfolio.get_portfolio is the raw fetcher.
-            # data_service.get_portfolio_data does the fetch AND stats calculation.
-            # We should probably use data_service.get_portfolio_data instad of direct get_portfolio if we want format_portfolio_summary to work out of box.
-
-            # Let's switch to using data_service.get_portfolio_data() for the notification part
-            # to ensure format compatibility, but we already fetched `portfolio_data` above using raw `get_portfolio`.
-            # `get_portfolio` returns {holdings:..., accounts:..., asset_info:...}
-            # `format_portfolio_summary` expects {stats:..., total_value_usd:..., ...}
-
-            # Re-fetch using data service for Message Formatting is safer/easier
-            from data.data_service import get_portfolio_data
-
-            # Note: get_portfolio_data calls get_portfolio internally.
-            # We might be calling API twice if we are not careful.
-            # But get_portfolio has no caching?
-            # Actually, let's use the data we already fetched to calculate stats manually or mock it?
-            # No, data_service logic is complex (weights, etc).
-            # Let's just use get_portfolio_data() for everything?
-            # But we need raw data to save to JSON?
-            # get_portfolio_data returns "merged_data", "stats", etc. It contains the raw data too usually?
-            # Checking data_service.py... (not visible now, but usually it aggregates).
-
-            # Decision: use get_portfolio_data() for everything. It returns a rich object.
-            # We can save this rich object to JSON too, it's even better.
-
-            # Wait, the plan said "kis.get_portfolio.get_portfolio()".
-            # I will follow the plan but I noticed the format mismatch.
-            # I will assume I can construct a lightweight wrapper or...
-            # Actually, `data.data_service` is the high level service.
-
-            # Let's fetch rich data for both saving and display.
-            rich_data = get_portfolio_data()
-
-            # Overwrite the saving logic to use rich_data if strictly "portfolio_data" was intended
-            # or just save the rich_data. Saving rich_data is better for future analysis.
-            if should_save:
-                with open(current_file_path, 'w', encoding='utf-8') as f:
-                    json.dump(rich_data, f, ensure_ascii=False, indent=2)
-
             # Generate Message
-            summary_text = format_portfolio_summary(rich_data)
+            summary_text = format_portfolio_summary(portfolio_data)
 
             # Generate History Comparison
             history_files = get_sorted_history_files()
-            comparison_text = get_comparison_stats(rich_data, history_files, current_file_path)
+            comparison_text = get_comparison_stats(portfolio_data, history_files, current_file_path)
 
             final_message = f"{summary_text}\n{comparison_text}"
 
@@ -309,23 +255,3 @@ def job_daily_7am():
         except Exception as e:
             logging.error(f"[Scheduler] Notification failed: {e}")
             send_notification(f"⚠️ Scheduler Error: {e}")
-
-
-def run_scheduler_loop():
-    """Background thread loop."""
-    while True:
-        schedule.run_pending()
-        time.sleep(10)
-
-
-def start_scheduler():
-    """Initialize and start the scheduler."""
-    # Schedule Daily Job
-    # "Every day at 07:00" - We handle weekday logic inside the job funtion
-    # to keep schedule simple and robust (avoid missing if restarted)
-    schedule.every().day.at("07:00").do(job_daily_7am)
-
-    logging.info("[Scheduler] Scheduler started. Job scheduled for daily 07:00.")
-
-    t = threading.Thread(target=run_scheduler_loop, daemon=True)
-    t.start()

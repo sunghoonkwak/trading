@@ -331,8 +331,8 @@ def portfolio_menu():
             from . import value_averaging
             from display import show_in_result_area, input_at
 
-            # Call refactored calculate_order (returns multi-strategy results)
-            res = value_averaging.calculate_order()
+            # Call refactored get_daily_report (returns multi-strategy results)
+            res = value_averaging.get_daily_report()
 
             # Build Display Lines
             lines = []
