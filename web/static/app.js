@@ -120,7 +120,7 @@ function handleMessage(data) {
 
     switch (type) {
         case 'ODR':
-            handleOrderMessage(content);
+            handleOrderMessage(content, time);
             break;
         case 'MKT':
             handleMarketMessage(content, time);
@@ -147,7 +147,7 @@ function handleAlertMessage(content, time) {
     addLog(content, level, time);
 }
 
-function handleOrderMessage(content) {
+function handleOrderMessage(content, time) {
     const parts = content.split('|');
 
     if (parts[0]?.trim() === 'REMOVED') {
@@ -164,7 +164,7 @@ function handleOrderMessage(content) {
         const id = orderId || `${ticker}_${Date.now()}`;
 
         orders.set(id, {
-            time: new Date().toLocaleTimeString('en-US', { hour12: false }),
+            time: time || new Date().toLocaleTimeString('en-US', { hour12: false }),
             name, ticker, side, qty, price, state
         });
 

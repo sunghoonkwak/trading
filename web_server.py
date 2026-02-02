@@ -183,7 +183,13 @@ def _fetch_orders_for_sync():
                 qty = str(int(float(q_val)))
 
             order_msg = f"{fixed_name}|{pdno}|{side}|{qty}|{price}|PLACED|{odno}"
-            time_str = datetime.now().strftime("%H:%M:%S")
+            # Use actual order time if available
+            raw_time = row_lower.get('ord_tmd', '')
+            if raw_time and len(raw_time) == 6:
+                time_str = f"{raw_time[:2]}:{raw_time[2:4]}:{raw_time[4:]}"
+            else:
+                time_str = datetime.now().strftime("%H:%M:%S")
+
             msg = f'{{"type":"ODR","data":"{order_msg}","time":"{time_str}"}}'
             messages.append(msg)
 
