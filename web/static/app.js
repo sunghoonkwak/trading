@@ -301,6 +301,32 @@ function colorizeQuote(content) {
     return result;
 }
 
+function formatLogContent(message) {
+    if (!message.includes('|')) return escapeHtml(message);
+
+    const parts = message.split('|');
+    // Common widths based on the column purpose:
+    // [Name] | [Ticker] | [Bid] | [Last(Vol)] | [Diff(Rate)] | [Ask]
+    return parts.map((part, index) => {
+        let width = 'auto';
+        let textAlign = 'left';
+
+        if (parts.length >= 6) { // Market data format
+            if (index === 0) width = '180px'; // Name
+            else if (index === 1) width = '55px';  // Ticker
+            else if (index >= 2) { width = '85px'; textAlign = 'right'; } // Prices/Numbers
+        } else {
+            // Generic pipe-delimited (Orders, Sync)
+            if (index === 0) width = '100px';
+            else if (index === 1) width = '60px';
+            else if (index === 2) width = '150px';
+            else width = '80px';
+        }
+
+        return `<span style="width:${width}; display:inline-block; text-align:${textAlign}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:top; margin-right:8px">${escapeHtml(part.trim())}</span>`;
+    }).join(''); // Space-based separation for cleaner look
+}
+
 function addLog(message, level = 'info', time = null) {
     if (!elements.logPanel) return;
 
@@ -310,7 +336,13 @@ function addLog(message, level = 'info', time = null) {
     const timestamp = time || new Date().toLocaleTimeString('en-US', { hour12: false });
     const entry = document.createElement('div');
     entry.className = `log-entry ${level}`;
-    entry.innerHTML = `<span class="time">${timestamp}</span>${escapeHtml(message)}`;
+
+    // Apply special formatting if it's a pipe-delimited market/order log
+    const formattedContent = (level === 'mkt' || message.includes('|'))
+        ? formatLogContent(message)
+        : escapeHtml(message);
+
+    entry.innerHTML = `<span class="time">${timestamp}</span>${formattedContent}`;
 
     elements.logPanel.appendChild(entry);
 
