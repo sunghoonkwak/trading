@@ -21,6 +21,16 @@ from telegram_bot.telegram_utils import send_notification
 def _handle_domestic_market(tr_id: str, row) -> bool:
     """Handle domestic market data (H0UNASP0: orderbook, H0UNCNT0: tick)."""
     code = row['MKSC_SHRN_ISCD']
+
+    # DEBUG: Log suspicious codes (not 6 digits)
+    if len(code) != 6 or not code.isdigit():
+        logging.warning(
+            f"[DEBUG-CORRUPTION] Invalid code detected! code={repr(code)}, "
+            f"tr_id={tr_id}, row_keys={list(row.keys())}, "
+            f"row_values={[str(v)[:20] for v in row.values()][:5]}"
+        )
+        return True  # Skip corrupted data
+
     if code not in trading_state.stock_data_state:
         trading_state.stock_data_state[code] = {
             'price': 0, 'ask': 0, 'bid': 0,
@@ -86,6 +96,15 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
     """Handle overseas market data (HDFSASP0: orderbook, HDFSCNT0: tick)."""
     code = row.get('symb', row.get('SYMB'))
     if not code:
+        return True
+
+    # DEBUG: Log suspicious codes (longer than reasonable 12 chars, or all-numeric long codes)
+    # Overseas codes: AAPL, NASDTSLA, etc. Usually alphanumeric.
+    if len(code) > 12 or (len(code) > 6 and code.isdigit()):
+        logging.warning(
+            f"[DEBUG-CORRUPTION-OS] Suspicious overseas code! code={repr(code)}, "
+            f"tr_id={tr_id}, row_values={[str(v)[:20] for v in row.values()][:5]}"
+        )
         return True
 
     if code not in trading_state.stock_data_state:

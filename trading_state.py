@@ -73,7 +73,27 @@ def save_stock_data():
     """
     Save current stock_data_state to stock_data.json.
     """
+    import logging
     try:
+        # DEBUG: Check for corrupted codes before saving
+        corrupted = []
+        for code in stock_data_state.keys():
+            # Domestic stocks: 6 digits, Overseas: alphanumeric with prefix
+            if len(code) == 6:
+                if not code.isdigit():
+                    corrupted.append(code)
+            elif len(code) > 12 or len(code) == 0:
+                corrupted.append(code)
+            # Check for control characters
+            elif any(ord(c) < 32 for c in code):
+                corrupted.append(code)
+
+        if corrupted:
+            logging.warning(
+                f"[DEBUG-SAVE] Corrupted codes found before save! "
+                f"count={len(corrupted)}, samples={[repr(c) for c in corrupted[:5]]}"
+            )
+
         data = {
             'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'stock_data': stock_data_state.copy()
@@ -82,9 +102,9 @@ def save_stock_data():
         with open(STOCK_DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
+        logging.info(f"[TradingState] Saved {len(stock_data_state)} stocks")
         return True
     except Exception as e:
-        import logging
         logging.warning(f"[TradingState] Failed to save stock data: {e}")
         return False
 
