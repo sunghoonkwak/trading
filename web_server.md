@@ -79,3 +79,26 @@ Uvicorn 서버를 실행합니다.
 미체결 주문을 조회하여 WebSocket 메시지 형식으로 변환합니다.
 - `menu.handle_manage_orders.fetch_open_orders()` 호출
 - 국내/해외 주문을 ODR 형식으로 포맷팅하여 반환
+
+## 주문 취소 API (Order Cancel)
+
+### `POST /api/orders/{order_id}/cancel`
+미체결 주문을 취소합니다.
+
+**파라미터:**
+- `order_id`: 취소할 주문 번호
+
+**응답:**
+```json
+// 성공
+{"success": true, "message": "Order cancelled successfully"}
+
+// 실패
+{"success": false, "error": "Order not found"}
+```
+
+### `_cancel_order_sync(order_id)`
+동기 방식으로 주문을 취소합니다.
+- `fetch_open_orders()`로 미체결 주문 조회
+- 주문 ID로 대상 주문 검색
+- `execute_manage_action(market, '2', order_data)`로 취소 실행

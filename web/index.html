@@ -104,6 +104,17 @@
         </div>
     </div>
 
+    <!-- Cancel Confirmation Modal -->
+    <div id="cancel-confirm-modal" class="modal-overlay hidden">
+        <div class="confirm-dialog">
+            <p>Cancel order for <span id="cancel-ticker" class="cancel-ticker-name"></span>?</p>
+            <div class="confirm-buttons">
+                <button class="btn-confirm btn-yes" onclick="confirmCancel()">Yes</button>
+                <button class="btn-confirm btn-no" onclick="closeCancelModal()">No</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://s3.tradingview.com/tv.js"></script>
     <script src="/static/app.js"></script>
 </body>

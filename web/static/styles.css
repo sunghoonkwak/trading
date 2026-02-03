@@ -578,3 +578,82 @@ body {
 .holdings-table tr:hover:not(.summary-row) {
     background: rgba(255, 255, 255, 0.02);
 }
+
+/* Cancel Link Styles */
+.cancel-link {
+    color: var(--accent-danger);
+    cursor: pointer;
+    font-size: 0.7rem;
+    margin-left: 8px;
+    opacity: 0.7;
+    transition: all 0.15s ease;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+}
+
+.cancel-link:hover {
+    opacity: 1;
+    text-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
+/* Cancel Confirmation Modal */
+.confirm-dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--space-lg) var(--space-lg);
+    min-width: 280px;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.2s ease;
+}
+
+.confirm-dialog p {
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin-bottom: var(--space-lg);
+}
+
+.cancel-ticker-name {
+    color: var(--accent-info);
+    font-weight: 600;
+    font-family: var(--font-mono);
+}
+
+.confirm-buttons {
+    display: flex;
+    gap: var(--space-md);
+    justify-content: center;
+}
+
+.btn-confirm {
+    padding: var(--space-sm) var(--space-lg);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-width: 80px;
+}
+
+.btn-yes {
+    background: var(--accent-danger);
+    color: white;
+}
+
+.btn-yes:hover {
+    background: #dc2626;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+}
+
+.btn-no {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-no:hover {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--text-primary);
+}

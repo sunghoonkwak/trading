@@ -17,6 +17,10 @@ const maxLogEntries = 500;
 const maxQuotes = 20;
 const maxOrders = 20;
 
+// Cancel modal state
+let pendingCancelOrderId = null;
+let pendingCancelTicker = null;
+
 // DOM Elements
 const elements = {
     statusDot: null,
@@ -222,6 +226,9 @@ function updateOrdersPanel() {
         const entries = Array.from(orders.entries()).reverse();
         elements.ordersPanel.innerHTML = entries.map(([id, order]) => {
             const sideClass = order.side.toUpperCase().includes('BUY') ? 'buy' : 'sell';
+            const cancelLink = order.state === 'PLACED'
+                ? `<span class="cancel-link" onclick="showCancelConfirm('${id}', '${order.ticker}')">Cancel</span>`
+                : '';
             return `
                 <div class="order-entry ${sideClass}">
                     <span class="time" style="margin-right:8px">${order.time}</span>
@@ -230,7 +237,7 @@ function updateOrdersPanel() {
                     <span style="width:70px;display:inline-block;color:${sideClass === 'buy' ? 'var(--accent-success)' : 'var(--accent-danger)'}">${order.side}</span>
                     <span style="width:70px;text-align:right;display:inline-block">${formatNumber(order.price)}</span>
                     <span style="width:40px;text-align:right;display:inline-block">${order.qty}</span>
-                    <span style="margin-left:auto;color:var(--text-dim)">${order.state}</span>
+                    <span style="margin-left:auto;color:var(--text-dim)">${order.state}${cancelLink}</span>
                 </div>`;
         }).join('');
     }
@@ -554,10 +561,69 @@ function formatPrice(val, currency) {
     });
 }
 
+// --- Cancel Order Modal Logic ---
+
+function showCancelConfirm(orderId, ticker) {
+    pendingCancelOrderId = orderId;
+    pendingCancelTicker = ticker;
+
+    const modal = document.getElementById('cancel-confirm-modal');
+    const tickerSpan = document.getElementById('cancel-ticker');
+
+    if (tickerSpan) tickerSpan.textContent = ticker;
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeCancelModal() {
+    pendingCancelOrderId = null;
+    pendingCancelTicker = null;
+
+    const modal = document.getElementById('cancel-confirm-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function confirmCancel() {
+    if (!pendingCancelOrderId) {
+        closeCancelModal();
+        return;
+    }
+
+    const orderId = pendingCancelOrderId;
+    const ticker = pendingCancelTicker;
+    closeCancelModal();
+
+    addLog(`Cancelling order for ${ticker}...`, 'info');
+
+    try {
+        const response = await fetch(`/api/orders/${orderId}/cancel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            addLog(`Order cancelled: ${ticker}`, 'success');
+            // Remove from local orders map
+            orders.delete(orderId);
+            updateOrdersPanel();
+        } else {
+            addLog(`Cancel failed: ${result.error || 'Unknown error'}`, 'error');
+        }
+    } catch (e) {
+        addLog(`Cancel error: ${e.message}`, 'error');
+    }
+}
+
 // Close modal on outside click
 document.addEventListener('click', (e) => {
-    const modal = document.getElementById('ticker-modal');
-    if (e.target === modal) {
+    const tickerModal = document.getElementById('ticker-modal');
+    const cancelModal = document.getElementById('cancel-confirm-modal');
+
+    if (e.target === tickerModal) {
         closeTickerModal();
+    }
+    if (e.target === cancelModal) {
+        closeCancelModal();
     }
 });

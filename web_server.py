@@ -217,6 +217,60 @@ async def sync_orders_to_client(websocket: WebSocket):
         logging.error(f"[WebServer] Order sync error: {e}")
 
 
+@app.post("/api/orders/{order_id}/cancel")
+async def cancel_order(order_id: str):
+    """Cancel an open order by its order ID."""
+    try:
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, _cancel_order_sync, order_id)
+        return result
+    except Exception as e:
+        logging.error(f"[WebServer] Cancel order error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def _cancel_order_sync(order_id: str):
+    """Synchronously cancel an order by ID."""
+    from menu.handle_manage_orders import fetch_open_orders, execute_manage_action
+
+    try:
+        df, _, _ = fetch_open_orders()
+        if df.empty:
+            return {"success": False, "error": "No open orders found"}
+
+        # Find the order by ID
+        target_order = None
+        market = None
+        for _, row in df.iterrows():
+            row_lower = {k.lower(): v for k, v in row.items()}
+            odno = row_lower.get('odno', row_lower.get('ord_no', ''))
+            if str(odno) == str(order_id):
+                target_order = row
+                market = row.get('_market', 'US')
+                break
+
+        if target_order is None:
+            return {"success": False, "error": f"Order {order_id} not found"}
+
+        # Execute cancellation (action_type='2' means cancel)
+        df_res, err_msg = execute_manage_action(market, '2', target_order, None)
+
+        if err_msg:
+            return {"success": False, "error": err_msg}
+
+        # Check if cancellation was successful
+        if not df_res.empty:
+            cols = {c.lower(): c for c in df_res.columns}
+            if 'odno' in cols or 'ord_no' in cols:
+                return {"success": True, "message": "Order cancelled successfully"}
+
+        return {"success": True, "message": "Cancel request submitted"}
+
+    except Exception as e:
+        logging.error(f"[WebServer] _cancel_order_sync error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 def _fetch_orders_for_sync():
     """Fetch open orders and format as WebSocket messages."""
     messages = []
