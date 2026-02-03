@@ -85,11 +85,12 @@ def calculate_order() -> dict:
     Calculate buy/sell orders for today based on the RAOEO strategy.
 
     Strategy:
-        - Initial state (no holdings): LOC buy at current_price * 110%
-        - Holding state:
+        - Accumulating state (spent < seed/2): LOC buy at current_price * 110%
+        - Saturated state (spent >= seed/2):
             - Sell: Limit order at avg_price * (1 + sell_profit)
             - LOC buy 1: 50% budget at avg_price * (1 + (sell_profit - 1%)) (guaranteed execution)
             - LOC buy 2: 50% budget at avg_price * 100% (lower avg cost)
+        - If holdings exist in accumulating state, sell order is also placed.
 
     Returns:
         dict: Order calculation result with date, config, holdings, orders
@@ -162,39 +163,70 @@ def calculate_order() -> dict:
         cur_price = get_current_price(target, exchange)
 
     # 5. Calculate orders based on state
-    if target_holding is None or target_holding.get('qty', 0) == 0:
-        # Initial state - no holdings
-        result["state"] = "initial"
-        result["holdings"] = {"qty": 0, "avg_price": 0, "cur_price": cur_price}
+    # Get holdings info
+    qty = 0
+    avg_price = 0.0
+    if target_holding:
+        qty = int(target_holding.get('qty', 0))
+        avg_price = float(target_holding.get('avg_price', 0))
 
-        if cur_price <= 0:
-            result["error"] = f"Waiting for {target} price data from WebSocket. Please try again shortly."
-            return result
+    result["holdings"] = {
+        "qty": qty,
+        "avg_price": round(avg_price, 2),
+        "cur_price": cur_price
+    }
 
-        # LOC buy at 110% of current price (guaranteed execution at close)
-        buy_price = round(cur_price * 1.10, 2)
+    # Calculate spent amount (avg_price * qty)
+    spent_amount = avg_price * qty if qty > 0 else 0
+    half_seed = seed / 2
+
+    # State determination: spent < seed/2 -> accumulating, >= seed/2 -> saturated
+    if spent_amount < half_seed:
+        # Accumulating state - still building position
+        result["state"] = "accumulating"
+
+        # If holdings exist, add sell order
+        if qty > 0 and avg_price > 0:
+            sell_price = round(avg_price * (1 + sell_profit), 2)
+            result["orders"].append({
+                "type": "sell_all",
+                "price": sell_price,
+                "qty": qty,
+                "order_type": "LIMIT",
+                "type_code": LIMIT_ORDER_TYPE,
+                "desc": f"Sell all at {int(sell_profit*100)}% profit"
+            })
+
+        # Determine buy price based on holdings
+        if qty > 0 and avg_price > 0:
+            # Has holdings: use avg_price * (sell_profit - 1%) to avoid self-trade
+            buy_ratio = 1 + sell_profit - 0.01
+            buy_price = round(avg_price * buy_ratio, 2)
+            buy_desc = f"Accumulating buy at {int(buy_ratio*100)}% of avg (avoid self-trade)"
+        else:
+            # No holdings: use current price * 110%
+            if cur_price <= 0:
+                result["error"] = f"Waiting for {target} price data from WebSocket. Please try again shortly."
+                return result
+            buy_price = round(cur_price * 1.10, 2)
+            buy_desc = "Accumulating buy at 110% of current price"
+
         buy_qty = int(daily_budget / buy_price)
 
         if buy_qty > 0:
+            # Determine order type based on holdings
+            order_type_name = "buy_accumulating" if qty > 0 else "buy_initial"
             result["orders"].append({
-                "type": "buy_initial",
+                "type": order_type_name,
                 "price": buy_price,
                 "qty": buy_qty,
                 "order_type": "LOC",
                 "type_code": LOC_ORDER_TYPE,
-                "desc": "Initial buy at 110% of current price"
+                "desc": buy_desc
             })
     else:
-        # Holding state
-        result["state"] = "holding"
-        qty = int(target_holding.get('qty', 0))
-        avg_price = float(target_holding.get('avg_price', 0))
-
-        result["holdings"] = {
-            "qty": qty,
-            "avg_price": round(avg_price, 2),
-            "cur_price": cur_price
-        }
+        # Saturated state - position is large enough
+        result["state"] = "saturated"
 
         if avg_price <= 0:
             result["error"] = f"Invalid average price for {target}"

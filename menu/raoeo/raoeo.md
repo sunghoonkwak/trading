@@ -52,15 +52,17 @@
 #### Strategy Logic
 1. `load_config()`를 통해서 설정 정보를 로드합니다.
 2. `fetch_overseas_balance()`를 통해서 현재 보유중인 target 주식의 평단가를 확인합니다.
-3. **매도**: 평단가 × (1 + sell_profit) 가격으로 보유한 주식 전체를 매도합니다.
-4. **매수**: 당일 사용가능한 자금 (seed/duration)을 아래와 같이 분배합니다.
+3. **상태 판단**: 소모금액(평단가 × 보유량)이 seed/2 미만이면 `accumulating`, 이상이면 `saturated`.
+4. **매도**: 보유분이 있으면 평단가 × (1 + sell_profit) 가격으로 전량 매도 주문.
+5. **매수**: 당일 사용가능한 자금 (seed/duration)을 상태에 따라 분배합니다.
 
-| State | Price | Ratio | Type (ID) | Description |
-|-------|-------|-------|-----------|-------------|
-| Initial (보유 없음) | 현재가 × 110% | 100% | `buy_initial` | LOC 매수 |
-| Holding (보유 중) | 평단가 × (sell_profit - 1%) | 50% | `buy_guaranteed` | 자전거래 방지 LOC |
-| Holding (보유 중) | 평단가 × 100% | 50% | `buy_lower` | 평단가 하락용 LOC |
-| Holding (보유 중) | 평단가 × (1 + profit) | 100% | `sell_all` | 전량 익절 매도 |
+| State | Condition | Price | Ratio | Type (ID) | Description |
+|-------|-----------|-------|-------|-----------|-------------|
+| Accumulating | 소모금액 < seed/2, 보유량 = 0 | 현재가 × 110% | 100% | `buy_initial` | LOC 매수 |
+| Accumulating | 소모금액 < seed/2, 보유량 > 0 | 평단가 × (sell_profit - 1%) | 100% | `buy_accumulating` | 자전거래 방지 LOC |
+| Saturated | 소모금액 ≥ seed/2 | 평단가 × (sell_profit - 1%) | 50% | `buy_guaranteed` | 자전거래 방지 LOC |
+| Saturated | 소모금액 ≥ seed/2 | 평단가 × 100% | 50% | `buy_lower` | 평단가 하락용 LOC |
+| (보유 시) | 보유량 > 0 | 평단가 × (1 + sell_profit) | 100% | `sell_all` | 전량 익절 매도 |
 
 #### Returns
 - `dict`: 당일 매수/매도 주문 정보
@@ -159,7 +161,7 @@
     "history": [
         {
             "date": "2025-12-31",
-            "state": "holding",
+            "state": "saturated",
             "config": { ... },
             "holdings": { "qty": 6, "avg_price": 43.74, "cur_price": 44.10 },
             "orders": [ ... ]
