@@ -67,7 +67,7 @@ async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         # Default to latest report
         try:
-            from scheduler_service import REPORTS_DIR
+            from scheduler.scheduler_portfolio import REPORTS_DIR
             import glob
             list_of_files = glob.glob(os.path.join(REPORTS_DIR, "report_*.txt"))
             if list_of_files:
@@ -84,7 +84,7 @@ async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Read Report
     try:
-        from scheduler_service import REPORTS_DIR
+        from scheduler.scheduler_portfolio import REPORTS_DIR
         report_path = os.path.join(REPORTS_DIR, f"report_{target_date}.txt")
 
         if not os.path.exists(report_path):
