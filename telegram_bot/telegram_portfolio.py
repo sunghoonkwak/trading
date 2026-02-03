@@ -582,7 +582,12 @@ def format_va_single_ticker(result: dict, idx: int, total: int) -> str:
         f"── <b>{target_ticker}</b> ──",
     ]
 
-    if already_executed:
+    # Only consider it executed if we actually placed orders (not just skipped)
+    # Check if there are any orders that are NOT skip
+    real_orders = [o for o in executed_orders if o.get('type') != 'skip']
+    real_execution = already_executed and real_orders
+
+    if real_execution:
         lines.append(f"✅ <i>Executed today</i>")
         for o in executed_orders:
             o_qty = o.get('qty', 0)
@@ -605,6 +610,64 @@ def format_va_single_ticker(result: dict, idx: int, total: int) -> str:
             lines.append("✅ <i>No order needed</i>")
             lines.append("")
             lines.append("<i>Buy 1 share instead?</i>")
+
+    return "\n".join(lines)
+
+
+def format_va_report(data: dict) -> str:
+    """Format full daily VA report for scheduler."""
+    if data.get("error"):
+        return f"⚠️ <b>Value Averaging Error:</b> {data['error']}"
+
+    results = data.get("results", [])
+    if not results:
+        return "📈 <b>Value Averaging</b>\n\nNo strategies configured."
+
+    lines = [f"📈 <b>Value Averaging</b> ({data.get('date', 'N/A')})", ""]
+
+    has_action = False
+    for r in results:
+        ticker = r.get("target_ticker", "Unknown")
+        buy_amt = r.get("daily_target_amount", 0)
+
+        if r.get("error"):
+            lines.append(f"⚠️ <b>{ticker}</b>: {r['error']}")
+            has_action = True
+            continue
+
+        if r.get("already_executed"):
+             executed_orders = r.get("executed_orders", [])
+             if executed_orders:
+                 lines.append(f"✅ <b>{ticker}</b>: Executed (Target: ${buy_amt:,.2f})")
+                 for o in executed_orders:
+                     qty = o.get('qty')
+                     price = o.get('price')
+                     suffix = "share" if qty == 1 else "shares"
+                     lines.append(f"   └ Buy {qty} {suffix} (${price:,.2f})")
+             else:
+                 # Skipped (No order was needed)
+                 cur_p = r.get("current_price", 0)
+                 lines.append(f"⏭️ <b>{ticker}</b>: Skipped (Target: ${buy_amt:,.2f})")
+                 lines.append(f"   └ Current price ${cur_p:,.2f}")
+
+             has_action = True
+        else:
+             orders = r.get("orders", [])
+             if orders:
+                  lines.append(f"🔹 <b>{ticker}</b>: Buy ${buy_amt:,.2f}")
+                  for o in orders:
+                      qty = o['qty']
+                      price = o['price']
+                      suffix = "share" if qty == 1 else "shares"
+                      lines.append(f"   └ Buy {qty} {suffix} (${price:,.2f})")
+                  has_action = True
+             elif r.get("current_price", 0) > 0:
+                  pass
+             else:
+                  lines.append(f"⚠️ <b>{ticker}</b>: Price unavailable")
+
+    if not has_action:
+        lines.append("<i>No actions needed today.</i>")
 
     return "\n".join(lines)
 
@@ -666,7 +729,18 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     # Filter out already executed and error results for confirmation
-    pending_results = [r for r in results if not r.get("already_executed") and not r.get("error")]
+    # If it is executed but only contains "skip" orders, treat it as pending so user can force buy
+    pending_results = []
+    for r in results:
+        if r.get("error"): continue
+
+        already_exec = r.get("already_executed")
+        exec_orders = r.get("executed_orders", [])
+        real_orders = [o for o in exec_orders if o.get('type') != 'skip']
+
+        # Include if not executed OR (executed but no real buy orders)
+        if not already_exec or not real_orders:
+            pending_results.append(r)
 
     if not pending_results:
         # All already executed or errors - show summary and exit
@@ -677,7 +751,7 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"⚠️ {ticker}: {r['error']}")
             elif r.get("already_executed"):
                 target_amt = r.get("daily_target_amount", 0)
-                lines.append(f"✅ <b>{ticker}</b>: Already executed today (Target: ${target_amt:,.2f})")
+                lines.append(f"✅ <b>{ticker}</b>: Executed (Target: ${target_amt:,.2f})")
                 # Show execution details
                 exec_orders = r.get("executed_orders", [])
                 for eo in exec_orders:
@@ -709,6 +783,10 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Cache result for callback
     context.user_data['va_result'] = res
     context.user_data['va_pending'] = pending_results
+    # Identify items that are already done (not in pending)
+    completed_results = [r for r in results if r not in pending_results]
+    context.user_data['va_completed_results'] = completed_results
+
     context.user_data['va_idx'] = 0
     context.user_data['va_exec_results'] = []
 
@@ -757,9 +835,35 @@ async def show_va_ticker(update: Update, context: ContextTypes.DEFAULT_TYPE, edi
 async def show_va_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show final summary after all tickers processed."""
     exec_results = context.user_data.get('va_exec_results', [])
+    completed_results = context.user_data.get('va_completed_results', [])
 
     lines = ["📈 <b>Value Averaging Complete</b>", ""]
 
+    # 1. Show already executed items first
+    if completed_results:
+        for r in completed_results:
+            ticker = r.get("target_ticker", "Unknown")
+            target_amt = r.get("daily_target_amount", 0)
+            lines.append(f"✅ <b>{ticker}</b>: Executed (Target: ${target_amt:,.2f})")
+
+            # Show detail
+            exec_orders = r.get("executed_orders", [])
+            for eo in exec_orders:
+                type_str = eo.get('type', 'unknown')
+                qty = eo.get('qty', 0)
+                price = eo.get('price', 0)
+                message = eo.get('message', '')
+
+                if type_str == 'skip':
+                    lines.append(f"   └ <i>Skipped</i>")
+                elif type_str == 'buy_single_share':
+                    lines.append(f"   └ Buy 1 share (${price})")
+                elif 'buy' in type_str:
+                        lines.append(f"   └ Buy {qty} shares (${price})")
+                else:
+                        lines.append(f"   └ {message}")
+
+    # 2. Show interactive results
     if exec_results:
         success_count = sum(1 for r in exec_results if r.get('success') and r.get('executed'))
         skip_count = sum(1 for r in exec_results if not r.get('executed'))
@@ -788,18 +892,27 @@ async def show_va_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                          lines.append(f"   └ Buy {qty} shares (${price})")
             else:
-                lines.append(f"⏭️ <b>{ticker}</b>: Skipped")
+                lines.append(f"⏭️ <b>{ticker}</b>: Skipped (Target: ${r.get('daily_target', 0):,.2f})")
+                lines.append(f"   └ Current price ${r.get('current_price', 0):,.2f}")
 
         lines.append("")
-        lines.append(f"<b>Executed: {success_count} | Skipped: {skip_count}</b>")
-    else:
+        total_executed = success_count + len(completed_results)
+        total_skipped = skip_count # completed_results usually are "executed" ones
+        lines.append(f"<b>Executed: {total_executed} | Skipped: {total_skipped}</b>")
+    elif not completed_results:
+        # No completed and no interactive results
         lines.append("<i>No actions taken.</i>")
+    else:
+        # Only completed results
+        lines.append("")
+        lines.append(f"<b>Executed: {len(completed_results)}</b>")
 
     await wrap_edit(update, "\n".join(lines), parse_mode='HTML')
 
     # Cleanup
     context.user_data.pop('va_result', None)
     context.user_data.pop('va_pending', None)
+    context.user_data.pop('va_completed_results', None)
     context.user_data.pop('va_idx', None)
     context.user_data.pop('va_exec_results', None)
 
@@ -855,7 +968,9 @@ async def handle_va_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 "order": None,
                 "success": True,
                 "message": "Skipped",
-                "executed": False
+                "executed": False,
+                "daily_target": current.get('daily_target_amount', 0),
+                "current_price": price
             }
             await loop.run_in_executor(
                 None, value_averaging.save_ticker_result, ticker, day_count, result, False
@@ -898,7 +1013,9 @@ async def handle_va_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "order": None,
             "success": True,
             "message": "Skipped",
-            "executed": False
+            "executed": False,
+            "daily_target": current.get('daily_target_amount', 0),
+            "current_price": price
         }
         # Save: executed = False
         await loop.run_in_executor(

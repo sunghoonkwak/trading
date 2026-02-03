@@ -44,7 +44,7 @@ await wrap_edit_message(chat_id, message_id, "수정 내용", parse_mode='HTML')
 ---
 
 ### set_telegram_bot
-봇 초기화 시 호출되어 `wrap_send`, `wrap_edit_message`에서 사용할 봇 인스턴스와 채팅 ID를 설정합니다.
+봇 초기화 시 호출되어 `wrap_send`, `wrap_edit_message`에서 사용할 봇 인스턴스와 채팅 ID를 설정합니다. 또한, **메인 이벤트 루프(`_main_loop`)를 캡처**하여 이후 다른 스레드에서 안전하게 메시지를 보낼 수 있도록 합니다.
 
 ```python
 set_telegram_bot(app.bot, chat_id)
@@ -60,7 +60,7 @@ send_notification("📈 Order Filled: SOXL 5 @ $25.00", parse_mode='HTML')
 ```
 
 - **Args**: `text` (메시지 내용), `parse_mode` (기본값: 'HTML')
-- **Thread Safety**: 별도 스레드에서 비동기 루프를 생성하여 안전하게 전송
+- **Thread Safety**: 호출된 스레드가 메인 루프가 아닌 경우, `asyncio.run_coroutine_threadsafe`를 사용하여 봇의 메인 루프에 전송 작업을 위임합니다. 이를 통해 `httpx` 연결 풀 충돌(`Event loop is closed`)을 방지합니다.
 
 ---
 

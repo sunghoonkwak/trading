@@ -23,6 +23,12 @@
                 <button class="toggle-btn" id="mkt-toggle" title="Toggle MKT logs">
                     📊 MKT
                 </button>
+                <button class="control-btn" onclick="triggerReport('portfolio')">
+                    📁 Port Report
+                </button>
+                <button class="control-btn" onclick="triggerReport('order')">
+                    🛒 Order Report
+                </button>
                 <div class="connection-status" id="connection-status">
                     <span class="status-dot disconnected"></span>
                     <span class="status-text">Disconnected</span>
@@ -117,6 +123,23 @@
 
     <script src="https://s3.tradingview.com/tv.js"></script>
     <script src="/static/app.js"></script>
+    <script>
+        async function triggerReport(type) {
+            if (!confirm(`Run ${type} report now?`)) return;
+
+            try {
+                const response = await fetch(`/api/trigger/${type}`, { method: 'POST' });
+                const result = await response.json();
+                if (result.success) {
+                    alert(`${type} report triggered successfully!`);
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (e) {
+                alert(`Request failed: ${e}`);
+            }
+        }
+    </script>
 </body>
 
 </html>

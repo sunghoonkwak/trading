@@ -15,8 +15,11 @@ from scheduler.scheduler_order import run_daily_order_report
 def run_scheduler_loop():
     """Background thread loop."""
     while True:
-        schedule.run_pending()
-        time.sleep(600)
+        try:
+            schedule.run_pending()
+        except Exception as e:
+            logging.error(f"[Scheduler] Error in run_pending: {e}")
+        time.sleep(60)
 
 
 def start_scheduler():

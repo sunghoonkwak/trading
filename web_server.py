@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Set, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
@@ -226,6 +226,32 @@ async def cancel_order(order_id: str):
         return result
     except Exception as e:
         logging.error(f"[WebServer] Cancel order error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/trigger/portfolio")
+async def trigger_portfolio_report(background_tasks: BackgroundTasks):
+    """Trigger daily portfolio report manually."""
+    try:
+        from scheduler.scheduler_portfolio import run_daily_portfolio_report
+        # Run in background to not block response
+        background_tasks.add_task(run_daily_portfolio_report)
+        return {"success": True, "message": "Portfolio report triggered"}
+    except Exception as e:
+        logging.error(f"[WebServer] Trigger portfolio error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/trigger/order")
+async def trigger_order_report(background_tasks: BackgroundTasks):
+    """Trigger daily order report manually."""
+    try:
+        from scheduler.scheduler_order import run_daily_order_report
+        # Run in background to not block response
+        background_tasks.add_task(run_daily_order_report)
+        return {"success": True, "message": "Order report triggered"}
+    except Exception as e:
+        logging.error(f"[WebServer] Trigger order error: {e}")
         return {"success": False, "error": str(e)}
 
 

@@ -212,22 +212,34 @@ def run_daily_portfolio_report():
 
     current_file_path = os.path.join(HISTORY_DIR, f"portfolio_{date_str}.json")
 
-    try:
-        # Use rich data service for both saving and display
-        portfolio_data = get_portfolio_data()
-    except Exception as e:
-        error_msg = f"[Scheduler] Failed to get portfolio: {e}"
-        logging.error(error_msg)
-        send_notification(error_msg)
-        return
-
-    if should_save:
+    # Check if file already exists to avoid duplicate fetching/saving on manual trigger
+    if os.path.exists(current_file_path):
         try:
-            with open(current_file_path, 'w', encoding='utf-8') as f:
-                json.dump(portfolio_data, f, ensure_ascii=False, indent=2)
-            logging.info(f"[Scheduler] Saved portfolio data to {current_file_path}")
+            with open(current_file_path, 'r', encoding='utf-8') as f:
+                portfolio_data = json.load(f)
+            logging.info(f"[Scheduler] Loaded existing portfolio data from {current_file_path}")
         except Exception as e:
-            logging.error(f"[Scheduler] Failed to save file: {e}")
+            logging.error(f"[Scheduler] Failed to load existing file: {e}")
+            # Fallback to fetch if load fails
+            portfolio_data = None
+
+    if portfolio_data is None:
+        try:
+            # Use rich data service for both saving and display
+            portfolio_data = get_portfolio_data()
+        except Exception as e:
+            error_msg = f"[Scheduler] Failed to get portfolio: {e}"
+            logging.error(error_msg)
+            send_notification(error_msg)
+            return
+
+        if should_save:
+            try:
+                with open(current_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(portfolio_data, f, ensure_ascii=False, indent=2)
+                logging.info(f"[Scheduler] Saved portfolio data to {current_file_path}")
+            except Exception as e:
+                logging.error(f"[Scheduler] Failed to save file: {e}")
 
     # 3. Notification Logic (Mon(0) ~ Sat(5))
     should_notify = (0 <= weekday <= 5)

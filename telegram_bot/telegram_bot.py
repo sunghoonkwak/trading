@@ -118,12 +118,9 @@ def initialize_telegram():
 
     def run_bot():
         """Run bot in separate thread with its own event loop."""
-        global _app
 
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
+        async def main():
+            global _app
             _app = Application.builder().token(_bot_token).build()
 
             # Pass bot instance to utils
@@ -137,63 +134,59 @@ def initialize_telegram():
             # Register Global Commands
             _app.add_handler(CommandHandler("daily_report", cmd_daily_report))
 
-            # Send initialization message
-            async def send_init_message():
-                raoeo_desc = get_raoeo_commands_desc()
-                port_desc = get_portfolio_commands_desc()
-                memo_desc = get_memo_commands_desc()
-                init_text = (
-                    "🤖 <b>Trading Bot Initialized</b>\n\n"
-                    "Commands:\n"
-                    f"{raoeo_desc}\n"
-                    f"{port_desc}\n"
-                    f"{memo_desc}\n"
-                    "/daily_report [date] - View past reports"
-                )
-                try:
-                    await wrap_send(init_text, parse_mode='HTML')
-                except Exception as e:
-                    logging.error(f"[Telegram] Failed to send init message: {e}")
-                    # Fallback to plain text
-                    try:
-                        fallback_text = f"🤖 Trading Bot Initialized\n\nCommands:\n/raoeo_report\n/raoeo_order"
-                        await wrap_send(fallback_text)
-                    except Exception as e2:
-                        logging.error(f"[Telegram] Fallback also failed: {e2}")
-                        display.add_alert("[TG] Init message failed", "ERROR")
-
-            # Global Error Handler (Essential for stability)
-            # Global Error Handler (Essential for stability)
+            # Global Error Handler
             from telegram.error import BadRequest
-
             async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-                # Ignore if no error present
-                if context.error is None:
-                    return
-
-                # Filter out benign "Message is not modified" error
+                if context.error is None: return
                 if isinstance(context.error, BadRequest) and "Message is not modified" in str(context.error):
                     logging.warning(f"[TG] Benign error (ignored): {context.error}")
                     return
-
-                # Increase alert length to 100 chars
                 display.add_alert(f"[TG] ERR: {str(context.error)[:100]}", "ERROR")
                 logging.error(f"Telegram Exception: {context.error}", exc_info=context.error)
 
             _app.add_error_handler(error_handler)
 
-            loop.run_until_complete(_app.initialize())
-            loop.run_until_complete(_app.start())
-            loop.run_until_complete(_app.updater.start_polling(allowed_updates=Update.ALL_TYPES))
-            loop.run_until_complete(send_init_message())
+            # Send initialization message
+            raoeo_desc = get_raoeo_commands_desc()
+            port_desc = get_portfolio_commands_desc()
+            memo_desc = get_memo_commands_desc()
+            init_text = (
+                "🤖 <b>Trading Bot Initialized</b>\n\n"
+                "Commands:\n"
+                f"{raoeo_desc}\n"
+                f"{port_desc}\n"
+                f"{memo_desc}\n"
+                "/daily_report [date] - View past reports"
+            )
 
-            loop.run_forever()
+            # Initialize and start application
+            await _app.initialize()
+            await _app.start()
 
+            try:
+                # Send init message safely after start
+                await wrap_send(init_text, parse_mode='HTML')
+            except Exception as e:
+                logging.error(f"[TG] Init send failed: {e}")
+
+            # Run polling endlessly
+            await _app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+
+            # Keep the app running
+            # In v20+, start_polling starts the updater but we need to keep the script alive.
+            # But here we are in a thread.
+            # Note: app.run_polling() is the blocking helper, but we are doing components manually.
+            # Let's just use run_polling()! It handles everything including init, start, updater, and blocking.
+            # Re-building app to strictly follow run_polling pattern if possible,
+            # BUT we need to register handlers first.
+            await asyncio.Event().wait() # Wait forever
+
+        try:
+            # Use asyncio.run for robust loop management in this thread
+            asyncio.run(main())
         except Exception as e:
             display.add_alert(f"[TG] CRITICAL ERROR: {str(e)[:40]}", "ERROR")
             logging.error(f"Telegram bot error: {e}")
-        finally:
-            loop.close()
 
     # Start bot in background thread
     bot_thread = threading.Thread(target=run_bot, daemon=True)

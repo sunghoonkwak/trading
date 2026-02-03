@@ -13,32 +13,139 @@ from telegram_bot.telegram_portfolio import format_va_report
 def run_daily_order_report():
     """
     Execute daily order update routine (typically scheduled for evening).
-    Sends RAOEO and Value Averaging reports via Telegram.
+    Sends RAOEO and Value Averaging reports via Telegram (with Auto-Execution).
     """
-    logging.info("[Scheduler] Starting daily order report job.")
+    import logging
+    from datetime import datetime
+    import pytz
+
+    logging.info("[Scheduler] Starting daily order report & execution job.")
     try:
         report_parts = []
 
-        # 1. RAOEO Report
+        # 1. RAOEO Report & Execution
         try:
             raoeo_report = raoeo.get_daily_report()
+
+            # Check for pending orders and if NOT already executed today
+            pending_orders = raoeo_report.get("pending_orders", [])
+            executed_today = raoeo_report.get("executed_today")
+            failed_orders = raoeo_report.get("failed_orders", [])
+
+            # If we have pending orders (including retries) and it's not marked as fully executed today
+            if (pending_orders or failed_orders) and not executed_today:
+                logging.info(f"[Scheduler] Executing RAOEO orders: {len(pending_orders)} pending, {len(failed_orders)} failed")
+
+                # Combine pending and failed into executable list (get_daily_report separates them)
+                # Note: raoeo.execute_orders handles the list.
+                # We should prefer 'pending_orders' from the report if it includes everything needing execution.
+                # However, get_daily_report splits them.
+                # Logic in telegram_raoeo: "pending_orders" from report are displayed.
+                # Let's verify what execute_orders expects. It expects a list of order dicts.
+
+                # In raoeo.py:
+                # "pending_orders" includes new ones.
+                # "failed_orders" are from history.
+                # But get_daily_report's step 3 populates pending_orders from current_result (which includes failed retries).
+                # So pending_orders should contain ALL valid orders to execute.
+
+                execution_target = pending_orders
+
+                if execution_target:
+                    config = raoeo_report.get("config")
+                    exec_results = raoeo.execute_orders(execution_target, config)
+
+                    # Save history
+                    # We need to construct the 'result' dict similar to calculation output
+                    exec_data = {
+                        "date": (raoeo_report.get("current_result") or {}).get("date"),
+                        "config": config,
+                        "holdings": raoeo_report.get("holdings"),
+                        "orders": execution_target,
+                        "state": (raoeo_report.get("current_result") or {}).get("state", "unknown")
+                    }
+                    raoeo.save_history(exec_data, exec_results)
+
+                    # Re-fetch report to reflect execution
+                    raoeo_report = raoeo.get_daily_report()
+
             raoeo_text = format_raoeo_report(raoeo_report)
             report_parts.append(raoeo_text)
+
         except Exception as e:
-            logging.error(f"Error generating RAOEO report: {e}")
+            logging.error(f"[Scheduler] Error in RAOEO execution: {e}", exc_info=True)
             report_parts.append(f"⚠️ RAOEO Error: {e}")
 
-        # 2. Value Averaging Report
+        # 2. Value Averaging Report & Execution
         try:
             va_result = value_averaging.get_daily_report()
+
+            # VA returns a list of result objects in 'results'
+            # We need to iterate and execute if pending
+            results = va_result.get("results", [])
+            active_execution = False
+
+            for res in results:
+                ticker = res.get("target_ticker")
+                already_executed = res.get("already_executed")
+                orders = res.get("orders", [])
+
+                # If orders exist and NOT already executed, Execute!
+                if orders and not already_executed:
+                    active_execution = True
+                    executed_flag = False
+
+                    for order in orders:
+                        # Execute Single Order
+                        logging.info(f"[Scheduler] Executing VA order for {ticker}: {order['qty']} @ {order['price']}")
+                        exec_res = value_averaging.execute_single_order(ticker, order)
+
+                        # Save result (per order basis, but save_ticker_result handles day record)
+                        # We should update 'executed' flag if at least one succeeds or we tried
+                        # Actually save_ticker_result expects 'executed' bool.
+                        # If we tried to purchase, we log it.
+
+                        value_averaging.save_ticker_result(
+                            ticker=ticker,
+                            day_count=res.get("day_count", 0),
+                            result=exec_res,
+                            executed=True
+                        )
+                        executed_flag = True
+
+                    # If we processed orders, we should save that we tried (even if empty? orders won't be empty here)
+
+                elif not orders and not already_executed:
+                    # No orders needed (Skip)
+                    # We should record that we checked and skipped, so we don't wonder if it ran.
+                    # Create a "skip" result
+                    skip_res = {
+                        "order": None,
+                        "success": True,
+                        "message": "Skipped (No order needed)",
+                        "type": "skip"
+                    }
+                    value_averaging.save_ticker_result(
+                        ticker=ticker,
+                        day_count=res.get("day_count", 0),
+                        result=skip_res,
+                        executed=True # We 'executed' the check
+                    )
+
+            # Re-fetch report after execution to show updated status
+            # Only if we did something (execution or skip save)
+            # Actually easiest to just re-fetch always if not error
+            va_result = value_averaging.get_daily_report()
+
             va_text = format_va_report(va_result)
             report_parts.append(va_text)
+
         except Exception as e:
-            logging.error(f"Error generating VA report: {e}")
+            logging.error(f"[Scheduler] Error in VA execution: {e}", exc_info=True)
             report_parts.append(f"⚠️ VA Error: {e}")
 
         # Send Combined Message
-        full_message = "\n" + ("="*25) + "\n\n".join(report_parts)
+        full_message = "\n\n".join(report_parts)
         send_notification(full_message)
         logging.info("[Scheduler] Daily order notification sent.")
 

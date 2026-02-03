@@ -3,6 +3,7 @@
 Telegram Utilities
 """
 import logging
+import asyncio
 from telegram import Update
 import display
 
@@ -42,12 +43,17 @@ async def wrap_edit(update: Update, text: str, **kwargs):
 from telegram import Bot
 _bot: Bot = None
 _chat_id: str = None
+_main_loop: asyncio.AbstractEventLoop = None
 
 def set_telegram_bot(bot: Bot, chat_id: str):
     """Set the global bot and chat_id for utility functions."""
-    global _bot, _chat_id
+    global _bot, _chat_id, _main_loop
     _bot = bot
     _chat_id = chat_id
+    try:
+        _main_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logging.warning("[TG] set_telegram_bot called without a running loop")
 
 async def wrap_send(text: str, **kwargs):
     """
@@ -92,16 +98,14 @@ def send_notification(text: str, parse_mode: str = 'HTML'):
         text: Message text to send
         parse_mode: Parse mode for formatting ('HTML' or 'Markdown')
     """
-    global _bot, _chat_id
+    global _bot, _chat_id, _main_loop
 
-    if not _bot or not _chat_id:
-        logging.warning("[TG] Bot not initialized for notification")
+    if not _bot or not _chat_id or not _main_loop:
+        logging.warning("[TG] Bot/Loop not initialized for notification")
         return
 
     if not text:
         return
-
-    import asyncio
 
     async def _send():
         try:
@@ -115,16 +119,22 @@ def send_notification(text: str, parse_mode: str = 'HTML'):
         except Exception as e:
             logging.error(f"[TG] Notification failed: {e}")
 
-    # Schedule the coroutine on the bot's event loop from any thread
+    # Verify if we are in the main loop or need to schedule
     try:
-        # Get the running loop from the bot's thread
-        loop = asyncio.get_running_loop()
-        asyncio.ensure_future(_send(), loop=loop)
+        curr_loop = asyncio.get_running_loop()
+        if curr_loop == _main_loop:
+             # Just schedule it directly if we are already in the main loop
+             asyncio.ensure_future(_send())
+             return
     except RuntimeError:
-        # No running event loop in current thread
-        # Use run_coroutine_threadsafe if we can find the bot's loop
-        try:
-            # Create a new loop temporarily
-            asyncio.run(_send())
-        except Exception as e:
-            logging.error(f"[TG] Failed to send notification: {e}")
+        # No running loop, clearly implies we are in a non-async thread
+        pass
+
+    # Different thread or no loop -> Schedule on main loop safely
+    try:
+        if _main_loop and not _main_loop.is_closed():
+             future = asyncio.run_coroutine_threadsafe(_send(), _main_loop)
+        else:
+             logging.error("[TG] Main loop is closed or missing, cannot send notification")
+    except Exception as e:
+        logging.error(f"[TG] Failed to schedule notification: {e}")
