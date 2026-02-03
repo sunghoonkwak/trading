@@ -8,7 +8,7 @@
 |---------|-------------|
 | `/portfolio` | **대화형(Interactive)** 포트폴리오 관리 시작. 종목 버튼을 통해 상세 정보 조회 |
 | `/portfolio_weight` | 목표 비중 대비 리밸런싱 제안. **보유하지 않은 종목(수량 0)도** 실시간 시세/API 조회를 통해 매수 수량을 계산하여 제안합니다. |
-| `/portfolio_va` | Value Averaging 주문 계산 및 실행 (Yes/No 확인, 60초 타임아웃) |
+| `/portfolio_va` | **Value Averaging** 주문 계산 및 실행 (순차 처리 방식, 60초 타임아웃) |
 
 ## Functions (함수)
 
@@ -33,22 +33,29 @@ data = get_portfolio_cached(force_refresh=False)
 ---
 
 ### cmd_portfolio_va
-Value Averaging 주문 계산 결과를 보여주고 Yes/No 인라인 버튼으로 실행 여부를 확인합니다.
-**다중 종목을 지원**하여 여러 전략의 결과를 한 메시지에 표시합니다.
+**Value Averaging** 주문을 종목별로 순차적으로 처리합니다.
+1. `get_daily_report`를 호출하여 전체 전략을 계산합니다.
+2. 이미 실행된(`executed: true`) 종목은 요약 리스트에 표시합니다.
+   - 상세 주문 내역(수량, 가격, Target)을 함께 표시합니다.
+3. 실행되지 않은 종목이 있다면 첫 번째 종목부터 순차적으로 사용자에게 물어봅니다.
 
 ### handle_va_callback
-Yes/No 버튼 클릭 시:
-- **Yes**: 모든 종목의 주문 실행 후 결과로 메시지 업데이트
-- **No**: "Order Cancelled" 메시지로 업데이트
+Value Averaging 진행 중 사용자의 버튼 입력을 처리합니다:
+- **[Yes]**: 표시된 수량만큼 LOC 주문 실행 → 결과(성공/실패) 저장 → 다음 종목으로 이동
+- **[1주 구매]**: 현재가 기준 105% LOC로 **1주만** 매수 (Target 금액 부족 시 사용) → 다음 종목으로 이동
+- **[No/Skip]**: 주문하지 않고 건너뜀 (Skip 기록 저장) → 다음 종목으로 이동
+
+모든 종목 처리가 끝나면 **최종 요약(Summary)**를 표시합니다:
+> ✅ QLD: Order Placed (Target: $150.00)
+>    └ Buy 2 shares ($76.94)
 
 ### va_timeout_handler
-60초 타임아웃 시 "VA session expired" 메시지로 업데이트합니다.
+60초 타임아웃 시 세션을 종료하고 메시지를 정리합니다.
 
 ---
 
-### format_va_report
-`value_averaging.calculate_order()` 결과를 Telegram HTML 형식으로 포맷팅합니다.
-**다중 종목**의 Day, Weight, Price, Order 정보를 한 메시지에 표시합니다.
+### format_va_single_ticker
+단일 종목의 Value Averaging 계산 결과를 Telegram HTML 형식으로 포맷팅합니다. 사용자가 결정을 내리기 쉽도록 필요한 정보(현재가, 목표액, 주문 수량 등)를 강조합니다.
 
 ---
 

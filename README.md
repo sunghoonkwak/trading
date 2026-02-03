@@ -22,6 +22,7 @@
 - **Python 3.9+** (직접 실행 시)
 - Docker & Docker Compose (Docker 실행 시 선택 사항)
 - **설정 파일** (`~/KIS_config/` 디렉토리 또는 볼륨 마운트 필요):
+
 ### 📁 외부 설정 디렉토리 (`~/KIS_config/`)
 모든 민감한 설정 파일은 프로젝트 외부에 저장됩니다. `templete/` 디렉토리에 있는 예제 파일들을 `~/KIS_config/`로 복사하여 설정할 수 있습니다:
 ```
@@ -43,15 +44,15 @@
 ### 설치 및 실행
 
 1. **Docker로 실행 (권장)**
-   환경 설정 없이 바로 실행할 수 있는 가장 간편한 방법입니다.
+   환경 설정 없이 바로 실행할 수 있는 가장 간편한 방법입니다. `docker compose` 명령어를 사용합니다.
    ```bash
    # 데몬 모드(백그라운드)로 빌드 및 실행
-   docker compose up -d
+   docker compose up -d --build
 
    # 로그 확인
    docker logs -f my-trading-bot
    ```
-   *참고: Docker 모드에서는 터미널 메뉴가 비활성화되며 자동으로 데몬 모드로 전환됩니다. `host` 네트워크 모드 사용을 권장합니다.*
+   *참고: Docker 모드에서는 터미널 메뉴가 비활성화되며 자동으로 데몬 모드로 전환됩니다.*
 
 2. **Python 직접 실행 (고급 사용자)**
    개발 목적으로 소스 코드를 직접 수정하며 실행할 때 적합합니다.
@@ -77,7 +78,7 @@
 | :--- | :--- |
 | **전략 (Strategy)** | |
 | `/raoeo` | **RAOEO 전략** 상태를 조회하고 매수 주문을 실행합니다. (성공/실패 내역, 예산 표시) |
-| `/portfolio_va` | **Value Averaging** 전략 계산 결과를 확인하고 주문을 실행합니다. |
+| `/portfolio_va` | **Value Averaging** 전략을 실행합니다. 종목별로 순차적으로 계산 결과를 확인하고 주문(매수/1주매수/스킵)을 진행할 수 있습니다. |
 | **포트폴리오 (Portfolio)** | |
 | `/portfolio` | 현재 잔고 요약을 조회하고, 버튼을 눌러 개별 종목 상세 정보를 확인합니다. |
 | `/portfolio_weight` | 현재 비중과 목표 비중을 비교하여 **리밸런싱**이 필요한 종목을 제안합니다. |
@@ -98,7 +99,7 @@
     - **System Log**: 시스템 상태 및 에러 로그 (자동 줄바꿈 지원)
 
 ### 2. 터미널 메뉴 (Terminal Menu)
-- **Trading Menu**: 초기화 완료 후 자동으로 진입합니다.
+- **Trading Menu**: 초기화 완료 후 자동으로 진입합니다. (직접 실행 시에만 유효)
   - `1`: 잔고 확인 (Account Info)
   - `2`: 수동 주문 (Place Order)
   - `3`: 미체결 내역 및 정정/취소 (Manage Orders)
@@ -112,18 +113,18 @@
 .
 ├── main.py                 # 진입점 (자동 초기화 및 모듈 조정)
 ├── web_server.py           # FastAPI 웹 서버 (WebSocket 스트리밍)
-├── super_menu.py           # 최상위 터미널 메뉴
 ├── display.py              # 알림 및 로그 처리 (터미널 출력 활성화)
 ├── web/                    # 프론트엔드 리소스
 │   ├── index.html          # 대시보드 HTML
 │   └── static/             # CSS & JS
 ├── menu/                   # 메뉴 하위 모듈
 │   ├── menu.py             # 트레이딩 메뉴 로직
-│   └── ...
+│   └── portfolio/          # 포트폴리오 관련 (VA 등)
 ├── telegram_bot/           # 텔레그램 봇 핸들러
 │   ├── telegram_bot.py     # 봇 초기화 및 에러 핸들링
 │   ├── telegram_raoeo.py   # RAOEO 커맨드
 │   └── telegram_portfolio.py # 포트폴리오 커맨드
+├── scheduler/              # 스케줄러 (자동 실행 작업)
 └── data/                   # 데이터 처리
 ```
 

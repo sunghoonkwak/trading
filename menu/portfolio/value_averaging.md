@@ -46,68 +46,101 @@
 
 ## Functions (함수)
 
-### calculate_order
+### get_daily_report
 당일에 매수해야 하는 주문을 계산합니다 (다중 종목 지원).
 
 #### Strategy Logic
-1. `enabled: true`인 모든 전략을 순회
-2. 종목별로 `default_settings`와 병합 (전략 값이 우선)
-3. 누적 목표 가치 계산: `day_count × daily_budget`
-4. 금일 매수 목표액: `누적 목표 - 현재 보유 평가액`
-5. 매수 수량 계산 및 **LOC 주문** 생성 (가격: 현재가 × 105%)
+1. `enabled: true`인 모든 전략을 순회합니다.
+2. 종목별로 `default_settings`와 병합합니다.
+3. **Day Count 계산**:
+   - 히스토리에서 가장 최근 날짜의 기록을 확인합니다.
+   - 만약 오늘 기록이 이미 존재하면(성공/스킵 불문) 그 Day Count를 유지합니다.
+   - 오늘 기록이 없으면, 최근 기록의 `day_count + 1`을 사용하여 새로운 Day를 시작합니다.
+4. 누적 목표 가치 계산: `day_count × daily_budget`
+5. 금일 매수 목표액: `누적 목표 - 현재 보유 평가액`
+6. 매수 수량 계산 및 **LOC 주문** 생성 (가격: 현재가 × 105%)
 
 #### Returns
 ```python
 {
     "status": "calculated",
-    "date": "2026-01-06",
+    "date": "2026-02-03",
     "results": [
-        {"target_ticker": "QLD", "day_count": 4, "orders": [...], "executed_orders": [...], ...},
-        {"target_ticker": "TQQQ", "day_count": 1, "orders": [], "executed_orders": [], ...}
+        {
+            "target_ticker": "QLD",
+            "day_count": 22,
+            "orders": [...],
+            "already_executed": false, # 오늘 매수 완료 여부 (스킵은 false)
+            ...
+        },
+        ...
     ],
-    "total_orders": [...],  # 모든 종목의 orders 합산
+    "total_orders": [...],
     "error": None
 }
 ```
 
 ---
 
-### execute_orders
-계산된 주문을 KIS API를 통해 실행하고 **모든 종목에 대해 히스토리를 기록**합니다.
+### execute_single_order
+단일 종목에 대한 주문을 KIS API를 통해 실행합니다.
+- `/portfolio_va`의 순차 처리 과정에서 호출됩니다.
+- LOC 주문을 생성하여 전송합니다.
 
-> **Day 누적 방식**: 주문이 없어도(수량 0) 히스토리에 기록되어 day_count가 증가합니다.
-> 예: 가격이 비싸서 1주도 못 살 때 → 다음날 누적분으로 2주 이상 구매 가능
-
-> **실패 시 재시도**: `success: false`인 기록은 day_count에 포함되지 않으며, 같은 날 다시 시도할 수 있습니다.
+### save_ticker_result
+실행 결과를 `value_averaging_history.json`에 저장합니다.
+- 날짜별/종목별로 결과를 저장하며, 주문 성공 여부와 관계없이 기록을 남깁니다.
 
 ---
 
 ## History File (히스토리 파일)
 
-`value_averaging_history.json` - **종목별 분리 저장**:
+`value_averaging_history.json` - **날짜 기반 구조**:
 
 ```json
 {
-    "QLD": [
-        {
-            "date": "2026-01-06 09:08:43",
-            "day_count": 3,
-            "results": [{...}],
-            "success": true
+    "QLD": {
+        "2026-02-02": {
+            "day_count": 21,
+            "tried_count": 1,
+            "results": [
+                {
+                    "time": "09:30:00",
+                    "type": "skip",
+                    "executed": false,
+                    "success": true,
+                    "message": "Skipped"
+                }
+            ]
+        },
+        "2026-02-03": {
+            "day_count": 22,
+            "tried_count": 1,
+            "results": [
+                {
+                    "time": "05:24:02",
+                    "type": "buy_value_averaging",
+                    "qty": 2,
+                    "price": 77.09,
+                    "executed": true,
+                    "success": true,
+                    "message": "Order Placed"
+                }
+            ]
         }
-    ]
+    }
 }
 ```
 
-- `day_count`: 해당 주문의 Day 번호 (명시적으로 저장)
-- 히스토리는 **최신 순** (index 0이 가장 최근)으로 저장됩니다
-- Day 계산 시 가장 최근 성공 기록의 `day_count`를 읽어 +1 합니다
+- **Date Key**: 날짜(YYYY-MM-DD)를 키로 사용하여 하루의 기록을 그룹화합니다.
+- `executed`: 실제 주문 실행 여부. `true`면 "Already Executed"로 간주됩니다.
+- `day_count`: 해당 날짜의 진행 단계. **매수 여부(Skip 포함)와 관계없이 개장일마다 증가**합니다.
 
 ---
 
 ## Integration
 
-- **Terminal UI**: `portfolio_menu` Option 3에서 호출
-- **Telegram**: `/portfolio_va` 명령어에서 호출
+- **Telegram**: `/portfolio_va` 명령어에서 호출 (순차 실행 지원)
+- **Terminal UI**: 실행 기능은 제거됨 (Telegram 사용 권장)
 
-> **휴장일**: `is_market_holiday("NYSE")`로 휴장일/주말에는 계산 결과만 표시되고 주문이 차단됩니다.
+> **휴장일**: `is_market_holiday("NYSE")`로 휴장일이나 주말에는 주문이 차단되며, Day Count도 증가하지 않습니다.

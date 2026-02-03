@@ -50,40 +50,33 @@ def get_strategy_config(config: Dict[str, Any], ticker: str) -> Dict[str, Any]:
     return {}
 
 
-def load_history() -> Dict[str, List]:
-    """Load value_averaging_history.json. Returns {ticker: [history_entries]}."""
+def load_history() -> Dict[str, Dict[str, Any]]:
+    """
+    Load value_averaging_history.json.
+
+    New format:
+    {
+        "QLD": {
+            "2026-02-03": {
+                "day_count": 22,
+                "tried_count": 2,
+                "results": [
+                    {"time": "05:23:53", "type": "skip", ...},
+                    {"time": "05:24:02", "type": "buy_value_averaging", ...}
+                ]
+            }
+        }
+    }
+    """
     try:
         if not os.path.exists(HISTORY_FILE):
             return {}
         with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            # Handle migration from old format
-            if isinstance(data, dict) and 'history' in data and isinstance(data['history'], list):
-                # Old format: {"history": [...]} - migrate to new format
-                return _migrate_history(data)
             return data
     except Exception as e:
         logging.error(f"Failed to load value averaging history: {e}")
         return {}
-
-
-def _migrate_history(old_data: Dict[str, Any]) -> Dict[str, List]:
-    """Migrate old history format to new ticker-based format."""
-    new_history = {}
-    for entry in old_data.get('history', []):
-        # Extract ticker from first result's order
-        results = entry.get('results', [])
-        if results:
-            ticker = results[0].get('order', {}).get('ticker', 'UNKNOWN')
-            if ticker not in new_history:
-                new_history[ticker] = []
-            # Remove ticker and exchange from order (now stored at top level)
-            for r in results:
-                if 'order' in r:
-                    r['order'].pop('ticker', None)
-                    r['order'].pop('exchange', None)
-            new_history[ticker].append(entry)
-    return new_history
 
 
 def save_history(history_data: Dict[str, List]) -> bool:
@@ -100,9 +93,6 @@ def save_history(history_data: Dict[str, List]) -> bool:
 def get_daily_report():
     """
     Calculate the Value Averaging orders for today (supports multiple strategies).
-
-    Args:
-        None
 
     Returns:
         dict: Calculation result with results per ticker and aggregated orders.
@@ -162,22 +152,7 @@ def get_daily_report():
                 pass
 
         # Get ticker-specific history
-        ticker_history = hist_data.get(target_ticker, [])
-
-        # Check if already executed today with SUCCESS (not failed attempts)
-        already_executed = False
-        executed_orders = []
-        for entry in ticker_history:
-            if entry.get('date', '').startswith(today_et) and entry.get('success', False):
-                already_executed = True
-                # Extract executed order details if available
-                results_list = entry.get('results', [])
-                if results_list:
-                    # In new format, results is a list of dicts
-                    for res in results_list:
-                        if res.get('order'):
-                            executed_orders.append(res['order'])
-                break
+        ticker_history = hist_data.get(target_ticker, {})
 
         # Extract target data from portfolio
         target_data = merged_portfolio.get(target_ticker, {})
@@ -193,7 +168,7 @@ def get_daily_report():
         # Get or initialize daily_budget
         daily_budget = strategy.get('daily_budget', 0)
 
-        if not ticker_history:  # First run for this ticker
+        if not ticker_history:  # First run for this ticker (empty dict)
             if target_weight <= 0:
                 results.append({
                     "target_ticker": target_ticker,
@@ -210,15 +185,51 @@ def get_daily_report():
                     config_updated = True
                     break
 
-        # Day count calculation: get last successful day_count from history
-        # If no history, start at day 1
+        # Day count calculation
         last_day_count = 0
-        for entry in ticker_history:
-            if entry.get('success', False):
-                last_day_count = entry.get('day_count', 0)
-                break  # History is sorted newest first
+        using_existing_today_record = False
 
-        day_count = last_day_count if already_executed else last_day_count + 1
+        sorted_dates = sorted(ticker_history.keys(), reverse=True)
+        if sorted_dates:
+            latest_date = sorted_dates[0]
+            latest_entry = ticker_history[latest_date]
+            last_day_count = latest_entry.get('day_count', 0)
+
+            if latest_date == today_et:
+                using_existing_today_record = True
+
+        # Determine day_count
+        if using_existing_today_record:
+             # Even if we are re-running (because executed_today is False), we use the SAME day count
+             day_count = last_day_count
+        else:
+             # New day block
+             day_count = last_day_count + 1
+
+        # Determine if we should consider this ticker "already finished" for today
+        # User wants to re-try if it was only SKIPPED today.
+        # So already_executed is True ONLY if we actually BOUGHT specific items today.
+        executed_today = False
+        executed_orders = [] # Initialize here for scope
+
+        if using_existing_today_record:
+            today_entry = ticker_history[today_et]
+            results_list = today_entry.get('results', [])
+            executed_today = any(r.get('executed', False) for r in results_list)
+
+            if executed_today:
+                for res in results_list:
+                    if res.get('executed') and res.get('type') != 'skip':
+                        executed_orders.append({
+                            "qty": res.get('qty', 0),
+                            "price": res.get('price', 0),
+                            "order_type": res.get('order_type', 'LOC'),
+                            "type": res.get('type', 'buy'),
+                            "time": res.get('time', ''),
+                            "message": res.get('message', '')
+                        })
+
+        already_executed = executed_today
 
         # Calculate targets
         target_value_accumulated = day_count * daily_budget
@@ -273,123 +284,114 @@ def get_daily_report():
     }
 
 
-def execute_orders(order_report):
+def execute_single_order(ticker: str, order: dict) -> dict:
     """
-    Execute the calculated orders for all strategies.
-    Records history for all strategies (including those with no orders).
+    Execute a single order for one ticker.
+
+    Args:
+        ticker: Stock ticker symbol
+        order: Order dict with qty, price, exchange, order_type, etc.
+
+    Returns:
+        dict: Execution result with success, message, etc.
     """
-    if not order_report:
-        return []
-
-    results = order_report.get('results', [])
-    total_orders = order_report.get('total_orders', [])
-
-    if not results:
-        return []
-
-    today_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
-    hist_data = load_history()
-
-    exec_results = []
-
-    # KIS Auth Credentials
     cano = ka.getTREnv().my_acct
     acnt_prdt_cd = ka.getTREnv().my_prod
 
-    # Build order map and day_count map for quick lookup
-    order_map = {o['ticker']: o for o in total_orders}
-    day_count_map = {r['target_ticker']: r.get('day_count', 0) for r in results if r.get('target_ticker')}
+    res, err_msg = order_overseas_stock(
+        cano=cano,
+        acnt_prdt_cd=acnt_prdt_cd,
+        ovrs_excg_cd=order['exchange'],
+        pdno=ticker,
+        ord_qty=str(order['qty']),
+        ovrs_ord_unpr=str(order['price']),
+        ord_dv="buy",
+        ctac_tlno="",
+        mgco_aptm_odno="",
+        ord_svr_dvsn_cd="0",
+        ord_dvsn="34",  # LOC
+        env_dv="demo" if ka.isPaperTrading() else "real"
+    )
 
-    for r in results:
-        if r.get('error'):
-            continue
+    success = False
+    msg = "Failed"
+    if res is not None and not res.empty:
+        success = True
+        msg = "Order Placed"
+    elif err_msg:
+        msg = err_msg
 
-        ticker = r.get('target_ticker')
-        if not ticker:
-            continue
+    result = {
+        "ticker": ticker,
+        "order": {
+            "type": order.get('type', 'buy'),
+            "qty": order['qty'],
+            "price": order['price'],
+            "order_type": order.get('order_type', 'LOC'),
+            "desc": order.get('desc', ''),
+            "daily_target": order.get('daily_target', 0)
+        },
+        "success": success,
+        "message": msg
+    }
 
-        # Skip if already processed today with SUCCESS (failed attempts should retry)
-        ticker_history = hist_data.get(ticker, [])
-        already_success_today = any(
-            entry.get('date', '').startswith(today_et) and entry.get('success', False)
-            for entry in ticker_history
-        )
+    return result
 
-        if already_success_today:
-            logging.info(f"Value Averaging for {ticker} already succeeded today ({today_et} ET). Skipping.")
-            exec_results.append({
-                "ticker": ticker,
-                "skipped": True,
-                "message": f"Already succeeded today ({today_et} ET)"
-            })
-            continue
 
-        # Check if there's an order for this ticker
-        order = order_map.get(ticker)
+def save_ticker_result(ticker: str, day_count: int, result: dict, executed: bool):
+    """
+    Save a single history entry for one ticker.
 
-        if order and order.get('order_type') == 'LOC':
-            # Execute the order
-            res, err_msg = order_overseas_stock(
-                cano=cano,
-                acnt_prdt_cd=acnt_prdt_cd,
-                ovrs_excg_cd=order['exchange'],
-                pdno=ticker,
-                ord_qty=str(order['qty']),
-                ovrs_ord_unpr=str(order['price']),
-                ord_dv="buy",
-                ctac_tlno="",
-                mgco_aptm_odno="",
-                ord_svr_dvsn_cd="0",
-                ord_dvsn="34",  # LOC
-                env_dv="demo" if ka.isPaperTrading() else "real"
-            )
-
-            success = False
-            msg = "Failed"
-            if res is not None and not res.empty:
-                success = True
-                msg = "Order Placed"
-            elif err_msg:
-                msg = err_msg
-
-            result = {
-                "ticker": ticker,
-                "order": {
-                    "type": order['type'],
-                    "qty": order['qty'],
-                    "price": order['price'],
-                    "order_type": order['order_type'],
-                    "desc": order['desc'],
-                    "daily_target": order['daily_target']
-                },
-                "success": success,
-                "message": msg
+    Format:
+    {
+        "QLD": {
+            "YYYY-MM-DD": {
+                "day_count": 22,
+                "tried_count": N,
+                "results": [...]
             }
-        else:
-            # No order (qty=0 or insufficient budget) - still record the day
-            result = {
-                "ticker": ticker,
-                "order": None,
-                "success": True,  # Day recorded successfully
-                "message": "No order needed (insufficient qty)"
-            }
-
-        exec_results.append(result)
-
-        # Save to ticker-specific history
-        if ticker not in hist_data:
-            hist_data[ticker] = []
-
-        history_entry = {
-            "date": datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M:%S"),
-            "day_count": day_count_map.get(ticker, 0),
-            "results": [result],
-            "success": result.get('success', False)
         }
-        hist_data[ticker].insert(0, history_entry)
+    }
+    """
+    hist_data = load_history()
+    today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    now_time = datetime.now(ZoneInfo("America/New_York")).strftime("%H:%M:%S")
 
-    # Save all history updates
-    if exec_results:
-        save_history(hist_data)
+    if ticker not in hist_data:
+        hist_data[ticker] = {}
 
-    return exec_results
+    if today not in hist_data[ticker]:
+        hist_data[ticker][today] = {
+            "day_count": day_count,
+            "tried_count": 0,
+            "results": []
+        }
+
+    # Flatten result for storage
+    order = result.get('order')
+
+    storage_entry = {
+        "time": now_time,
+        "type": order.get('type', 'skip') if order else 'skip',
+        "qty": order.get('qty', 0) if order else 0,
+        "price": order.get('price', 0) if order else 0,
+        "order_type": order.get('order_type') if order else None,
+        "desc": order.get('desc') if order else None,
+        "executed": executed,
+        "success": result.get('success', False),
+        "message": result.get('message', '')
+    }
+
+    hist_data[ticker][today]["results"].append(storage_entry)
+    hist_data[ticker][today]["tried_count"] = len(hist_data[ticker][today]["results"])
+
+    # Update day_count if this execution actually happened (and it's higher)
+    # Theoretically day_count for today is fixed once created, but we can ensure consistency
+    current_day_count = hist_data[ticker][today].get("day_count", 0)
+    if day_count > current_day_count:
+        hist_data[ticker][today]["day_count"] = day_count
+    elif current_day_count == 0:
+        # Initial setting
+        hist_data[ticker][today]["day_count"] = day_count
+
+    save_history(hist_data)
