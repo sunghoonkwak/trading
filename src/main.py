@@ -83,14 +83,21 @@ from kis import event_pipe
 if __name__ == "__main__":
     # [CRITICAL] Configure logging at the VERY TOP
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    logs_dir = os.path.join(base_dir, "logs")
+    # If running from src/, logs should be in project root
+    if os.path.basename(base_dir) == "src":
+        logs_dir = os.path.join(os.path.dirname(base_dir), "logs")
+    else:
+        logs_dir = os.path.join(base_dir, "logs")
 
     # Ensure logs directory exists
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
 
     # Latest log in root, archived logs in logs/
-    latest_log = os.path.join(base_dir, "WebSocket_latest.log")
+    if os.path.basename(base_dir) == "src":
+        latest_log = os.path.join(os.path.dirname(base_dir), "WebSocket_latest.log")
+    else:
+        latest_log = os.path.join(base_dir, "WebSocket_latest.log")
 
     rotation_msgs = archive_existing_log(latest_log, logs_dir)
     log_file = latest_log
@@ -245,7 +252,7 @@ if __name__ == "__main__":
 
         # Sync orders
         print("[Startup]   - Syncing open orders...")
-        from menu.handle_manage_orders import sync_open_orders
+        from kis.wrapper import sync_open_orders
         sync_open_orders()
         logging.info("[Startup] Orders synced")
         print("[Startup] ✓ Orders synced")
@@ -283,25 +290,21 @@ if __name__ == "__main__":
 
     time.sleep(1)
 
-    # Step 5: Launch Trading Menu
+    # Step 5: Start Daemon Loop (Docker)
     print("")
-    print("[Startup] Step 5: Starting Trading Menu...")
+    print("[Startup] Step 5: System is ready. Running in daemon mode.")
     print("")
 
     try:
-        from menu.menu import menu
-        if os.environ.get("ENV_MODE") == "docker":
-            print("[System] Docker mode detected. Running in daemon mode (no menu).")
-            print("[System] Logs are being piped to stdout/file. Use 'docker logs -f' to view.")
-            while True:
-                time.sleep(3600)
-        else:
-            menu()
+        # Removed legacy menu execution. Always run in daemon mode.
+        print("[System] Logs are being piped to stdout/file. Use 'docker logs -f' to view.")
+        while True:
+             time.sleep(3600)
     except KeyboardInterrupt:
         print("\n[Shutdown] Keyboard Interrupt")
     except Exception as e:
-        print(f"[Error] Menu crashed: {e}")
-        logging.error(f"[System] Menu crash: {e}", exc_info=True)
+        print(f"[Error] System crashed: {e}")
+        logging.error(f"[System] Crash: {e}", exc_info=True)
     finally:
         # Shutdown sequence
         print("\n[System] Shutting down...")

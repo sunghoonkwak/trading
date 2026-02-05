@@ -1,19 +1,21 @@
 """
 This module handles the management of open orders (cancellation and correction).
-It follows a strict 6-step workflow for user interaction and API execution.
+Extracted from menu/handle_manage_orders.py
 """
 import logging
-from utils import getch
+import threading
+import pandas as pd
 from kis.kis_api import kis_auth as ka
 import trading_config
-from display import show_in_result_area, input_at, safe_write, update_order_state, add_alert, clear_order_states
-from .menu import MENU_DEBUG
+from display import update_order_state, add_alert, clear_order_states
 from kis.kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl
 from kis.kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import inquire_psbl_rvsecncl
 from kis.kis_api.overseas_stock.order_rvsecncl.order_rvsecncl import order_rvsecncl as order_rvsecncl_overseas
 from kis.kis_api.overseas_stock.inquire_nccs.inquire_nccs import inquire_nccs as inquire_nccs_overseas
-import threading
-import time
+from kis.kis_api.overseas_stock.price import price as price_module
+
+# Centralized debug toggle (using global logging level instead)
+MENU_DEBUG = False
 
 class SyncManager:
     """Manages order synchronization to prevent race conditions and redundant API calls."""
@@ -53,7 +55,6 @@ def request_sync():
 
 def fetch_open_orders():
     """Step 1: Fetch open orders from both US and KR markets and return a combined DataFrame."""
-    import pandas as pd
     cano = ka.getTREnv().my_acct
     prod = ka.getTREnv().my_prod
 
@@ -74,40 +75,6 @@ def fetch_open_orders():
     combined_df = pd.concat([df_us, df_kr], ignore_index=True)
     return combined_df, len(df_us), len(df_kr)
 
-def print_open_orders_list(df):
-    """Utility to format and return lines for the open orders list."""
-    header_lines = ["="*40, " [Manage Open Orders]", "="*40]
-    order_list = []
-
-    def get_val(row_lower, keys, default=0):
-        for k in keys:
-            if k in row_lower: return row_lower[k]
-        return default
-
-    for idx, (_, row) in enumerate(df.iterrows()):
-        market = row.get('_market', 'US')
-        name = row.get('prdt_name', row.get('pdno', row.get('stck_nm', 'Unknown')))
-        row_lower = {k.lower(): v for k, v in row.items()}
-
-        if market == "KR":
-            side = "BUY " if row.get('sll_buy_dvsn_cd') == '02' else "SELL"
-            price = int(float(row.get('ord_unpr', '0')))
-            qty = row.get('psbl_qty', 0)
-        else:
-            side_name = get_val(row_lower, ['sll_buy_dvsn_cd_name', 'sll_buy_dvsn_name'], '?')
-            side = side_name if side_name != '?' else ("BUY" if get_val(row_lower, ['sll_buy_dvsn_cd'], '')=='02' else "SELL")
-            p_val = get_val(row_lower, ['ft_ord_unpr4', 'ft_ord_unpr3', 'ovrs_ord_unpr', 'ord_unpr'], '0')
-            try: price = float(p_val)
-            except: price = 0.0
-            q_val = get_val(row_lower, ['nccs_qty', 'ft_ord_qty4', 'ord_qty'], 0)
-            try: qty = int(float(q_val))
-            except: qty = 0
-
-        order_list.append(f" {idx+1}. [{market}] {name} | {side} | Prc: {price} | Qty: {qty}")
-        if idx >= 6: break
-
-    return header_lines + order_list
-
 def execute_manage_action(market, action_type, order_data, new_price=None):
     """Step 5: Execute cancellation or correction."""
     cano = ka.getTREnv().my_acct
@@ -115,7 +82,7 @@ def execute_manage_action(market, action_type, order_data, new_price=None):
     t_ord = {k.lower(): v for k, v in order_data.items()}
 
     if MENU_DEBUG:
-        logging.debug(f"[MenuDebug] Execute Manage - Mkt: {market}, Action: {action_type}, NewP: {new_price}, Target: {t_ord.get('pdno')} / {t_ord.get('odno')}")
+        logging.debug(f"[Manager] Execute Manage - Mkt: {market}, Action: {action_type}, NewP: {new_price}, Target: {t_ord.get('pdno')} / {t_ord.get('odno')}")
 
     if market == "KR":
         ord_dvsn = t_ord.get('ord_dvsn_cd', t_ord.get('ord_dvsn', '00'))
@@ -147,34 +114,6 @@ def execute_manage_action(market, action_type, order_data, new_price=None):
             mgco_aptm_odno="", ord_svr_dvsn_cd="0", env_dv="real"
         )
 
-def print_execution_result(df_res, err_msg=None):
-    """Step 6: Print result of the management action."""
-    header_lines = ["="*40, " [Order Result]", "="*40]
-
-    is_success = False
-    res_msg, res_odno = err_msg if err_msg else "Processed", ""
-
-    if not df_res.empty:
-        cols = {c.lower(): c for c in df_res.columns}
-        if 'odno' in cols:
-            is_success, res_odno = True, df_res.iloc[0][cols['odno']]
-        elif 'ord_no' in cols:
-            is_success, res_odno = True, df_res.iloc[0][cols['ord_no']]
-
-        # If success, overwrite msg from df if available
-        if is_success:
-            if 'msg1' in cols: res_msg = df_res.iloc[0][cols['msg1']]
-            elif 'message' in cols: res_msg = df_res.iloc[0][cols['message']]
-
-    final_lines = header_lines + [
-        f" Result : {'SUCCESS' if is_success else 'FAILED'}",
-        f" Ord No : {res_odno}",
-        f" Message: {res_msg}",
-        " Press any key to return..."
-    ]
-    show_in_result_area(final_lines)
-    getch()
-
 def sync_open_orders():
     """Fetch open orders from API and sync them to display state."""
     add_alert("[ORD] Syncing open orders...", "INFO")
@@ -182,7 +121,7 @@ def sync_open_orders():
     try:
         df, num_us, num_kr = fetch_open_orders()
     except Exception as e:
-        print_log(PrintLevel.ERROR, f"Sync failed: {e}")
+        add_alert(f"Sync failed: {e}", "ERROR")
         return False
 
     # Priority Alert Message requested by user
@@ -221,47 +160,49 @@ def sync_open_orders():
             update_order_state(odno, pdno, display_name, side, price, qty, "PLACED", notify=False)
     return not df.empty
 
-def handle_manage_orders():
-    """Main menu controller following the 6-step structure."""
+def fetch_price(ticker: str, exchange: str = None) -> float:
+    """
+    Fetch current price for an overseas stock from KIS API.
+
+    Args:
+        ticker: Stock ticker symbol (e.g., 'QLD', 'SOXL')
+        exchange: Exchange code (NAS, NYS, AMS). If None, auto-mapping via config.
+
+    Returns:
+        Current price as float, or 0.0 if failed
+    """
+    if not exchange:
+        exchange = trading_config.get_kis_exchange_code(ticker)
+
     try:
-        # Step 1: Open order fetching
-        show_in_result_area(["Fetching open orders..."])
-        sync_open_orders()
+        env_dv = "demo" if ka.isPaperTrading() else "real"
+        df = price_module.price("", exchange, ticker.upper(), env_dv)
 
-        # Step 2: Determine which order to manage via user input
-        df, _, _ = fetch_open_orders()
+        if df is not None and not df.empty:
+            row = df.iloc[0]
 
-        if df.empty:
-            show_in_result_area(["No open orders found.", "Press any key to return..."])
-            getch()
-            return
+            # Try multiple possible field names for current price
+            # 'last' is real-time price, 'base' is previous close (used when market is closed)
+            price_fields = ['last', 'base', 'ovrs_stck_prpr', 'stck_prpr', 'prpr', 'clpr']
+            for field in price_fields:
+                if field in row:
+                    val = row[field]
+                    # Skip if value is None, empty string, or falsy (but not '0')
+                    if val is None or val == '':
+                        continue
+                    try:
+                        price_val = float(val)
+                        if price_val > 0:
+                            logging.info(f"[KIS API] {ticker} price fetched: {price_val} (field: {field})")
+                            return price_val
+                    except (ValueError, TypeError):
+                        continue
 
-        display_lines = print_open_orders_list(df)
-        show_in_result_area(display_lines)
-        idx_s = input_at(len(display_lines)+2, 2, "Choice: ").strip()
-        if idx_s.lower() == 'q' or not idx_s: return
+            # No price found
+            logging.warning(f"[KIS API] {ticker}: No valid price available in response")
 
-        try:
-            idx = int(idx_s) - 1
-            if idx < 0 or idx >= len(df): raise ValueError
-        except: return
-        target_order = df.iloc[idx]
-        market = target_order.get('_market', 'US')
-
-        # Step 3: Choose action (Correct or Cancel) via user input
-        action = input_at(len(display_lines)+3, 2, "Action (1: Correct, 2: Cancel): ").strip()
-        if action not in ['1', '2']: return
-
-        # Step 4: Get new price for Correction via user input
-        new_price = None
-        if action == '1':
-            new_price = input_at(len(display_lines)+4, 2, "New Price: ").strip()
-
-        # Step 5: execute_manage_action
-        df_res, err_msg = execute_manage_action(market, action, target_order, new_price)
-
-        # Step 6: print result
-        print_execution_result(df_res, err_msg)
+        return 0.0
 
     except Exception as e:
-        add_alert(f"Order Manage Error: {e}", "ERROR")
+        logging.warning(f"Failed to fetch price from KIS API for {ticker}: {e}")
+        return 0.0

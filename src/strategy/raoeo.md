@@ -6,14 +6,6 @@
 
 라오어 무한 매수법에 필요한 매매 계산 및 주문을 자동으로 처리하는 모듈입니다.
 
-## Menu Options (메뉴 옵션)
-
-| Key | Action | Description |
-|-----|--------|-------------|
-| `1` | Execute Orders | 주문 계산 및 실행 |
-| `2` | View History | 누적 히스토리 조회 (Pagination) |
-| `q` | Quit | 이전 메뉴로 돌아가기 |
-
 ## Configuration (설정)
 
 `~/KIS_config/raoeo.json` 파일 구조:

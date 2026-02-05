@@ -97,7 +97,7 @@ def get_daily_report():
     Returns:
         dict: Calculation result with results per ticker and aggregated orders.
     """
-    from menu.handle_account_info import fetch_price
+    from kis.wrapper import fetch_price
     from data.data_service import get_portfolio_data
 
     # Fetch portfolio data internally

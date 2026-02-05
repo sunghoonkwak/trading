@@ -31,18 +31,18 @@
 
 ## Key Components (주요 구성 요소)
 
-### `PrintLevel` (IntEnum)
-뷰어에 표시할 로그의 상세 레벨을 정의합니다:
-*   `ERROR` (0): 치명적인 오류.
-*   `INFO` (1): 일반적인 운영 이벤트 (주문, 시세 등).
-*   `DEBUG` (2): 상세 디버깅 정보.
+### Logging Levels
+로그 레벨은 문자열로 정의됩니다:
+*   `"ERROR"`: 치명적인 오류.
+*   `"INFO"`: 일반적인 운영 이벤트 (주문, 시세 등).
+*   `"DEBUG"`: 상세 디버깅 정보.
 
 ### Logging Functions
 
 #### `print_viewer(msg_type, level, log)`
 주요 로깅 인터페이스입니다.
 *   `logging` 모듈을 통해 파일에 기록합니다.
-*   `level <= print_log_level`인 경우 IPC를 통해 뷰어로 전송합니다.
+*   `level`이 `"INFO"` 또는 `"ERROR"`인 경우 IPC를 통해 뷰어로 전송합니다.
 
 #### `send_log(msg_type, message)`
 메시지를 Write Queue에 추가합니다 (Non-blocking).

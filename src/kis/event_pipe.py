@@ -25,17 +25,6 @@ if IS_WINDOWS:
 else:
     import socket
 
-class PrintLevel(IntEnum):
-    ERROR = 0
-    INFO = 1
-    DEBUG = 2
-    MAX = 3
-
-print_log_level = PrintLevel.INFO
-
-def get_log_level():
-    return print_log_level
-
 # Windows Named Pipe
 PIPE_NAME = r'\\.\pipe\kis_websocket_log'
 # Linux Unix Domain Socket
@@ -71,19 +60,17 @@ def set_web_broadcast_callback(callback):
     logging.info("[Pipe] Web broadcast callback registered")
 
 
-
 def print_viewer(msg_type, level, log):
     """Log to file and send to separate terminal viewer via pipe."""
     # Always log to file using standard logging
-    if level == PrintLevel.ERROR:
+    if level == "ERROR":
         logging.error(log)
-    elif level == PrintLevel.INFO:
-        logging.debug(log)
-    elif level == PrintLevel.DEBUG:
+    else:
+        # INFO and DEBUG map to logging.debug
         logging.debug(log)
 
-    # Send to separate terminal viewer
-    if level <= print_log_level:
+    # Send to separate terminal viewer (only INFO/ERROR)
+    if level in ["INFO", "ERROR"]:
         send_log(msg_type, log)
 
 

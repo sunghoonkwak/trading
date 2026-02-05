@@ -560,7 +560,7 @@ def get_weight_diffs():
             try:
                 # 1. Try WebSocket (fastest)
                 try:
-                    from menu.raoeo.raoeo import get_current_price
+                    from strategy.raoeo import get_current_price
                     cur_price = get_current_price(t)
                 except ImportError:
                     pass
@@ -587,7 +587,7 @@ def get_weight_diffs():
                         if df is not None and not df.empty and 'stck_prpr' in df.columns:
                             cur_price = float(df.iloc[0]['stck_prpr'])
                     else:
-                        from menu.handle_account_info import fetch_price
+                        from kis.wrapper import fetch_price
                         cur_price = fetch_price(t)
 
                 # 4. Set appropriate currency if fetching succeeded

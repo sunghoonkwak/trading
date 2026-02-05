@@ -20,4 +20,4 @@ COPY . .
 EXPOSE 8080
 
 # 실행 명령어
-CMD ["python", "main.py"]
+CMD ["python", "src/main.py"]

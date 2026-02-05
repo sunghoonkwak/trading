@@ -257,7 +257,7 @@ async def trigger_order_report(background_tasks: BackgroundTasks):
 
 def _cancel_order_sync(order_id: str):
     """Synchronously cancel an order by ID."""
-    from menu.handle_manage_orders import fetch_open_orders, execute_manage_action
+    from kis.wrapper import fetch_open_orders, execute_manage_action
 
     try:
         df, _, _ = fetch_open_orders()
@@ -301,7 +301,7 @@ def _fetch_orders_for_sync():
     """Fetch open orders and format as WebSocket messages."""
     messages = []
     try:
-        from menu.handle_manage_orders import fetch_open_orders
+        from kis.wrapper import fetch_open_orders
         import trading_config
         from utils import get_fixed_width
         from datetime import datetime

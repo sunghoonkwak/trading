@@ -77,7 +77,7 @@ Uvicorn 서버를 실행합니다.
 
 ### `_fetch_orders_for_sync()`
 미체결 주문을 조회하여 WebSocket 메시지 형식으로 변환합니다.
-- `menu.handle_manage_orders.fetch_open_orders()` 호출
+- `kis.wrapper.fetch_open_orders()` 호출
 - 국내/해외 주문을 ODR 형식으로 포맷팅하여 반환
 
 ## 주문 취소 API (Order Cancel)

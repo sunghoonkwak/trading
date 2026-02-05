@@ -5,8 +5,8 @@ Handles daily order reporting and notifications (RAOEO, Value Averaging).
 """
 import logging
 from telegram_bot.telegram_utils import send_notification
-from menu.raoeo import raoeo
-from menu.portfolio import value_averaging
+from strategy import raoeo
+from strategy import value_averaging
 from telegram_bot.telegram_raoeo import format_raoeo_report
 from telegram_bot.telegram_portfolio import format_va_report
 

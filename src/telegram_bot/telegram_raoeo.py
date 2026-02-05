@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 
-from menu.raoeo.raoeo import get_daily_report, execute_orders, save_history
+from strategy.raoeo import get_daily_report, execute_orders, save_history
 from utils import is_market_holiday
 
 # Conversation state

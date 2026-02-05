@@ -21,7 +21,7 @@ from datetime import datetime
 
 from data.data_service import get_weight_diffs
 from data.data_service import get_portfolio_data
-from menu.handle_manage_orders import fetch_open_orders
+from kis.wrapper import fetch_open_orders
 import trading_config
 from utils import is_market_holiday
 
@@ -136,8 +136,8 @@ def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
 
     # Only try WebSocket/API fallback if merged_data doesn't have valid price
     if cur_price <= 0 and currency == "USD":
-        from menu.raoeo.raoeo import get_current_price
-        from menu.handle_account_info import fetch_price
+        from strategy.raoeo import get_current_price
+        from kis.wrapper import fetch_price
 
         # Try WebSocket
         cur_price = get_current_price(ticker)
@@ -214,8 +214,8 @@ def format_ticker_not_in_portfolio(ticker: str, portfolio_data: dict) -> str:
     Returns:
         Formatted string with ticker info
     """
-    from menu.raoeo.raoeo import get_current_price
-    from menu.handle_account_info import fetch_price
+    from strategy.raoeo import get_current_price
+    from kis.wrapper import fetch_price
 
     targets = portfolio_data.get("targets", {})
     tgt_weight = targets.get(ticker, 0) * 100
@@ -709,7 +709,7 @@ def build_va_single_keyboard(has_order: bool, no_order_needed: bool, is_holiday:
 
 async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio_va - Value Averaging (sequential processing)."""
-    from menu.portfolio import value_averaging
+    from strategy import value_averaging
 
     logging.info(f"[TG] /portfolio_va from user {update.effective_user.id}")
 

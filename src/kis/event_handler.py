@@ -11,10 +11,10 @@ import trading_state
 import trading_config
 from trading_config import strip_market_prefix
 from kis import event_pipe
-from kis.event_pipe import PrintLevel, print_viewer
+from kis.event_pipe import print_viewer
 from display import add_alert, remove_order_state
 from utils import get_fixed_width, format_number
-from menu.handle_manage_orders import request_sync
+from kis.wrapper import request_sync
 from telegram_bot.telegram_utils import send_notification
 
 
@@ -39,7 +39,7 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
         }
 
     state = trading_state.stock_data_state[code]
-    level = PrintLevel.DEBUG
+    level = "DEBUG"
 
     if tr_id == "H0UNASP0":
         state['time'] = row['BSOP_HOUR']
@@ -62,7 +62,7 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
             state['rate'] = float(row['PRDY_CTRT'])
             sign = row['PRDY_VRSS_SIGN']
             state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
-            level = PrintLevel.INFO
+            level = "INFO"
             trading_state.notify_data_received()
         except:
             return True
@@ -115,7 +115,7 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
         }
 
     state = trading_state.stock_data_state[code]
-    level = PrintLevel.DEBUG
+    level = "DEBUG"
 
     if tr_id == "HDFSASP0":
         state['time'] = row.get('xhms', '000000')
@@ -138,7 +138,7 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
                 state['ask'] = float(row['PASK'])
             sign = row.get('SIGN', '3')
             state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
-            level = PrintLevel.INFO
+            level = "INFO"
             trading_state.notify_data_received()
         except:
             return True
@@ -238,7 +238,7 @@ def _handle_domestic_order(row) -> bool:
         request_sync()
         return True
     except Exception as e:
-        print_viewer("SYS", PrintLevel.ERROR, f"Error parsing H0STCNI0: {e}")
+        print_viewer("SYS", "ERROR", f"Error parsing H0STCNI0: {e}")
         return True
 
 
@@ -349,7 +349,7 @@ def _handle_overseas_order(tr_id: str, row) -> bool:
         request_sync()
         return True
     except Exception as e:
-        print_viewer("SYS", PrintLevel.ERROR, f"Error parsing overseas notification: {e}")
+        print_viewer("SYS", "ERROR", f"Error parsing overseas notification: {e}")
         return True
 
 
@@ -357,11 +357,11 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
     """Main WebSocket result handler - routes to specific handlers by tr_id."""
     # Handle PINGPONG for testing (displays even when market is closed)
     if tr_id == "PINGPONG":
-        print_viewer("SYS", PrintLevel.INFO, "PINGPONG received")
+        print_viewer("SYS", "INFO", "PINGPONG received")
         return
 
     if df.empty:
-        print_viewer("SYS", PrintLevel.ERROR, f"System Message received for TR: {tr_id}")
+        print_viewer("SYS", "ERROR", f"System Message received for TR: {tr_id}")
         return
 
     tr_id = tr_id.strip()
@@ -382,4 +382,4 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
 
         else:
             if i == 0:
-                print_viewer("SYS", PrintLevel.DEBUG, f"Unhandled TR_ID: {tr_id}")
+                print_viewer("SYS", "DEBUG", f"Unhandled TR_ID: {tr_id}")

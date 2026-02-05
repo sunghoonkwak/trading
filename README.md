@@ -11,8 +11,7 @@
   - 현대적인 다크 모드 UI와 효율적인 화면 분할(좌우 7:3)을 제공합니다.
   - 접속 주소: `http://<서버IP>:8080`
 - **터미널 제어 인터페이스 (Terminal Control)**:
-  - **Super Menu**: 시스템 상태 모니터링 및 스레드 관리.
-  - **Trading Menu**: 수동 매매, 잔고 조회, 미체결 주문 관리 등 실질적 기능 제공.
+  - Docker 환경에 최적화되어, 인터랙티브 메뉴 대신 **웹 대시보드**와 **텔레그램**을 주 제어 수단으로 사용합니다.
 - **실시간 알림 및 원격 제어**: 텔레그램 봇을 통해 매매 알림을 받고 명령어로 조회/주문이 가능합니다.
 - **도커 지원 (Dockerized)**: 컨테이너 환경에서 손쉽게 배포 및 실행이 가능합니다.
 
@@ -27,18 +26,17 @@
 모든 민감한 설정 파일은 프로젝트 외부에 저장됩니다. `templete/` 디렉토리에 있는 예제 파일들을 `~/KIS_config/`로 복사하여 설정할 수 있습니다:
 ```
 ~/KIS_config/
-├── kis_devlp.yaml               # KIS API 설정 (모의/실전)
-├── password.txt                 # 복호화 비밀번호
-├── credentials.enc              # 암호화된 API 키
-├── telegram.txt                 # 텔레그램 봇 토큰/채팅 ID
-├── service-account.json         # Google Sheets 서비스 계정
-├── portfolio.json               # 캐싱된 포트폴리오 데이터
-├── portfolio_weights.json       # 포트폴리오 비중 설정
-├── raoeo.json                   # RAOEO 전략 설정 (Config)
-├── raoeo_history.json           # RAOEO 매매 히스토리
-├── value_averaging.json         # Value Averaging 설정
+├── kis_devlp.yaml            # KIS API 설정 (모의/실전)
+├── credentials.enc           # 암호화된 API 키
+├── service-account.json      # Google Sheets 서비스 계정
+├── telegram.txt              # 텔레그램 봇 토큰/채팅 ID (옵션)
+├── portfolio.json            # 캐싱된 포트폴리오 데이터
+├── portfolio_weights.json    # 포트폴리오 비중 설정
+├── raoeo.json                # RAOEO 전략 설정 (Config)
+├── raoeo_history.json        # RAOEO 매매 히스토리
+├── value_averaging.json      # Value Averaging 설정
 ├── value_averaging_history.json # Value Averaging 히스토리
-└── memo.json                    # 텔레그램 메모 저장소
+└── memo.json                 # 텔레그램 메모 저장소
 ```
 
 ### 설치 및 실행
@@ -66,8 +64,9 @@
    # Windows
    # pip install -r requirements-windows.txt
 
-   # 3. 실행
-   python main.py
+   # 3. 실행 (src 디렉토리의 main.py 실행)
+   # PYTHONPATH 설정 필요할 수 있음
+   python src/main.py
    ```
 
 ## 📱 Telegram 봇 명령어
@@ -98,34 +97,32 @@
   - **우측 (30%)**:
     - **System Log**: 시스템 상태 및 에러 로그 (자동 줄바꿈 지원)
 
-### 2. 터미널 메뉴 (Terminal Menu)
-- **Trading Menu**: 초기화 완료 후 자동으로 진입합니다. (직접 실행 시에만 유효)
-  - `1`: 잔고 확인 (Account Info)
-  - `2`: 수동 주문 (Place Order)
-  - `3`: 미체결 내역 및 정정/취소 (Manage Orders)
-  - `r`: RAOEO 메뉴
-  - `p`: 포트폴리오 메뉴
-  - `q`: 시스템 종료 (Exit System)
+### 2. 터미널 메뉴 (비활성화됨)
+Docker 환경에서는 인터랙티브 터미널 메뉴가 사용되지 않습니다. 모든 제어는 **웹 대시보드** 또는 **텔레그램 봇**을 통해 수행하십시오.
 
 ## 📂 프로젝트 구조
 
 ```
 .
-├── main.py                 # 진입점 (자동 초기화 및 모듈 조정)
-├── web_server.py           # FastAPI 웹 서버 (WebSocket 스트리밍)
-├── display.py              # 알림 및 로그 처리 (터미널 출력 활성화)
-├── web/                    # 프론트엔드 리소스
-│   ├── index.html          # 대시보드 HTML
-│   └── static/             # CSS & JS
-├── menu/                   # 메뉴 하위 모듈
-│   ├── menu.py             # 트레이딩 메뉴 로직
-│   └── portfolio/          # 포트폴리오 관련 (VA 등)
-├── telegram_bot/           # 텔레그램 봇 핸들러
-│   ├── telegram_bot.py     # 봇 초기화 및 에러 핸들링
-│   ├── telegram_raoeo.py   # RAOEO 커맨드
-│   └── telegram_portfolio.py # 포트폴리오 커맨드
-├── scheduler/              # 스케줄러 (자동 실행 작업)
-└── data/                   # 데이터 처리
+├── src/                        # 소스 코드 디렉토리
+│   ├── main.py                 # 진입점 (자동 초기화 및 데몬 루프)
+│   ├── web_server.py           # FastAPI 웹 서버 (WebSocket 스트리밍)
+│   ├── display.py              # 알림 및 로그 처리
+│   ├── kis/                    # KIS API 연동 및 래퍼
+│   │   ├── wrapper.py          # 주문 관리 및 시세 조회 통합 래퍼
+│   │   ├── event_pipe.py       # IPC 통신 (로그 파이프)
+│   │   └── kis_api/            # 저수준 API 모듈
+│   ├── strategy/               # 매매 전략 (RAOEO, Value Averaging 등)
+│   ├── portfolio/              # 포트폴리오 관리
+│   ├── telegram_bot/           # 텔레그램 봇 핸들러
+│   ├── scheduler/              # 스케줄러 (자동 실행 작업)
+│   ├── data/                   # 데이터 처리
+│   ├── web/                    # 프론트엔드 리소스 (HTML/JS/CSS)
+│   └── utils.py                # 유틸리티 함수
+├── Dockerfile                  # 도커 빌드 설정
+├── docker-compose.yml          # 도커 컴포즈 설정
+├── requirements.txt            # 파이썬 의존성
+└── README.md                   # 프로젝트 문서
 ```
 
 ## ⚠️ 참고 사항

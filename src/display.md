@@ -9,7 +9,7 @@
 ### `add_alert(message, level="INFO")`
 시스템 알림을 발생시킵니다.
 1. **Log File**: `WebSocket_latest.log`에 즉시 기록합니다.
-2. **Web Viewer**: `kis.event_pipe`가 연결되어 있다면 `ALT` 메시지를 전송하여 웹 대시보드 System Log에 표시합니다.
+2. **Web Viewer**: `kis.event_pipe`가 연결되어 있다면 `SYS` 메시지(INFO 레벨)를 전송하여 웹 대시보드 System Log에 표시합니다.
 3. **Terminal Output**:
    - 모든 알림 메시지는 터미널에도 컬러 텍스트로 **항상 출력**됩니다.
    - Web Viewer 및 로그 파일에도 동일하게 기록됩니다.
