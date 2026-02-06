@@ -17,6 +17,16 @@ const maxLogEntries = 500;
 const maxQuotes = 20;
 const maxOrders = 20;
 
+// Fixed Ticker Order Configuration
+const tickerOrder = [
+    // Leverage ETFs
+    'SOXL', 'TQQQ', 'QLD',
+    // ETFs
+    'QQQM', 'VOO', 'TLT',
+    // Individual Stocks
+    'GOOGL', 'TSM', 'NVDA', 'AVGO', 'QCOM', 'BLK'
+]; // Tickers will layout in this order. Others will follow alphabetically.
+
 // Cancel modal state
 let pendingCancelOrderId = null;
 let pendingCancelTicker = null;
@@ -253,7 +263,28 @@ function updateQuotesPanel() {
     if (quotes.size === 0) {
         elements.quotesPanel.innerHTML = '<div class="empty-state">Waiting for quotes...</div>';
     } else {
-        const entries = Array.from(quotes.entries()).reverse();
+        const entries = Array.from(quotes.entries());
+
+        // Sort based on tickerOrder
+        entries.sort((a, b) => {
+            const tickerA = a[0];
+            const tickerB = b[0];
+            const indexA = tickerOrder.indexOf(tickerA);
+            const indexB = tickerOrder.indexOf(tickerB);
+
+            // Both in list: Sort by index
+            if (indexA !== -1 && indexB !== -1) {
+                return indexA - indexB;
+            }
+            // Only A in list: A comes first
+            if (indexA !== -1) return -1;
+            // Only B in list: B comes first
+            if (indexB !== -1) return 1;
+
+            // Neither in list: Sort alphabetically
+            return tickerA.localeCompare(tickerB);
+        });
+
         elements.quotesPanel.innerHTML = entries.map(([ticker, quote]) => {
             return `<div class="quote-entry">${formatQuoteColumns(quote.content, quote.time)}</div>`;
         }).join('');
