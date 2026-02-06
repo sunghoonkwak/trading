@@ -181,21 +181,37 @@ def calculate_order() -> dict:
     half_seed = seed / 2
 
     # State determination: spent < seed/2 -> accumulating, >= seed/2 -> saturated
+
+    # Common Sell Logic (Executed regardless of state)
+    if qty > 0 and avg_price > 0:
+        sell_price = round(avg_price * (1 + sell_profit), 2)
+
+        qty_lmt = (qty // 2) + (qty % 2)
+        qty_loc = qty // 2
+
+        if qty_lmt > 0:
+            result["orders"].append({
+                "type": "sell_limit",
+                "price": sell_price,
+                "qty": qty_lmt,
+                "order_type": "LIMIT",
+                "type_code": LIMIT_ORDER_TYPE,
+                "desc": f"Sell limit {int(sell_profit*100)}% profit"
+            })
+
+        if qty_loc > 0:
+            result["orders"].append({
+                "type": "sell_loc",
+                "price": sell_price,
+                "qty": qty_loc,
+                "order_type": "LOC",
+                "type_code": LOC_ORDER_TYPE,
+                "desc": f"Sell LOC {int(sell_profit*100)}% profit"
+            })
+
     if spent_amount < half_seed:
         # Accumulating state - still building position
         result["state"] = "accumulating"
-
-        # If holdings exist, add sell order
-        if qty > 0 and avg_price > 0:
-            sell_price = round(avg_price * (1 + sell_profit), 2)
-            result["orders"].append({
-                "type": "sell_all",
-                "price": sell_price,
-                "qty": qty,
-                "order_type": "LIMIT",
-                "type_code": LIMIT_ORDER_TYPE,
-                "desc": f"Sell all at {int(sell_profit*100)}% profit"
-            })
 
         # Determine buy price based on holdings
         if qty > 0 and avg_price > 0:
@@ -232,18 +248,6 @@ def calculate_order() -> dict:
             result["error"] = f"Invalid average price for {target}"
             return result
 
-        # Sell order: all holdings at avg + profit
-        sell_price = round(avg_price * (1 + sell_profit), 2)
-
-        result["orders"].append({
-            "type": "sell_all",
-            "price": sell_price,
-            "qty": qty,
-            "order_type": "LIMIT",
-            "type_code": LIMIT_ORDER_TYPE,
-            "desc": f"Sell all at {int(sell_profit*100)}% profit"
-        })
-
         # Calculate total quantity for today's budget based on avg_price
         # Logic: Total Qty = Budget / AvgPrice
         # Buy 1: (Total / 2) + Remainder
@@ -278,7 +282,6 @@ def calculate_order() -> dict:
                 "type_code": LOC_ORDER_TYPE,
                 "desc": "Buy at 100% of avg (lower cost)"
             })
-
 
     return result
 

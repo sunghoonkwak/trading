@@ -45,7 +45,7 @@
 1. `load_config()`를 통해서 설정 정보를 로드합니다.
 2. `fetch_overseas_balance()`를 통해서 현재 보유중인 target 주식의 평단가를 확인합니다.
 3. **상태 판단**: 소모금액(평단가 × 보유량)이 seed/2 미만이면 `accumulating`, 이상이면 `saturated`.
-4. **매도**: 보유분이 있으면 평단가 × (1 + sell_profit) 가격으로 전량 매도 주문.
+4. **매도**: 보유분이 있으면 평단가 × (1 + sell_profit) 가격으로 50% 지정가, 50% LOC 매도 주문.
 5. **매수**: 당일 사용가능한 자금 (seed/duration)을 상태에 따라 분배합니다.
 
 | State | Condition | Price | Ratio | Type (ID) | Description |
@@ -54,7 +54,8 @@
 | Accumulating | 소모금액 < seed/2, 보유량 > 0 | 평단가 × (sell_profit - 1%) | 100% | `buy_accumulating` | 자전거래 방지 LOC |
 | Saturated | 소모금액 ≥ seed/2 | 평단가 × (sell_profit - 1%) | 50% | `buy_guaranteed` | 자전거래 방지 LOC |
 | Saturated | 소모금액 ≥ seed/2 | 평단가 × 100% | 50% | `buy_lower` | 평단가 하락용 LOC |
-| (보유 시) | 보유량 > 0 | 평단가 × (1 + sell_profit) | 100% | `sell_all` | 전량 익절 매도 |
+| (보유 시) | 보유량 > 0 | 평단가 × (1 + sell_profit) | 50% | `sell_limit` | 지정가 익절 (홀수 포함) |
+| (보유 시) | 보유량 > 0 | 평단가 × (1 + sell_profit) | 50% | `sell_loc` | LOC 익절 |
 
 #### Returns
 - `dict`: 당일 매수/매도 주문 정보
