@@ -154,9 +154,18 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
             # Build price map
             y_prices = {h['ticker']: h.get('cur_price', 0) for h in yesterday_data.get('holdings', [])}
 
-            movers = []
+            # Deduplicate current holdings by ticker
+            # Use a dictionary to track unique tickers.
+            # If a ticker appears multiple times, we just take the first one found
+            # (assuming cur_price is same for same ticker).
+            unique_holdings = {}
             for h in curr_holdings:
                 ticker = h['ticker']
+                if ticker not in unique_holdings:
+                    unique_holdings[ticker] = h
+
+            movers = []
+            for ticker, h in unique_holdings.items():
                 cur_p = h.get('cur_price', 0)
                 old_p = y_prices.get(ticker, 0)
 
