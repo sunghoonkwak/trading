@@ -139,7 +139,7 @@
 ```
 
 - **Date Key**: 날짜(YYYY-MM-DD)를 키로 사용하여 하루의 기록을 그룹화합니다.
-- `executed`: 실제 주문 실행 여부. `true`면 "Already Executed"로 간주됩니다.
+- `executed`: 실제 주문 실행 여부. `true`면 "Already Executed"로 간주됩니다. (단, **Skip**은 실행으로 간주하지 않아 재평가 가능)
 - `day_count`: 해당 날짜의 진행 단계. **매수 여부(Skip 포함)와 관계없이 개장일마다 증가**합니다.
 
 ---

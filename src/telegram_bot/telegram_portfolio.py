@@ -621,18 +621,17 @@ def format_va_report(data: dict) -> str:
 
     results = data.get("results", [])
     if not results:
-        return "📈 <b>Value Averaging</b>\n\nNo strategies configured."
+        return "⚠️ <b>Value Averaging Error:</b> No results found (Check configuration)."
 
     lines = [f"📈 <b>Value Averaging</b> ({data.get('date', 'N/A')})", ""]
 
-    has_action = False
     for r in results:
         ticker = r.get("target_ticker", "Unknown")
         buy_amt = r.get("daily_target_amount", 0)
 
         if r.get("error"):
             lines.append(f"⚠️ <b>{ticker}</b>: {r['error']}")
-            has_action = True
+
             continue
 
         day = r.get("day_count", 0)
@@ -646,9 +645,6 @@ def format_va_report(data: dict) -> str:
              executed_orders = r.get("executed_orders", [])
              if executed_orders:
                  lines.append(f"✅ <b>{ticker}</b> {info_str}")
-                 # lines.append(f"   Target Buy: ${buy_amt:,.2f}") # Logic removed target: in header, maybe keep or drop? User snippet didn't show it but implied 'target value'.
-                 # User wanted: "Target Amount" usually refers to the 'buy target amount' in previous context, but here "Target Value" (accumulated) is requested.
-                 # Let's check user request: "target밸류가 얼마 지금 밸류가 얼마 타겟대비 몇프로인지" -> Target Value, Current Value, % Diff.
 
                  for o in executed_orders:
                      qty = o.get('qty')
@@ -658,12 +654,11 @@ def format_va_report(data: dict) -> str:
                      side = "Sell" if "sell" in o_type.lower() else "Buy"
                      lines.append(f"   └ {side} {qty} {suffix} (${price:,.2f})")
              else:
-                 # Skipped (No order was needed)
-                 cur_p = r.get("current_price", 0)
-                 lines.append(f"⏭️ <b>{ticker}</b> {info_str}")
-                 lines.append(f"   └ Skipped (Target Buy: ${buy_amt:,.2f})")
+                 # Should not happen with new logic (Skip is not 'executed')
+                 # But if it does, it means history has 'executed=True' but no orders.
+                 lines.append(f"⚠️ <b>{ticker}</b> {info_str}")
+                 lines.append(f"   └ Error: Marked executed but no orders found (Unexpected Skip)")
 
-             has_action = True
         else:
              orders = r.get("orders", [])
              if orders:
@@ -678,14 +673,13 @@ def format_va_report(data: dict) -> str:
                       o_type = o.get('type', 'buy')
                       side = "Sell" if "sell" in o_type.lower() else "Buy"
                       lines.append(f"   └ {side} {qty} {suffix} (${price:,.2f})")
-                  has_action = True
+
              elif r.get("current_price", 0) > 0:
-                  pass
+                  # Hold Case (Within threshold)
+                  lines.append(f"⏸️ <b>{ticker}</b> {info_str}")
+                  lines.append(f"   └ Hold (Diff inside ±15%)")
              else:
                   lines.append(f"⚠️ <b>{ticker}</b>: Price unavailable")
-
-    if not has_action:
-        lines.append("<i>No actions needed today.</i>")
 
     return "\n".join(lines)
 

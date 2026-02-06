@@ -49,6 +49,8 @@ Value Averaging 진행 중 사용자의 버튼 입력을 처리합니다:
 모든 종목 처리가 끝나면 **최종 요약(Summary)**를 표시합니다:
 > ✅ QLD: Order Placed (Target: $150.00)
 >    └ Buy 2 shares ($76.94)
+> ⏸️ TQQQ (Day 25 | Target $2,109 | Cur $1,943 | -7.8%)
+>    └ Hold (Diff inside ±15%)
 
 ### va_timeout_handler
 60초 타임아웃 시 세션을 종료하고 메시지를 정리합니다.

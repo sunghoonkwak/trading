@@ -219,7 +219,8 @@ def get_daily_report():
 
             if executed_today:
                 for res in results_list:
-                    if res.get('executed') and res.get('type') != 'skip':
+                    # Check if any ACTUAL order was placed (type is not skip)
+                    if res.get('executed') and res.get('type') not in ['skip', None]:
                         executed_orders.append({
                             "qty": res.get('qty', 0),
                             "price": res.get('price', 0),
@@ -228,6 +229,11 @@ def get_daily_report():
                             "time": res.get('time', ''),
                             "message": res.get('message', '')
                         })
+
+            # Recalculate 'executed_today' based on whether an ACUTAL order exists
+            # intended behavior: if previous attempts were skips, executed_today stays False
+            # so we can re-evaluate.
+            executed_today = bool(executed_orders)
 
         already_executed = executed_today
 
