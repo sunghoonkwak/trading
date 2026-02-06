@@ -131,7 +131,7 @@
                 const response = await fetch(`/api/trigger/${type}`, { method: 'POST' });
                 const result = await response.json();
                 if (result.success) {
-                    alert(`${type} report triggered successfully!`);
+                    // alert(`${type} report triggered successfully!`);
                 } else {
                     alert(`Error: ${result.error}`);
                 }
