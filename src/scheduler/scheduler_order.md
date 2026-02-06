@@ -8,8 +8,8 @@
 매일 저녁 실행되어 현재 설정된 트레이딩 전략(RAOEO, Value Averaging)의 상태를 점검하고 리포트를 생성합니다.
 RAOEO와 Value Averaging 각각의 리포트를 생성한 뒤, 하나의 통합 메시지로 합쳐 텔레그램으로 전송합니다.
 
-- **RAOEO Report**: `menu.raoeo.raoeo.get_daily_report()`를 호출하여 전략 상태를 가져오고 포맷팅합니다.
-- **Value Averaging Output**: `menu.portfolio.value_averaging.get_daily_report()`를 호출하여 주문 필요 여부를 계산합니다. 주문이 필요 없는 경우 `type='skip'` 결과를 생성하여 리포트에 포함시킵니다.
+- **RAOEO Report**: `strategy.raoeo.get_daily_report()`를 호출하여 전략 상태를 가져오고 포맷팅합니다.
+- **Value Averaging Output**: `strategy.value_averaging.get_daily_report()`를 호출하여 주문 필요 여부를 계산합니다. 매수/매도 주문이 있으면 실행하고, 없으면 `type='skip'` 결과를 생성하여 리포트에 포함시킵니다.
 
 ### Helpers (Imported)
 
@@ -18,5 +18,5 @@ RAOEO와 Value Averaging 각각의 리포트를 생성한 뒤, 하나의 통합 
 
 ## Dependencies
 - `telegram_bot.telegram_utils`: 메시지 전송 (`send_notification`)
-- `menu.raoeo`: RAOEO 로직
-- `menu.portfolio`: Value Averaging 로직
+- `strategy.raoeo`: RAOEO 로직
+- `strategy.value_averaging`: Value Averaging 로직

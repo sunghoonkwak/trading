@@ -603,13 +603,13 @@ def format_va_single_ticker(result: dict, idx: int, total: int) -> str:
             lines.append("⚠️ <i>Price unavailable</i>")
         elif orders:
             for o in orders:
-                lines.append(f"📋 {o['qty']} qty @ ${o['price']:.2f} (LOC)")
+                o_type = o.get('order_type', 'LOC')
+                lines.append(f"📋 {o['qty']} qty @ ${o['price']:.2f} ({o_type})")
             lines.append("")
             lines.append("<i>Execute order?</i>")
         else:
             lines.append("✅ <i>No order needed</i>")
             lines.append("")
-            lines.append("<i>Buy 1 share instead?</i>")
 
     return "\n".join(lines)
 
@@ -635,31 +635,49 @@ def format_va_report(data: dict) -> str:
             has_action = True
             continue
 
+        day = r.get("day_count", 0)
+        tgt_val = r.get("target_value_accumulated", 0)
+        cur_val = r.get("current_value", 0)
+        diff_pct = ((cur_val - tgt_val) / tgt_val * 100) if tgt_val > 0 else 0.0
+
+        info_str = f"(Day {day} | Target ${tgt_val:,.0f} | Cur ${cur_val:,.0f} | {diff_pct:+.1f}%)"
+
         if r.get("already_executed"):
              executed_orders = r.get("executed_orders", [])
              if executed_orders:
-                 lines.append(f"✅ <b>{ticker}</b>: Executed (Target: ${buy_amt:,.2f})")
+                 lines.append(f"✅ <b>{ticker}</b> {info_str}")
+                 # lines.append(f"   Target Buy: ${buy_amt:,.2f}") # Logic removed target: in header, maybe keep or drop? User snippet didn't show it but implied 'target value'.
+                 # User wanted: "Target Amount" usually refers to the 'buy target amount' in previous context, but here "Target Value" (accumulated) is requested.
+                 # Let's check user request: "target밸류가 얼마 지금 밸류가 얼마 타겟대비 몇프로인지" -> Target Value, Current Value, % Diff.
+
                  for o in executed_orders:
                      qty = o.get('qty')
                      price = o.get('price')
                      suffix = "share" if qty == 1 else "shares"
-                     lines.append(f"   └ Buy {qty} {suffix} (${price:,.2f})")
+                     o_type = o.get('type', 'buy')
+                     side = "Sell" if "sell" in o_type.lower() else "Buy"
+                     lines.append(f"   └ {side} {qty} {suffix} (${price:,.2f})")
              else:
                  # Skipped (No order was needed)
                  cur_p = r.get("current_price", 0)
-                 lines.append(f"⏭️ <b>{ticker}</b>: Skipped (Target: ${buy_amt:,.2f})")
-                 lines.append(f"   └ Current price ${cur_p:,.2f}")
+                 lines.append(f"⏭️ <b>{ticker}</b> {info_str}")
+                 lines.append(f"   └ Skipped (Target Buy: ${buy_amt:,.2f})")
 
              has_action = True
         else:
              orders = r.get("orders", [])
              if orders:
-                  lines.append(f"🔹 <b>{ticker}</b>: Buy ${buy_amt:,.2f}")
+                  target_txt = "Sell" if buy_amt < 0 else "Buy"
+                  abs_amt = abs(buy_amt)
+                  lines.append(f"🔹 <b>{ticker}</b> {info_str}")
+                  lines.append(f"   └ {target_txt} ${abs_amt:,.2f}")
                   for o in orders:
                       qty = o['qty']
                       price = o['price']
                       suffix = "share" if qty == 1 else "shares"
-                      lines.append(f"   └ Buy {qty} {suffix} (${price:,.2f})")
+                      o_type = o.get('type', 'buy')
+                      side = "Sell" if "sell" in o_type.lower() else "Buy"
+                      lines.append(f"   └ {side} {qty} {suffix} (${price:,.2f})")
                   has_action = True
              elif r.get("current_price", 0) > 0:
                   pass
@@ -692,13 +710,6 @@ def build_va_single_keyboard(has_order: bool, no_order_needed: bool, is_holiday:
             [
                 InlineKeyboardButton("✅ Yes", callback_data="va_yes"),
                 InlineKeyboardButton("❌ No", callback_data="va_no")
-            ]
-        ]
-    elif no_order_needed:
-        keyboard = [
-            [
-                InlineKeyboardButton("📦 1주 구매", callback_data="va_buy1"),
-                InlineKeyboardButton("❌ Skip", callback_data="va_no")
             ]
         ]
     else:
@@ -738,8 +749,8 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
         exec_orders = r.get("executed_orders", [])
         real_orders = [o for o in exec_orders if o.get('type') != 'skip']
 
-        # Include if not executed OR (executed but no real buy orders)
-        if not already_exec or not real_orders:
+        # Include only if there are NEW orders calculated and not already executed
+        if r.get('orders') and not already_exec:
             pending_results.append(r)
 
     if not pending_results:
@@ -856,10 +867,10 @@ async def show_va_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 if type_str == 'skip':
                     lines.append(f"   └ <i>Skipped</i>")
-                elif type_str == 'buy_single_share':
-                    lines.append(f"   └ Buy 1 share (${price})")
                 elif 'buy' in type_str:
                         lines.append(f"   └ Buy {qty} shares (${price})")
+                elif 'sell' in type_str:
+                        lines.append(f"   └ Sell {qty} shares (${price})")
                 else:
                         lines.append(f"   └ {message}")
 
@@ -890,7 +901,8 @@ async def show_va_summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if o_type == 'buy_single_share':
                          lines.append(f"   └ Buy 1 share (${price})")
                     else:
-                         lines.append(f"   └ Buy {qty} shares (${price})")
+                         o_side = "Sell" if "sell" in o_type.lower() else "Buy"
+                         lines.append(f"   └ {o_side} {qty} shares (${price})")
             else:
                 lines.append(f"⏭️ <b>{ticker}</b>: Skipped (Target: ${r.get('daily_target', 0):,.2f})")
                 lines.append(f"   └ Current price ${r.get('current_price', 0):,.2f}")
@@ -976,35 +988,6 @@ async def handle_va_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 None, value_averaging.save_ticker_result, ticker, day_count, result, False
             )
             exec_results.append(result)
-
-    elif callback_data == "va_buy1":
-        # Buy 1 share
-        # Create a LOC order for 1 share at 105% price
-        loc_price = round(price * 1.05, 2)
-        daily_target = current.get('daily_target_amount', 0)
-
-        order = {
-            "type": "buy_single_share",
-            "qty": 1,
-            "price": loc_price,
-            "order_type": "LOC",
-            "desc": "Single share purchase",
-            "exchange": exchange,
-            "daily_target": daily_target
-        }
-
-        result = await loop.run_in_executor(
-            None, value_averaging.execute_single_order, ticker, order
-        )
-        # Mark executed if success
-        executed = result.get('success', False)
-        result['executed'] = executed
-
-        # Save
-        await loop.run_in_executor(
-            None, value_averaging.save_ticker_result, ticker, day_count, result, executed
-        )
-        exec_results.append(result)
 
     elif callback_data == "va_no":
         # Skip - record in history

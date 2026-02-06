@@ -231,28 +231,58 @@ def get_daily_report():
 
         already_executed = executed_today
 
-        # Calculate targets
+        # Calculate targets and thresholds
         target_value_accumulated = day_count * daily_budget
         current_value = current_value_usd if is_us_stock else current_value_krw
+
+        # 15% Thresholds
+        buy_threshold = target_value_accumulated * 0.85
+        sell_threshold = target_value_accumulated * 1.15
+
         daily_target_amount = target_value_accumulated - current_value
 
         # Determine orders (skip if already executed today)
         orders = []
-        if not already_executed and daily_target_amount > 0 and current_price > 0:
-            buy_qty = int(daily_target_amount / current_price)
-            if buy_qty > 0:
-                order = {
-                    "type": "buy_value_averaging",
-                    "ticker": target_ticker,
-                    "exchange": exchange,
-                    "qty": buy_qty,
-                    "price": round(current_price * 1.05, 2),
-                    "order_type": "LOC",
-                    "desc": f"Value Averaging Day {day_count}",
-                    "daily_target": daily_target_amount
-                }
-                orders.append(order)
-                total_orders.append(order)
+        if not already_executed and current_price > 0:
+            # Case 1: Buy Condition (Current Value < 90% of Target)
+            if current_value < buy_threshold:
+                # Buy amount = gap to target (fill the hole)
+                buy_amount = daily_target_amount
+                buy_qty = int(buy_amount / current_price)
+
+                if buy_qty > 0:
+                    order = {
+                        "type": "buy_value_averaging",
+                        "ticker": target_ticker,
+                        "exchange": exchange,
+                        "qty": buy_qty,
+                        "price": round(current_price * 1.00, 2), # 100% LOC
+                        "order_type": "LOC",
+                        "desc": f"Value Averaging Day {day_count}",
+                        "daily_target": daily_target_amount
+                    }
+                    orders.append(order)
+                    total_orders.append(order)
+
+            # Case 2: Sell Condition (Current Value > 110% of Target)
+            elif current_value > sell_threshold:
+                # Sell amount = Excess amount
+                sell_amount = current_value - target_value_accumulated
+                sell_qty = int(sell_amount / current_price)
+
+                if sell_qty > 0:
+                     order = {
+                        "type": "sell_value_averaging",
+                        "ticker": target_ticker,
+                        "exchange": exchange,
+                        "qty": sell_qty,
+                        "price": 0, # Market price for sell usually, or we can use 0 for market
+                        "order_type": "Market", # User requested Market sell
+                        "desc": f"Value Averaging Sell Day {day_count}",
+                        "daily_target": -sell_amount # Negative for sell logic indication if needed
+                    }
+                     orders.append(order)
+                     total_orders.append(order)
 
         results.append({
             "target_ticker": target_ticker,
@@ -298,6 +328,16 @@ def execute_single_order(ticker: str, order: dict) -> dict:
     cano = ka.getTREnv().my_acct
     acnt_prdt_cd = ka.getTREnv().my_prod
 
+    ord_dv = "buy"
+    if "sell" in order.get('type', '').lower():
+        ord_dv = "sell"
+
+    # For sell, we might need a different order division code or handling
+    # order_type mapping: "LOC" -> "34", "Market" -> "00" (usually)
+    ord_dvsn = "34" # LOC default
+    if order.get('order_type') == "Market":
+        ord_dvsn = "00"
+
     res, err_msg = order_overseas_stock(
         cano=cano,
         acnt_prdt_cd=acnt_prdt_cd,
@@ -305,11 +345,11 @@ def execute_single_order(ticker: str, order: dict) -> dict:
         pdno=ticker,
         ord_qty=str(order['qty']),
         ovrs_ord_unpr=str(order['price']),
-        ord_dv="buy",
+        ord_dv=ord_dv,
         ctac_tlno="",
         mgco_aptm_odno="",
         ord_svr_dvsn_cd="0",
-        ord_dvsn="34",  # LOC
+        ord_dvsn=ord_dvsn,
         env_dv="demo" if ka.isPaperTrading() else "real"
     )
 
