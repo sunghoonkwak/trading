@@ -6,8 +6,9 @@
 
 - `telegram_bot.py`: 봇 초기화, 자격 증명 로드 (`Core`)
 - `telegram_utils.py`: 공통 메시징 래퍼 및 유틸리티 (`Shared Utils`)
+- `telegram_portfolio.py`: 포트폴리오 조회 및 관리 커맨드 (`Portfolio`)
 - `telegram_raoeo.py`: RAOEO 전략 전용 명령어 (`Strategy`)
-- `telegram_portfolio.py`: 포트폴리오 조회 및 관리 커맨드 (`Strategy`)
+- `telegram_va.py`: Value Averaging 전략 전용 명령어 (`Strategy`)
 
 ## Dependencies (의존성)
 

@@ -14,7 +14,7 @@ RAOEO와 Value Averaging 각각의 리포트를 생성한 뒤, 하나의 통합 
 ### Helpers (Imported)
 
 - **format_raoeo_report(report)**: `telegram_bot.telegram_raoeo`에서 가져옴. RAOEO 리포트를 텔레그램 메시지 포맷으로 변환합니다.
-- **format_va_report(res)**: `telegram_bot.telegram_portfolio`에서 가져옴. Value Averaging 결과를 텔레그램 메시지 포맷으로 변환합니다.
+- **format_va_report(res)**: `telegram_bot.telegram_va`에서 가져옴. Value Averaging 결과를 텔레그램 메시지 포맷으로 변환합니다.
 
 ## Dependencies
 - `telegram_bot.telegram_utils`: 메시지 전송 (`send_notification`)

@@ -18,6 +18,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 from .telegram_raoeo import register_raoeo_handlers, get_raoeo_commands_desc
 from .telegram_portfolio import register_portfolio_handlers, get_portfolio_commands_desc
+from .telegram_va import register_va_handlers, get_va_commands_desc
 from .telegram_memo import register_memo_handler, get_memo_commands_desc
 from .telegram_utils import wrap_send, set_telegram_bot, wrap_reply
 import display
@@ -127,8 +128,9 @@ def initialize_telegram():
             set_telegram_bot(_app.bot, _chat_id)
 
             # Register strategy handlers
-            register_raoeo_handlers(_app)
             register_portfolio_handlers(_app)
+            register_raoeo_handlers(_app)
+            register_va_handlers(_app)
             register_memo_handler(_app)  # Saves arbitrary text messages
 
             # Register Global Commands
@@ -147,16 +149,18 @@ def initialize_telegram():
             _app.add_error_handler(error_handler)
 
             # Send initialization message
-            raoeo_desc = get_raoeo_commands_desc()
-            port_desc = get_portfolio_commands_desc()
-            memo_desc = get_memo_commands_desc()
+            raoeo_desc = get_raoeo_commands_desc().strip()
+            port_desc = get_portfolio_commands_desc().strip()
+            va_desc = get_va_commands_desc().strip()
+            memo_desc = get_memo_commands_desc().strip()
             init_text = (
                 "🤖 <b>Trading Bot Initialized</b>\n\n"
                 "Commands:\n"
+                f"{port_desc}\n\n"
                 f"{raoeo_desc}\n"
-                f"{port_desc}\n"
-                f"{memo_desc}\n"
-                "/daily_report [date] - View past reports"
+                f"{va_desc}\n\n"
+                "/daily_report [date] - View past reports\n"
+                f"{memo_desc}"
             )
 
             # Initialize and start application
