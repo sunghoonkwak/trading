@@ -93,27 +93,39 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
     # but here we work with the raw saved json)
 
     def get_total_equity(data: dict) -> float:
-        """Calculate Total Equity in KRW (approx)"""
-        # This is an approximation. Ideally we save 'total_value' in the json.
-        # But get_portfolio returns structured data.
-        # Let's check if metadata has it? No.
-        # We will calculate it manually.
+        """Calculate Total Equity in KRW"""
+        # 1. Try to use pre-calculated stats (Most reliable)
+        stats = data.get('stats', {})
+        # Check if keys exist (they might be 0 but exist)
+        if 'total_stock_krw' in stats and 'total_cash_krw' in stats:
+            return stats.get('total_stock_krw', 0) + stats.get('total_cash_krw', 0)
 
+        # 2. Fallback: Calculate manually
         total_krw = 0.0
-        exchange_rate = data.get('metadata', {}).get('exchange_rate', 1400) # Default fallback
-        if not exchange_rate: exchange_rate = 1400
+        # Try metadata then top-level exchange_rate
+        exchange_rate = data.get('metadata', {}).get('exchange_rate')
+        if not exchange_rate:
+            exchange_rate = data.get('exchange_rate', 1400)
+
+        merged_data = data.get('merged_data', {})
 
         for h in data.get('holdings', []):
-             # check currency from asset_info if possible, or infer
-             # Actually get_portfolio holdings have 'cur_price' and 'qty'
-             # We need to know if it's USD or KRW.
-             # asset_info map has this.
              ticker = h.get('ticker')
-             asset_info = data.get('asset_info', {}).get(ticker, {})
-             market = asset_info.get('market', 'US')
+
+             # Determine currency
+             currency = 'USD' # Default
+             if ticker in merged_data:
+                 currency = merged_data[ticker].get('currency', 'USD')
+             else:
+                 # Helper logic if merged_data missing
+                 asset_info = data.get('asset_info', {}).get(ticker, {})
+                 market = asset_info.get('market', 'US')
+                 # If explicit KR market or 6-digit ticker starting with 0-9 (heuristic)
+                 if market == 'KR' or (len(ticker) == 6 and ticker.isdigit()):
+                     currency = 'KRW'
 
              val = h.get('qty', 0) * h.get('cur_price', 0)
-             if market == 'US':
+             if currency == 'USD':
                  total_krw += val * exchange_rate
              else:
                  total_krw += val
@@ -126,7 +138,29 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
 
         return total_krw
 
-    current_total = get_total_equity(current_data)
+    def get_total_equity_usd(data: dict) -> float:
+        """Calculate Total Equity in USD"""
+        # 1. Try pre-calculated total_value_usd
+        if data.get('total_value_usd'):
+            return float(data['total_value_usd'])
+
+        # 2. Try stats
+        stats = data.get('stats', {})
+        if 'total_stock_usd' in stats and 'total_cash_usd' in stats:
+            return stats.get('total_stock_usd', 0) + stats.get('total_cash_usd', 0)
+
+        # 3. Fallback: Derived from KRW / Exchange Rate
+        total_krw = get_total_equity(data)
+        exchange_rate = data.get('metadata', {}).get('exchange_rate')
+        if not exchange_rate:
+            exchange_rate = data.get('exchange_rate', 1400)
+
+        if exchange_rate > 0:
+            return total_krw / exchange_rate
+        return 0.0
+
+    current_total_krw = get_total_equity(current_data)
+    current_total_usd = get_total_equity_usd(current_data)
 
     for label, idx in targets:
         if abs(idx) <= len(past_files):
@@ -135,12 +169,23 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
                 with open(target_file, 'r', encoding='utf-8') as f:
                     past_data = json.load(f)
 
-                past_total = get_total_equity(past_data)
-                diff_val, diff_pct = calculate_diff(current_total, past_total)
+                past_total_krw = get_total_equity(past_data)
+                past_total_usd = get_total_equity_usd(past_data)
 
-                emoji = "🔺" if diff_pct > 0 else "🔻" if diff_pct < 0 else "➖"
+                # Calculate KRW stats
+                diff_krw, pct_krw = calculate_diff(current_total_krw, past_total_krw)
+                emoji_krw = "🔺" if pct_krw > 0 else "🔻" if pct_krw < 0 else "➖"
 
-                comparison_lines.append(f"{emoji} <b>{label}:</b> {diff_pct:+.2f}% ({diff_val/10000:,.0f}만)")
+                # Calculate USD stats
+                diff_usd, pct_usd = calculate_diff(current_total_usd, past_total_usd)
+                emoji_usd = "🔺" if pct_usd > 0 else "🔻" if pct_usd < 0 else "➖"
+
+                # Format:
+                # 1 Day: 🔺 758,571,357 KRW (+897만, 1.20%) 🔺 $ 518,114 (+500, 0.10%)
+                line = (f"{label}: {emoji_krw} {current_total_krw:,.0f} KRW ({diff_krw/10000:+,.0f}만, {pct_krw:+.2f}%) "
+                        f"{emoji_usd} $ {current_total_usd:,.0f} ({diff_usd:+,.0f}, {pct_usd:+.2f}%)")
+
+                comparison_lines.append(line)
             except Exception as e:
                 logging.warning(f"Error comparing {label}: {e}")
 

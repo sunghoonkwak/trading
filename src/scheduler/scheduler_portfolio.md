@@ -12,8 +12,15 @@
 
 ### get_comparison_stats
 현재 포트폴리오 가치와 과거 기록을 비교하여 성과 분석 텍스트를 생성합니다.
+- **KRW & USD**: 원화(KRW)와 달러(USD) 기준의 총 자산 변동을 모두 계산하여 제공합니다.
+    - USD 계산 우선순위: `total_value_usd` (저장된 값) > `stats` 필드 합계 > 강제 환산 (KRW/환율)
 - **비교 기간**: 1일 전, 1주일 전(5일), 1달 전(20일)
 - **Top Movers**: 전일 대비 변동폭이 큰 종목 Top 3를 추출하여 보여줍니다. (동일 종목 복수 계좌 보유 시 통합하여 계산)
+
+### get_total_equity / get_total_equity_usd
+총 자산 가치를 계산하는 내부 헬퍼 함수들입니다.
+- **Priority**: `merged_data`의 `stats` 필드(stock + cash)를 가장 우선적으로 사용하여 정확도를 높입니다.
+- **Fallback**: `stats` 데이터 부재 시, 보유 종목의 현재가와 수량을 기반으로 직접 계산합니다. (환율 적용 주의)
 
 ## File Storage
 리포트 및 히스토리 파일은 다음 경로에 저장됩니다:
