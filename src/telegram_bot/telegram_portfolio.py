@@ -75,8 +75,11 @@ def format_weight_diffs(diffs: list = None, total_usd: float = 0) -> str:
     buy_lines = []
 
     for d in diffs:
-        # Show top diffs or those > 0.5%
-        if d['abs_diff'] < 0.005:
+        # Show top diffs if absolute diff >= 0.5% OR relative diff >= 30%
+        is_significant_abs = d['abs_diff'] >= 0.005
+        is_significant_rel = (d['tgt_w'] > 0 and d['abs_diff'] / d['tgt_w'] >= 0.3)
+
+        if not (is_significant_abs or is_significant_rel):
             continue
 
         ticker = d['ticker']
@@ -102,9 +105,9 @@ def format_weight_diffs(diffs: list = None, total_usd: float = 0) -> str:
         lines.append("")
 
     if not sell_lines and not buy_lines:
-        lines.append("No significant differences found (>0.5%).")
+        lines.append("No significant differences found (>0.5% abs or >30% rel).")
     else:
-        lines.append("<i>Significant changes (>0.5%) only</i>")
+        lines.append("<i>Significant changes (>0.5% abs or >30% rel) only</i>")
 
     return "\n".join(lines)
 
