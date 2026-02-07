@@ -180,12 +180,12 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
                 diff_usd, pct_usd = calculate_diff(current_total_usd, past_total_usd)
                 emoji_usd = "🔺" if pct_usd > 0 else "🔻" if pct_usd < 0 else "➖"
 
-                # Format Option: Right-Aligned with K-Unit
+                # Format Option: Right-Aligned with K-Unit (using code tag for monospace text without copy block)
                 # <b>📅 1 Day</b>
-                # <pre>
+                # <code>
                 # 🇰🇷  123,456,789 (🔺   +1,234 k,  +1.20%)
                 # 🇺🇸       12,345 (🔺      +123,  +1.00%)
-                # </pre>
+                # </code>
 
                 # KRW Diff: 1k unit (space added as requested: "+8,970 k")
                 str_krw_total = f"{current_total_krw:,.0f}"
@@ -204,7 +204,7 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
 
                 line_header = f"<b>📅 {label}</b>"
 
-                comparison_lines.append(f"{line_header}\n<pre>\n{line_krw}\n{line_usd}\n</pre>")
+                comparison_lines.append(f"{line_header}\n<code>{line_krw}\n{line_usd}</code>")
             except Exception as e:
                 logging.warning(f"Error comparing {label}: {e}")
 
