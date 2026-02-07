@@ -99,6 +99,7 @@ def get_daily_report():
     """
     from kis.wrapper import fetch_price
     from data.data_service import get_portfolio_data
+    from utils import is_market_holiday
 
     # Fetch portfolio data internally
     portfolio_data = get_portfolio_data()
@@ -311,8 +312,20 @@ def get_daily_report():
         config['strategies'] = strategies
         save_config(config)
 
+    # Determine status
+    status = "calculated"
+    if is_market_holiday("NYSE"):
+        status = "market_holiday"
+        # Force clear orders on holiday
+        for r in results:
+            r['orders'] = []
+        total_orders = []
+
+    if not results and not total_orders and not error_msg:
+         status = "error" if error_msg else "init" # Should not happen if strategies exist
+
     return {
-        "status": "calculated",
+        "status": status,
         "date": today_et,
         "results": results,
         "total_orders": total_orders,

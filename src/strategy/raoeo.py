@@ -9,7 +9,7 @@ import os
 import sys
 import json
 import logging
-from utils import getch, getch_str
+from utils import getch, getch_str, is_market_holiday
 from datetime import datetime
 from typing import Optional
 import pytz
@@ -453,7 +453,8 @@ def get_daily_report() -> dict:
             - error: Error message if any
     """
     report = {
-        "executed_today": None,
+        "status": "init",
+        "date": datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d"),
         "current_result": None,
         "cur_price": 0.0,
         "config": None,
@@ -465,6 +466,8 @@ def get_daily_report() -> dict:
     }
     tz_us = pytz.timezone('US/Eastern')
     today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
+
+    today_entry = None
 
     # 1. Check history first - if some failed, we prioritize retrying those EXACT orders
     if os.path.exists(HISTORY_FILE):
@@ -479,6 +482,7 @@ def get_daily_report() -> dict:
                     if today_entry:
                         report["config"] = today_entry.get('config')
                         report["holdings"] = today_entry.get('holdings')
+                        report["status"] = "executed" # Default to executed if found in history, refined below
 
                         # Categorize orders from history
                         for o in today_entry.get('orders', []):
@@ -489,9 +493,10 @@ def get_daily_report() -> dict:
 
                         if not report["failed_orders"]:
                             # Everything succeeded
-                            report["executed_today"] = today_entry
+                            report["status"] = "executed"
                         else:
                             # Some failed! Populate current_result with THESE failed orders for retry
+                            report["status"] = "calculated" # Retry needed
                             report["current_result"] = {
                                 "date": today_str,
                                 "config": today_entry['config'],
@@ -503,16 +508,46 @@ def get_daily_report() -> dict:
         except Exception as e:
             add_alert(f"Error reading history for report: {e}", "ERROR")
 
-    # 2. No history for today yet - calculate fresh orders
-    if not report["executed_today"] and not report["current_result"]:
+    # 2. Market Holiday Check (if not already executed)
+    if not today_entry:
+         if is_market_holiday("NYSE"):
+            report["status"] = "market_holiday"
+            # Calculate to show info, but clear orders
+            current_result = calculate_order()
+            current_result["orders"] = [] # Force empty orders
+
+            if current_result.get('error'):
+                 report["error"] = current_result['error']
+
+            report["current_result"] = current_result
+            report["config"] = current_result.get('config')
+            report["holdings"] = current_result.get('holdings')
+
+            # Fetch price for display
+            config_target = report["config"].get("target")
+            if config_target:
+                 from kis.wrapper import fetch_price
+                 cur_price = fetch_price(config_target)
+                 if cur_price <= 0:
+                      cur_price = get_current_price(config_target, report["config"].get('exchange', 'NASD'))
+                 report["cur_price"] = cur_price
+
+            return report
+
+    # 3. No history for today yet - calculate fresh orders
+    if not today_entry and not report["current_result"]:
         current_result = calculate_order()
         if current_result.get('error'):
             report["error"] = current_result['error']
+            report["status"] = "error"
+        else:
+            report["status"] = "calculated"
+
         report["current_result"] = current_result
         report["config"] = current_result.get('config')
         report["holdings"] = current_result.get('holdings')
 
-    # 3. Calculate pending orders from current_result
+    # 4. Calculate pending orders from current_result
     # Note: failed_orders should be retried, so they go into pending_orders
     # Only exclude orders that have already succeeded
     if report.get("current_result"):
@@ -521,7 +556,7 @@ def get_daily_report() -> dict:
             if o.get('type') not in success_types:
                 report["pending_orders"].append(o)
 
-    # 4. Fetch current price: KIS API -> WebSocket -> holdings
+    # 5. Fetch current price: KIS API -> WebSocket -> holdings
     config = report.get("config")
     holdings = report.get("holdings") or {}
     if config:

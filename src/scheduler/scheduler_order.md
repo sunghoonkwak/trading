@@ -8,8 +8,8 @@
 매일 저녁 실행되어 현재 설정된 트레이딩 전략(RAOEO, Value Averaging)의 상태를 점검하고 리포트를 생성합니다.
 RAOEO와 Value Averaging 각각의 리포트를 생성한 뒤, 하나의 통합 메시지로 합쳐 텔레그램으로 전송합니다.
 
-- **RAOEO Report**: `strategy.raoeo.get_daily_report()`를 호출하여 전략 상태를 가져오고 포맷팅합니다.
-- **Value Averaging Output**: `strategy.value_averaging.get_daily_report()`를 호출하여 주문 필요 여부를 계산합니다. 매수/매도 주문이 있으면 실행하고, 없으면 `type='skip'` 결과를 생성하여 리포트에 포함시킵니다.
+- **RAOEO Report**: `strategy.raoeo.get_daily_report()`를 호출하여 전략 상태를 가져오고 포맷팅합니다. 리포트 상태가 `market_holiday`인 경우 주문 실행을 건너뜁니다.
+- **Value Averaging Output**: `strategy.value_averaging.get_daily_report()`를 호출하여 주문 필요 여부를 계산합니다. 리포트 상태가 `market_holiday`가 아닌 경우에만 매수/매도 주문을 실행하거나 스킵 결과를 기록합니다. 휴장일에는 실행 로직을 건너뜁니다.
 
 ### Helpers (Imported)
 

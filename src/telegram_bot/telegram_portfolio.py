@@ -23,7 +23,6 @@ from data.data_service import get_weight_diffs
 from data.data_service import get_portfolio_data
 from kis.wrapper import fetch_open_orders
 import trading_config
-from utils import is_market_holiday
 
 # Conversation states
 SELECT_TICKER = 0
@@ -293,7 +292,7 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
             tgt = targets.get(ticker, 0)
             ticker_weights.append((ticker, tgt))
         ticker_weights.sort(key=lambda x: x[1], reverse=True)
-        button_tickers = [t[0] for t in ticker_weights[:8]]
+        button_tickers = [t[0] for t_w in ticker_weights[:8]]
 
     # Build keyboard (2 columns)
     keyboard = []
@@ -684,6 +683,10 @@ def format_va_report(data: dict) -> str:
              else:
                   lines.append(f"⚠️ <b>{ticker}</b>: Price unavailable")
 
+    if data.get("status") == "market_holiday":
+        lines.append("")
+        lines.append("🚫 <b>휴장일 (Market Closed)</b>")
+
     return "\n".join(lines)
 
 
@@ -736,55 +739,72 @@ async def cmd_portfolio_va(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await wrap_reply(update, "⚠️ <b>No strategies configured.</b>", parse_mode='HTML')
         return ConversationHandler.END
 
+    # If status is market_holiday, show strict warning and exit after summary
+    is_holiday = (res.get("status") == "market_holiday")
+
     # Filter out already executed and error results for confirmation
     # If it is executed but only contains "skip" orders, treat it as pending so user can force buy
     pending_results = []
-    for r in results:
-        if r.get("error"): continue
+    if not is_holiday: # Only consider pending if not a holiday
+        for r in results:
+            if r.get("error"): continue
 
-        already_exec = r.get("already_executed")
-        exec_orders = r.get("executed_orders", [])
-        real_orders = [o for o in exec_orders if o.get('type') != 'skip']
+            already_exec = r.get("already_executed")
+            exec_orders = r.get("executed_orders", [])
+            real_orders = [o for o in exec_orders if o.get('type') != 'skip']
 
-        # Include only if there are NEW orders calculated and not already executed
-        if r.get('orders') and not already_exec:
-            pending_results.append(r)
+            # Include only if there are NEW orders calculated and not already executed
+            if r.get('orders') and not already_exec:
+                pending_results.append(r)
 
     if not pending_results:
-        # All already executed or errors - show summary and exit
+        # All already executed, errors, or holiday - show summary and exit
         lines = [f"📈 <b>Value Averaging</b> ({res.get('date', 'N/A')})", ""]
+
         for r in results:
             ticker = r.get("target_ticker", "Unknown")
             if r.get("error"):
                 lines.append(f"⚠️ {ticker}: {r['error']}")
-            elif r.get("already_executed"):
+            elif r.get("already_executed") and not is_holiday:
                 target_amt = r.get("daily_target_amount", 0)
-                lines.append(f"✅ <b>{ticker}</b>: Executed (Target: ${target_amt:,.2f})")
-                # Show execution details
+
+                # Check actual executed orders from result
                 exec_orders = r.get("executed_orders", [])
-                for eo in exec_orders:
-                    type_str = eo.get('type', 'unknown')
-                    qty = eo.get('qty', 0)
-                    price = eo.get('price', 0)
-                    message = eo.get('message', '')
+                if exec_orders:
+                    # Show details of what was executed
+                    lines.append(f"✅ <b>{ticker}</b>: Executed (Target ${target_amt:,.0f})")
+                    for eo in exec_orders:
+                        type_str = eo.get('type', 'unknown')
+                        qty = eo.get('qty', 0)
+                        price = eo.get('price', 0)
+                        message = eo.get('message', '')
 
-                    if type_str == 'skip':
-                        lines.append(f"   └ <i>Skipped</i>")
-                    elif type_str == 'buy_single_share':
-                        lines.append(f"   └ Buy 1 share (${price})")
-                    elif 'buy' in type_str:
-                         lines.append(f"   └ Buy {qty} shares (${price})")
-                    else:
-                         lines.append(f"   └ {message}")
-        await wrap_reply(update, "\n".join(lines), parse_mode='HTML')
-        return ConversationHandler.END
+                        if type_str == 'skip':
+                            lines.append(f"   └ <i>Skipped</i>")
+                        elif type_str == 'buy_single_share':
+                            lines.append(f"   └ Buy 1 share (${price})")
+                        elif 'buy' in type_str:
+                            lines.append(f"   └ Buy {qty} shares (${price})")
+                        else:
+                            lines.append(f"   └ {message}")
+                else:
+                    lines.append(f"✅ <b>{ticker}</b>: Verified (Already met)")
 
-    # Holiday check
-    is_holiday = is_market_holiday("NYSE")
-    if is_holiday:
-        lines = [f"📈 <b>Value Averaging</b> ({res.get('date', 'N/A')})", "", "🚫 <b>휴장일</b> - 주문 비활성화"]
-        for r in pending_results:
-            lines.append(f"• {r.get('target_ticker')}: ${r.get('daily_target_amount', 0):,.2f}")
+            else:
+                # Hold Case (No orders, not executed, no error) OR Holiday
+                day = r.get("day_count", 0)
+                tgt_val = r.get("target_value_accumulated", 0)
+                cur_val = r.get("current_value", 0)
+                diff_pct = ((cur_val - tgt_val) / tgt_val * 100) if tgt_val > 0 else 0.0
+                info_str = f"(Day {day} | Target ${tgt_val:,.0f} | Cur ${cur_val:,.0f} | {diff_pct:+.1f}%)"
+
+                lines.append(f"⏸️ <b>{ticker}</b> {info_str}")
+                lines.append(f"   └ Hold (Diff inside ±15%)")
+
+        if is_holiday:
+            lines.append("")
+            lines.append("🚫 <b>휴장일 (Market Closed)</b>")
+
         await wrap_reply(update, "\n".join(lines), parse_mode='HTML')
         return ConversationHandler.END
 

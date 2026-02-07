@@ -41,6 +41,9 @@ data = get_portfolio_cached(force_refresh=False)
    - 단, **스케줄러에 의해 Skip된 종목**도 사용자가 수동으로 매수할 기회를 제공하기 위해 대기(Pending) 목록에 포함됩니다.
    - 이미 완전히 실행된(Already Executed) 종목은 상단 요약에 표시됩니다.
 
+4. **휴장일 처리**: 마켓 휴장일인 경우 하단에 "🚫 휴장일 (Market Closed)" 경고를 표시하고 주문 확인 단계로 진입하지 않고 요약만 보여준 뒤 종료합니다.
+   - 휴장일에도 보유 종목의 현재 상태(Hold 등) 정보는 모두 표시됩니다.
+
 ### handle_va_callback
 Value Averaging 진행 중 사용자의 버튼 입력을 처리합니다:
 - **[Yes]**: 표시된 수량만큼 주문 실행 → 결과(성공/실패) 저장 → 다음 종목으로 이동

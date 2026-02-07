@@ -31,9 +31,10 @@ def run_daily_order_report():
             pending_orders = raoeo_report.get("pending_orders", [])
             executed_today = raoeo_report.get("executed_today")
             failed_orders = raoeo_report.get("failed_orders", [])
+            is_holiday = raoeo_report.get("status") == "market_holiday"
 
             # If we have pending orders (including retries) and it's not marked as fully executed today
-            if (pending_orders or failed_orders) and not executed_today:
+            if (pending_orders or failed_orders) and not executed_today and not is_holiday:
                 logging.info(f"[Scheduler] Executing RAOEO orders: {len(pending_orders)} pending, {len(failed_orders)} failed")
 
                 # Combine pending and failed into executable list (get_daily_report separates them)
@@ -83,54 +84,48 @@ def run_daily_order_report():
             # VA returns a list of result objects in 'results'
             # We need to iterate and execute if pending
             results = va_result.get("results", [])
+            is_holiday = va_result.get("status") == "market_holiday"
             active_execution = False
 
-            for res in results:
-                ticker = res.get("target_ticker")
-                already_executed = res.get("already_executed")
-                orders = res.get("orders", [])
+            if not is_holiday:
+                for res in results:
+                    ticker = res.get("target_ticker")
+                    already_executed = res.get("already_executed")
+                    orders = res.get("orders", [])
 
-                # If orders exist and NOT already executed, Execute!
-                if orders and not already_executed:
-                    active_execution = True
-                    executed_flag = False
+                    # If orders exist and NOT already executed, Execute!
+                    if orders and not already_executed:
+                        active_execution = True
+                        executed_flag = False
 
-                    for order in orders:
-                        # Execute Single Order
-                        logging.info(f"[Scheduler] Executing VA order for {ticker}: {order['qty']} @ {order['price']}")
-                        exec_res = value_averaging.execute_single_order(ticker, order)
+                        for order in orders:
+                            # Execute Single Order
+                            logging.info(f"[Scheduler] Executing VA order for {ticker}: {order['qty']} @ {order['price']}")
+                            exec_res = value_averaging.execute_single_order(ticker, order)
 
-                        # Save result (per order basis, but save_ticker_result handles day record)
-                        # We should update 'executed' flag if at least one succeeds or we tried
-                        # Actually save_ticker_result expects 'executed' bool.
-                        # If we tried to purchase, we log it.
+                            # Save result (per order basis, but save_ticker_result handles day record)
+                            value_averaging.save_ticker_result(
+                                ticker=ticker,
+                                day_count=res.get("day_count", 0),
+                                result=exec_res,
+                                executed=True
+                            )
+                            executed_flag = True
 
+                    elif not orders and not already_executed:
+                        # No orders needed (Skip)
+                        skip_res = {
+                            "order": None,
+                            "success": True,
+                            "message": "Skipped (No order needed)",
+                            "type": "skip"
+                        }
                         value_averaging.save_ticker_result(
                             ticker=ticker,
                             day_count=res.get("day_count", 0),
-                            result=exec_res,
-                            executed=True
+                            result=skip_res,
+                            executed=True # We 'executed' the check
                         )
-                        executed_flag = True
-
-                    # If we processed orders, we should save that we tried (even if empty? orders won't be empty here)
-
-                elif not orders and not already_executed:
-                    # No orders needed (Skip)
-                    # We should record that we checked and skipped, so we don't wonder if it ran.
-                    # Create a "skip" result
-                    skip_res = {
-                        "order": None,
-                        "success": True,
-                        "message": "Skipped (No order needed)",
-                        "type": "skip"
-                    }
-                    value_averaging.save_ticker_result(
-                        ticker=ticker,
-                        day_count=res.get("day_count", 0),
-                        result=skip_res,
-                        executed=True # We 'executed' the check
-                    )
 
             # Re-fetch report after execution to show updated status
             # Only if we did something (execution or skip save)

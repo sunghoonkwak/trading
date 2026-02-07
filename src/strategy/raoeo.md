@@ -62,18 +62,19 @@
 
 ---
 
-### build_raoeo_report
-현재 RAOEO 상태를 조회합니다. Terminal UI와 Telegram 모두에서 사용됩니다.
+### get_daily_report
+현재 RAOEO 상태를 조회합니다. Terminal UI, Telegram, Scheduler 모두에서 사용됩니다.
 
 #### Returns
 - `dict`: 다음 키들을 포함
+  - `status`: 마켓 상태 (`calculated`, `market_holiday`, `error`)
+  - `date`: US Eastern 기준 날짜 (YYYY-MM-DD)
   - `config`: RAOEO 설정 정보
   - `holdings`: 현재 보유 수량, 평단가
   - `cur_price`: KIS API → WebSocket → holdings 순으로 조회한 현재가
   - `success_orders`: 오늘 성공한 주문 목록
   - `failed_orders`: 오늘 실패한 주문 목록 (재시도 대상)
   - `pending_orders`: 실행 대기 중인 주문 (failed + 신규)
-  - `executed_today`: 오늘 히스토리가 있는 경우 해당 데이터
   - `current_result`: 계산된 주문 정보
   - `error`: 에러 발생 시 메시지
 
@@ -128,7 +129,7 @@
 #### Features
 - **유연한 재시도**: 오늘 실행 기록이 있더라도 실패한 주문이 남아 있다면 `Execute` 메뉴를 통해 언제든 다시 시도할 수 있습니다.
 - **모듈화**: `build_raoeo_report()`, `execute_orders()` 등을 호출하여 기능을 수행합니다.
-- **휴장일 체크**: `is_market_holiday("NYSE")`로 휴장일/주말에는 주문 실행이 차단됩니다.
+- **휴장일 체크**: `get_daily_report()` 내부에서 `is_market_holiday("NYSE")`를 통해 휴장일 여부를 판단하며, 휴장일 시 `status`를 `market_holiday`로 설정하고 주문 생성을 차단합니다.
 
 ## Telegram Integration
 
@@ -143,7 +144,7 @@
 2. **Yes** 선택 → 주문 실행 및 히스토리 저장
 3. **No** 선택 → 취소
 
-> **휴장일**: 계산 결과는 표시되지만 Yes/No 버튼이 숨겨져 주문이 차단됩니다.
+> **휴장일**: `status: "market_holiday"`인 경우 리포트에 경고가 표시되며 주문 버튼이 비활성화됩니다.
 
 ## History File (히스토리 파일)
 
