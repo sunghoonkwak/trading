@@ -180,27 +180,29 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
                 diff_usd, pct_usd = calculate_diff(current_total_usd, past_total_usd)
                 emoji_usd = "🔺" if pct_usd > 0 else "🔻" if pct_usd < 0 else "➖"
 
-                # Format Option: Right-Aligned with K-Unit (using code tag for monospace text without copy block)
+                # Format Option: Simplified (Change Only)
                 # <b>📅 1 Day</b>
                 # <code>
-                # 🇰🇷  123,456,789 (🔺   +1,234 k,  +1.20%)
-                # 🇺🇸       12,345 (🔺      +123,  +1.00%)
+                # 🇰🇷 🔺  +1,234 k,  +1.20%
+                # 🇺🇸 🔺    +123,  +1.00%
                 # </code>
 
                 # KRW Diff: 1k unit (space added as requested: "+8,970 k")
-                str_krw_total = f"{current_total_krw:,.0f}"
                 str_krw_diff = f"{diff_krw/1000:+,.0f} k"
                 str_krw_pct = f"{pct_krw:+.2f}%"
 
                 # USD Diff: Standard
-                str_usd_total = f"{current_total_usd:,.0f}"
                 str_usd_diff = f"{diff_usd:+,.0f}"
                 str_usd_pct = f"{pct_usd:+.2f}%"
 
                 # Construct aligned lines
-                # Padding: Total(12), Diff(10), Pct(7)
-                line_krw = f"🇰🇷 {str_krw_total:>12} ({emoji_krw} {str_krw_diff:>10}, {str_krw_pct:>7})"
-                line_usd = f"🇺🇸 {str_usd_total:>12} ({emoji_usd} {str_usd_diff:>10}, {str_usd_pct:>7})"
+                # Padding:
+                # Emoji: fixed
+                # Diff: ~10 chars
+                # Pct: ~7 chars
+
+                line_krw = f"🇰🇷 {emoji_krw} {str_krw_diff:>10}, {str_krw_pct:>7}"
+                line_usd = f"🇺🇸 {emoji_usd} {str_usd_diff:>10}, {str_usd_pct:>7}"
 
                 line_header = f"<b>📅 {label}</b>"
 
