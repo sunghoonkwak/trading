@@ -102,3 +102,35 @@ Uvicorn 서버를 실행합니다.
 - `fetch_open_orders()`로 미체결 주문 조회
 - 주문 ID로 대상 주문 검색
 - `execute_manage_action(market, '2', order_data)`로 취소 실행
+
+## 메모 API (Memo Management)
+
+### `GET /api/memos`
+저장된 모든 메모를 가져옵니다.
+
+**응답:**
+```json
+{
+  "YYYY-MM-DD": [
+    "HH:MM:SS : Memo text 1",
+    "HH:MM:SS : Memo text 2"
+  ],
+  ...
+}
+```
+
+### `POST /api/memos/delete`
+특정 날짜와 내용을 가진 메모를 삭제합니다.
+
+**파라미터 (JSON Body):**
+- `date`: 날짜 문자열 ("YYYY-MM-DD")
+- `text`: 메모 전체 텍스트 (시간 포함)
+
+**응답:**
+```json
+// 성공
+{"success": true, "message": "Memo deleted"}
+
+// 실패
+{"success": false, "error": "Memo not found"}
+```

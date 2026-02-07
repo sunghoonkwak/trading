@@ -43,6 +43,7 @@ const elements = {
     logCount: null,
     btnAutoScroll: null,
     mktToggle: null,
+    memosPanel: null, // New
 };
 
 // Initialize on DOM load
@@ -50,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initElements();
     initMktToggle();
     connectWebSocket();
+    fetchMemos(); // New
 });
 
 function initElements() {
@@ -64,6 +66,7 @@ function initElements() {
     elements.logCount = document.getElementById('log-count');
     elements.btnAutoScroll = document.getElementById('btn-auto-scroll');
     elements.mktToggle = document.getElementById('mkt-toggle');
+    elements.memosPanel = document.getElementById('memos-panel'); // New
 }
 
 function initMktToggle() {
@@ -658,3 +661,179 @@ document.addEventListener('click', (e) => {
         closeCancelModal();
     }
 });
+
+
+// --- Memo Logic ---
+
+async function fetchMemos() {
+    if (!elements.memosPanel) return;
+    elements.memosPanel.innerHTML = '<div class="empty-state">Loading...</div>';
+
+    try {
+        const response = await fetch('/api/memos');
+        const data = await response.json();
+        renderMemos(data);
+    } catch (e) {
+        elements.memosPanel.innerHTML = `<div class="log-entry error">Error: ${e.message}</div>`;
+    }
+}
+
+function renderMemos(data) {
+    if (!elements.memosPanel) return;
+
+    if (!data || Object.keys(data).length === 0) {
+        elements.memosPanel.innerHTML = '<div class="empty-state">No memos found.</div>';
+        return;
+    }
+
+    let html = '';
+    // Sort dates descending (newest first)
+    const dates = Object.keys(data).sort().reverse();
+
+    dates.forEach(date => {
+        html += `<div class="memo-date-group">
+            <div class="memo-date-header">${date}</div>`;
+
+        const msgs = data[date];
+        // Reverse messages to show newest first? Or keep chronological?
+        // Usually chronological within a day is better for chat logs, but for memos maybe newest first?
+        // Let's keep original order (chronological) as per user request "date order" (implicit)
+        // actually user said "날짜순으로 표시하고" which usually means sorted by date.
+
+        msgs.forEach((msg, index) => {
+            // format: "HH:MM:SS : message text"
+            // We need to be careful with splitting if the text contains " : "
+            const firstColon = msg.indexOf(' : ');
+            let time = '';
+            let text = msg;
+
+            if (firstColon !== -1) {
+                time = msg.substring(0, firstColon);
+                text = msg.substring(firstColon + 3);
+            }
+
+            // Truncate logic
+            const maxLen = 60;
+            let displayHeader = text;
+            let isTruncated = false;
+
+            if (text.length > maxLen) {
+                displayHeader = text.substring(0, maxLen) + '...';
+                isTruncated = true;
+            }
+
+            const safeTime = escapeHtml(time);
+            const safeText = escapeHtml(text).replace(/\n/g, '<br>');
+            const safeHeader = escapeHtml(displayHeader);
+
+            // Use encodeURIComponent for safe passing to functions, replacing single quotes
+            const encodedText = encodeURIComponent(msg).replace(/'/g, "%27");
+            const entryId = `memo-${date.replace(/-/g, '')}-${index}`;
+
+            // Click action: Copy to clipboard
+            const clickAttr = `onclick="copyMemoToClipboard('${encodedText}')"`;
+            const cursorClass = 'clickable';
+
+            // Toggle Button
+            const toggleBtn = isTruncated
+                ? `<button class="memo-toggle-btn" onclick="toggleMemo('${entryId}', '${encodedText}', '${safeHeader.replace(/'/g, "\\'")}')">🔽</button>`
+                : '';
+
+            html += `
+                <div class="memo-entry" id="${entryId}">
+                    <span class="memo-time">${safeTime}</span>
+                    <span class="memo-text ${cursorClass}" ${clickAttr} title="Click to copy">
+                        ${safeHeader}
+                    </span>
+                    <div class="memo-actions">
+                        ${toggleBtn}
+                        <button class="memo-delete-btn" onclick="deleteMemo('${date}', '${encodedText}')" title="Delete">🗑️</button>
+                    </div>
+                </div>`;
+        });
+
+        html += `</div>`;
+    });
+
+    elements.memosPanel.innerHTML = html;
+}
+
+function toggleMemo(elementId, encodedText, shortHeader) {
+    const entry = document.getElementById(elementId);
+    if (!entry) return;
+
+    const textSpan = entry.querySelector('.memo-text');
+    const toggleBtn = entry.querySelector('.memo-toggle-btn');
+
+    const isExpanded = entry.classList.contains('expanded');
+    // Actually msg includes timestamp. Let's start clean.
+
+    // We need just the text part.
+    // The encodedText passed to toggleMemo is the FULL msg (Time : Text).
+    // But we usually want to toggle the TEXT part.
+    // In render loop, we extracted `text`. We should pass THAT or re-extract.
+    // Simpler: Just toggle CSS class and use data attribute?
+    // Or swap content.
+
+    if (isExpanded) {
+        // Collapse
+        textSpan.innerHTML = shortHeader; // Revert to truncated
+        entry.classList.remove('expanded');
+        toggleBtn.textContent = '🔽';
+    } else {
+        // Expand
+        // We need the full text without timestamp
+        const fullMsg = decodeURIComponent(encodedText);
+        const firstColon = fullMsg.indexOf(' : ');
+        let content = fullMsg;
+        if (firstColon !== -1) content = fullMsg.substring(firstColon + 3);
+
+        textSpan.innerHTML = escapeHtml(content).replace(/\n/g, '<br>');
+        entry.classList.add('expanded');
+        toggleBtn.textContent = '🔼';
+    }
+}
+
+async function copyMemoToClipboard(encodedText) {
+    const text = decodeURIComponent(encodedText);
+    try {
+        await navigator.clipboard.writeText(text);
+        addLog('✅ Memo copied to clipboard', 'success');
+    } catch (err) {
+        // Fallback for non-secure contexts
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            addLog('✅ Memo copied to clipboard', 'success');
+        } catch (err2) {
+            addLog(`❌ Failed to copy: ${err}`, 'error');
+        }
+        document.body.removeChild(textArea);
+    }
+}
+
+async function deleteMemo(date, encodedText) {
+    if (!confirm('Delete this memo?')) return;
+
+    const text = decodeURIComponent(encodedText);
+
+    try {
+        const response = await fetch('/api/memos/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date, text })
+        });
+        const result = await response.json();
+        if (result.success) {
+            fetchMemos(); // Refresh list
+        } else {
+            alert('Failed to delete: ' + (result.error || 'Unknown error'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+

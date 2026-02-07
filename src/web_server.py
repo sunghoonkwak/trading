@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
 import json
+from pydantic import BaseModel
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -103,6 +104,11 @@ if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
+class MemoDeleteRequest(BaseModel):
+    date: str
+    text: str
+
+
 @app.get("/")
 async def get_index():
     """Serve main event viewer page."""
@@ -110,6 +116,46 @@ async def get_index():
     if os.path.exists(index_path):
         return FileResponse(index_path, media_type="text/html")
     return {"error": "index.html not found"}
+
+
+@app.get("/api/memos")
+async def get_memos():
+    """Fetch all memos from memo.json."""
+    try:
+        from telegram_bot.telegram_memo import load_messages
+        messages = load_messages()
+        return messages
+    except Exception as e:
+        logging.error(f"[WebServer] Failed to fetch memos: {e}")
+        return {"error": str(e)}
+
+
+@app.post("/api/memos/delete")
+async def delete_memo(request: MemoDeleteRequest):
+    """Delete a specific memo."""
+    try:
+        from telegram_bot.telegram_memo import load_messages, save_messages
+        messages = load_messages()
+
+        date_key = request.date
+        target_text = request.text
+
+        if date_key in messages:
+            # Filter out the exact message
+            original_len = len(messages[date_key])
+            messages[date_key] = [msg for msg in messages[date_key] if msg != target_text]
+
+            if len(messages[date_key]) < original_len:
+                if not messages[date_key]:  # Remove date key if empty
+                    del messages[date_key]
+                save_messages(messages)
+                return {"success": True, "message": "Memo deleted"}
+
+        return {"success": False, "error": "Memo not found"}
+
+    except Exception as e:
+        logging.error(f"[WebServer] Failed to delete memo: {e}")
+        return {"success": False, "error": str(e)}
 
 
 @app.get("/api/holdings/{ticker}")

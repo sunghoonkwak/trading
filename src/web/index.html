@@ -61,6 +61,22 @@
                         <div class="empty-state">Waiting for quotes...</div>
                     </div>
                 </section>
+
+                <!-- Memos Panel -->
+                <section class="viewer-section memos-section">
+                    <div class="section-header">
+                        <h3>📝 Memos</h3>
+                        <div class="log-controls">
+                            <button class="control-btn" onclick="fetchMemos()">
+                                🔄 Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="section-content" id="memos-panel">
+                        <div class="empty-state">Loading memos...</div>
+                    </div>
+                </section>
+
             </div>
 
             <!-- Right Column: System Log (30%) -->
