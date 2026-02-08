@@ -157,18 +157,6 @@
     ],
     "US": [
         {
-            "ticker": "FAS",
-            "name": "Direxion Daily Financial Bull 3X Shares",
-            "market": "AMS",
-            "color": [
-                50,
-                255,
-                50
-            ],
-            "disabled": false,
-            "telegram_button": true
-        },
-        {
             "ticker": "QQQM",
             "name": "Invesco NASDAQ 100 ETF",
             "market": "NAS",
@@ -194,6 +182,18 @@
         {
             "ticker": "SOXL",
             "name": "DIREXION SEMICONDUCTOR DAILY 3X",
+            "market": "AMS",
+            "color": [
+                50,
+                255,
+                50
+            ],
+            "disabled": false,
+            "telegram_button": true
+        },
+        {
+            "ticker": "FAS",
+            "name": "Direxion Daily Financial Bull 3X Shares",
             "market": "AMS",
             "color": [
                 50,

@@ -1,12 +1,32 @@
+"""
+Portfolio Weight Calculation
+
+Allocation logic:
+1. Cash allocation based on F&G index:
+   - F&G <= 20 (Extreme Fear): max cash (0.3)
+   - 20 < F&G <= 80 (Neutral): mid cash (0.2)
+   - F&G > 80 (Extreme Greed): min cash (0.1)
+
+2. Stock total = 1.0 - cash
+
+3. Relative score-based allocation:
+   - Each stock's score is calculated based on its ratio or target_score
+   - Target weight = (score / total_score) * stock_total
+
+4. Group handling:
+   - Target: main_ticker gets full group target (constituents don't reduce it)
+   - Current: main_ticker's holding + sum of constituents' holdings
+"""
+
 import json
 import os
-import unicodedata
 
 def load_config(config_path=None):
     """Loads the portfolio configuration from a JSON file."""
     if config_path is None:
-        # Default path: ~/KIS_config/portfolio_weights.json
-        config_path = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_weights.json")
+        config_path = os.path.join(
+            os.path.expanduser("~"), "KIS_config", "portfolio_weights.json"
+        )
     elif not os.path.isabs(config_path):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         config_path = os.path.join(script_dir, config_path)
@@ -14,86 +34,83 @@ def load_config(config_path=None):
     with open(config_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
-def calculate_target_weights(current_weights, config, current_vix=None):
+
+def get_cash_weight(fear_greed_index: float, cash_strategy: dict) -> float:
     """
-    Calculates the target weights for the portfolio based on logical scores and US Index reference.
-
-    The logic is:
-    1. Base Score System:
-       - Defined Groups (Nasdaq, S&P, Dividend) have fixed target scores (e.g. 100, 50, 15).
-       - Individual Stocks have scores calculated as: Ratio * US_Index_Weight (165).
-       - Fixed items (VIXY) have manual scores.
-
-    2. Total Score Calculation:
-       - Total Theoretical Score = Sum(Group Targets) + Sum(Individual Scores) + Sum(Fixed Scores).
-
-    3. Target Percentage Calculation:
-       - Individual/Fixed Tickers: Target% = Score / Total Score.
-       - Groups: Group Target% = Group Score / Total Score.
-         - The Group Target% is distributed:
-           - "Constituents" (e.g. QQQ, KODEX) KEEP their current portfolio weight (User Rule).
-           - "Main Ticker" (e.g. QQQM) takes the remaining weight:
-             Main% = Group% - Sum(Current% of Constituents).
+    Determines cash weight based on Fear & Greed index.
 
     Args:
-        current_weights (dict): Existing portfolio weights.
-        config (dict): Portfolio configuration.
-        current_vix (float, optional): Current VIX index value. Defaults to 14.83 (from user example) if not provided.
+        fear_greed_index: Current F&G index value (0-100)
+        cash_strategy: Dict with 'min', 'mid', 'max' cash weights
+
+    Returns:
+        Cash weight (0.0 to 1.0)
     """
-    if current_vix is None:
-        current_vix = 14.83
+    if fear_greed_index <= 20:
+        # Extreme Fear -> Hold more cash
+        return cash_strategy['max']
+    elif fear_greed_index > 80:
+        # Extreme Greed -> Hold less cash
+        return cash_strategy['min']
+    else:
+        # Neutral
+        return cash_strategy['mid']
 
-    # 1. Calculate US Index Weight Base
-    us_index_weight = sum(group['target_score'] for group in config['groups'])
 
-    # 2. Calculate VIX Strategy Score
-    vix_score = 0.0
-    vix_ticker = None
+def calculate_target_weights(
+    current_weights: dict,
+    config: dict,
+    fear_greed_index: float = 50.0
+) -> tuple:
+    """
+    Calculates target weights based on new allocation logic.
 
-    if 'vix_strategy' in config:
-        v_cfg = config['vix_strategy']
-        vix_ticker = v_cfg['ticker']
-        # Formula: min(if(VIX < max, limit * (max - VIX) / scale, 0), limit)
-        if current_vix < v_cfg['max']:
-            raw_score = v_cfg['limit'] * (v_cfg['max'] - current_vix) / v_cfg['scale']
-            vix_score = min(raw_score, v_cfg['limit'])
-        else:
-            vix_score = 0.0
+    Args:
+        current_weights: Current portfolio weights (ticker -> weight)
+        config: Portfolio configuration
+        fear_greed_index: Current F&G index (default: 50 = neutral)
 
-    # 3. Calculate Total Score
-    total_group_score = us_index_weight
+    Returns:
+        Tuple of (target_weights, total_score, cash_weight)
+    """
+    # 1. Calculate cash weight based on F&G
+    cash_strategy = config.get('cash_strategy', {'min': 0.1, 'mid': 0.2, 'max': 0.3})
+    cash_weight = get_cash_weight(fear_greed_index, cash_strategy)
 
+    # 2. Stock total = 1.0 - cash
+    stock_total = 1.0 - cash_weight
+
+    # 3. Calculate total score (for relative allocation)
+    # Groups: sum of target_scores
+    total_group_score = sum(group['target_score'] for group in config.get('groups', []))
+
+    # Individual stocks: ratio * base (where base = total_group_score for consistency)
+    individual_stocks = config.get('individual_stocks', [])
     total_individual_score = sum(
-        item['ratio'] * us_index_weight
-        for item in config['individual_stocks']
+        item['ratio'] * total_group_score
+        for item in individual_stocks
     )
 
-    total_fixed_score = sum(item['score'] for item in config.get('fixed_scores', []))
-
-    total_score = total_group_score + total_individual_score + total_fixed_score + vix_score
+    total_score = total_group_score + total_individual_score
 
     if total_score == 0:
-        return {}, 0
+        return {}, 0, cash_weight
 
     target_weights = {}
 
-    # 4. Assign Weights for VIX
-    if vix_ticker:
-        target_weights[vix_ticker] = vix_score / total_score
-
-    # 5. Assign Weights for Individual Stocks
-    for item in config['individual_stocks']:
+    # 4. Assign weights for individual stocks
+    for item in individual_stocks:
         ticker = item['ticker']
-        score = item['ratio'] * us_index_weight
-        target_weights[ticker] = score / total_score
+        score = item['ratio'] * total_group_score
+        target_weights[ticker] = (score / total_score) * stock_total
 
-    # 6. Distribute KR Dividend Strategy (Sub-allocation)
+    # 5. Distribute KR Dividend Strategy (Sub-allocation)
     if "kr_dividend_strategy" in config:
         kr_strat = config["kr_dividend_strategy"]
         source_key = kr_strat.get("source_ticker")
 
         if source_key and source_key in target_weights:
-            total_kr_weight = target_weights.pop(source_key) # Remove the placeholder aggregation
+            total_kr_weight = target_weights.pop(source_key)
 
             constituents = kr_strat.get("constituents", [])
             total_internal_weight = sum(c.get("weight", 0) for c in constituents)
@@ -102,64 +119,146 @@ def calculate_target_weights(current_weights, config, current_vix=None):
                 for c in constituents:
                     sub_ticker = c["ticker"]
                     internal_w = c["weight"]
-                    # Allocate proportional weight
                     target_weights[sub_ticker] = total_kr_weight * (internal_w / total_internal_weight)
 
-    # 3. Assign Weights for Fixed Score Items
-    for item in config.get('fixed_scores', []):
-        ticker = item['ticker']
-        score = item['score']
-        target_weights[ticker] = score / total_score
+    # 6. Assign weights for groups
+    # Target: main_ticker gets full group target (no reduction for constituents)
+    for group in config.get('groups', []):
+        group_target_percent = (group['target_score'] / total_score) * stock_total
+        main_ticker = group['main_ticker']
 
-    # 4. Assign Weights for Groups
-    for group in config['groups']:
-        group_target_percent = group['target_score'] / total_score
+        # Main ticker gets the full group target
+        target_weights[main_ticker] = group_target_percent
 
-        # Calculate weight consumed by legacy/fixed constituents
-        used_weight = 0.0
-        for constituent in group.get('constituents', []):
-            # Target for constituent is its CURRENT weight (Fixed position logic)
-            c_weight = current_weights.get(constituent, 0.0)
-            target_weights[constituent] = c_weight
-            used_weight += c_weight
+        # Constituents are NOT added to target_weights
+        # They only contribute to current holding calculation
 
-        # Assign remaining weight to Main Ticker
-        remaining_weight = group_target_percent - used_weight
+    return target_weights, total_score, cash_weight
 
-        # Ensure non-negative (if current holdings exceed target, Main gets 0)
-        target_weights[group['main_ticker']] = max(0.0, remaining_weight)
 
-    return target_weights, total_score
+def calculate_current_group_weights(
+    current_weights: dict,
+    config: dict
+) -> dict:
+    """
+    Calculates current holdings with constituents merged into main ticker.
 
-if __name__ == "__main__":
-    # Example Usage / Test
-    try:
-        config_file = "portfolio_weights.json"
-        if not os.path.exists(config_file):
-            # Fallback for running from different dir
-            config_file = os.path.join(os.path.dirname(__file__), "portfolio_weights.json")
+    For each group, the current weight of main_ticker is calculated as:
+    main_ticker_current + sum(constituents_current)
 
-        config = load_config(config_file)
+    Args:
+        current_weights: Current portfolio weights (ticker -> weight)
+        config: Portfolio configuration
 
-        # Mock Current Weights (approximate from user image for verification)
-        # Note: These should be actual portfolio weight ratios (0.01 = 1%)
-        mock_current_weights = {
-            "QQQ": 0.0204,
-            "379810": 0.0383,
-            "379800": 0.0751,
-            "490490": 0.0028
+    Returns:
+        Merged current weights (main_ticker includes constituents)
+    """
+    merged_weights = dict(current_weights)
+
+    for group in config.get('groups', []):
+        main_ticker = group['main_ticker']
+        constituents = group.get('constituents', [])
+
+        # Sum constituents into main ticker
+        constituent_total = 0.0
+        for constituent in constituents:
+            if constituent in merged_weights:
+                constituent_total += merged_weights.pop(constituent)
+
+        # Add to main ticker (create if not exists)
+        merged_weights[main_ticker] = merged_weights.get(main_ticker, 0.0) + constituent_total
+
+    return merged_weights
+
+
+def calculate_rebalancing(
+    current_weights: dict,
+    config: dict,
+    fear_greed_index: float = 50.0
+) -> dict:
+    """
+    Calculates the difference between target and current weights for rebalancing.
+
+    Args:
+        current_weights: Current portfolio weights
+        config: Portfolio configuration
+        fear_greed_index: Current F&G index
+
+    Returns:
+        Dict with ticker -> {'target': float, 'current': float, 'diff': float}
+    """
+    target_weights, _, cash_weight = calculate_target_weights(
+        current_weights, config, fear_greed_index
+    )
+
+    # Merge current weights (constituents into main ticker)
+    merged_current = calculate_current_group_weights(current_weights, config)
+
+    result = {}
+
+    # All tickers from both target and current
+    all_tickers = set(target_weights.keys()) | set(merged_current.keys())
+
+    for ticker in all_tickers:
+        target = target_weights.get(ticker, 0.0)
+        current = merged_current.get(ticker, 0.0)
+        diff = target - current
+
+        result[ticker] = {
+            'target': target,
+            'current': current,
+            'diff': diff
         }
 
-        targets, score = calculate_target_weights(mock_current_weights, config)
+    return result
 
-        # Load stock configuration for names
-        stock_config_file = "stock_configuration.json"
-        if not os.path.exists(stock_config_file):
-            stock_config_file = os.path.join(os.path.dirname(__file__), "stock_configuration.json")
 
+if __name__ == "__main__":
+    import unicodedata
+
+    # Load configuration
+    config_file = "portfolio_weights.json"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Try template directory first
+    template_path = os.path.join(os.path.dirname(script_dir), "..", "templete", config_file)
+    if os.path.exists(template_path):
+        config_path = template_path
+    else:
+        config_path = os.path.join(script_dir, config_file)
+
+    config = load_config(config_path)
+
+    # Mock current weights for testing
+    mock_current_weights = {
+        "QQQ": 0.0204,
+        "379810": 0.0383,
+        "379800": 0.0751,
+        "490490": 0.0028,
+        "QQQM": 0.15,
+        "VOO": 0.10,
+    }
+
+    # Test with different F&G values
+    test_fg_values = [15, 50, 85]
+
+    for fg in test_fg_values:
+        print(f"\n{'='*60}")
+        print(f"F&G Index: {fg}")
+        print('='*60)
+
+        targets, score, cash = calculate_target_weights(mock_current_weights, config, fg)
+
+        print(f"Cash Weight: {cash*100:.1f}%")
+        print(f"Stock Total: {(1-cash)*100:.1f}%")
+        print(f"Total Score: {score:.2f}")
+
+        # Load stock names for display
+        stock_config_file = os.path.join(script_dir, "stock_configuration.json")
         ticker_map = {}
         if os.path.exists(stock_config_file):
-            stock_config = load_config(stock_config_file)
+            with open(stock_config_file, 'r', encoding='utf-8') as f:
+                stock_config = json.load(f)
             for region in stock_config:
                 for stock in stock_config[region]:
                     ticker = stock.get('ticker')
@@ -167,59 +266,28 @@ if __name__ == "__main__":
                     if ticker and name:
                         ticker_map[ticker] = name
 
-        # Sort Logic: By Target % (Descending) -> then Ticker
-        # This makes it easier to read high-weight items first
-        all_tickers = sorted(targets.keys(), key=lambda t: targets[t], reverse=True)
+        # Sort by target weight
+        sorted_tickers = sorted(targets.keys(), key=lambda t: targets[t], reverse=True)
 
-        print(f"Total Calculated Score: {score:.3f}")
+        print(f"\n{'Ticker':<15} {'Target %':>10}")
+        print("-" * 30)
 
-        # Column Headers
-        h_name = "Name"
-        h_ticker = "Ticker"
-        h_target = "Target %"
-
-        # Define Column Widths
-        w_name = 40
-        w_ticker = 15
-        w_target = 10
-
-        sep_len = w_name + 3 + w_ticker + 3 + w_target
-        print("=" * sep_len)
-
-        def get_display_width(s):
-            w = 0
-            for char in s:
-                if unicodedata.east_asian_width(char) in ('W', 'F'):
-                    w += 2
-                else:
-                    w += 1
-            return w
-
-        def pad_string(s, width):
-            d_width = get_display_width(s)
-            padding = width - d_width
-            if padding < 0:
-                # Truncate logic could be added here if strictly needed,
-                # but for now let's just return as is or handle simple overflow
-                return s + " " # minimal space
-            return s + " " * padding
-
-        header = f"{pad_string(h_name, w_name)} | {pad_string(h_ticker, w_ticker)} | {h_target}"
-        print(header)
-        print("-" * sep_len)
-
-        for ticker in all_tickers:
+        for ticker in sorted_tickers:
             weight = targets[ticker]
-            # Custom name handling for specific tickers if not in config
-            if ticker == "국내 배당주":
-                name = "국내 배당주"
-            else:
-                name = ticker_map.get(ticker, ticker) # Fallback to ticker if name not found
+            if weight > 0.001:  # Skip near-zero weights
+                print(f"{ticker:<15} {weight*100:>9.2f}%")
 
-            val_str = f"{weight*100:6.2f}%"
+    # Test rebalancing calculation
+    print(f"\n{'='*60}")
+    print("Rebalancing Analysis (F&G=50)")
+    print('='*60)
 
-            line = f"{pad_string(name, w_name)} | {pad_string(ticker, w_ticker)} | {val_str}"
-            print(line)
+    rebalance = calculate_rebalancing(mock_current_weights, config, 50)
+    sorted_rebalance = sorted(rebalance.items(), key=lambda x: abs(x[1]['diff']), reverse=True)
 
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    print(f"\n{'Ticker':<15} {'Target':>10} {'Current':>10} {'Diff':>10}")
+    print("-" * 50)
+
+    for ticker, data in sorted_rebalance:
+        if abs(data['diff']) > 0.001:  # Only show meaningful differences
+            print(f"{ticker:<15} {data['target']*100:>9.2f}% {data['current']*100:>9.2f}% {data['diff']*100:>+9.2f}%")

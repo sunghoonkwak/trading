@@ -28,14 +28,17 @@ UI 모듈(`portfolio.py`, `handle_account_info.py`)과 데이터 소스(`KIS Thr
 ### `get_weight_diffs()`
 현재 포트폴리오와 목표 비중 간의 차이를 분석하여 리밸런싱 정보를 계산합니다.
 
-- **Weight Calculation**: `calculate_weights.py` 로직을 통해 목표 비중 산출.
+- **Group Constituents Handling**:
+    - `portfolio_weights.json`의 그룹 설정에서 `constituents`를 추출합니다.
+    - Constituents의 보유비중은 `main_ticker`에 합산되어 표시됩니다.
+    - Constituents는 리포트에서 개별적으로 표시되지 않습니다.
+- **Weight Calculation**: `calculate_weights.py` 로직을 통해 목표 비중 산출 (F&G 지수 기반 현금 배분).
 - **Qty Calculation**: (목표 금액 - 현재 금액) / 현재가.
 - **Smart Price Fetching**:
     - 보유하지 않은 종목(수량 0)이라도 `qty_diff`를 계산하기 위해 가격을 조회합니다.
     - **1순위**: 보유 종목의 현재가 (`merged_data`)
     - **2순위**: 실시간 WebSocket 시세 (`menu.raoeo.get_current_price`)
     - **3순위**: KIS API 조회 (국내 `inquire_price` / 해외 `fetch_price`)
-    - 이 로직을 통해 "현재 보유하지 않은 종목을 몇 주 사야 하는지" 정확히 제안합니다.
 
 ### `convert_portfolio_to_account_format(portfolio)`
 `get_portfolio_data`의 통합 구조를 `handle_account_info.py`의 UI 출력용 포맷(List 기반)으로 변환하는 어댑터 함수입니다.

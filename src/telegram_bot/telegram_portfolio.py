@@ -32,13 +32,20 @@ def format_portfolio_summary(data: dict) -> str:
     if data.get("error"):
         return f"⚠️ <b>Error:</b> {data['error']}"
 
+    # Get F&G index
+    try:
+        from utils import get_fear_and_greed
+        fg_index = int(get_fear_and_greed())
+    except ImportError:
+        fg_index = 50
+
     stats = data.get("stats", {})
     total_usd = data.get("total_value_usd", 0)
     rate = data.get("exchange_rate", 0)
     total_krw = total_usd * rate if rate > 0 else 0
 
     lines = [
-        f"💰 <b>Portfolio Summary</b> (Rate: {rate:,.1f})",
+        f"💰 <b>Portfolio Summary</b> (Rate: {rate:,.1f} | F&G: {fg_index})",
         "",
         f"<b>Total</b>: <b>${total_usd/1000:,.1f}K</b> (₩{total_krw/1000000:,.1f}M)",
         f"<b>Cash</b>: <b>{stats.get('total_cash_usd', 0) / total_usd * 100 if total_usd > 0 else 0:.1f}%</b>",
@@ -62,11 +69,18 @@ def format_weight_diffs(diffs: list = None, total_usd: float = 0) -> str:
     Returns:
         Formatted string with weight differences
     """
+    # Get F&G index
+    try:
+        from utils import get_fear_and_greed
+        fg_index = int(get_fear_and_greed())
+    except ImportError:
+        fg_index = 50
+
     if diffs is None:
         diffs, total_usd = get_weight_diffs()
 
     if not diffs:
-        return "⚖️ <b>Portfolio Rebalancing</b>\n\nEverything is balanced!"
+        return f"⚖️ <b>Portfolio Rebalancing</b> (F&G: {fg_index})\n\nEverything is balanced!"
 
     sell_lines = []
     buy_lines = []
@@ -89,7 +103,7 @@ def format_weight_diffs(diffs: list = None, total_usd: float = 0) -> str:
         else:
             buy_lines.append(msg)
 
-    lines = [f"⚖️ <b>Portfolio Rebalancing</b> (Total: ${total_usd/1000:,.1f}K)", ""]
+    lines = [f"⚖️ <b>Portfolio Rebalancing</b> (F&G: {fg_index} | Total: ${total_usd/1000:,.1f}K)", ""]
 
     if sell_lines:
         lines.append("🔴 <b>SELL</b>")

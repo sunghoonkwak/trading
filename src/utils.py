@@ -3,15 +3,55 @@ Common utility functions for the trading application.
 """
 import sys
 import unicodedata
+import time
 from datetime import datetime
 import pandas as pd
 import logging
+
+try:
+    import fear_and_greed
+    FG_AVAILABLE = True
+except ImportError:
+    fear_and_greed = None
+    FG_AVAILABLE = False
+    logging.warning("fear_and_greed not found. F&G index will use default value.")
 
 try:
     import pandas_market_calendars as mcal
 except ImportError:
     mcal = None
     logging.warning("pandas_market_calendars not found. Holiday check will be disabled.")
+
+# Cache for Fear & Greed Index
+_fg_cache = {"value": 50, "last_update": 0}
+
+
+def get_fear_and_greed() -> float:
+    """
+    Fetches Fear & Greed index safely with caching (10 min).
+    Prevents blocking with frequent network calls.
+
+    Returns:
+        float: Current F&G index value (0-100). Default 50 on error.
+    """
+    global _fg_cache
+
+    if not FG_AVAILABLE:
+        return 50.0
+
+    try:
+        now = time.time()
+        # Update every 10 minutes (600 seconds) to avoid API spam/blocking
+        if now - _fg_cache["last_update"] > 600:
+            data = fear_and_greed.get()
+            _fg_cache["value"] = float(data.value)
+            _fg_cache["last_update"] = now
+    except Exception as e:
+        logging.warning(f"Failed to fetch F&G index: {e}")
+        # Retain old value on error
+        pass
+
+    return _fg_cache["value"]
 
 # Platform-specific getch implementation
 IS_WINDOWS = sys.platform == "win32"

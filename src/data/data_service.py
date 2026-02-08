@@ -398,7 +398,7 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
         try:
             from data.calculate_weights import calculate_target_weights, load_config
         except ImportError:
-            def calculate_target_weights(c, cfg, v=None): return {}, 0
+            def calculate_target_weights(c, cfg, fg=50.0): return {}, 0, 0.2
             def load_config(p): return {}
 
         # Path resolution for weights config (in KIS_config directory)
@@ -409,7 +409,15 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
             logging.warning(f"[Data] portfolio_weights.json not found at {config_path}")
 
         config = load_config(config_path)
-        targets, score = calculate_target_weights(current_weights, config)
+
+        # Get F&G index from cached utility
+        try:
+            from utils import get_fear_and_greed
+            fear_greed_index = get_fear_and_greed()
+        except ImportError:
+            fear_greed_index = 50.0
+
+        targets, score, cash_weight = calculate_target_weights(current_weights, config, fear_greed_index)
     except Exception as e:
         logging.error(f"[DataService] Weight calc error: {e}")
         targets = {}
@@ -515,17 +523,12 @@ def get_weight_diffs():
     """
     Calculate weight differences between current and target allocations.
 
-    Args:
-        merged_data: Merged holdings data by ticker
-        current_weights: Current weight per ticker
-        targets: Target weight per ticker
-        total_value_usd: Total portfolio value in USD
-        exchange_rate: KRW/USD exchange rate
-
     Returns:
         list: Sorted list of diffs (by abs_diff descending), each containing:
             ticker, name, cur_w, tgt_w, diff, abs_diff, qty_diff
     """
+    import os
+
     portfolio_data = get_portfolio_data()
     merged_data = portfolio_data.get("merged_data", {})
     current_weights = portfolio_data.get("current_weights", {})
@@ -533,13 +536,40 @@ def get_weight_diffs():
     total_value_usd = portfolio_data.get("total_value_usd", 0.0)
     exchange_rate = portfolio_data.get("exchange_rate", None)
 
+    # Load portfolio config to get group constituents
+    config_path = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_weights.json")
+    constituents_set = set()
+    main_ticker_constituents = {}  # main_ticker -> [constituents]
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        for group in config.get('groups', []):
+            main_ticker = group.get('main_ticker')
+            constituents = group.get('constituents', [])
+            if main_ticker and constituents:
+                constituents_set.update(constituents)
+                main_ticker_constituents[main_ticker] = constituents
+    except Exception as e:
+        logging.warning(f"[get_weight_diffs] Failed to load config: {e}")
+
+    # Merge constituents' current weight into main ticker
+    merged_current_weights = dict(current_weights)
+    for main_ticker, constituents in main_ticker_constituents.items():
+        constituent_weight_sum = 0.0
+        for c in constituents:
+            if c in merged_current_weights:
+                constituent_weight_sum += merged_current_weights.pop(c, 0.0)
+        merged_current_weights[main_ticker] = merged_current_weights.get(main_ticker, 0.0) + constituent_weight_sum
+
     diffs = []
 
-    # We care about all tickers in either Targets OR Current
-    all_tickers = set(current_weights.keys()) | set(targets.keys())
+    # We care about all tickers in either Targets OR merged Current (excluding constituents)
+    all_tickers = (set(merged_current_weights.keys()) | set(targets.keys())) - constituents_set
 
     for t in all_tickers:
-        cur_w = current_weights.get(t, 0.0)
+        cur_w = merged_current_weights.get(t, 0.0)
         tgt_w = targets.get(t, 0.0)
 
         # Filter Cash
