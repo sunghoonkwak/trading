@@ -648,4 +648,31 @@ def get_weight_diffs():
     # Sort by absolute difference descending
     diffs.sort(key=lambda x: x["abs_diff"], reverse=True)
 
-    return diffs, total_value_usd
+    # Calculate cash weight info
+    cash_info = {}
+    try:
+        from data.calculate_weights import get_cash_weight, load_config
+        config_path = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_weights.json")
+        config = load_config(config_path)
+        cash_strategy = config.get('cash_strategy', {'min': 0.1, 'mid': 0.2, 'max': 0.3})
+
+        from utils import get_fear_and_greed
+        fg_index = get_fear_and_greed()
+        target_cash_weight = get_cash_weight(fg_index, cash_strategy)
+
+        # Current cash weight
+        current_cash = 0.0
+        for t, data in merged_data.items():
+            if data.get("type") == "CASH" or "cash" in t.lower():
+                current_cash += data.get("current_value_usd", 0)
+        current_cash_weight = current_cash / total_value_usd if total_value_usd > 0 else 0
+
+        cash_info = {
+            "current": current_cash_weight,
+            "target": target_cash_weight,
+            "diff": target_cash_weight - current_cash_weight
+        }
+    except Exception as e:
+        logging.warning(f"[get_weight_diffs] Failed to calculate cash info: {e}")
+
+    return diffs, total_value_usd, cash_info
