@@ -171,7 +171,7 @@ async def cmd_value_average(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     results = res.get("results", [])
     if not results:
-        await wrap_reply(update, "⚠️ <b>No strategies configured.</b>", parse_mode='HTML')
+        await wrap_reply(update, "⚠️ <b>No targets found (or all disabled).</b>", parse_mode='HTML')
         return ConversationHandler.END
 
     is_holiday = (res.get("status") == "market_holiday")
