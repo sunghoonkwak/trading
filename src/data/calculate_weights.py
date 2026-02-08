@@ -3,11 +3,11 @@ Portfolio Weight Calculation
 
 Allocation logic:
 1. Cash allocation based on F&G index:
-   - F&G <= 20 (Extreme Fear): max cash (0.3)
+   - F&G <= 20 (Extreme Fear): min cash (0.1) + leverage 10% (SOXL 5%, TQQQ 5%)
    - 20 < F&G <= 80 (Neutral): mid cash (0.2)
-   - F&G > 80 (Extreme Greed): min cash (0.1)
+   - F&G > 80 (Extreme Greed): max cash (0.3) - defensive
 
-2. Stock total = 1.0 - cash
+2. Stock total = 1.0 - cash - leverage_total
 
 3. Relative score-based allocation:
    - Each stock's score is calculated based on its ratio or target_score
@@ -16,6 +16,10 @@ Allocation logic:
 4. Group handling:
    - Target: main_ticker gets full group target (constituents don't reduce it)
    - Current: main_ticker's holding + sum of constituents' holdings
+
+5. Leverage allocation (Extreme Fear only):
+   - SOXL: 5% fixed
+   - TQQQ: 5% fixed
 """
 
 import json
@@ -38,6 +42,7 @@ def load_config(config_path=None):
 def get_cash_weight(fear_greed_index: float, cash_strategy: dict) -> float:
     """
     Determines cash weight based on Fear & Greed index.
+    Note: In Extreme Fear, uses min cash + leverage for aggressive positioning.
 
     Args:
         fear_greed_index: Current F&G index value (0-100)
@@ -47,11 +52,11 @@ def get_cash_weight(fear_greed_index: float, cash_strategy: dict) -> float:
         Cash weight (0.0 to 1.0)
     """
     if fear_greed_index <= 20:
-        # Extreme Fear -> Hold more cash
-        return cash_strategy['max']
-    elif fear_greed_index > 80:
-        # Extreme Greed -> Hold less cash
+        # Extreme Fear -> Aggressive (min cash + leverage)
         return cash_strategy['min']
+    elif fear_greed_index > 80:
+        # Extreme Greed -> Defensive (max cash)
+        return cash_strategy['max']
     else:
         # Neutral
         return cash_strategy['mid']
@@ -77,8 +82,15 @@ def calculate_target_weights(
     cash_strategy = config.get('cash_strategy', {'min': 0.1, 'mid': 0.2, 'max': 0.3})
     cash_weight = get_cash_weight(fear_greed_index, cash_strategy)
 
-    # 2. Stock total = 1.0 - cash
-    stock_total = 1.0 - cash_weight
+    # 2. Leverage allocation in Extreme Fear (SOXL 5%, TQQQ 5%)
+    leverage_allocation = {}
+    leverage_total = 0.0
+    if fear_greed_index <= 20:
+        leverage_allocation = {'SOXL': 0.05, 'TQQQ': 0.05}
+        leverage_total = sum(leverage_allocation.values())
+
+    # 3. Stock total = 1.0 - cash - leverage
+    stock_total = 1.0 - cash_weight - leverage_total
 
     # 3. Calculate total score (for relative allocation)
     # Groups: sum of target_scores
@@ -132,6 +144,10 @@ def calculate_target_weights(
 
         # Constituents are NOT added to target_weights
         # They only contribute to current holding calculation
+
+    # 7. Add leverage allocation (Extreme Fear only)
+    for ticker, weight in leverage_allocation.items():
+        target_weights[ticker] = target_weights.get(ticker, 0.0) + weight
 
     return target_weights, total_score, cash_weight
 

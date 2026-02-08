@@ -5,20 +5,22 @@
 ## Purpose (목적)
 
 F&G(Fear & Greed) 지수 기반 자산 배분 로직 구현:
-1. **Cash Allocation**: F&G 지수 구간에 따라 현금 비중을 3단계로 확정.
-2. **Relative Score**: 주식 총량 내에서 각 종목의 점수 비율에 따라 비중 분배.
-3. **Group Logic**: 그룹 내 Constituents 보유비중은 Main Ticker에 합산하여 비교.
-4. **Dividend Strategy**: '국내 배당주' 그룹의 비중을 세부 구성 종목들의 내부 비율에 따라 자동 분배.
+1. **Cash Allocation**: F&G 지수 구간에 따라 현금 비중 확정.
+2. **Leverage Allocation**: Extreme Fear 구간에서 SOXL/TQQQ 고정 비중 할당.
+3. **Relative Score**: 주식 총량 내에서 각 종목의 점수 비율에 따라 비중 분배.
+4. **Group Logic**: 그룹 내 Constituents 보유비중은 Main Ticker에 합산하여 비교.
+5. **Dividend Strategy**: '국내 배당주' 그룹의 비중을 세부 구성 종목들의 내부 비율에 따라 자동 분배.
 
 ## Configuration (~/KIS_config/portfolio_weights.json)
 
 ```json
 {
   "cash_strategy": {
-    "min": 0.1,    // F&G > 80 (Extreme Greed)
+    "min": 0.1,    // F&G <= 20 (Extreme Fear) - aggressive + leverage
     "mid": 0.2,    // 20 < F&G <= 80 (Neutral)
-    "max": 0.3     // F&G <= 20 (Extreme Fear)
+    "max": 0.3     // F&G > 80 (Extreme Greed) - defensive
   },
+  // Extreme Fear: cash 10% + SOXL 5% + TQQQ 5% = 80% stocks
   "groups": [
     {
       "name": "Nasdaq100",
@@ -50,12 +52,14 @@ F&G 지수에 따라 현금 비중 결정.
 
 #### Logic Step
 1. **Cash Weight**: F&G 지수 구간에 따라 현금 비중 확정.
-2. **Stock Total**: `1.0 - cash_weight`를 주식 총량으로 설정.
-3. **Score 계산**: 그룹 점수 합 + 개별 종목 점수 합.
-4. **Weight 분배**:
+2. **Leverage Allocation**: Extreme Fear 시 SOXL 5% + TQQQ 5% 고정 할당.
+3. **Stock Total**: `1.0 - cash_weight - leverage_total`를 주식 총량으로 설정.
+4. **Score 계산**: 그룹 점수 합 + 개별 종목 점수 합.
+5. **Weight 분배**:
    - **개별 종목**: `(score / total_score) * stock_total`
    - **그룹**: Main Ticker에 전체 그룹 비중 할당.
    - **배당주**: `source_ticker` 비중을 `constituents`에 내부 가중치로 분배.
+   - **레버리지**: Extreme Fear 시 고정 비중 추가.
 
 #### Args
 - `current_weights` (dict): 현재 포트폴리오의 실제 비중.

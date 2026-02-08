@@ -1,4 +1,9 @@
 {
+    "cash_strategy": {
+        "min": 0.1,
+        "mid": 0.2,
+        "max": 0.3
+    },
     "groups": [
         {
             "name": "Nasdaq100",
@@ -11,14 +16,8 @@
         },
         {
             "name": "Nasdaq100 leverage x2",
-            "target_score": 10,
+            "target_score": 15,
             "main_ticker": "QLD",
-            "constituents": []
-        },
-        {
-            "name": "Nasdaq100 leverage x3",
-            "target_score": 5,
-            "main_ticker": "TQQQ",
             "constituents": []
         },
         {
@@ -41,7 +40,11 @@
     "individual_stocks": [
         {
             "ticker": "SOXL",
-            "ratio": 0.03
+            "ratio": 0
+        },
+		{
+            "ticker": "TQQQ",
+            "ratio": 0
         },
         {
             "ticker": "TSM",
@@ -61,27 +64,19 @@
         },
         {
             "ticker": "QCOM",
-            "ratio": 0.10
+            "ratio": 0.1
         },
         {
             "ticker": "KR_DIV",
-            "ratio": 0.20
+            "ratio": 0.2
         },
         {
             "ticker": "TLT",
-            "ratio": 0.10
+            "ratio": 0.1
         },
         {
             "ticker": "453850",
-            "ratio": 0.00
-        },
-        {
-            "ticker": "USD cash",
-            "ratio": 0.20
-        },
-        {
-            "ticker": "KRW cash",
-            "ratio": 0.10
+            "ratio": 0.0
         }
     ],
     "kr_dividend_strategy": {
@@ -120,12 +115,5 @@
                 "weight": 3
             }
         ]
-    },
-    "vix_strategy": {
-        "ticker": "VIXY",
-        "max": 17,
-        "limit": 5,
-        "scale": 5
-    },
-    "fixed_scores": []
+    }
 }
