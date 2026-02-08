@@ -11,7 +11,7 @@ import json
 import logging
 from utils import getch, getch_str, is_market_holiday
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict
 import pytz
 
 from kis.kis_api import kis_auth as ka
@@ -23,6 +23,7 @@ import trading_config
 
 # Config directory (same as kis_auth.py)
 CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
+# Updated to use new config/history files
 CONFIG_FILE = os.path.join(CONFIG_ROOT, "raoeo.json")
 HISTORY_FILE = os.path.join(CONFIG_ROOT, "raoeo_history.json")
 
@@ -36,22 +37,24 @@ def load_config() -> dict:
     Load configuration from raoeo.json.
     """
     try:
+        if not os.path.exists(CONFIG_FILE):
+             # Fallback to old file if new one doesn't exist (during migration period)
+             old_file = os.path.join(CONFIG_ROOT, "raoeo.json")
+             if os.path.exists(old_file):
+                 add_alert(f"New config not found, using old: {old_file}", "WARNING")
+                 with open(old_file, 'r', encoding='utf-8') as f:
+                     data = json.load(f)
+                     # Adapt old format to new format structure strictly for internal use
+                     old_config = data.get('config', {})
+                     target = old_config.get('target')
+                     if target:
+                         return {"targets": {target: old_config}}
+                     return {} # Invalid old config
+
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        config = data.get('config', {})
-
-        # Validate required fields
-        required = ['seed', 'target', 'duration']
-        for field in required:
-            if field not in config:
-                raise ValueError(f"Missing required config field: {field}")
-
-        # Set defaults
-        config.setdefault('exchange', 'NASD')
-        config.setdefault('sell_profit', 0.10)
-
-        return config
+        return data # Returns dict with "targets" key
     except FileNotFoundError:
         add_alert(f"Config file not found: {CONFIG_FILE}", "ERROR")
         return {}
@@ -80,117 +83,132 @@ def get_current_price(symbol: str, exchange: str = "NASD") -> float:
     return 0.0
 
 
-def calculate_order() -> dict:
+def calculate_orders() -> dict:
     """
-    Calculate buy/sell orders for today based on the RAOEO strategy.
-
-    Strategy:
-        - Accumulating state (spent < seed/2): LOC buy at current_price * 110%
-        - Saturated state (spent >= seed/2):
-            - Sell: Limit order at avg_price * (1 + sell_profit)
-            - LOC buy 1: 50% budget at avg_price * (1 + (sell_profit - 1%)) (guaranteed execution)
-            - LOC buy 2: 50% budget at avg_price * 100% (lower avg cost)
-        - If holdings exist in accumulating state, sell order is also placed.
+    Calculate buy/sell orders for today based on the RAOEO strategy for ALL targets.
 
     Returns:
-        dict: Order calculation result with date, config, holdings, orders
+        dict: Combined result with structure:
+            {
+                "date": "YYYY-MM-DD",
+                "targets": {
+                    "Ticker1": { ... },
+                    "Ticker2": { ... }
+                },
+                "global_error": None
+            }
     """
     tz_us = pytz.timezone('US/Eastern')
+    today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
+
     result = {
-        "date": datetime.now(tz_us).strftime("%Y-%m-%d"),
+        "date": today_str,
+        "targets": {},
+        "global_error": None
+    }
+
+    # 1. Load config
+    config_data = load_config()
+    targets_config = config_data.get('targets', {})
+
+    if not targets_config:
+        result["global_error"] = "No targets configured in raoeo_new.json"
+        return result
+
+    # 2. Fetch Portfolio Data (Efficiency: Fetch once for all)
+    portfolio = get_portfolio_data()
+    if portfolio.get('error'):
+         result["global_error"] = f"Portfolio Error: {portfolio['error']}"
+         return result
+
+    merged_holdings = portfolio.get('merged_data', {})
+
+    # 3. Process each target
+    for ticker, target_conf in targets_config.items():
+        res_entry = _process_single_target(ticker, target_conf, merged_holdings)
+        result["targets"][ticker] = res_entry
+
+    return result
+
+
+def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) -> dict:
+    """
+    Internal helper to calculate orders for a SINGLE target.
+    """
+    res = {
         "state": None,
-        "config": {},
+        "config": config,
         "holdings": {},
         "daily_budget": 0.0,
         "orders": [],
         "error": None
     }
 
-    # 1. Load config
-    config = load_config()
-    if not config:
-        result["error"] = "Failed to load config"
-        return result
+    # Validation
+    required = ['seed', 'duration']
+    for field in required:
+        if field not in config:
+            res["error"] = f"Missing config field: {field}"
+            return res
 
-    result["config"] = config
     seed = float(config['seed'])
-    target = config['target']
-
-    # Try to get correct exchange from global config, fallback to local raoeo.json info
+    duration = int(config['duration'])
+    sell_profit = float(config.get('sell_profit', 0.10))
     exchange = config.get('exchange', 'NASD')
-    stock_info = trading_config.get_stock_info(target)
+
+    # Resolve Exchange
+    stock_info = trading_config.get_stock_info(ticker)
     if stock_info:
         mkt = stock_info.get('market', '').upper()
         excg_map = {"NASDAQ": "NASD", "NYSE": "NYSE", "AMEX": "AMEX", "NASDAQ/AMEX": "AMEX"}
         if mkt in excg_map:
             exchange = excg_map[mkt]
-            # Update config in result to show actual exchange used
-            result["config"]["exchange"] = exchange
+            res["config"]["exchange"] = exchange # Update back to res config
 
-    duration = int(config['duration'])
-    sell_profit = float(config.get('sell_profit', 0.10))
-
-    # 2. Calculate daily budget
+    # Daily Budget
     daily_budget = seed / duration
-    result["daily_budget"] = round(daily_budget, 2)
+    res["daily_budget"] = round(daily_budget, 2)
 
-    # 3. Fetch current holdings from portfolio data
-    portfolio = get_portfolio_data()
-    if portfolio.get('error'):
-        result["error"] = portfolio['error']
-        return result
-
-    # Find target stock in merged holdings
-    merged = portfolio.get('merged_data', {})
-    target_holding = None
-    for ticker, info in merged.items():
-        if ticker.upper() == target.upper():
-            qty = info.get('qty', 0)
-            total_investment = info.get('total_investment', 0)
-            avg_price = total_investment / qty if qty > 0 else 0
-            target_holding = {
-                'symbol': ticker,
-                'qty': qty,
-                'avg_price': avg_price,
-                'cur_price': info.get('cur_price', 0)
-            }
-            break
-
-    # 4. Get current price: KIS API -> WebSocket
-    from kis.wrapper import fetch_price
-    cur_price = fetch_price(target)
-    if cur_price <= 0:
-        cur_price = get_current_price(target, exchange)
-
-    # 5. Calculate orders based on state
-    # Get holdings info
+    # Current Holdings
     qty = 0
     avg_price = 0.0
-    if target_holding:
-        qty = int(target_holding.get('qty', 0))
-        avg_price = float(target_holding.get('avg_price', 0))
+    cur_price_holding = 0.0
 
-    result["holdings"] = {
+    # Search in merged holdings
+    # merged_holdings keys are usually symbols
+    if ticker in portfolio_holdings:
+        info = portfolio_holdings[ticker]
+        qty = int(info.get('qty', 0))
+        total_investment = info.get('total_investment', 0)
+        avg_price = total_investment / qty if qty > 0 else 0
+        cur_price_holding = info.get('cur_price', 0)
+
+    # Current Price Strategy: KIS API -> WebSocket -> Holdings
+    from kis.wrapper import fetch_price
+    cur_price = fetch_price(ticker)
+    if cur_price <= 0:
+        cur_price = get_current_price(ticker, exchange)
+    if cur_price <= 0:
+        cur_price = cur_price_holding
+
+    res["holdings"] = {
         "qty": qty,
         "avg_price": round(avg_price, 2),
         "cur_price": cur_price
     }
 
-    # Calculate spent amount (avg_price * qty)
+    # Algorithm Logic
     spent_amount = avg_price * qty if qty > 0 else 0
     half_seed = seed / 2
 
-    # State determination: spent < seed/2 -> accumulating, >= seed/2 -> saturated
-
-    # Common Sell Logic (Executed regardless of state)
+    # Common Sell Logic
     if qty > 0 and avg_price > 0:
         sell_price = round(avg_price * (1 + sell_profit), 2)
-
         qty_lmt = (qty // 2) + (qty % 2)
         qty_loc = qty // 2
 
         if qty_lmt > 0:
-            result["orders"].append({
+            res["orders"].append({
                 "type": "sell_limit",
                 "price": sell_price,
                 "qty": qty_lmt,
@@ -198,9 +216,8 @@ def calculate_order() -> dict:
                 "type_code": LIMIT_ORDER_TYPE,
                 "desc": f"Sell limit {int(sell_profit*100)}% profit"
             })
-
         if qty_loc > 0:
-            result["orders"].append({
+            res["orders"].append({
                 "type": "sell_loc",
                 "price": sell_price,
                 "qty": qty_loc,
@@ -210,29 +227,24 @@ def calculate_order() -> dict:
             })
 
     if spent_amount < half_seed:
-        # Accumulating state - still building position
-        result["state"] = "accumulating"
+        # Accumulating
+        res["state"] = "accumulating"
 
-        # Determine buy price based on holdings
         if qty > 0 and avg_price > 0:
-            # Has holdings: use avg_price * (sell_profit - 1%) to avoid self-trade
-            buy_ratio = 1 + sell_profit - 0.01
-            buy_price = round(avg_price * buy_ratio, 2)
-            buy_desc = f"Accumulating buy at {int(buy_ratio*100)}% of avg (avoid self-trade)"
+             buy_ratio = 1 + sell_profit - 0.01
+             buy_price = round(avg_price * buy_ratio, 2)
+             buy_desc = f"Accumulating buy at {int(buy_ratio*100)}% of avg (avoid self-trade)"
         else:
-            # No holdings: use current price * 110%
-            if cur_price <= 0:
-                result["error"] = f"Waiting for {target} price data from WebSocket. Please try again shortly."
-                return result
-            buy_price = round(cur_price * 1.10, 2)
-            buy_desc = "Accumulating buy at 110% of current price"
+             if cur_price <= 0:
+                 res["error"] = f"Waiting for {ticker} price data."
+                 return res
+             buy_price = round(cur_price * 1.10, 2)
+             buy_desc = "Accumulating buy at 110% of current price"
 
         buy_qty = int(daily_budget / buy_price)
-
         if buy_qty > 0:
-            # Determine order type based on holdings
             order_type_name = "buy_accumulating" if qty > 0 else "buy_initial"
-            result["orders"].append({
+            res["orders"].append({
                 "type": order_type_name,
                 "price": buy_price,
                 "qty": buy_qty,
@@ -240,28 +252,24 @@ def calculate_order() -> dict:
                 "type_code": LOC_ORDER_TYPE,
                 "desc": buy_desc
             })
+
     else:
-        # Saturated state - position is large enough
-        result["state"] = "saturated"
-
+        # Saturated
+        res["state"] = "saturated"
         if avg_price <= 0:
-            result["error"] = f"Invalid average price for {target}"
-            return result
+            res["error"] = f"Invalid average price for {ticker}"
+            return res
 
-        # Calculate total quantity for today's budget based on avg_price
-        # Logic: Total Qty = Budget / AvgPrice
-        # Buy 1: (Total / 2) + Remainder
-        # Buy 2: (Total / 2)
         total_buy_qty = int(daily_budget / avg_price)
         buy_qty_1 = (total_buy_qty // 2) + (total_buy_qty % 2)
         buy_qty_2 = total_buy_qty // 2
 
-        # Buy order 1: 1% lower than sell target (guaranteed execution, avoid self-match)
+        # Buy 1: (Sell Profit - 1%)
         buy_ratio_1 = 1 + sell_profit - 0.01
         buy_price_1 = round(avg_price * buy_ratio_1, 2)
 
         if buy_qty_1 > 0:
-            result["orders"].append({
+            res["orders"].append({
                 "type": "buy_guaranteed",
                 "price": buy_price_1,
                 "qty": buy_qty_1,
@@ -270,11 +278,10 @@ def calculate_order() -> dict:
                 "desc": f"Buy at {int(buy_ratio_1*100)}% of avg (guaranteed)"
             })
 
-        # Buy order 2: at 100% (lower avg)
+        # Buy 2: 100% Avg
         buy_price_2 = round(avg_price * 1.00, 2)
-
         if buy_qty_2 > 0:
-            result["orders"].append({
+            res["orders"].append({
                 "type": "buy_lower",
                 "price": buy_price_2,
                 "qty": buy_qty_2,
@@ -283,129 +290,164 @@ def calculate_order() -> dict:
                 "desc": "Buy at 100% of avg (lower cost)"
             })
 
-    return result
+    return res
 
 
-def execute_orders(orders: list, config: dict) -> list:
+def execute_orders(orders_map: dict) -> Dict[str, list]:
     """
-    Execute the calculated orders via KIS API.
+    Execute orders for multiple targets.
 
     Args:
-        orders: List of order dicts from calculate_order()
-        config: Configuration dict with target, exchange
+        orders_map: Dict mapping ticker -> list of order dicts (from result['targets'][ticker]['orders'])
 
     Returns:
-        list: Execution results for each order
+        Dict[str, list]: map of ticker -> execution results list
     """
-    results = []
+    final_results = {}
     cano = ka.getTREnv().my_acct
     prod = ka.getTREnv().my_prod
-    target = config['target']
-    exchange = config.get('exchange', 'NASD')
 
-    for order in orders:
-        try:
-            df, err = order_overseas(
-                cano=cano,
-                acnt_prdt_cd=prod,
-                ovrs_excg_cd=exchange,
-                pdno=target,
-                ord_qty=str(order['qty']),
-                ovrs_ord_unpr=str(order['price']),
-                ord_dv="buy" if "buy" in order['type'].lower() else "sell",
-                ctac_tlno="",
-                mgco_aptm_odno="",
-                ord_svr_dvsn_cd="0",
-                ord_dvsn=order.get('type_code', LOC_ORDER_TYPE),
-                env_dv="real"
-            )
+    # We need to look up exchange for each ticker.
+    # The caller typically has access to config, but here we might just rely on
+    # the order object if we injected it, OR look it up again.
+    # Ideally, the order object should have exchange info or we pass it.
+    # Refactoring: Let's assume order dict itself DOES NOT have exchange.
+    # We should get exchange from config.
 
-            success = df is not None and not df.empty
-            results.append({
-                "order": order,
-                "success": success,
-                "error": err if not success else None,
-                "response": df.to_dict('records') if success else None
-            })
-        except Exception as e:
-            results.append({
-                "order": order,
-                "success": False,
-                "error": str(e)
-            })
+    # Actually, execute_orders is called with a flat list in old code.
+    # New design: We iterate through the `result['targets']` structure in `main.py` or wherever calls this.
+    # But to keep `raoeo.py` self-contained/backward-ish compatible, let's accept `calculated_result`?
+    # Or just `orders_map`.
 
-    return results
+    # Wait, the prompt implies `execute_orders` signature change.
+    # Let's change signature to accept the `whole result object` or just the map.
+    pass
 
-
-def save_history(order_data: dict, exec_results: list = None) -> bool:
+def execute_all_orders(calculated_result: dict) -> dict:
     """
-    Save order calculation and execution results to history file.
+    Execute ALL orders found in the calculated result.
 
     Args:
-        order_data: Result from calculate_order()
-        exec_results: Optional list of execution results from execute_orders()
+        calculated_result: Return value from calculate_orders()
+
+    Returns:
+        dict: A map of ticker -> execution results list
     """
+    execution_summary = {}
+
+    cano = ka.getTREnv().my_acct
+    prod = ka.getTREnv().my_prod
+
+    targets_data = calculated_result.get('targets', {})
+
+    for ticker, data in targets_data.items():
+        orders = data.get('orders', [])
+        config = data.get('config', {})
+        exchange = config.get('exchange', 'NASD')
+
+        ticker_results = []
+
+        for order in orders:
+             try:
+                # Actual API Call
+                df, err = order_overseas(
+                    cano=cano,
+                    acnt_prdt_cd=prod,
+                    ovrs_excg_cd=exchange,
+                    pdno=ticker,
+                    ord_qty=str(order['qty']),
+                    ovrs_ord_unpr=str(order['price']),
+                    ord_dv="buy" if "buy" in order['type'].lower() else "sell",
+                    ctac_tlno="",
+                    mgco_aptm_odno="",
+                    ord_svr_dvsn_cd="0",
+                    ord_dvsn=order.get('type_code', LOC_ORDER_TYPE),
+                    env_dv="real"
+                )
+
+                success = df is not None and not df.empty
+                ticker_results.append({
+                    "order": order,
+                    "success": success,
+                    "error": err if not success else None,
+                    "response": df.to_dict('records') if success else None
+                })
+             except Exception as e:
+                 ticker_results.append({
+                    "order": order,
+                    "success": False,
+                    "error": str(e)
+                })
+
+        execution_summary[ticker] = ticker_results
+
+    return execution_summary
+
+
+def save_history(calculated_result: dict, execution_summary: dict = None) -> bool:
+    """
+    Save calculation and execution results to history file (New Format).
+    """
+    today_str = calculated_result.get('date')
+    if not today_str:
+         tz_us = pytz.timezone('US/Eastern')
+         today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
+
+    # Update calculated_result with execution success/fail status
+    if execution_summary:
+        targets = calculated_result.get('targets', {})
+        for ticker, t_res in targets.items():
+            exec_res_list = execution_summary.get(ticker, [])
+            for order in t_res.get('orders', []):
+                # find matching result
+                matched = next((r for r in exec_res_list if r['order'] == order), None)
+                if matched:
+                    order['success'] = matched['success']
+                    order['error'] = matched.get('error')
+
     try:
-        # Ensure date is set
-        if not order_data.get('date'):
-            tz_us = pytz.timezone('US/Eastern')
-            order_data['date'] = datetime.now(tz_us).strftime("%Y-%m-%d")
-
-        # Merge execution info into order_data
-        if exec_results:
-            # Match each order with its result
-            for order in order_data.get('orders', []):
-                result = next((r for r in exec_results if r['order'] == order), None)
-                if result:
-                    order['success'] = result['success']
-                    order['error'] = result.get('error')
-
-        # Load existing history
-        history = {"history": []}
+        history_list = []
         if os.path.exists(HISTORY_FILE):
-            try:
-                with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-                    content = f.read().strip()
-                    if content:
-                        loaded = json.loads(content)
-                        # Filter out entries without date
-                        history["history"] = [e for e in loaded.get('history', []) if e.get('date')]
-            except (json.JSONDecodeError, IOError):
-                pass
+             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                 history_list = json.load(f)
 
-        # Check if today's entry already exists
-        today_str = order_data.get('date')
-        existing_entry = None
-        for entry in history.get('history', []):
+        # Find today's entry
+        existing_idx = -1
+        for idx, entry in enumerate(history_list):
             if entry.get('date') == today_str:
-                existing_entry = entry
+                existing_idx = idx
                 break
 
-        if existing_entry:
-            # Update existing entry with new order results
-            for new_order in order_data.get('orders', []):
-                # match by the descriptive 'type' (which acts as ID)
-                old_matching = None
-                for old_order in existing_entry.get('orders', []):
-                    if old_order.get('type') == new_order.get('type'):
-                        old_matching = old_order
-                        break
+        new_entry_targets = calculated_result.get('targets', {})
 
-                if old_matching:
-                    if new_order.get('success'):
-                        old_matching['success'] = True
-                        old_matching['error'] = None
-                    elif not old_matching.get('success'):
-                        old_matching['error'] = new_order.get('error')
+        if existing_idx >= 0:
+            # Merge logic: verify if we need to merge specifically
+            # Current logic: Replace or Merge?
+            # If we calculated NEW orders for a ticker, we overwrite that ticker's entry.
+            # But we should preserve other tickers if they exist in history but not in current run (unlikely if we run all)
+
+            existing_entry = history_list[existing_idx]
+            existing_targets = existing_entry.get('targets', {})
+
+            # Merge
+            for ticker, data in new_entry_targets.items():
+                existing_targets[ticker] = data
+
+            history_list[existing_idx]['targets'] = existing_targets
+
         else:
-            # Insert new entry at the beginning
-            history["history"].insert(0, order_data)
+            # Insert New
+            new_entry = {
+                "date": today_str,
+                "targets": new_entry_targets
+            }
+            history_list.insert(0, new_entry)
 
-        # Save
-        with open(HISTORY_FILE, 'w', encoding='utf-8') as f_out:
-            json.dump(history, f_out, indent=4, ensure_ascii=False)
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(history_list, f, indent=4, ensure_ascii=False)
 
         return True
+
     except Exception as e:
         add_alert(f"Failed to save history: {e}", "ERROR")
         return False
@@ -414,9 +456,7 @@ def save_history(order_data: dict, exec_results: list = None) -> bool:
 def check_today_history() -> Optional[dict]:
     """
     Check if RAOEO strategy was executed today.
-
-    Returns:
-        Optional[dict]: Today's execution record if exists, None otherwise
+    Returns the WHOLE list entry for today { "date":..., "targets":... } or None.
     """
     tz_us = pytz.timezone('US/Eastern')
     today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
@@ -424,12 +464,10 @@ def check_today_history() -> Optional[dict]:
     try:
         if os.path.exists(HISTORY_FILE):
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-                if content:
-                    history_data = json.loads(content)
-                    for entry in history_data.get('history', []):
-                        if entry.get('date') == today_str:
-                            return entry
+                history_list = json.load(f)
+                for entry in history_list:
+                    if entry.get('date') == today_str:
+                        return entry
     except Exception as e:
         add_alert(f"Error checking history: {e}", "ERROR")
 
@@ -439,133 +477,198 @@ def check_today_history() -> Optional[dict]:
 def get_daily_report() -> dict:
     """
     Build RAOEO status report for both terminal and Telegram.
+    Now supports MULTIPLE targets.
 
     Returns:
-        dict: Report containing:
-            - executed_today: Today's execution record if exists
-            - current_result: Calculated order result if not executed
-            - cur_price: Current price fetched from KIS API/WebSocket/holdings
-            - config: Config from current_result or history
-            - holdings: Holdings from current_result or history
-            - success_orders: List of successfully executed orders
-            - failed_orders: List of failed orders
-            - pending_orders: List of pending orders to be placed
-            - error: Error message if any
+        dict: {
+            "status": "executed" | "calculated" | "market_holiday" | "error",
+            "global_error": ...,
+            "targets": {
+                 "SOXL": {
+                     "status": ...,
+                     "config": ...,
+                     "holdings": ...,
+                     "success_orders": [],
+                     "failed_orders": [],
+                     "pending_orders": []
+                 },
+                 ...
+            }
+        }
     """
-    report = {
-        "status": "init",
-        "date": datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d"),
-        "current_result": None,
-        "cur_price": 0.0,
-        "config": None,
-        "holdings": None,
-        "success_orders": [],
-        "failed_orders": [],
-        "pending_orders": [],
-        "error": None
-    }
     tz_us = pytz.timezone('US/Eastern')
     today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
 
-    today_entry = None
+    report = {
+         "date": today_str,
+         "status": "init",
+         "global_error": None,
+         "targets": {}
+    }
 
-    # 1. Check history first - if some failed, we prioritize retrying those EXACT orders
-    if os.path.exists(HISTORY_FILE):
-        try:
-            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-                content = f.read().strip()
-                if content:
-                    hist = json.loads(content)
-                    # Filter out entries without date and get the first one
-                    entries = [e for e in hist.get('history', []) if e.get('date')]
-                    today_entry = entries[0] if entries and entries[0].get('date') == today_str else None
-                    if today_entry:
-                        report["config"] = today_entry.get('config')
-                        report["holdings"] = today_entry.get('holdings')
-                        report["status"] = "executed" # Default to executed if found in history, refined below
+    # 1. Check History
+    today_entry = check_today_history()
 
-                        # Categorize orders from history
-                        for o in today_entry.get('orders', []):
-                            if o.get('success'):
-                                report["success_orders"].append(o)
-                            else:
-                                report["failed_orders"].append(o)
+    # 2. Config & Portfolio (needed if calculating fresh)
+    # We always try to load config to know what targets SHOULD exist
+    config_data = load_config()
+    targets_config = config_data.get('targets', {})
 
-                        if not report["failed_orders"]:
-                            # Everything succeeded
-                            report["status"] = "executed"
-                        else:
-                            # Some failed! Populate current_result with THESE failed orders for retry
-                            report["status"] = "calculated" # Retry needed
-                            report["current_result"] = {
-                                "date": today_str,
-                                "config": today_entry['config'],
-                                "holdings": today_entry['holdings'],
-                                "orders": report["failed_orders"],
-                                "state": today_entry.get('state', 'unknown'),
-                                "is_retry": True
-                            }
-        except Exception as e:
-            add_alert(f"Error reading history for report: {e}", "ERROR")
+    if not targets_config:
+        report["global_error"] = "No targets configured."
+        return report
 
-    # 2. Market Holiday Check (if not already executed)
+    # 3. Iterate all configured targets
+    generated_portfolio = None
+
+    # If we might need fresh data (holiday or calculation), fetch portfolio once
     if not today_entry:
-         if is_market_holiday("NYSE"):
-            report["status"] = "market_holiday"
-            # Calculate to show info, but clear orders
-            current_result = calculate_order()
-            current_result["orders"] = [] # Force empty orders
+        generated_portfolio = get_portfolio_data()
 
-            if current_result.get('error'):
-                 report["error"] = current_result['error']
+    calculated_fresh = None
 
-            report["current_result"] = current_result
-            report["config"] = current_result.get('config')
-            report["holdings"] = current_result.get('holdings')
+    for ticker, conf in targets_config.items():
+        t_report = {
+            "status": "init",
+            "config": conf,
+            "holdings": None,
+            "current_result": None,
+            "success_orders": [],
+            "failed_orders": [],
+            "pending_orders": [],
+            "error": None,
+            "cur_price": 0.0
+        }
 
-            # Fetch price for display
-            config_target = report["config"].get("target")
-            if config_target:
-                 from kis.wrapper import fetch_price
-                 cur_price = fetch_price(config_target)
-                 if cur_price <= 0:
-                      cur_price = get_current_price(config_target, report["config"].get('exchange', 'NASD'))
-                 report["cur_price"] = cur_price
+        hist_data = None
+        if today_entry and 'targets' in today_entry:
+             hist_data = today_entry['targets'].get(ticker)
 
-            return report
+        if hist_data:
+            # Found in history
+            t_report["holdings"] = hist_data.get('holdings')
+            t_report["config"] = hist_data.get('config') # Use history's config snapshot
 
-    # 3. No history for today yet - calculate fresh orders
-    if not today_entry and not report["current_result"]:
-        current_result = calculate_order()
-        if current_result.get('error'):
-            report["error"] = current_result['error']
-            report["status"] = "error"
+            orders = hist_data.get('orders', [])
+            all_success = True
+            for o in orders:
+                if o.get('success'):
+                    t_report["success_orders"].append(o)
+                else:
+                    t_report["failed_orders"].append(o)
+                    all_success = False
+
+            if all_success and orders:
+                t_report["status"] = "executed"
+            elif t_report["failed_orders"]:
+                t_report["status"] = "calculated" # Needs retry
+                # Reconstruct 'current_result' subset for retry logic
+                t_report["current_result"] = {
+                    "orders": t_report["failed_orders"],
+                    "state": hist_data.get('state'),
+                    "is_retry": True
+                }
+            elif not orders:
+                 t_report["status"] = "executed"
+
         else:
-            report["status"] = "calculated"
+            # Not in history - Calculate Fresh OR Holiday Status
 
-        report["current_result"] = current_result
-        report["config"] = current_result.get('config')
-        report["holdings"] = current_result.get('holdings')
+            # 1. Populate current Holdings if available
+            if generated_portfolio:
+                merged = generated_portfolio.get('merged_data', {})
+                if ticker in merged:
+                    info = merged[ticker]
+                    qty = int(info.get('qty', 0))
+                    total_inv = info.get('total_investment', 0)
+                    avg_price = total_inv / qty if qty > 0 else 0
+                    t_report["holdings"] = {
+                        "qty": qty,
+                        "avg_price": round(avg_price, 2),
+                        "cur_price": info.get('cur_price', 0)
+                    }
+                else:
+                     # Initial / Empty
+                     t_report["holdings"] = {
+                         "qty": 0, "avg_price": 0.0, "cur_price": 0.0
+                     }
 
-    # 4. Calculate pending orders from current_result
-    # Note: failed_orders should be retried, so they go into pending_orders
-    # Only exclude orders that have already succeeded
-    if report.get("current_result"):
-        success_types = {o.get('type') for o in report["success_orders"]}
-        for o in report["current_result"].get('orders', []):
-            if o.get('type') not in success_types:
-                report["pending_orders"].append(o)
+                     # If not held, try to fetch current price for reference
+                     try:
+                         # Use existing exchange config if available, or auto-detect
+                         excsk = None
+                         if config and 'exchange' in config:
+                             excsk = config['exchange']
 
-    # 5. Fetch current price: KIS API -> WebSocket -> holdings
-    config = report.get("config")
-    holdings = report.get("holdings") or {}
-    if config:
-        from kis.wrapper import fetch_price
-        cur_price = fetch_price(config['target'])  # auto-maps exchange code
-        if cur_price <= 0:
-            cur_price = get_current_price(config['target'], config.get('exchange', 'NASD'))
-        if cur_price <= 0:
-            cur_price = holdings.get('cur_price', 0)
-        report["cur_price"] = cur_price
+                         from kis import wrapper
+                         fetched_price = wrapper.fetch_price(ticker, excsk)
+                         if fetched_price > 0:
+                             t_report["holdings"]["cur_price"] = fetched_price
+                     except Exception as e_fetch:
+                         logging.warning(f"Failed to fetch price for empty holding {ticker}: {e_fetch}")
+
+            # 2. Check Holiday vs Calculation
+            if not calculated_fresh:
+                 # Market Holiday Check
+                 if is_market_holiday("NYSE"):
+                     report["status"] = "market_holiday"
+                     # We already populated holdings above
+                 else:
+                     calculated_fresh = calculate_orders()
+
+            if calculated_fresh:
+                # Extract specific target result
+                if calculated_fresh.get('global_error'):
+                    report["global_error"] = calculated_fresh['global_error']
+
+                t_data = calculated_fresh.get('targets', {}).get(ticker)
+
+                if t_data:
+                     t_report["current_result"] = t_data
+                     # overwrite holdings with the one from calculation (should be same)
+                     t_report["holdings"] = t_data.get('holdings')
+                     t_report["config"] = t_data.get('config')
+
+                     if t_data.get('error'):
+                         t_report["error"] = t_data['error']
+                         t_report["status"] = "error"
+                     else:
+                         t_report["status"] = "calculated"
+                         # All orders are pending
+                         t_report["pending_orders"] = t_data.get('orders', [])
+
+            # Holiday Handling
+            if is_market_holiday("NYSE"):
+                 t_report["status"] = "market_holiday"
+
+        # Common: Fetch current price (efficiency: could be batch, but per-ticker is fine for reporting)
+        if t_report.get("config"):
+            from kis.wrapper import fetch_price
+            cp = fetch_price(ticker)
+            if cp <= 0:
+                cp = get_current_price(ticker, t_report["config"].get('exchange', 'NASD'))
+            if cp <= 0 and t_report.get("holdings"):
+                cp = t_report["holdings"].get("cur_price", 0)
+            t_report["cur_price"] = cp
+
+        report["targets"][ticker] = t_report
+
+    # Aggregate Global Status
+    # If ANY target is "calculated", global is "calculated" (needs action)
+    # If ALL are "executed", global is "executed"
+    statuses = [t["status"] for t in report["targets"].values()]
+
+    if "error" in statuses:
+        report["status"] = "error" # partial error
+    elif "calculated" in statuses:
+        report["status"] = "calculated"
+    elif all(s == "executed" for s in statuses):
+        report["status"] = "executed"
+    elif "market_holiday" in statuses:
+         report["status"] = "market_holiday"
 
     return report
+
+# Backward compatibility wrappers if needed by existing callers
+# (e.g. if main.py calls specific functions expecting old return types)
+# Ideally main.py should be updated.

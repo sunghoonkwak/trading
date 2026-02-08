@@ -13,74 +13,97 @@ from telegram.ext import (
 )
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 
-from strategy.raoeo import get_daily_report, execute_orders, save_history
+from strategy.raoeo import get_daily_report, execute_all_orders, save_history
 
 # Conversation state
 RAOEO_CONFIRM = 0
 
 
 def format_raoeo_report(report: dict) -> str:
-    """Format RAOEO report for Telegram with Success/Failed sections."""
+    """Format RAOEO report for Telegram (Multi-Target)."""
     if not report:
         return "⚠️ No RAOEO data available."
 
     lines = []
-    today_str = (report.get("current_result") or {}).get("date") or (report.get("executed_today") or {}).get("date", "Today")
+    today_str = report.get("date", "Today")
+    global_status = report.get("status", "unknown")
+
     lines.append(f"📊 <b>RAOEO Status - {today_str}</b>")
+    if report.get("global_error"):
+        lines.append(f"⚠️ Global Error: {report['global_error']}")
 
-    # Get pre-calculated values from report
-    config = report.get("config")
-    holdings = report.get("holdings") or {}
-    cur_price = report.get("cur_price", 0)
-    success_orders = report.get("success_orders", [])
-    failed_orders = report.get("failed_orders", [])
-    pending_orders = report.get("pending_orders", [])
+    targets = report.get("targets", {})
+    if not targets:
+        lines.append("No targets configured.")
+        return "\n".join(lines)
 
-    if config:
-        lines.append(f"Target: <code>{config['target']}</code> @ {config['exchange']}")
-    if holdings:
-        lines.append(f"Holdings: {holdings.get('qty', 0)} @ ${holdings.get('avg_price', 0):.2f} (Cur: ${cur_price:.2f})")
-    if config:
-        # Calculate and show daily budget
-        seed = float(config.get('seed', 0))
-        duration = int(config.get('duration', 1))
-        daily_budget = seed / duration if duration > 0 else 0
-        lines.append(f"Budget: ${daily_budget:.2f}/day (${seed:,.0f} / {duration} days)")
+    # Iterate targets
+    for ticker, t_report in targets.items():
+        config = t_report.get("config")
+        exch = config.get('exchange', 'N/A') if config else 'N/A'
+
+        lines.append(f"\n🔹 <b>{ticker} @ {exch}</b>")
+
+        holdings = t_report.get("holdings") or {}
+        cur_price = t_report.get("cur_price", 0)
+
+        # Info Line
+        if config:
+             seed = float(config.get('seed', 0))
+             duration = int(config.get('duration', 1))
+             daily_budget = seed / duration if duration > 0 else 0
+             lines.append(f"  Budget: ${daily_budget:.2f}/day (${seed:,.0f} / {duration}d)")
+
+        if holdings:
+             lines.append(f"  Holdings: {holdings.get('qty', 0)} @ ${holdings.get('avg_price', 0):.2f} (Cur: ${cur_price:.2f})")
+
+        # Orders
+        success_orders = t_report.get("success_orders", [])
+        failed_orders = t_report.get("failed_orders", [])
+        pending_orders = t_report.get("pending_orders", []) # These are new calculated ones
+
+        # Section: Success
+        if success_orders:
+            lines.append("  ✅ <b>Completed:</b>")
+            for o in success_orders:
+                lines.append(f"    • {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}")
+
+        # Section: Failed (Retry)
+        if failed_orders:
+            lines.append("  🔄 <b>Failed → Retry:</b>")
+            for o in failed_orders:
+                err = f" - <i>{o.get('error', '')[:20]}</i>" if o.get('error') else ""
+                lines.append(f"    • {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}{err}")
+
+        # Section: Pending
+        # Filter out if already in failed set (though logic usually separates them)
+        if pending_orders:
+            lines.append("  ⏳ <b>Pending:</b>")
+            for o in pending_orders:
+                lines.append(f"    • {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}")
+
+        if t_report.get("status") == "market_holiday":
+            lines.append("  🚫 <b>Market Holiday</b>")
+        elif not (success_orders or failed_orders or pending_orders):
+            lines.append("  - No orders today.")
+
     lines.append("")
 
-    # --- Section: Success ---
-    if success_orders:
-        lines.append("✅ <b>Completed:</b>")
-        for o in success_orders:
-            lines.append(f"  • {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}")
-        lines.append("")
+    # Global Summary
+    if global_status == "market_holiday":
+        pass # lines.append("🚫 <b>휴장일</b> - 주문 비활성화")
 
-    # --- Section: Failed (with retry indicator) ---
-    if failed_orders:
-        lines.append("🔄 <b>Failed → Retry:</b>")
-        for o in failed_orders:
-            err = f" - <i>{o.get('error', '')[:30]}</i>" if o.get('error') else ""
-            lines.append(f"  • {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}{err}")
-        lines.append("")
+    # Check if executable
+    has_executable = False
+    for t_report in targets.values():
+        if t_report.get("pending_orders") or t_report.get("failed_orders"):
+             has_executable = True
+             break
 
-    # --- Section: New Pending (not from failed retry) ---
-    failed_types = {o.get('type') for o in failed_orders}
-    new_pending = [o for o in pending_orders if o.get('type') not in failed_types]
-    if new_pending:
-        lines.append("⏳ <b>Pending:</b>")
-        for o in new_pending:
-            lines.append(f"  • {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}")
-        lines.append("")
-
-    if report.get("status") == "market_holiday":
-        lines.append("🚫 <b>휴장일</b> - 주문 비활성화")
-    elif not success_orders and not failed_orders and not pending_orders:
-        lines.append("No orders for today.")
-
-    if failed_orders or pending_orders:
-        lines.append("<i>Execute these orders?</i>")
-    elif success_orders:
-        lines.append("✨ <i>All orders completed for today.</i>")
+    if has_executable:
+        lines.append("<i>Execute all pending/failed orders?</i>")
+    elif global_status == "executed":
+        lines.append("✨ <i>All tasks completed.</i>")
 
     return "\n".join(lines)
 
@@ -120,14 +143,19 @@ async def cmd_raoeo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Format message
     msg = format_raoeo_report(report)
 
-    # Check if there are executable orders
-    pending_orders = report.get("pending_orders", [])
-    failed_orders = report.get("failed_orders", [])
-    has_orders = bool(pending_orders or failed_orders) and not report.get("executed_today")
+    # Check if there are executable orders globally
+    has_orders = False
+    if report.get("targets"):
+        for t_report in report["targets"].values():
+            if t_report.get("pending_orders") or t_report.get("failed_orders"):
+                has_orders = True
+                break
 
     # Holiday check - disable orders
     if report.get("status") == "market_holiday":
         has_orders = False
+
+    # Also if already fully executed, no need to show yes/no (though logic above handles it via pending/failed checks)
 
     # Build keyboard
     keyboard = build_raoeo_keyboard(has_orders)
@@ -160,40 +188,72 @@ async def handle_raoeo_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await wrap_edit(update, "⚠️ Session expired. Please run /raoeo again.", parse_mode='HTML')
             return ConversationHandler.END
 
-        # Get pending orders (include failed orders for retry)
-        pending_orders = report.get("pending_orders", [])
-        if not pending_orders:
+        # Re-verify executable orders
+        # In multi-target, we need to gather all pending/failed from report to pass to execute
+        # OR just pass the whole report to a new execute_all_orders function?
+        # Let's see what we did in raoeo.py.
+        # I added execute_all_orders(calculated_result) in raoeo.py.
+        # But wait, execute_all_orders expects the format returned by calculate_orders.
+        # get_daily_report structure is slightly different (nested keys match, but we need to ensure orders are there).
+        # In get_daily_report, we populated "pending_orders" in t_report.
+        # But execute_all_orders uses 'orders' key in target data if I recall correctly?
+        # Let's double check execute_all_orders implementation in raoeo.py I just wrote.
+        # It iterates targets -> orders.
+        # In get_daily_report, I put new orders in "pending_orders" and failed in "failed_orders".
+        # So I might need to construct a "execution payload" here.
+
+        # Construct execution payload
+        execution_payload = {
+            "date": report.get("date"),
+            "targets": {}
+        }
+
+        exec_count = 0
+
+        for ticker, t_report in report.get("targets", {}).items():
+            to_exec = []
+            to_exec.extend(t_report.get("pending_orders", []))
+            to_exec.extend(t_report.get("failed_orders", [])) # Retry these too
+
+            if to_exec:
+                execution_payload["targets"][ticker] = {
+                    "config": t_report.get("config"),
+                    "orders": to_exec
+                }
+                exec_count += len(to_exec)
+
+        if exec_count == 0:
             await wrap_edit(update, "⚠️ No orders to execute.", parse_mode='HTML')
             context.user_data.pop('raoeo_report', None)
             return ConversationHandler.END
 
         # Execute orders
         try:
-            config = report.get("config")
-            exec_results = execute_orders(pending_orders, config)
+            # We use execute_all_orders from raoeo.py
+            exec_results_map = execute_all_orders(execution_payload)
 
+            # Update report display
             lines = [format_raoeo_report(report), "", "─" * 20, "<b>Execution Result:</b>"]
-            success_count = 0
 
-            for res in exec_results:
-                status = "✅" if res['success'] else "❌"
-                if res['success']:
-                    success_count += 1
-                o = res['order']
-                err_msg = f" ({res['error']})" if not res['success'] and res.get('error') else ""
-                lines.append(f"{status} {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}{err_msg}")
+            total_success = 0
+
+            for ticker, res_list in exec_results_map.items():
+                if not res_list: continue
+                lines.append(f"🔹 {ticker}:")
+                for res in res_list:
+                    status = "✅" if res['success'] else "❌"
+                    if res['success']: total_success += 1
+                    o = res['order']
+                    err_msg = f" ({res['error']})" if not res['success'] and res.get('error') else ""
+                    lines.append(f"  {status} {o['type'].upper()} {o['qty']} @ ${o['price']:.2f}{err_msg}")
 
             # Save to history
-            exec_data = {
-                "date": (report.get("current_result") or {}).get("date"),
-                "config": config,
-                "holdings": report.get("holdings"),
-                "orders": pending_orders,
-                "state": (report.get("current_result") or {}).get("state", "unknown")
-            }
-            save_history(exec_data, exec_results)
-            lines.append(f"\n💾 Saved. <b>{success_count}/{len(pending_orders)} succeeded</b>")
+            # save_history expects (calculated_result, execution_summary)
+            # calculated_result should have the orders we tried to execute.
+            # execution_summary is the map ticker -> result list
+            save_history(execution_payload, exec_results_map)
 
+            lines.append(f"\n💾 Saved. <b>{total_success}/{exec_count} succeeded</b>")
             await wrap_edit(update, "\n".join(lines), parse_mode='HTML')
 
         except Exception as e:

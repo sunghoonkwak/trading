@@ -1,9 +1,16 @@
 {
-    "config": {
-        "seed": 10000,
-        "target": "SOXL",
-        "exchange": "AMEX",
-        "duration": 40,
-        "sell_profit": 0.10
+    "targets": {
+        "SOXL": {
+            "seed": 10000,
+            "exchange": "AMS",
+            "duration": 40,
+            "sell_profit": 0.1
+        },
+        "FAS": {
+            "seed": 10000,
+            "exchange": "AMS",
+            "duration": 60,
+            "sell_profit": 0.1
+        }
     }
 }

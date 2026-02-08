@@ -10,6 +10,9 @@
   - 실시간 주문(Orders), 시세(Quotes), 메모(Memos), 시스템 로그(System Logs)를 WebSocket으로 모니터링합니다.
   - 현대적인 다크 모드 UI와 효율적인 화면 분할(좌우 5:5)을 제공합니다.
   - 접속 주소: `http://<서버IP>:8080`
+- **전략 (Strategies)**:
+  - **RAOEO (Unlimited Buying)**: 다중 종목(Multi-Target) 동시 운영 지원 (예: SOXL, FAS 등), 개별 설정 및 휴장일 자동 대응.
+  - **Value Averaging**: 목표 비중 기반 분할 매수/매도 전략.
 - **터미널 제어 인터페이스 (Terminal Control)**:
   - Docker 환경에 최적화되어, 인터랙티브 메뉴 대신 **웹 대시보드**와 **텔레그램**을 주 제어 수단으로 사용합니다.
 - **실시간 알림 및 원격 제어**: 텔레그램 봇을 통해 매매 알림을 받고 명령어로 조회/주문이 가능합니다.

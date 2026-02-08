@@ -296,6 +296,12 @@ async def smart_sleep_async():
     await asyncio.sleep(_smartSleep)
 
 
+def smart_sleep():
+    if _DEBUG:
+        logging.info(f"[RateLimit] Sleeping {_smartSleep}s ")
+    time.sleep(_smartSleep)
+
+
 def getTREnv():
     return _TRENV
 

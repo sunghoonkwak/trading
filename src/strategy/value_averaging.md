@@ -11,33 +11,29 @@
     "default_settings": {
         "duration": 200
     },
-    "strategies": [
-        {
+    "targets": {
+        "QLD": {
             "enabled": true,
-            "target": "QLD",
-            "exchange": "AMEX",
+            "exchange": "AMS",
             "daily_budget": 84.34,
             "target_weight_initial": 0.0325
         },
-        {
+        "TQQQ": {
             "enabled": true,
-            "target": "TQQQ",
-            "exchange": "NASD",
+            "exchange": "NAS",
             "daily_budget": 41.68,
-            "target_weight_initial": 0.016,
-            "duration": 250
+            "target_weight_initial": 0.016
         }
-    ]
+    }
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `default_settings` | obj | 모든 전략에 적용되는 기본값 |
-| `strategies[]` | array | 종목별 전략 배열 |
+| `targets` | dict | 종목별 전략 설정 딕셔너리 (Key: Ticker) |
 | `enabled` | bool | 전략 활성화 여부 |
-| `target` | str | 대상 종목 심볼 |
-| `exchange` | str | 거래소 코드 (AMEX, NASD 등) |
+| `exchange` | str | 거래소 코드 (AMS, NAS 등) |
 | `duration` | int | 투자 기간 (일) - 개별 override 가능 |
 | `daily_budget` | float | 일별 투자 예산 (자동 계산됨) |
 | `target_weight_initial` | float | 초기 목표 비중 (0.0 - 1.0) |
@@ -50,7 +46,7 @@
 당일에 매수해야 하는 주문을 계산합니다 (다중 종목 지원).
 
 #### Strategy Logic
-1. `enabled: true`인 모든 전략을 순회합니다.
+1. `enabled: true`인 모든 **Target**을 순회합니다.
 2. 종목별로 `default_settings`와 병합합니다.
 3. **Day Count 계산**:
    - 히스토리에서 가장 최근 날짜의 기록을 확인합니다.
@@ -102,45 +98,38 @@
 
 ## History File (히스토리 파일)
 
-`value_averaging_history.json` - **날짜 기반 구조**:
+`value_averaging_history.json` - **리스트(Array) 기반 구조**:
 
 ```json
-{
-    "QLD": {
-        "2026-02-02": {
-            "day_count": 21,
-            "tried_count": 1,
-            "results": [
-                {
-                    "time": "09:30:00",
-                    "type": "skip",
-                    "executed": false,
-                    "success": true,
-                    "message": "Skipped"
-                }
-            ]
-        },
-        "2026-02-03": {
-            "day_count": 22,
-            "tried_count": 1,
-            "results": [
-                {
-                    "time": "05:24:02",
-                    "type": "buy_value_averaging",
-                    "qty": 2,
-                    "price": 77.09,
-                    "executed": true,
-                    "success": true,
-                    "message": "Order Placed"
-                }
-            ]
+[
+    {
+        "date": "2026-02-06",
+        "targets": {
+            "QLD": {
+                "day_count": 22,
+                "tried_count": 1,
+                "results": [
+                    {
+                        "time": "05:24:02",
+                        "type": "buy_value_averaging",
+                        "qty": 2,
+                        "price": 77.09,
+                        "executed": true,
+                        "success": true,
+                        "message": "Order Placed"
+                    }
+                ]
+            },
+            "TQQQ": { ... }
         }
-    }
-}
+    },
+    ...
+]
 ```
 
-- **Date Key**: 날짜(YYYY-MM-DD)를 키로 사용하여 하루의 기록을 그룹화합니다.
-- `executed`: 실제 주문 실행 여부. `true`면 "Already Executed"로 간주됩니다. (단, **Skip**은 실행으로 간주하지 않아 재평가 가능)
+- **List Structure**: 최신 날짜의 기록이 리스트의 앞쪽(인덱스 0)에 위치합니다.
+- **Targets Dict**: 각 날짜 항목 내에 `targets` 딕셔너리로 종목별 기록을 관리합니다.
+- `executed`: 실제 주문 실행 여부. `true`면 "Already Executed"로 간주됩니다.
 - `day_count`: 해당 날짜의 진행 단계. **매수 여부(Skip 포함)와 관계없이 개장일마다 증가**합니다.
 
 ---

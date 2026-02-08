@@ -157,9 +157,21 @@
     ],
     "US": [
         {
+            "ticker": "FAS",
+            "name": "Direxion Daily Financial Bull 3X Shares",
+            "market": "AMS",
+            "color": [
+                50,
+                255,
+                50
+            ],
+            "disabled": false,
+            "telegram_button": true
+        },
+        {
             "ticker": "QQQM",
             "name": "Invesco NASDAQ 100 ETF",
-            "market": "NASDAQ",
+            "market": "NAS",
             "color": [
                 50,
                 255,
@@ -171,7 +183,7 @@
         {
             "ticker": "QQQ",
             "name": "Invesco QQQ Trust",
-            "market": "NASDAQ",
+            "market": "NAS",
             "color": [
                 50,
                 255,
@@ -182,7 +194,7 @@
         {
             "ticker": "SOXL",
             "name": "DIREXION SEMICONDUCTOR DAILY 3X",
-            "market": "AMEX",
+            "market": "AMS",
             "color": [
                 50,
                 255,
@@ -194,7 +206,7 @@
         {
             "ticker": "VOO",
             "name": "SPDR S&P 500 ETF Trust",
-            "market": "AMEX",
+            "market": "AMS",
             "color": [
                 50,
                 255,
@@ -205,7 +217,7 @@
         {
             "ticker": "QLD",
             "name": "PROSHARES QQQ 2X",
-            "market": "AMEX",
+            "market": "AMS",
             "color": [
                 50,
                 255,
@@ -217,7 +229,7 @@
         {
             "ticker": "TQQQ",
             "name": "PROSHARES QQQ 3X",
-            "market": "NASDAQ",
+            "market": "NAS",
             "color": [
                 50,
                 255,
@@ -229,7 +241,7 @@
         {
             "ticker": "SPYM",
             "name": "SPDR S&P 500 ETF Trust",
-            "market": "AMEX",
+            "market": "AMS",
             "color": [
                 50,
                 255,
@@ -240,7 +252,7 @@
         {
             "ticker": "SCHD",
             "name": "Schwab U.S. Dividend Equity ETF",
-            "market": "AMEX",
+            "market": "AMS",
             "color": [
                 50,
                 255,
@@ -251,7 +263,7 @@
         {
             "ticker": "NVDA",
             "name": "NVIDIA Corporation",
-            "market": "NASDAQ",
+            "market": "NAS",
             "color": [
                 255,
                 255,
@@ -263,7 +275,7 @@
         {
             "ticker": "AVGO",
             "name": "Broadcom Inc.",
-            "market": "NASDAQ",
+            "market": "NAS",
             "color": [
                 255,
                 255,
@@ -275,7 +287,7 @@
         {
             "ticker": "GOOGL",
             "name": "Google LLC",
-            "market": "NASDAQ",
+            "market": "NAS",
             "color": [
                 255,
                 255,
@@ -287,7 +299,7 @@
         {
             "ticker": "QCOM",
             "name": "QUALCOMM, Inc.",
-            "market": "NASDAQ",
+            "market": "NAS",
             "color": [
                 255,
                 255,
@@ -299,7 +311,7 @@
         {
             "ticker": "TSM",
             "name": "Taiwan Semiconductor Manufacturing Company Limited",
-            "market": "NYSE",
+            "market": "NYS",
             "color": [
                 160,
                 160,
@@ -311,7 +323,7 @@
         {
             "ticker": "BLK",
             "name": "BlackRock, Inc.",
-            "market": "NYSE",
+            "market": "NYS",
             "color": [
                 160,
                 160,
@@ -322,7 +334,7 @@
         {
             "ticker": "O",
             "name": "Realty Income Corporation",
-            "market": "NYSE",
+            "market": "NYS",
             "color": [
                 160,
                 160,
@@ -333,7 +345,7 @@
         {
             "ticker": "CPNG",
             "name": "Coupang, Inc.",
-            "market": "NYSE",
+            "market": "NYS",
             "color": [
                 160,
                 160,
@@ -344,7 +356,7 @@
         {
             "ticker": "TLT",
             "name": "iShares 20+ Year Treasury Bond ETF",
-            "market": "NASDAQ",
+            "market": "NAS",
             "color": [
                 160,
                 160,
@@ -355,7 +367,7 @@
         {
             "ticker": "VIXY",
             "name": "PROSHARES VIX SHORT TERM FUTURES",
-            "market": "AMEX",
+            "market": "AMS",
             "color": [
                 255,
                 50,

@@ -3,7 +3,9 @@ import logging
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Dict, Any, List
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from typing import Dict, Any, List, Optional
 
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
 from kis.kis_api import kis_auth as ka
@@ -40,46 +42,52 @@ def save_config(config: Dict[str, Any]) -> bool:
 def get_strategy_config(config: Dict[str, Any], ticker: str) -> Dict[str, Any]:
     """Get strategy config for a specific ticker, merging with default_settings."""
     default_settings = config.get('default_settings', {})
-    strategies = config.get('strategies', [])
+    targets = config.get('targets', {})
 
-    for strategy in strategies:
-        if strategy.get('target') == ticker:
-            # Merge default_settings with strategy (strategy takes priority)
-            merged = {**default_settings, **strategy}
-            return merged
+    strategy = targets.get(ticker)
+    if strategy:
+        # Merge default_settings with strategy (strategy takes priority)
+        merged = {**default_settings, **strategy}
+        return merged
     return {}
 
 
-def load_history() -> Dict[str, Dict[str, Any]]:
+def load_history() -> List[Dict[str, Any]]:
     """
     Load value_averaging_history.json.
 
-    New format:
-    {
-        "QLD": {
-            "2026-02-03": {
-                "day_count": 22,
-                "tried_count": 2,
-                "results": [
-                    {"time": "05:23:53", "type": "skip", ...},
-                    {"time": "05:24:02", "type": "buy_value_averaging", ...}
-                ]
+    Format:
+    [
+        {
+            "date": "2026-02-06",
+            "targets": {
+                "QLD": {
+                    "day_count": 22,
+                    "tried_count": 2,
+                    "results": [...]
+                },
+                "TQQQ": { ... }
             }
-        }
-    }
+        },
+        ...
+    ]
     """
     try:
         if not os.path.exists(HISTORY_FILE):
-            return {}
+            return []
         with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
+            # Ensure it's a list
+            if isinstance(data, dict):
+                # Fallback or empty if old format somehow persists (though we migrated)
+                return []
             return data
     except Exception as e:
         logging.error(f"Failed to load value averaging history: {e}")
-        return {}
+        return []
 
 
-def save_history(history_data: Dict[str, List]) -> bool:
+def save_history(history_data: List[Dict[str, Any]]) -> bool:
     """Save value_averaging_history.json."""
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
@@ -113,13 +121,13 @@ def get_daily_report():
     exchange_rate = portfolio_data.get('exchange_rate', 0)
 
     config = load_config()
-    strategies = config.get('strategies', [])
+    targets_config = config.get('targets', {})
     default_settings = config.get('default_settings', {})
 
-    if not strategies:
-        return {"error": "No strategies configured in value_averaging.json"}
+    if not targets_config:
+        return {"error": "No targets configured in value_averaging.json"}
 
-    # Load history (now ticker-based)
+    # Load history (list-based)
     hist_data = load_history()
     today_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
 
@@ -127,13 +135,9 @@ def get_daily_report():
     total_orders = []
     config_updated = False
 
-    for strategy in strategies:
+    for target_ticker, strategy in targets_config.items():
         # Skip disabled strategies
         if not strategy.get('enabled', True):
-            continue
-
-        target_ticker = strategy.get('target', '')
-        if not target_ticker:
             continue
 
         # Merge with default settings
@@ -152,8 +156,18 @@ def get_daily_report():
             except Exception:
                 pass
 
-        # Get ticker-specific history
-        ticker_history = hist_data.get(target_ticker, {})
+        # Get ticker-specific history from list
+        # We need to find the latest valid entry for this ticker
+        ticker_history_entry = None
+        ticker_history_date = None
+
+        # Sort history by date descending just in case, though usually it is.
+        # Assuming index 0 is latest for now, but safest to iterate.
+        for entry in hist_data:
+            if target_ticker in entry.get('targets', {}):
+                ticker_history_entry = entry['targets'][target_ticker]
+                ticker_history_date = entry['date']
+                break
 
         # Extract target data from portfolio
         target_data = merged_portfolio.get(target_ticker, {})
@@ -169,7 +183,7 @@ def get_daily_report():
         # Get or initialize daily_budget
         daily_budget = strategy.get('daily_budget', 0)
 
-        if not ticker_history:  # First run for this ticker (empty dict)
+        if not ticker_history_entry:  # First run for this ticker
             if target_weight <= 0:
                 results.append({
                     "target_ticker": target_ticker,
@@ -179,25 +193,20 @@ def get_daily_report():
 
             daily_budget = (total_asset_val * target_weight) / duration
             # Update strategy in config
-            for s in strategies:
-                if s.get('target') == target_ticker:
-                    s['daily_budget'] = daily_budget
-                    s['target_weight_initial'] = target_weight
-                    config_updated = True
-                    break
+            if target_ticker in targets_config:
+                targets_config[target_ticker]['daily_budget'] = daily_budget
+                targets_config[target_ticker]['target_weight_initial'] = target_weight
+                config_updated = True
 
         # Day count calculation
         last_day_count = 0
         using_existing_today_record = False
 
-        sorted_dates = sorted(ticker_history.keys(), reverse=True)
-        if sorted_dates:
-            latest_date = sorted_dates[0]
-            latest_entry = ticker_history[latest_date]
-            last_day_count = latest_entry.get('day_count', 0)
+        if ticker_history_entry:
+            last_day_count = ticker_history_entry.get('day_count', 0)
 
-            if latest_date == today_et:
-                using_existing_today_record = True
+            if ticker_history_date == today_et:
+                 using_existing_today_record = True
 
         # Determine day_count
         if using_existing_today_record:
@@ -214,8 +223,7 @@ def get_daily_report():
         executed_orders = [] # Initialize here for scope
 
         if using_existing_today_record:
-            today_entry = ticker_history[today_et]
-            results_list = today_entry.get('results', [])
+            results_list = ticker_history_entry.get('results', [])
             executed_today = any(r.get('executed', False) for r in results_list)
 
             if executed_today:
@@ -309,7 +317,7 @@ def get_daily_report():
 
     # Save updated config if needed
     if config_updated:
-        config['strategies'] = strategies
+        config['targets'] = targets_config
         save_config(config)
 
     # Determine status
@@ -416,15 +424,32 @@ def save_ticker_result(ticker: str, day_count: int, result: dict, executed: bool
     today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
     now_time = datetime.now(ZoneInfo("America/New_York")).strftime("%H:%M:%S")
 
-    if ticker not in hist_data:
-        hist_data[ticker] = {}
+    # Find today's entry
+    today_index = -1
+    for i, entry in enumerate(hist_data):
+        if entry['date'] == today:
+            today_index = i
+            break
 
-    if today not in hist_data[ticker]:
-        hist_data[ticker][today] = {
+    if today_index == -1:
+        # Create new entry for today
+        new_entry = {
+            "date": today,
+            "targets": {}
+        }
+        hist_data.insert(0, new_entry)
+        today_index = 0
+
+    today_entry = hist_data[today_index]
+
+    if ticker not in today_entry["targets"]:
+         today_entry["targets"][ticker] = {
             "day_count": day_count,
             "tried_count": 0,
             "results": []
         }
+
+    target_entry = today_entry["targets"][ticker]
 
     # Flatten result for storage
     order = result.get('order')
@@ -441,16 +466,14 @@ def save_ticker_result(ticker: str, day_count: int, result: dict, executed: bool
         "message": result.get('message', '')
     }
 
-    hist_data[ticker][today]["results"].append(storage_entry)
-    hist_data[ticker][today]["tried_count"] = len(hist_data[ticker][today]["results"])
+    target_entry["results"].append(storage_entry)
+    target_entry["tried_count"] = len(target_entry["results"])
 
     # Update day_count if this execution actually happened (and it's higher)
-    # Theoretically day_count for today is fixed once created, but we can ensure consistency
-    current_day_count = hist_data[ticker][today].get("day_count", 0)
+    current_day_count = target_entry.get("day_count", 0)
     if day_count > current_day_count:
-        hist_data[ticker][today]["day_count"] = day_count
+        target_entry["day_count"] = day_count
     elif current_day_count == 0:
-        # Initial setting
-        hist_data[ticker][today]["day_count"] = day_count
+        target_entry["day_count"] = day_count
 
     save_history(hist_data)

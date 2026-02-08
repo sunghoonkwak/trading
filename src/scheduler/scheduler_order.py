@@ -27,48 +27,51 @@ def run_daily_order_report():
         try:
             raoeo_report = raoeo.get_daily_report()
 
-            # Check for pending orders and if NOT already executed today
-            pending_orders = raoeo_report.get("pending_orders", [])
-            executed_today = raoeo_report.get("executed_today")
-            failed_orders = raoeo_report.get("failed_orders", [])
-            is_holiday = raoeo_report.get("status") == "market_holiday"
+            # RAOEO Multi-Target Execution Logic
+            # We need to gather executable orders from all targets
+            execution_payload = {
+                "date": raoeo_report.get("date"),
+                "targets": {}
+            }
 
-            # If we have pending orders (including retries) and it's not marked as fully executed today
-            if (pending_orders or failed_orders) and not executed_today and not is_holiday:
-                logging.info(f"[Scheduler] Executing RAOEO orders: {len(pending_orders)} pending, {len(failed_orders)} failed")
+            has_executable = False
+            targets_report = raoeo_report.get("targets", {})
 
-                # Combine pending and failed into executable list (get_daily_report separates them)
-                # Note: raoeo.execute_orders handles the list.
-                # We should prefer 'pending_orders' from the report if it includes everything needing execution.
-                # However, get_daily_report splits them.
-                # Logic in telegram_raoeo: "pending_orders" from report are displayed.
-                # Let's verify what execute_orders expects. It expects a list of order dicts.
+            for ticker, t_report in targets_report.items():
+                if t_report.get("status") == "market_holiday":
+                    continue
 
-                # In raoeo.py:
-                # "pending_orders" includes new ones.
-                # "failed_orders" are from history.
-                # But get_daily_report's step 3 populates pending_orders from current_result (which includes failed retries).
-                # So pending_orders should contain ALL valid orders to execute.
+                p_orders = t_report.get("pending_orders", [])
+                f_orders = t_report.get("failed_orders", [])
 
-                execution_target = pending_orders
+                # Check for pending orders and failed orders
+                if (p_orders or f_orders) and t_report.get("status") != "executed":
+                    to_exec = []
+                    to_exec.extend(p_orders)
+                    to_exec.extend(f_orders)
 
-                if execution_target:
-                    config = raoeo_report.get("config")
-                    exec_results = raoeo.execute_orders(execution_target, config)
+                    if to_exec:
+                        execution_payload["targets"][ticker] = {
+                            "config": t_report.get("config"),
+                            "orders": to_exec
+                        }
+                        has_executable = True
 
-                    # Save history
-                    # We need to construct the 'result' dict similar to calculation output
-                    exec_data = {
-                        "date": (raoeo_report.get("current_result") or {}).get("date"),
-                        "config": config,
-                        "holdings": raoeo_report.get("holdings"),
-                        "orders": execution_target,
-                        "state": (raoeo_report.get("current_result") or {}).get("state", "unknown")
-                    }
-                    raoeo.save_history(exec_data, exec_results)
+            if raoeo_report.get("status") == "market_holiday":
+                has_executable = False
+                logging.info("[Scheduler] RAOEO: Market Holiday, skipping.")
 
-                    # Re-fetch report to reflect execution
-                    raoeo_report = raoeo.get_daily_report()
+            if has_executable:
+                logging.info(f"[Scheduler] Executing RAOEO orders for targets: {list(execution_payload['targets'].keys())}")
+
+                # Execute All
+                exec_results_map = raoeo.execute_all_orders(execution_payload)
+
+                # Save History
+                raoeo.save_history(execution_payload, exec_results_map)
+
+                # Re-fetch report for notification
+                raoeo_report = raoeo.get_daily_report()
 
             raoeo_text = format_raoeo_report(raoeo_report)
             report_parts.append(raoeo_text)
