@@ -367,7 +367,7 @@ function formatLogContent(message) {
             else width = '80px';
         }
 
-        return `<span style="width:${width}; display:inline-block; text-align:${textAlign}; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:top; margin-right:8px">${escapeHtml(part.trim())}</span>`;
+        return `<span style="width:${width}; display:inline-block; text-align:${textAlign}; vertical-align:top; margin-right:8px">${escapeHtml(part.trim())}</span>`;
     }).join(''); // Space-based separation for cleaner look
 }
 
@@ -381,8 +381,8 @@ function addLog(message, level = 'info', time = null) {
     const entry = document.createElement('div');
     entry.className = `log-entry ${level}`;
 
-    // Apply special formatting if it's a pipe-delimited market/order log
-    const formattedContent = (level === 'mkt' || message.includes('|'))
+    // Apply special formatting only for market data logs
+    const formattedContent = (level === 'mkt')
         ? formatLogContent(message)
         : escapeHtml(message);
 
