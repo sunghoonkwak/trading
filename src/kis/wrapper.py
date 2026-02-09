@@ -58,10 +58,16 @@ def fetch_open_orders():
     cano = ka.getTREnv().my_acct
     prod = ka.getTREnv().my_prod
 
-    # 1. US Market
-    df_us = inquire_nccs_overseas(cano=cano, acnt_prdt_cd=prod, ovrs_excg_cd="NASD", sort_sqn="DS", FK200="", NK200="")
-    if not df_us.empty:
-        df_us['_market'] = 'US'
+    # 1. US Markets (NASD, NYSE, AMEX)
+    us_exchanges = ["NASD", "NYSE", "AMEX"]
+    df_us_list = []
+    for excg_cd in us_exchanges:
+        df = inquire_nccs_overseas(cano=cano, acnt_prdt_cd=prod, ovrs_excg_cd=excg_cd, sort_sqn="DS", FK200="", NK200="")
+        if not df.empty:
+            df['_market'] = 'US'
+            df_us_list.append(df)
+
+    df_us = pd.concat(df_us_list, ignore_index=True) if df_us_list else pd.DataFrame()
 
     # 2. KR Market
     df_kr = inquire_psbl_rvsecncl(cano=cano, acnt_prdt_cd=prod, inqr_dvsn_1="0", inqr_dvsn_2="0")
