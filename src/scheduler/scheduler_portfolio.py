@@ -7,6 +7,7 @@ import logging
 import os
 import json
 import glob
+import re
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -258,8 +259,8 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
 def run_daily_portfolio_report():
     """
     Execute daily portfolio reporting routine (typically scheduled for morning).
-    - Tue-Sat: Collect Data (Save JSON).
-    - Mon-Sat: Send Notification (Backup Report).
+    - Tue-Sat: Collect Data (Save JSON) + Send Notification.
+    - Mon: Load Friday's data (no fetch) + Resend report for week-start review.
     - Sun: Skip.
     """
     now = datetime.now()
@@ -272,43 +273,57 @@ def run_daily_portfolio_report():
 
     logging.info(f"[Scheduler] Starting daily job. Weekday: {weekday}")
 
-    # 1. Fetch Data
-    # For file naming/logic, we consider 7AM today as "Yesterday's Close"
-    # e.g., 2026-02-02 07:00 -> Report for 2026-02-01
-    yesterday = now - timedelta(days=1)
-    date_str = yesterday.strftime("%Y%m%d")
-
     portfolio_data = None
+    current_file_path = None
 
-    # 2. Save Data logic (Tue(1) ~ Sat(5))
-    # Monday morning 7AM follows Sunday, so no market data to save usually.
-    # Tuesday morning 7AM follows Monday, so we save Monday's data.
-    should_save = (1 <= weekday <= 5)
-
-    current_file_path = os.path.join(HISTORY_DIR, f"portfolio_{date_str}.json")
-
-    # Check if file already exists to avoid duplicate fetching/saving on manual trigger
-    if os.path.exists(current_file_path):
-        try:
-            with open(current_file_path, 'r', encoding='utf-8') as f:
-                portfolio_data = json.load(f)
-            logging.info(f"[Scheduler] Loaded existing portfolio data from {current_file_path}")
-        except Exception as e:
-            logging.error(f"[Scheduler] Failed to load existing file: {e}")
-            # Fallback to fetch if load fails
-            portfolio_data = None
-
-    if portfolio_data is None:
-        try:
-            # Use rich data service for both saving and display
-            portfolio_data = get_portfolio_data()
-        except Exception as e:
-            error_msg = f"[Scheduler] Failed to get portfolio: {e}"
-            logging.error(error_msg)
-            send_notification(error_msg)
+    # Monday (0): Load most recent saved file (Friday's data) for week-start review
+    # No new data fetch, just resend Friday's report
+    if weekday == 0:
+        history_files = get_sorted_history_files()
+        if history_files:
+            # Load the most recent file (should be Friday's data)
+            latest_file = history_files[-1]
+            try:
+                with open(latest_file, 'r', encoding='utf-8') as f:
+                    portfolio_data = json.load(f)
+                current_file_path = latest_file
+                logging.info(f"[Scheduler] Monday - Loaded Friday's data from {latest_file}")
+            except Exception as e:
+                logging.error(f"[Scheduler] Failed to load Friday's data: {e}")
+                send_notification(f"⚠️ Monday report failed: Could not load Friday's data")
+                return
+        else:
+            logging.warning("[Scheduler] Monday - No history files found")
+            send_notification("⚠️ Monday report: No historical data available")
             return
+    else:
+        # Tue(1) ~ Sat(5): Fetch new data and save
+        # For file naming, 7AM today = "Yesterday's Close"
+        yesterday = now - timedelta(days=1)
+        date_str = yesterday.strftime("%Y%m%d")
+        current_file_path = os.path.join(HISTORY_DIR, f"portfolio_{date_str}.json")
 
-        if should_save:
+        # Check if file already exists (avoid duplicate fetch on manual trigger)
+        if os.path.exists(current_file_path):
+            try:
+                with open(current_file_path, 'r', encoding='utf-8') as f:
+                    portfolio_data = json.load(f)
+                logging.info(f"[Scheduler] Loaded existing portfolio data from {current_file_path}")
+            except Exception as e:
+                logging.error(f"[Scheduler] Failed to load existing file: {e}")
+                portfolio_data = None
+
+        if portfolio_data is None:
+            try:
+                # Use rich data service for both saving and display
+                portfolio_data = get_portfolio_data()
+            except Exception as e:
+                error_msg = f"[Scheduler] Failed to get portfolio: {e}"
+                logging.error(error_msg)
+                send_notification(error_msg)
+                return
+
+            # Save data (Tue-Sat)
             try:
                 with open(current_file_path, 'w', encoding='utf-8') as f:
                     json.dump(portfolio_data, f, ensure_ascii=False, indent=2)
@@ -317,9 +332,8 @@ def run_daily_portfolio_report():
                 logging.error(f"[Scheduler] Failed to save file: {e}")
 
     # 3. Notification Logic (Mon(0) ~ Sat(5))
-    should_notify = (0 <= weekday <= 5)
-
-    if should_notify:
+    # At this point, portfolio_data and current_file_path are both set
+    if portfolio_data:
         try:
             # Generate Message
             summary_text = format_portfolio_summary(portfolio_data)
@@ -329,6 +343,11 @@ def run_daily_portfolio_report():
             comparison_text = get_comparison_stats(portfolio_data, history_files, current_file_path)
 
             final_message = f"{summary_text}\n{comparison_text}"
+
+            # Extract date_str from current_file_path for backup naming
+            # e.g., portfolio_20260207.json -> 20260207
+            match = re.search(r'portfolio_(\d{8})\.json', current_file_path)
+            date_str = match.group(1) if match else datetime.now().strftime("%Y%m%d")
 
             # Backup Report
             report_file = os.path.join(REPORTS_DIR, f"report_{date_str}.txt")

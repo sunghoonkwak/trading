@@ -7,7 +7,8 @@
 ### run_daily_portfolio_report
 매일 아침 실행되는 메인 잡 함수입니다.
 - **Data Collection (화-토)**: 전날 장 마감 데이터를 수집하여 `portfolio_history/`에 JSON 파일로 저장합니다.
-- **Notification (월-토)**: 수집된 데이터 혹은 최신 데이터를 기반으로 요약 리포트를 생성하고 텔레그램으로 전송합니다.
+- **Notification (화-토)**: 수집된 데이터를 기반으로 요약 리포트를 생성하고 텔레그램으로 전송합니다.
+- **Monday**: 새 데이터를 fetch하지 않고, 금요일에 저장된 데이터를 로드하여 리포트를 재전송합니다. (한국 한주 시작 전 재확인용)
 - **Sunday**: 일요일은 아무 작업도 수행하지 않습니다.
 
 ### get_comparison_stats
