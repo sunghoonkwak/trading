@@ -418,6 +418,17 @@ function clearLogs() {
     }
 }
 
+function refreshOrders() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        orders.clear();
+        updateOrdersPanel();
+        ws.send('sync_orders');
+        addLog('Refreshing orders...', 'info');
+    } else {
+        addLog('Cannot refresh: WebSocket not connected', 'warning');
+    }
+}
+
 // Utilities
 function escapeHtml(text) {
     const div = document.createElement('div');

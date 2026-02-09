@@ -44,7 +44,12 @@
                 <section class="viewer-section orders-section">
                     <div class="section-header">
                         <h3>📋 Orders</h3>
-                        <span class="section-count" id="orders-count">0</span>
+                        <div class="log-controls">
+                            <span class="section-count" id="orders-count">0</span>
+                            <button class="control-btn" onclick="refreshOrders()">
+                                🔄 Refresh
+                            </button>
+                        </div>
                     </div>
                     <div class="section-content" id="orders-panel">
                         <div class="empty-state">No orders</div>
