@@ -214,6 +214,7 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
                 "qty": qty_lmt,
                 "order_type": "LIMIT",
                 "type_code": LIMIT_ORDER_TYPE,
+                "exchange": exchange,
                 "desc": f"Sell limit {int(sell_profit*100)}% profit"
             })
         if qty_loc > 0:
@@ -223,6 +224,7 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
                 "qty": qty_loc,
                 "order_type": "LOC",
                 "type_code": LOC_ORDER_TYPE,
+                "exchange": exchange,
                 "desc": f"Sell LOC {int(sell_profit*100)}% profit"
             })
 
@@ -250,6 +252,7 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
                 "qty": buy_qty,
                 "order_type": "LOC",
                 "type_code": LOC_ORDER_TYPE,
+                "exchange": exchange,
                 "desc": buy_desc
             })
 
@@ -275,6 +278,7 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
                 "qty": buy_qty_1,
                 "order_type": "LOC",
                 "type_code": LOC_ORDER_TYPE,
+                "exchange": exchange,
                 "desc": f"Buy at {int(buy_ratio_1*100)}% of avg (guaranteed)"
             })
 
@@ -287,6 +291,7 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
                 "qty": buy_qty_2,
                 "order_type": "LOC",
                 "type_code": LOC_ORDER_TYPE,
+                "exchange": exchange,
                 "desc": "Buy at 100% of avg (lower cost)"
             })
 
@@ -343,17 +348,30 @@ def execute_all_orders(calculated_result: dict) -> dict:
     for ticker, data in targets_data.items():
         orders = data.get('orders', [])
         config = data.get('config', {})
-        exchange = config.get('exchange', 'NASD')
+        config_exchange = config.get('exchange', 'NASD')
 
         ticker_results = []
 
         for order in orders:
              try:
+                # Get exchange from order first, then fallback to config
+                exchange = order.get('exchange') or config_exchange
+
+                # Map exchange code for order API (different from quote API)
+                # Quote API uses: NAS, NYS, AMS
+                # Order API uses: NASD, NYSE, AMEX
+                order_exchange_map = {
+                    'AMS': 'AMEX',
+                    'NAS': 'NASD',
+                    'NYS': 'NYSE'
+                }
+                order_exchange = order_exchange_map.get(exchange, exchange)
+
                 # Actual API Call
                 df, err = order_overseas(
                     cano=cano,
                     acnt_prdt_cd=prod,
-                    ovrs_excg_cd=exchange,
+                    ovrs_excg_cd=order_exchange,
                     pdno=ticker,
                     ord_qty=str(order['qty']),
                     ovrs_ord_unpr=str(order['price']),
