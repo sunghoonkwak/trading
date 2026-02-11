@@ -10,6 +10,22 @@ from typing import Dict, Any, List, Optional
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
 from kis.kis_api import kis_auth as ka
 
+# Mapping for exchange codes: short (price fetching) to full (order API)
+EXCHANGE_CODE_MAP = {
+    "NAS": "NASD",
+    "NYS": "NYSE",
+    "AMS": "AMEX",
+    "NASD": "NASD",
+    "NYSE": "NYSE",
+    "AMEX": "AMEX",
+    "SEHK": "SEHK",
+    "SHAA": "SHAA",
+    "SZAA": "SZAA",
+    "TKSE": "TKSE",
+    "HASE": "HASE",
+    "VNSE": "VNSE"
+}
+
 # Config / History File Paths (same as kis_auth.py)
 CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
 CONFIG_FILE = os.path.join(CONFIG_ROOT, 'value_averaging.json')
@@ -143,7 +159,7 @@ def get_daily_report():
         # Merge with default settings
         merged_strategy = {**default_settings, **strategy}
         duration = merged_strategy.get('duration', 100)
-        exchange = merged_strategy.get('exchange', 'AMEX')
+        exchange = merged_strategy.get('exchange', 'AMS')
 
         # Get target weight
         target_weight = targets.get(target_ticker, 0.0)
@@ -365,10 +381,13 @@ def execute_single_order(ticker: str, order: dict) -> dict:
     if order.get('order_type') == "Market":
         ord_dvsn = "00"
 
+    # Map exchange code to ensure compatibility with order API
+    ovrs_excg_cd = EXCHANGE_CODE_MAP.get(order['exchange'], order['exchange'])
+
     res, err_msg = order_overseas_stock(
         cano=cano,
         acnt_prdt_cd=acnt_prdt_cd,
-        ovrs_excg_cd=order['exchange'],
+        ovrs_excg_cd=ovrs_excg_cd,
         pdno=ticker,
         ord_qty=str(order['qty']),
         ovrs_ord_unpr=str(order['price']),
