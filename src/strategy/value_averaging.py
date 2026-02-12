@@ -287,7 +287,7 @@ def get_daily_report():
                         "ticker": target_ticker,
                         "exchange": exchange,
                         "qty": buy_qty,
-                        "price": round(current_price * 1.00, 2), # 100% LOC
+                        "price": round(current_price * 1.05, 2), # 105% LOC
                         "order_type": "LOC",
                         "desc": f"Value Averaging Day {day_count}",
                         "daily_target": daily_target_amount
