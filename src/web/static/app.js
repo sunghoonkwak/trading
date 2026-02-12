@@ -20,7 +20,7 @@ const maxOrders = 20;
 // Fixed Ticker Order Configuration
 const tickerOrder = [
     // Leverage ETFs
-    'SOXL', 'TQQQ', 'QLD',
+    'SOXL', 'FAS', 'TQQQ', 'QLD',
     // ETFs
     'QQQM', 'VOO', 'TLT',
     // Individual Stocks
