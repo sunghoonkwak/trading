@@ -54,26 +54,19 @@
 1. `load_config()`로 설정을 로드하고 `targets` 내의 각 종목을 순회합니다.
 2. 각 종목별로:
     - `fetch_price()`를 통해 현재가와 보유 정보를 조회합니다.
-    - **Phase 판단**: 소모금액(평단가 × 보유량) 기준으로 3단계 분류.
-    - **매도**: 보유량 > 1이면 `(보유량 - 1)`의 50%씩 지정가/LOC 매도.
-    - **매수**: Phase에 따라 주문 분배.
+    - **상태 판단**: 소모금액(평단가 × 보유량)이 seed/2 미만이면 `accumulating`, 이상이면 `saturated`.
+    - **매도**: 보유분이 있으면 평단가 × (1 + sell_profit) 가격으로 50% 지정가, 50% LOC 매도 주문.
+    - **매수**: 당일 사용가능한 자금 (seed/duration)을 상태에 따라 분배.
 
-**매수 전략 (3단계)**:
-
-| Phase | Condition | Price | Qty | Type (ID) | Description |
+| State | Condition | Price | Qty | Type (ID) | Description |
 |-------|-----------|-------|-----|-----------|-------------|
-| Phase 0 | 소모금액 < seed×10% | max(평단가×110%, 현재가×110%) | 일일구매량 100% (최소1) | `buy_phase0_main` | LOC 매수 |
-| Phase 0 | 소모금액 < seed×10% | 평단가 × 95% | seed10%수량 - 보유수량 - 일일구매량 | `buy_phase0_fill` | LOC 10% 채움 (0이하 생략) |
-| Phase 1 | seed×10% ≤ 소모금액 < seed/2 | max(평단가×110%, 현재가×110%) | 일일구매량 100% (최소1) | `buy_phase1` | LOC 매수 |
-| Phase 2 | 소모금액 ≥ seed/2 | 평단가 × 100% | 일일구매량 50% (최소1) | `buy_phase2_avg` | LOC 평단가 매수 |
-| Phase 2 | 소모금액 ≥ seed/2 | 평단가 × 110% | 일일구매량 50% (최소1) | `buy_phase2_upper` | LOC 110% 매수 |
-
-**매도 전략**:
-
-| Condition | Price | Qty | Type (ID) | Description |
-|-----------|-------|-----|-----------|-------------|
-| 보유량 > 1 | 평단가 × (1 + sell_profit) | (보유량-1)의 50% (홀수 포함) | `sell_limit` | 지정가 익절 |
-| 보유량 > 1 | 평단가 × (1 + sell_profit) | (보유량-1)의 50% | `sell_loc` | LOC 익절 |
+| Accumulating | 소모금액 < seed/2, 보유량 = 0 | 현재가 × 110% | budget/price (최소 1주) | `buy_initial` | LOC 매수 |
+| Accumulating | 소모금액 < seed/2, 보유량 > 0 | 평단가 × (sell_profit - 1%) | budget/price (최소 1주) | `buy_accumulating` | 자전거래 방지 LOC |
+| Saturated | 소모금액 ≥ seed/2, budget 부족 | 평단가 × 100% | 1주 | `buy_lower` | 최소 1주 보장 |
+| Saturated | 소모금액 ≥ seed/2, budget 충분 | 평단가 × (sell_profit - 1%) | 50% | `buy_guaranteed` | 자전거래 방지 LOC |
+| Saturated | 소모금액 ≥ seed/2, budget 충분 | 평단가 × 100% | 50% | `buy_lower` | 평단가 하락용 LOC |
+| (보유 시) | 보유량 > 0 | 평단가 × (1 + sell_profit) | 50% | `sell_limit` | 지정가 익절 (홀수 포함) |
+| (보유 시) | 보유량 > 0 | 평단가 × (1 + sell_profit) | 50% | `sell_loc` | LOC 익절 |
 
 #### Returns
 - `dict`: 모든 타겟의 계산 결과 및 주문 목록을 포함하는 구조

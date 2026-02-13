@@ -201,12 +201,11 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
     spent_amount = avg_price * qty if qty > 0 else 0
     half_seed = seed / 2
 
-    # Common Sell Logic (keep at least 1 share)
-    if qty > 1 and avg_price > 0:
-        sellable = qty - 1
+    # Common Sell Logic
+    if qty > 0 and avg_price > 0:
         sell_price = round(avg_price * (1 + sell_profit), 2)
-        qty_lmt = (sellable // 2) + (sellable % 2)
-        qty_loc = sellable // 2
+        qty_lmt = (qty // 2) + (qty % 2)
+        qty_loc = qty // 2
 
         if qty_lmt > 0:
             res["orders"].append({
@@ -229,120 +228,86 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
                 "desc": f"Sell LOC {int(sell_profit*100)}% profit"
             })
 
-    ten_pct_seed = seed * 0.1
+    if spent_amount < half_seed:
+        # Accumulating
+        res["state"] = "accumulating"
 
-    if spent_amount < ten_pct_seed:
-        # Phase 0: Holdings < 10% of seed
-        res["state"] = "phase_0"
+        if qty > 0 and avg_price > 0:
+             buy_ratio = 1 + sell_profit - 0.01
+             buy_price = round(avg_price * buy_ratio, 2)
+             buy_desc = f"Accumulating buy at {int(buy_ratio*100)}% of avg (avoid self-trade)"
+        else:
+             if cur_price <= 0:
+                 res["error"] = f"Waiting for {ticker} price data."
+                 return res
+             buy_price = round(cur_price * 1.10, 2)
+             buy_desc = "Accumulating buy at 110% of current price"
 
-        if avg_price <= 0:
-            res["error"] = f"Phase 0: No avg_price for {ticker}. Check holdings."
-            return res
-
-        if cur_price <= 0:
-            res["error"] = f"Phase 0: No current price for {ticker}."
-            return res
-
-        # Order 1: 100% of daily budget at max(avg*110%, cur*110%)
-        buy_price_1 = round(max(avg_price * 1.10, cur_price * 1.10), 2)
-        buy_qty_1 = int(daily_budget / buy_price_1)
-        if buy_qty_1 < 1:
-            buy_qty_1 = 1
-
-        res["orders"].append({
-            "type": "buy_phase0_main",
-            "price": buy_price_1,
-            "qty": buy_qty_1,
-            "order_type": "LOC",
-            "type_code": LOC_ORDER_TYPE,
-            "exchange": exchange,
-            "desc": f"Phase0: Buy at max(avg*110%, cur*110%) = ${buy_price_1}"
-        })
-
-        # Order 2: (seed_10pct_qty - qty - buy_qty_1) at avg*95%
-        seed_10pct_qty = int(ten_pct_seed / avg_price)
-        remaining_qty = seed_10pct_qty - qty - buy_qty_1
-
-        if remaining_qty > 0:
-            buy_price_2 = round(avg_price * 0.95, 2)
-            res["orders"].append({
-                "type": "buy_phase0_fill",
-                "price": buy_price_2,
-                "qty": remaining_qty,
-                "order_type": "LOC",
-                "type_code": LOC_ORDER_TYPE,
-                "exchange": exchange,
-                "desc": f"Phase0: Fill to 10% seed at avg*95% = ${buy_price_2}"
-            })
-
-    elif spent_amount < half_seed:
-        # Phase 1: 10% <= spent < seed/2
-        res["state"] = "phase_1"
-
-        if avg_price <= 0:
-            res["error"] = f"Phase 1: No avg_price for {ticker}. Check holdings."
-            return res
-
-        if cur_price <= 0:
-            res["error"] = f"Phase 1: No current price for {ticker}."
-            return res
-
-        # Order: 100% of daily budget at max(avg*110%, cur*110%)
-        buy_price = round(max(avg_price * 1.10, cur_price * 1.10), 2)
         buy_qty = int(daily_budget / buy_price)
-        if buy_qty < 1:
-            buy_qty = 1
-
+        if buy_qty == 0:
+            buy_qty = 1  # Minimum 1 share guarantee
+        order_type_name = "buy_accumulating" if qty > 0 else "buy_initial"
         res["orders"].append({
-            "type": "buy_phase1",
+            "type": order_type_name,
             "price": buy_price,
             "qty": buy_qty,
             "order_type": "LOC",
             "type_code": LOC_ORDER_TYPE,
             "exchange": exchange,
-            "desc": f"Phase1: Buy at max(avg*110%, cur*110%) = ${buy_price}"
+            "desc": buy_desc
         })
 
     else:
-        # Phase 2: spent >= seed/2
-        res["state"] = "phase_2"
-
+        # Saturated
+        res["state"] = "saturated"
         if avg_price <= 0:
-            res["error"] = f"Phase 2: No avg_price for {ticker}. Check holdings."
+            res["error"] = f"Invalid average price for {ticker}"
             return res
 
-        # Order 1: 50% of daily budget at avg*100%
-        buy_price_1 = round(avg_price, 2)
         total_buy_qty = int(daily_budget / avg_price)
-        buy_qty_1 = total_buy_qty // 2
-        if buy_qty_1 < 1:
-            buy_qty_1 = 1
 
-        res["orders"].append({
-            "type": "buy_phase2_avg",
-            "price": buy_price_1,
-            "qty": buy_qty_1,
-            "order_type": "LOC",
-            "type_code": LOC_ORDER_TYPE,
-            "exchange": exchange,
-            "desc": f"Phase2: Buy 50% at avg = ${buy_price_1}"
-        })
+        if total_buy_qty == 0:
+            # Budget insufficient: buy 1 share at avg price (lower cost only)
+            res["orders"].append({
+                "type": "buy_lower",
+                "price": round(avg_price, 2),
+                "qty": 1,
+                "order_type": "LOC",
+                "type_code": LOC_ORDER_TYPE,
+                "exchange": exchange,
+                "desc": "Buy 1 share at 100% of avg (minimum guarantee)"
+            })
+        else:
+            buy_qty_1 = (total_buy_qty // 2) + (total_buy_qty % 2)
+            buy_qty_2 = total_buy_qty // 2
 
-        # Order 2: 50% of daily budget at avg*110%
-        buy_price_2 = round(avg_price * 1.10, 2)
-        buy_qty_2 = total_buy_qty - buy_qty_1
-        if buy_qty_2 < 1:
-            buy_qty_2 = 1
+            # Buy 1: (Sell Profit - 1%)
+            buy_ratio_1 = 1 + sell_profit - 0.01
+            buy_price_1 = round(avg_price * buy_ratio_1, 2)
 
-        res["orders"].append({
-            "type": "buy_phase2_upper",
-            "price": buy_price_2,
-            "qty": buy_qty_2,
-            "order_type": "LOC",
-            "type_code": LOC_ORDER_TYPE,
-            "exchange": exchange,
-            "desc": f"Phase2: Buy 50% at avg*110% = ${buy_price_2}"
-        })
+            if buy_qty_1 > 0:
+                res["orders"].append({
+                    "type": "buy_guaranteed",
+                    "price": buy_price_1,
+                    "qty": buy_qty_1,
+                    "order_type": "LOC",
+                    "type_code": LOC_ORDER_TYPE,
+                    "exchange": exchange,
+                    "desc": f"Buy at {int(buy_ratio_1*100)}% of avg (guaranteed)"
+                })
+
+            # Buy 2: 100% Avg
+            buy_price_2 = round(avg_price * 1.00, 2)
+            if buy_qty_2 > 0:
+                res["orders"].append({
+                    "type": "buy_lower",
+                    "price": buy_price_2,
+                    "qty": buy_qty_2,
+                    "order_type": "LOC",
+                    "type_code": LOC_ORDER_TYPE,
+                    "exchange": exchange,
+                    "desc": "Buy at 100% of avg (lower cost)"
+                })
 
     return res
 
