@@ -239,12 +239,8 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
             res["error"] = f"Phase 0: No avg_price for {ticker}. Check holdings."
             return res
 
-        if cur_price <= 0:
-            res["error"] = f"Phase 0: No current price for {ticker}."
-            return res
-
-        # Order 1: 100% of daily budget at max(avg*110%, cur*110%)
-        buy_price_1 = round(max(avg_price * 1.10, cur_price * 1.10), 2)
+        # Order 1: 100% of daily budget at avg*(1+sell_profit-0.01)
+        buy_price_1 = round(avg_price * (1 + sell_profit - 0.01), 2)
         buy_qty_1 = int(daily_budget / buy_price_1)
         if buy_qty_1 < 1:
             buy_qty_1 = 1
@@ -256,7 +252,7 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
             "order_type": "LOC",
             "type_code": LOC_ORDER_TYPE,
             "exchange": exchange,
-            "desc": f"Phase0: Buy at max(avg*110%, cur*110%) = ${buy_price_1}"
+            "desc": f"Phase0: Buy at avg*{(1+sell_profit-0.01)*100:.0f}% = ${buy_price_1}"
         })
 
         # Order 2: (seed_10pct_qty - qty - buy_qty_1) at avg*95%
@@ -283,12 +279,8 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
             res["error"] = f"Phase 1: No avg_price for {ticker}. Check holdings."
             return res
 
-        if cur_price <= 0:
-            res["error"] = f"Phase 1: No current price for {ticker}."
-            return res
-
-        # Order: 100% of daily budget at max(avg*110%, cur*110%)
-        buy_price = round(max(avg_price * 1.10, cur_price * 1.10), 2)
+        # Order: 100% of daily budget at avg*(1+sell_profit-0.01)
+        buy_price = round(avg_price * (1 + sell_profit - 0.01), 2)
         buy_qty = int(daily_budget / buy_price)
         if buy_qty < 1:
             buy_qty = 1
@@ -300,7 +292,7 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
             "order_type": "LOC",
             "type_code": LOC_ORDER_TYPE,
             "exchange": exchange,
-            "desc": f"Phase1: Buy at max(avg*110%, cur*110%) = ${buy_price}"
+            "desc": f"Phase1: Buy at avg*{(1+sell_profit-0.01)*100:.0f}% = ${buy_price}"
         })
 
     else:
@@ -328,8 +320,8 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
             "desc": f"Phase2: Buy 50% at avg = ${buy_price_1}"
         })
 
-        # Order 2: 50% of daily budget at avg*110%
-        buy_price_2 = round(avg_price * 1.10, 2)
+        # Order 2: 50% of daily budget at avg*(1+sell_profit-0.01)
+        buy_price_2 = round(avg_price * (1 + sell_profit - 0.01), 2)
         buy_qty_2 = total_buy_qty - buy_qty_1
         if buy_qty_2 < 1:
             buy_qty_2 = 1
@@ -341,7 +333,7 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
             "order_type": "LOC",
             "type_code": LOC_ORDER_TYPE,
             "exchange": exchange,
-            "desc": f"Phase2: Buy 50% at avg*110% = ${buy_price_2}"
+            "desc": f"Phase2: Buy 50% at avg*{(1+sell_profit-0.01)*100:.0f}% = ${buy_price_2}"
         })
 
     return res
