@@ -172,8 +172,11 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     # 1. Try Cache
     cached = PortfolioCacheManager.get(force_refresh)
     if cached:
+        logging.info("[DataService] Using cached portfolio data")
         add_alert("[Data] Using cached portfolio", "DEBUG")
         return _apply_scope_filter(cached, scope)
+
+    logging.info("[DataService] Fetching fresh portfolio data (cache missed/force)")
 
     # 2. Fetch from KIS
     if not is_kis_ready():
@@ -236,17 +239,25 @@ def _apply_scope_filter(data: Dict, scope: str) -> Dict:
     
     target_ids = kis_ids if scope == "kis" else ({a["id"] for a in accounts} - kis_ids)
     
+    # DEBUG LOG
+    logging.info(f"[Filter] Scope: {scope}, TargetIDs: {target_ids}")
+    all_cash = raw.get("cash_holdings", [])
+    logging.info(f"[Filter] Raw Cash Count: {len(all_cash)}")
+    for c in all_cash:
+        logging.info(f"  - Cash: {c.get('account_name')} | ID: {c.get('account_id')} | Amt: {c.get('amount')}")
+
     # Re-run processing on filtered raw data
+    target_names = {a["name"] for a in accounts if a["id"] in target_ids}
+    filtered_cash = [c for c in all_cash if (c.get("account_id") in target_ids or c.get("account_name") in target_names)]
+    
+    logging.info(f"[Filter] Filtered Cash Count: {len(filtered_cash)}")
+
     filtered_raw = {
         "metadata": raw.get("metadata", {}),
         "asset_info": raw.get("asset_info", {}),
         "holdings": [h for h in raw.get("holdings", []) if h.get("account_id") in target_ids],
-        "cash_holdings": [c for c in raw.get("cash_holdings", []) if c.get("account_id") in target_ids]
+        "cash_holdings": filtered_cash
     }
-    
-    if not filtered_raw["cash_holdings"]:
-        target_names = {a["name"] for a in accounts if a["id"] in target_ids}
-        filtered_raw["cash_holdings"] = [c for c in raw.get("cash_holdings", []) if c.get("account_name") in target_names]
 
     processor = PortfolioProcessor()
     merged, total = processor.merge_holdings(filtered_raw)

@@ -10,7 +10,7 @@ import schedule
 
 # Import jobs from sub-modules
 from scheduler.scheduler_portfolio import run_daily_portfolio_report
-from scheduler.scheduler_order import run_daily_order_report
+from scheduler.scheduler_order import run_daily_order_report, run_periodic_rebalancing
 
 def run_scheduler_loop():
     """Background thread loop."""
@@ -31,9 +31,14 @@ def start_scheduler():
     # 9:00 PM - Order Checks (RAOEO / VA)
     schedule.every().day.at("21:00").do(run_daily_order_report)
 
+    # Periodic Rebalancing (Every 5 mins)
+    # The time window check is inside the function
+    schedule.every(5).minutes.do(run_periodic_rebalancing)
+
     logging.info("[Scheduler] Scheduler started.")
     logging.info(" - 07:00 : Portfolio Report")
     logging.info(" - 21:00 : Order Report (RAOEO/VA)")
+    logging.info(" - Every 5m : Periodic Rebalancing (23:40-05:40)")
 
     t = threading.Thread(target=run_scheduler_loop, daemon=True)
     t.start()

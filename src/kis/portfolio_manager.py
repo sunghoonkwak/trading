@@ -142,10 +142,10 @@ class PortfolioManager:
 
         # Cash
         if kis_data['krw_orderable'] > 0:
-            cash.append({"account_name": "한국투자증권", "amount": float(kis_data['krw_orderable']), "currency": "KRW"})
-        usd_cash = float(kis_data['overseas_asset'].get('frcr_drwg_psbl_amt_1', 0))
+            cash.append({"account_name": "한국투자증권", "account_key": kis_acc_key, "amount": float(kis_data['krw_orderable']), "currency": "KRW"})
+        usd_cash = float(cls._get_val(kis_data['overseas_asset'], ['frcr_drwg_psbl_amt_1', 'ovrs_relt_proc_amt'], 0))
         if usd_cash > 0:
-            cash.append({"account_name": "한국투자증권", "amount": usd_cash, "currency": "USD"})
+            cash.append({"account_name": "한국투자증권", "account_key": kis_acc_key, "amount": usd_cash, "currency": "USD"})
 
         return {
             "holdings": holdings, "cash_holdings": cash, "asset_info": asset_info,
@@ -188,6 +188,14 @@ class PortfolioManager:
                 "qty": h["qty"], "avg_price": h["avg_price"], "cur_price": h.get("cur_price", h["avg_price"])
             })
 
+        cash_holdings = []
+        for c in kis.get("cash_holdings", []) + gs.get("cash_holdings", []):
+            c_id = id_map.get(c.get("account_key"), "unknown")
+            cash_holdings.append({
+                **c,
+                "account_id": c_id
+            })
+
         metadata = {"last_updated": datetime.now(timezone.utc).isoformat(), "exchange_rate": ex_rate}
         if kis_err: metadata["kis_error"] = kis_err
         if gs_err: metadata["gsheet_error"] = gs_err
@@ -195,5 +203,5 @@ class PortfolioManager:
         return {
             "metadata": metadata, "owners": cls.OWNERS, "accounts": account_list,
             "asset_info": {**(kis.get("asset_info", {})), **(gs.get("asset_info", {}))},
-            "holdings": holdings, "cash_holdings": kis.get("cash_holdings", []) + gs.get("cash_holdings", [])
+            "holdings": holdings, "cash_holdings": cash_holdings
         }

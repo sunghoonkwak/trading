@@ -17,6 +17,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from .telegram_strategy import register_strategy_handlers
+from .telegram_rebalancing import register_rebalancing_handlers
 from .telegram_portfolio import register_portfolio_handlers, get_portfolio_commands_desc
 from .telegram_memo import register_memo_handler, get_memo_commands_desc
 from .telegram_utils import wrap_send, set_telegram_bot, wrap_reply
@@ -123,6 +124,7 @@ def initialize_telegram():
             set_telegram_bot(_app.bot, _chat_id)
             register_portfolio_handlers(_app)
             register_strategy_handlers(_app)
+            register_rebalancing_handlers(_app)
             register_memo_handler(_app)
             _app.add_handler(CommandHandler("daily_report", cmd_daily_report))
             _app.add_error_handler(error_handler)
@@ -139,7 +141,8 @@ def initialize_telegram():
                     "🤖 <b>Trading Bot Initialized</b>\n\n"
                     "Commands:\n"
                     f"{port_desc}\n\n"
-                    "/strategy - View & Execute Strategies\n\n"
+                    "/strategy - RAOEO & VA Strategies\n"
+                    "/rebalance - TQQQ+SCHD Rebalancing\n\n"
                     "/daily_report [date] - View past reports\n"
                     f"{memo_desc}"
                 )

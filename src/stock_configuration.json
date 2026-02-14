@@ -258,7 +258,8 @@
                 255,
                 50
             ],
-            "disabled": true
+            "disabled": false,
+            "telegram_button": true
         },
         {
             "ticker": "NVDA",

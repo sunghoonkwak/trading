@@ -5,41 +5,28 @@
 
 # Core Logic (핵심 로직)
 
-1. **데이터 준비**: 포트폴리오(KIS API), 현재가, 설정 파일 등을 로드합니다.
-2. **전략 계산**: `raoeo`나 `value_averaging` 모듈의 순수 함수를 호출하여 주문 목록을 생성합니다.
-3. **휴장일 체크**: 휴장일인 경우 실행을 막고 상태를 보고합니다.
-4. **주문 실행**: `execute=True` 플래그가 있으면 KIS API를 통해 실제 주문을 전송합니다.
-5. **이력 저장**: 실행 결과를 JSON 파일로 저장합니다.
+1. **데이터 준비**: 포트폴리오(KIS API), 현재가, 설정 파일 등을 로드합니다. 리밸런싱의 경우 KIS 계좌로 범위를 제한(Scope filtering)합니다.
+2. **전략 계산**: `raoeo`, `value_averaging`, `rebalancing` 모듈의 함수를 호출하여 주문 목록을 생성합니다. 휴장일에도 계산은 수행하여 보고서에 포함합니다.
+3. **주문 실행**: `execute=True` 플래그가 있으면 KIS API를 통해 실제 주문을 전송합니다.
+4. **안전 집행 (Rebalancing)**: 리밸런싱의 경우 매도 대금이 입금될 시간을 확보하기 위해 **매도 우선 실행 후 60초 대기**, 그 다음 매수를 실행합니다.
+5. **이력 저장**: 실행 결과를 각 전략별 JSON 파일로 저장합니다.
 
 # Key Functions (주요 함수)
 
-## `run_raoeo_strategy`
-RAOEO 전략의 전체 사이클(조회 -> 계산 -> 실행)을 수행합니다.
+## `run_raoeo_strategy` / `run_va_strategy`
+각 전략의 전체 사이클(조회 -> 계산 -> 실행)을 수행합니다.
 
-- **입력 (Input)**: `execute` (bool): 주문 실행 여부 (False면 계산만 수행).
-- **출력 (Output)**: `dict` (보고서 데이터 - 주문 목록, 실행 결과 등).
-
-## `run_va_strategy`
-Value Averaging 전략의 전체 사이클을 수행합니다.
-
-- **입력 (Input)**: `execute` (bool): 주문 실행 여부.
-- **출력 (Output)**: `dict` (보고서 데이터).
+## `run_rebalancing_strategy`
+리밸런싱 전략 전용 사이클을 수행합니다. KIS 전용 데이터를 사용하며, 안전 집행 로직이 포함되어 있습니다.
 
 ## `execute_single_order`
-개별 `StrategyOrder` 객체를 KIS API 포맷으로 변환하여 실행합니다.
-
-# Configuration (None)
-이 모듈은 독자적인 설정 파일이 없으며, `strategy_config.json`과 `kis_config` 등을 참조합니다.
+개별 `StrategyOrder` 객체를 KIS API 포맷으로 변환하여 실행합니다. 미국 주식의 경우 시장가 매도 효과를 위해 아주 낮은 지정가(0.01) 매도를 지원합니다.
 
 # Usage Example (사용 예시)
 
 ```python
-from strategy.execution_service import run_raoeo_strategy
+from strategy.execution_service import run_rebalancing_strategy
 
-# 1. 단순 보고서 생성 (계산만)
-report = run_raoeo_strategy(execute=False)
-print(report['orders'])
-
-# 2. 실제 주문 실행
-result = run_raoeo_strategy(execute=True)
+# 실제 주문 실행 (매도 후 60초 대기 로직 포함)
+result = run_rebalancing_strategy(execute=True)
 ```

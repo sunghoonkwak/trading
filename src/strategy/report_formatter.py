@@ -8,7 +8,7 @@ from typing import Dict, List
 from strategy.base import StrategyOrder, OrderSide
 
 def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
-    """Formats the combined strategy report."""
+    """Formats the combined strategy report (RAOEO + VA)."""
     lines = []
     today = raoeo_report.get('date', 'Today')
     
@@ -118,5 +118,58 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
             err_str = f" ({msg})" if not res['success'] else ""
             lines.append(f"  {status} {order.symbol} {order.side.name} {order.quantity} @ {order.price}{err_str}")
         lines.append(f"\n💾 Saved. <b>{success_count}/{len(all_exec_results)} succeeded</b>")
+
+    return "\n".join(lines)
+
+def format_rebalancing_report(reb_report: Dict) -> str:
+    """Formats the rebalancing strategy report."""
+    lines = []
+    today = reb_report.get('date', 'Today')
+    lines.append(f"⚖️ <b>Rebalancing Report - {today}</b>")
+    
+    if reb_report.get('error'):
+        lines.append(f"  ⚠️ Error: {reb_report['error']}")
+    elif reb_report.get('status') == 'disabled':
+        lines.append("  ⚪ Disabled")
+    else:
+        info = reb_report.get('info', {})
+        if info:
+            seed = info.get('seed', 0)
+            cash = info.get('usd_cash', 0)
+            avail = info.get('total_available', 0)
+            lines.append(f"  🎯 <b>Target Seed: ${seed:,.0f}</b>")
+            lines.append(f"  💰 <b>Available Cash: ${avail:,.2f}</b> (Pure: ${cash:,.2f})")
+            if info.get('scale_factor', 1.0) < 1.0:
+                lines.append(f"  ⚠️ Scaled by {info['scale_factor']*100:.1f}% due to cash limit")
+            lines.append("")
+
+        orders = reb_report.get('orders', [])
+        if orders:
+            # Show current holdings first
+            lines.append("  <b>Current KIS Holdings:</b>")
+            for ticker, status in info.get('asset_status', {}).items():
+                lines.append(f"    • {ticker}: {status['qty']} shares (${status['cur_val']:,.1f})")
+            lines.append("")
+            
+            for o in orders:
+                lines.append(f"  • {o}")
+            if reb_report.get('status') == 'market_holiday':
+                lines.append("    🚫 Market Holiday (Will not execute)")
+        elif reb_report.get('status') == 'market_holiday':
+            lines.append("  🚫 Market Holiday")
+        else:
+            lines.append("  ✅ Within threshold (No orders needed).")
+
+    # Execution Results
+    exec_results = reb_report.get('execution_results', [])
+    if exec_results:
+        lines.append("\n" + "─" * 20)
+        lines.append("<b>Execution Results:</b>")
+        for res in exec_results:
+            status = "✅" if res['success'] else "❌"
+            order = res['order']
+            msg = res.get('message', '')
+            err_str = f" ({msg})" if not res['success'] else ""
+            lines.append(f"  {status} {order.symbol} {order.side.name} {order.quantity} @ {order.price}{err_str}")
 
     return "\n".join(lines)

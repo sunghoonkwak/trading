@@ -1,40 +1,36 @@
 # Scheduler Order Service (`src/scheduler/scheduler_order.py`)
 
-정해진 일정(예: 장 종료 직전)에 따라 **전략 실행(Execution)**을 담당하는 스케줄러 모듈입니다.
-텔레그램 봇을 사용하지 않는 경우에도 자동으로 주문이 나가도록 설계되었습니다.
+정해진 일정에 따라 **전략 실행(Execution)**을 담당하는 스케줄러 모듈입니다.
+매일 밤 정해진 시간 또는 장중에 주기적으로 주문을 실행하도록 설계되었습니다.
 
 # Core Logic (핵심 로직)
 
-1. **전략 실행 (RAOEO)**: `run_raoeo_strategy(execute=True)`를 호출하여 주문을 계산하고 실행합니다.
-2. **전략 실행 (VA)**: `run_va_strategy(execute=True)`를 호출하여 주문을 계산하고 실행합니다.
-3. **통합 보고서 생성**: `format_strategy_report`를 사용하여 실행 결과를 텍스트로 변환합니다.
-4. **텔레그램 알림**: 생성된 보고서를 `send_notification`으로 전송합니다.
+1. **데일리 전략 (RAOEO/VA)**: 매일 밤 정해진 시간(예: 21:00)에 통합 보고서를 생성하고 주문을 실행합니다.
+2. **주기적 리밸런싱**: 미국 장중 시간(23:40 ~ 05:40) 동안 5분 간격으로 비중을 체크하고 리밸런싱을 수행합니다.
+3. **지능형 알림**: 
+   - 데일리 전략은 항상 결과를 보고합니다.
+   - 리밸런싱은 23:40 첫 보고 시 무조건 알림을 보내고, 그 외에는 실제 주문이나 에러가 발생한 경우에만 알림을 보냅니다.
 
 # Key Functions (주요 함수)
 
 ## `run_daily_order_report`
-매일 밤 자동으로 실행되어야 하는 함수입니다.
+매일 밤 RAOEO 및 VA 전략을 실행합니다.
 
-- **기능**: 전략 계산 및 주문 자동 실행, 결과 보고서 전송.
-- **예외 처리**: 실행 중 오류가 발생해도 로그를 남기고 다음 단계로 넘어갑니다.
+## `run_periodic_rebalancing`
+리밸런싱 전용 주기적 실행 함수입니다. 시간 윈도우 체크 로직이 포함되어 있습니다.
 
-# Configuration (`scheduler/scheduler.py` - Crontab)
+# Configuration (`scheduler/scheduler.py`)
 
 ```python
-# scheduler.py 예시
-scheduler.add_job(
-    run_daily_order_report, 
-    'cron', 
-    day_of_week='mon-fri', 
-    hour=22, minute=50
-)
+# 5분마다 리밸런싱 체크
+schedule.every(5).minutes.do(run_periodic_rebalancing)
 ```
 
 # Usage Example (사용 예시)
 
 ```python
-from scheduler.scheduler_order import run_daily_order_report
+from scheduler.scheduler_order import run_periodic_rebalancing
 
-# 수동 실행 (테스트)
-run_daily_order_report()
+# 리밸런싱 루틴 수동 실행
+run_periodic_rebalancing()
 ```

@@ -32,5 +32,14 @@
                 "threshold_rate": 0.15
             }
         }
+    },
+    "rebalancing": {
+        "enabled": true,
+        "seed": 5000,
+        "assets": [
+            {"ticker": "TQQQ", "target_weight": 0.5},
+            {"ticker": "SCHD", "target_weight": 0.5}
+        ],
+        "rebalance_threshold": 0.05
     }
 }
