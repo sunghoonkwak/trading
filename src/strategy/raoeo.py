@@ -11,10 +11,9 @@ from datetime import datetime
 import math
 
 from strategy.base import StrategyOrder, OrderSide
+from constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
-# Constants
-LOC_ORDER_TYPE = "34"  # Limit On Close
-LIMIT_ORDER_TYPE = "00"
+# Constants removed (moved to constants.py)
 
 def calculate_orders(
     targets_config: Dict,
@@ -89,7 +88,7 @@ def calculate_orders(
                     side=OrderSide.SELL,
                     quantity=qty_limit,
                     price=target_sell_price,
-                    order_type=LIMIT_ORDER_TYPE,
+                    order_type=ORDER_TYPE_US_LIMIT,
                     reason=f"Sell Limit {int(sell_profit*100)}% profit"
                 ))
             
@@ -99,7 +98,7 @@ def calculate_orders(
                     side=OrderSide.SELL,
                     quantity=qty_loc,
                     price=target_sell_price,
-                    order_type=LOC_ORDER_TYPE,
+                    order_type=ORDER_TYPE_US_LOC,
                     reason=f"Sell LOC {int(sell_profit*100)}% profit"
                 ))
 
@@ -127,7 +126,7 @@ def calculate_orders(
                 side=OrderSide.BUY,
                 quantity=buy_qty_main,
                 price=buy_price_main,
-                order_type=LOC_ORDER_TYPE,
+                order_type=ORDER_TYPE_US_LOC,
                 reason=f"Phase0: Main Buy"
             ))
             
@@ -143,7 +142,7 @@ def calculate_orders(
                         side=OrderSide.BUY,
                         quantity=remaining_fill_qty,
                         price=buy_price_fill,
-                        order_type=LOC_ORDER_TYPE,
+                        order_type=ORDER_TYPE_US_LOC,
                         reason=f"Phase0: Fill 10%"
                     ))
 
@@ -158,7 +157,7 @@ def calculate_orders(
                 side=OrderSide.BUY,
                 quantity=buy_qty_main,
                 price=buy_price_main,
-                order_type=LOC_ORDER_TYPE,
+                order_type=ORDER_TYPE_US_LOC,
                 reason=f"Phase1: Normal Buy"
             ))
 
@@ -175,7 +174,7 @@ def calculate_orders(
                 side=OrderSide.BUY,
                 quantity=buy_qty_1,
                 price=buy_price_1,
-                order_type=LOC_ORDER_TYPE,
+                order_type=ORDER_TYPE_US_LOC,
                 reason=f"Phase2: Avg Buy"
             ))
             
@@ -189,7 +188,7 @@ def calculate_orders(
                 side=OrderSide.BUY,
                 quantity=buy_qty_2,
                 price=buy_price_2,
-                order_type=LOC_ORDER_TYPE,
+                order_type=ORDER_TYPE_US_LOC,
                 reason=f"Phase2: Upper Buy"
             ))
 

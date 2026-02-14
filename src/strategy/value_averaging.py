@@ -9,9 +9,7 @@ import logging
 from typing import Dict, List, Tuple
 from strategy.base import StrategyOrder, OrderSide
 
-# Constants
-LOC_ORDER_TYPE = "34"  # Limit On Close
-MARKET_ORDER_TYPE = "00"
+from constants import ORDER_TYPE_US_LOC, ORDER_TYPE_KR_MARKET
 
 def calculate_orders(
     targets_config: Dict,
@@ -147,7 +145,7 @@ def calculate_orders(
                             side=OrderSide.BUY,
                             quantity=buy_qty,
                             price=buy_price,
-                            order_type=LOC_ORDER_TYPE,
+                            order_type=ORDER_TYPE_US_LOC,
                             reason=f"VA Day {day_count} (Target: {daily_target_amount:.2f})"
                         ))
 
@@ -161,7 +159,7 @@ def calculate_orders(
                             side=OrderSide.SELL,
                             quantity=sell_qty,
                             price=0.0,  # Market Price
-                            order_type=MARKET_ORDER_TYPE,
+                            order_type=ORDER_TYPE_KR_MARKET,
                             reason=f"VA Sell Day {day_count} (Target: {daily_target_amount:.2f})"
                         ))
 

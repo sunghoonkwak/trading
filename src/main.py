@@ -110,9 +110,10 @@ class TradingSystem:
     def start_web_server(self):
         """Starts the Web Event Viewer dashboard."""
         print("[Startup] Step 4: Starting Web Event Viewer...")
+        from constants import DEFAULT_WEB_PORT, DEFAULT_HOST
         try:
             from web_server import start_web_server
-            threading.Thread(target=start_web_server, kwargs={"host": "0.0.0.0", "port": 8080}, daemon=True).start()
+            threading.Thread(target=start_web_server, kwargs={"host": DEFAULT_HOST, "port": DEFAULT_WEB_PORT}, daemon=True).start()
             print("[Startup] ✓ Web Event Viewer started in background")
         except Exception as e:
             logging.error(f"[Startup] Web server error: {e}")

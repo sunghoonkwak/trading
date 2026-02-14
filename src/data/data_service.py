@@ -17,6 +17,7 @@ from display import add_alert
 from data.config_manager import ConfigFile, load_json, save_json
 from utils.market_utils import get_fear_and_greed
 from trading_config import get_stock_info
+from constants import PORTFOLIO_CACHE_EXPIRE
 
 # =============================================================================
 # Cache Management
@@ -26,7 +27,7 @@ from trading_config import get_stock_info
 class PortfolioCache:
     data: Dict
     timestamp: datetime
-    expire_seconds: int = 300
+    expire_seconds: int = PORTFOLIO_CACHE_EXPIRE
 
     def is_expired(self) -> bool:
         return (datetime.now() - self.timestamp).total_seconds() > self.expire_seconds

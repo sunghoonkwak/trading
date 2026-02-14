@@ -81,11 +81,12 @@ class MarketStateManager:
         except Exception as e: logging.warning(f"[MarketState] Save failed: {e}"); return False
 
     def _start_periodic_save(self):
+        from constants import MARKET_STATE_SAVE_INTERVAL
         if self._persistence_running: return
         self._persistence_running = True
         def worker():
             while self._persistence_running:
-                time.sleep(60)
+                time.sleep(MARKET_STATE_SAVE_INTERVAL)
                 if self._persistence_running: self.save_to_disk()
         threading.Thread(target=worker, daemon=True, name="MarketStateSaver").start()
 
