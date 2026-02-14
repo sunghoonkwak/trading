@@ -1,34 +1,38 @@
-# KIS Wrapper (`kis/wrapper.py`)
+# KIS Wrapper (`src/kis/wrapper.py`)
 
-## 개요
-이 모듈은 KIS API의 고수준 래퍼(Wrapper) 역할을 수행하며, 주문 관리, 시세 조회, 그리고 주문 동기화 기능을 제공합니다. 기존 `menu` 기능과 `kis/price.py` 로직이 통합되었습니다.
+KIS API의 복잡한 기능을 단순화하여 제공하는 인터페이스 모듈입니다.
+내부적으로 `OrderManager`와 `PriceFetcher` 등을 사용하여 비즈니스 로직과 API 명세를 분리합니다.
 
-## 주요 기능
+# Core Logic (핵심 로직)
 
-### 1. 주문 동기화 (Order Synchronization)
-API와 로컬 상태 간의 주문 내역을 동기화합니다.
-- **`SyncManager`**: 디바운싱(Debouncing)을 통해 불필요한 API 중복 호출을 방지합니다.
-- **`sync_open_orders()`**: 한국/미국 미체결 주문을 조회하여 로컬 메모리 및 UI에 반영합니다.
+1. **인터페이스 캡슐화**: 메인 스레드나 전략 모듈에서 자주 사용하는 API 기능(주가 조회, 주문 조회, 동기화)을 쉬운 함수 형태로 제공합니다.
+2. **UI 동기화**: 조회된 주문 정보를 터미널 및 웹 뷰어의 상태에 반영(`update_order_state`)합니다.
+3. **주가 조회 (REST)**: WebSocket이 아닌 일반 HTTP 요청을 통한 주가 조회를 처리합니다.
 
-### 2. 시세 조회 (Price Fetching)
-- **`fetch_price(ticker, exchange=None)`**:
-  - 해외 주식의 현재가를 조회합니다.
-  - 거래소 코드가 없으면 `trading_config`를 통해 자동 매핑합니다.
-  - 다양한 필드(`last`, `base`, `prpr` 등)를 확인하여 장중/장외 가격을 유연하게 가져옵니다.
+# Key Functions (주요 함수)
 
-### 3. 주문 관리 (Order Management)
-- **`fetch_open_orders()`**: 한국(`KR`) 및 미국(`US`) 미체결 내역을 통합된 DataFrame으로 반환합니다.
-- **`execute_manage_action(market, action_type, order_data, new_price)`**:
-  - 주문 정정(`01`) 및 취소(`02`)를 실행합니다.
-  - 시장 구분(KR/US)에 따라 적절한 API를 호출합니다.
+## `fetch_price`
+특정 종목의 최신 주가를 조회합니다.
 
-## 사용 예시
+- **입력 (Input)**: `ticker` (str), `exchange` (str, optional)
+- **출력 (Output)**: `float`
+
+## `sync_open_orders`
+현재 미체결 주문 목록을 가져와 UI 표시 상태를 최신화합니다.
+
+## `execute_manage_action`
+주문 취소 또는 정정 작업을 실행합니다.
+
+# Configuration (None)
+
+# Usage Example (사용 예시)
+
 ```python
-from kis.wrapper import request_sync, fetch_price
+from kis import wrapper
 
-# 현재가 조회
-price = fetch_price("AAPL")
+# 주가 조회
+price = wrapper.fetch_price("SOXL")
 
-# 주문 동기화 요청 (비동기/디바운싱 적용)
-request_sync()
+# 주문 상태 동기화
+wrapper.sync_open_orders()
 ```
