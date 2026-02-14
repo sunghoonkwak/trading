@@ -6,36 +6,47 @@ trigger: always_on
 
 ---
 
-## 0. *****가장 중요*****
-.antigravityignore에 기입된 폴더나 파일은 절대 읽지마
-
 ## 1. Conversation Rules
-1. Use Korean if possible.
-2. Use **bold style** for important points.
+1. Use **Korean** for all interactions unless asked otherwise.
+2. Use **bold style** for important points or key terms.
 
-## 2. MCP
-1. MCP사용을 매우매우 권장함
+## 2. Tool Usage (MCP)
+1. Strongly recommend using MCP tools whenever applicable.
 
-## 2. Command Execution Rules
-1. Only ask for git commands when committing.
-2. Do not ask when reading project files.
+## 3. Command Execution Rules
+1. **Git Commands**:
+   - Only ask for confirmation when running `git commit`, `git push`, or destructive commands (e.g., `git reset --hard`).
+   - For `git status`, `git diff`, etc., run them without asking.
+2. **File Operations**:
+   - Do NOT ask for permission to read project files. Just read them.
 
-## 3. coding rules
-1. Only English is available. Never use Korean.
-2. 앞으로 작성할 모든 코드에서 API 키나 비밀번호는 직접 입력하지 말고, 반드시 내가 미리 만들어둔 load_credentials() 함수를 호출하는 방식으로 작성해줘. 그리고 민감한 정보가 담긴 .enc 파일은 절대 읽지 마
+## 4. Coding Rules
+1. **Language**: Use **English only** for variable names, comments, and documentation. Never use Korean in code.
+2. **Security**:
+   - NEVER hardcode API keys or passwords.
+   - ALWAYS use `load_credentials()` or environment variables.
+   - NEVER read `.enc` files containing sensitive data.
 
-## 4. Commit Message
-1. Every commit message should follow this structure:
+## 5. Commit Message Rules (STRICT)
+1. **Structure**:
+   ```text
+   <type>(<scope>): <subject>
 
-```text
-<type>(<scope>): <subject>
+   [body]
 
-[body]
+   [footer]
+   ```
+2. **Length Constraints**:
+   - **Subject Line**: Maximum **50 characters**.
+   - **Body Lines**: Wrap at **72 characters**.
+3. **Content Restrictions**:
+   - **NEVER** include file names (e.g., `main.py`, `utils.py`) in the message. Focus on *what* and *why*.
+4. **Workflow**:
+   - When asked for a commit message, **ONLY show the message**.
+   - **DO NOT** prepare or suggest the `git commit` command immediately. Wait for user approval.
 
-[footer]
-```
-2. Follow 72/50 rule.
-
-3. 절대 파일명을 넣지마
-
-4. commit message 요청시 그냥 보여줘 commit command run할 준비하지마, 그리고 md파일 수정 안했으면 수정해
+### Checklist for Commit Messages:
+- [ ] Subject < 50 chars?
+- [ ] Body wrapped at 72 chars?
+- [ ] No filenames in message?
+- [ ] Did I stop before running the command?
