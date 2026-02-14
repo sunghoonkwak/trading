@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from typing import Dict, Any, List, Optional
+from utils import ConfigFile, load_json, save_json, is_market_holiday
 
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
 from kis.kis_api import kis_auth as ka
@@ -24,44 +25,6 @@ EXCHANGE_CODE_MAP = {
     "VNSE": "VNSE"
 }
 
-from strategy import storage
-
-def load_config() -> Dict[str, Any]:
-    """Load value_averaging config from unified strategy config."""
-    return storage.get_strategy_config("value_averaging")
-
-
-def get_strategy_config(config: Dict[str, Any], ticker: str) -> Dict[str, Any]:
-    """Get strategy config for a specific ticker."""
-    targets = config.get('targets', {})
-    return targets.get(ticker, {})
-
-
-def load_history() -> List[Dict[str, Any]]:
-    """
-    Load value_averaging_history.json via storage module.
-    """
-    try:
-        data = storage.load_history("value_averaging")
-        # Ensure it's a list
-        if isinstance(data, dict):
-            # Fallback or empty if old format somehow persists (though we migrated)
-            return []
-        return data if isinstance(data, list) else []
-    except Exception as e:
-        logging.error(f"Failed to load value averaging history: {e}")
-        return []
-
-
-def save_history(history_data: List[Dict[str, Any]]) -> bool:
-    """Save value_averaging_history.json via storage module."""
-    try:
-        return storage.save_history("value_averaging", history_data)
-    except Exception as e:
-        logging.error(f"Failed to save value averaging history: {e}")
-        return False
-
-
 def get_daily_report():
     """
     Calculate the Value Averaging orders for today (supports multiple strategies).
@@ -71,7 +34,6 @@ def get_daily_report():
     """
     from kis.wrapper import fetch_price
     from data.data_service import get_portfolio_data
-    from utils import is_market_holiday
 
     # Fetch portfolio data internally
     portfolio_data = get_portfolio_data()
@@ -81,14 +43,14 @@ def get_daily_report():
     price_map = portfolio_data.get('price_map', {})
     merged_portfolio = portfolio_data.get('merged_data', {})
 
-    config = load_config()
+    config = load_json(ConfigFile.STRATEGY_CONFIG, default={}).get("value_averaging", {})
     targets_config = config.get('targets', {})
 
     if not targets_config:
         return {"error": "No targets configured in value_averaging.json"}
 
     # Load history (list-based)
-    hist_data = load_history()
+    hist_data = load_json(ConfigFile.VA_HISTORY, default=[])
     today_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
 
     results = []
@@ -352,7 +314,7 @@ def save_ticker_result(ticker: str, day_count: int, result: dict, executed: bool
         }
     }
     """
-    hist_data = load_history()
+    hist_data = load_json(ConfigFile.VA_HISTORY, default=[])
     today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
     now_time = datetime.now(ZoneInfo("America/New_York")).strftime("%H:%M:%S")
 
@@ -408,4 +370,4 @@ def save_ticker_result(ticker: str, day_count: int, result: dict, executed: bool
     elif current_day_count == 0:
         target_entry["day_count"] = day_count
 
-    save_history(hist_data)
+    save_json(ConfigFile.VA_HISTORY, hist_data)

@@ -7,7 +7,96 @@ import time
 from datetime import datetime
 import pandas as pd
 import logging
+import json
+import os
+from enum import Enum
+from typing import Any, Dict, Union
 
+# Config directory
+CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
+
+class ConfigFile(Enum):
+    """
+    Enum for configuration files.
+    Value is a tuple of (filename, read_only).
+    """
+    PORTFOLIO = ("portfolio.json", False)
+    MEMO = ("memo.json", False)
+    VA_HISTORY = ("value_averaging_history.json", False)
+    RAOEO_HISTORY = ("raoeo_history.json", False)
+    STRATEGY_CONFIG = ("strategy_config.json", True)
+    PORTFOLIO_WEIGHTS = ("portfolio_weights.json", True)
+
+    @property
+    def filename(self) -> str:
+        return self.value[0]
+
+    @property
+    def read_only(self) -> bool:
+        return self.value[1]
+
+
+def _get_config_path(file_type: ConfigFile) -> str:
+    """Get full path for a config file."""
+    return os.path.join(CONFIG_ROOT, file_type.filename)
+
+
+def load_json(file_type: ConfigFile, default: Any = None) -> Union[Dict, list]:
+    """
+    Load JSON data from a config file.
+
+    Args:
+        file_type: ConfigFile enum member.
+        default: Default value to return on error or file not found.
+
+    Returns:
+        Loaded JSON data (dict or list) or default value.
+    """
+    path = _get_config_path(file_type)
+    if default is None:
+        default = {}
+
+    try:
+        if not os.path.exists(path):
+            logging.warning(f"[Utils] File not found: {path}")
+            return default
+
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logging.error(f"[Utils] Failed to load {file_type.filename}: {e}")
+        return default
+
+
+def save_json(file_type: ConfigFile, data: Any) -> bool:
+    """
+    Save data to a JSON config file.
+
+    Args:
+        file_type: ConfigFile enum member.
+        data: Data to save (dict or list).
+
+    Returns:
+        True if successful, False otherwise.
+
+    Raises:
+        ValueError: If file_type is read-only.
+    """
+    if file_type.read_only:
+        raise ValueError(f"File {file_type.name} is read-only.")
+
+    path = _get_config_path(file_type)
+
+    try:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        logging.error(f"[Utils] Failed to save {file_type.filename}: {e}")
+        return False
 try:
     import fear_and_greed
     FG_AVAILABLE = True

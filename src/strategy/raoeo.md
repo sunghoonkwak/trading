@@ -41,9 +41,6 @@
 
 ## Functions (기능)
 
-### load_config
-`raoeo.json` 파일에서 설정을 로드합니다.
-
 #### Returns
 - `dict`: `targets` 키를 포함한 설정 정보
 
@@ -53,7 +50,7 @@
 모든 타겟 종목에 대해 당일 매수/매도 주문을 계산합니다.
 
 #### Strategy Logic
-1. `load_config()`로 설정을 로드하고 `targets` 내의 각 종목을 순회합니다.
+1. `utils.load_json(ConfigFile.STRATEGY_CONFIG)`로 설정을 로드하고 `targets` 내의 각 종목을 순회합니다.
 2. 각 종목별로:
     - `fetch_price()`를 통해 현재가와 보유 정보를 조회합니다.
     - **Phase 판단**: 소모금액(평단가 × 보유량) 기준으로 3단계 분류.

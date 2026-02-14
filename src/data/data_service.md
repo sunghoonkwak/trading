@@ -40,9 +40,6 @@ UI 모듈(`portfolio.py`, `handle_account_info.py`)과 데이터 소스(`KIS Thr
     - **2순위**: 실시간 WebSocket 시세 (`menu.raoeo.get_current_price`)
     - **3순위**: KIS API 조회 (국내 `inquire_price` / 해외 `fetch_price`)
 
-### `convert_portfolio_to_account_format(portfolio)`
-`get_portfolio_data`의 통합 구조를 `handle_account_info.py`의 UI 출력용 포맷(List 기반)으로 변환하는 어댑터 함수입니다.
-
 ## Data Structure (`portfolio.json`)
 
 `get_portfolio_data()`가 반환하고 파일로 저장하는 데이터의 구조입니다.

@@ -96,7 +96,7 @@
 
 ### save_ticker_result
 실행 결과를 `value_averaging_history.json`에 저장합니다.
-- 날짜별/종목별로 결과를 저장하며, 주문 성공 여부와 관계없이 기록을 남깁니다.
+- `utils.save_json(ConfigFile.VA_HISTORY, ...)`를 사용하여 날짜별/종목별로 결과를 저장하며, 주문 성공 여부와 관계없이 기록을 남깁니다.
 
 ---
 

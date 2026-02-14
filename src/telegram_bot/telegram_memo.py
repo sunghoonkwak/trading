@@ -4,40 +4,16 @@ Telegram Memo Module
 
 Saves arbitrary text messages to message.json for later review.
 """
-import os
-import json
 import html
 import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from utils import ConfigFile, load_json, save_json
 
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 from .telegram_utils import wrap_reply
 import display
-
-# Path to memo.json in KIS_config folder
-CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
-MEMO_FILE = os.path.join(CONFIG_ROOT, "memo.json")
-
-
-def load_messages() -> dict:
-    """Load existing messages from memo.json."""
-    if not os.path.exists(MEMO_FILE):
-        return {}
-    try:
-        with open(MEMO_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, Exception) as e:
-        logging.error(f"[Memo] Failed to load messages: {e}")
-        return {}
-
-
-def save_messages(messages: dict):
-    """Save messages to memo.json."""
-    with open(MEMO_FILE, "w", encoding="utf-8") as f:
-        json.dump(messages, f, ensure_ascii=False, indent=2)
-
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle non-command text messages and save to message.json."""
@@ -55,11 +31,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     entry = f"{time_str} : {text}"
 
     # Load, append to date, save
-    messages = load_messages()
+    messages = load_json(ConfigFile.MEMO, default={})
     if date_key not in messages:
         messages[date_key] = []
     messages[date_key].append(entry)
-    save_messages(messages)
+    save_json(ConfigFile.MEMO, messages)
 
     # Calculate today count and weekly total
     today_count = len(messages.get(date_key, []))
@@ -75,7 +51,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def cmd_memo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /memo - show recent 7 days of messages."""
-    messages = load_messages()
+    messages = load_json(ConfigFile.MEMO, default={})
     if not messages:
         await wrap_reply(update, "📭 No saved messages.")
         return

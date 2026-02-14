@@ -76,6 +76,3 @@ F&G 지수에 따라 현금 비중 결정.
 
 ### calculate_rebalancing
 목표 비중과 현재 비중의 차이 계산.
-
-### other utils
-- `load_config(path)`: JSON 설정 로드.

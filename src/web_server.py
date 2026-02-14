@@ -122,8 +122,8 @@ async def get_index():
 async def get_memos():
     """Fetch all memos from memo.json."""
     try:
-        from telegram_bot.telegram_memo import load_messages
-        messages = load_messages()
+        from utils import ConfigFile, load_json
+        messages = load_json(ConfigFile.MEMO, default={})
         return messages
     except Exception as e:
         logging.error(f"[WebServer] Failed to fetch memos: {e}")
@@ -134,8 +134,8 @@ async def get_memos():
 async def delete_memo(request: MemoDeleteRequest):
     """Delete a specific memo."""
     try:
-        from telegram_bot.telegram_memo import load_messages, save_messages
-        messages = load_messages()
+        from utils import ConfigFile, load_json, save_json
+        messages = load_json(ConfigFile.MEMO, default={})
 
         date_key = request.date
         target_text = request.text
@@ -148,7 +148,7 @@ async def delete_memo(request: MemoDeleteRequest):
             if len(messages[date_key]) < original_len:
                 if not messages[date_key]:  # Remove date key if empty
                     del messages[date_key]
-                save_messages(messages)
+                save_json(ConfigFile.MEMO, messages)
                 return {"success": True, "message": "Memo deleted"}
 
         return {"success": False, "error": "Memo not found"}

@@ -22,21 +22,7 @@ Allocation logic:
    - TQQQ: 5% fixed
 """
 
-import json
-import os
-
-def load_config(config_path=None):
-    """Loads the portfolio configuration from a JSON file."""
-    if config_path is None:
-        config_path = os.path.join(
-            os.path.expanduser("~"), "KIS_config", "portfolio_weights.json"
-        )
-    elif not os.path.isabs(config_path):
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        config_path = os.path.join(script_dir, config_path)
-
-    with open(config_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+from utils import ConfigFile, load_json
 
 
 def get_cash_weight(fear_greed_index: float, cash_strategy: dict) -> float:
@@ -232,18 +218,7 @@ def calculate_rebalancing(
 if __name__ == "__main__":
     import unicodedata
 
-    # Load configuration
-    config_file = "portfolio_weights.json"
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Try template directory first
-    template_path = os.path.join(os.path.dirname(script_dir), "..", "templete", config_file)
-    if os.path.exists(template_path):
-        config_path = template_path
-    else:
-        config_path = os.path.join(script_dir, config_file)
-
-    config = load_config(config_path)
+    config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
 
     # Mock current weights for testing
     mock_current_weights = {
@@ -270,6 +245,9 @@ if __name__ == "__main__":
         print(f"Total Score: {score:.2f}")
 
         # Load stock names for display
+        import os
+        import json
+        script_dir = os.path.dirname(os.path.abspath(__file__))
         stock_config_file = os.path.join(script_dir, "stock_configuration.json")
         ticker_map = {}
         if os.path.exists(stock_config_file):

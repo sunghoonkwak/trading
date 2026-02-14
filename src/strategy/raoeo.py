@@ -9,7 +9,7 @@ import os
 import sys
 import json
 import logging
-from utils import getch, getch_str, is_market_holiday
+from utils import getch, getch_str, is_market_holiday, ConfigFile, load_json, save_json
 from datetime import datetime
 from typing import Optional, Dict
 import pytz
@@ -21,18 +21,9 @@ from kis.kis_api.overseas_stock.order.order import order as order_overseas
 import trading_state
 import trading_config
 
-from strategy import storage
-
 # LOC order type code for US stocks
 LOC_ORDER_TYPE = "34"
 LIMIT_ORDER_TYPE = "00"
-
-
-def load_config() -> dict:
-    """
-    Load configuration from strategy_config.json via storage module.
-    """
-    return storage.get_strategy_config("raoeo")
 
 
 def get_current_price(symbol: str, exchange: str = "NASD") -> float:
@@ -80,7 +71,7 @@ def calculate_orders() -> dict:
     }
 
     # 1. Load config
-    config_data = load_config()
+    config_data = load_json(ConfigFile.STRATEGY_CONFIG, default={}).get("raoeo", {})
     targets_config = config_data.get('targets', {})
 
     if not targets_config:
@@ -437,7 +428,7 @@ def save_history(calculated_result: dict, execution_summary: dict = None) -> boo
                     order['error'] = matched.get('error')
 
     try:
-        history_list = storage.load_history("raoeo")
+        history_list = load_json(ConfigFile.RAOEO_HISTORY, default=[])
         if not isinstance(history_list, list):
              history_list = []
 
@@ -473,7 +464,7 @@ def save_history(calculated_result: dict, execution_summary: dict = None) -> boo
             }
             history_list.insert(0, new_entry)
 
-        return storage.save_history("raoeo", history_list)
+        return save_json(ConfigFile.RAOEO_HISTORY, history_list)
 
     except Exception as e:
         add_alert(f"Failed to save history: {e}", "ERROR")
@@ -489,7 +480,7 @@ def check_today_history() -> Optional[dict]:
     today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
 
     try:
-        history_list = storage.load_history("raoeo")
+        history_list = load_json(ConfigFile.RAOEO_HISTORY, default=[])
         if isinstance(history_list, list):
             for entry in history_list:
                 if entry.get('date') == today_str:
@@ -537,7 +528,7 @@ def get_daily_report() -> dict:
 
     # 2. Config & Portfolio (needed if calculating fresh)
     # We always try to load config to know what targets SHOULD exist
-    config_data = load_config()
+    config_data = load_json(ConfigFile.STRATEGY_CONFIG, default={}).get("raoeo", {})
     targets_config = config_data.get('targets', {})
 
     if not targets_config:

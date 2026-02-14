@@ -17,12 +17,7 @@ from thread_comm import ThreadRequest, RequestType
 from kis.kis_thread import request_portfolio, wait_for_response
 from thread_state import is_kis_ready
 from display import add_alert
-import json
-import os
-
-# Path to portfolio.json - in KIS_config directory
-CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
-PORTFOLIO_FILE = os.path.join(CONFIG_ROOT, 'portfolio.json')
+from utils import ConfigFile, load_json, save_json
 
 # =============================================================================
 # Portfolio Cache
@@ -51,7 +46,7 @@ class PortfolioCache:
 _portfolio_cache: Optional[PortfolioCache] = None
 
 
-def get_cached_portfolio(force_refresh: bool = False) -> Optional[dict]:
+def _get_cached_portfolio(force_refresh: bool = False) -> Optional[dict]:
     """Get cached portfolio data, or None if expired/missing."""
     global _portfolio_cache
 
@@ -64,7 +59,7 @@ def get_cached_portfolio(force_refresh: bool = False) -> Optional[dict]:
     return _portfolio_cache.data
 
 
-def set_portfolio_cache(data: dict) -> None:
+def _set_portfolio_cache(data: dict) -> None:
     """Update the portfolio cache with new data."""
     global _portfolio_cache
     _portfolio_cache = PortfolioCache(
@@ -73,7 +68,7 @@ def set_portfolio_cache(data: dict) -> None:
     )
 
 
-def clear_portfolio_cache() -> None:
+def _clear_portfolio_cache() -> None:
     """Clear the portfolio cache."""
     global _portfolio_cache
     _portfolio_cache = None
@@ -82,14 +77,6 @@ def clear_portfolio_cache() -> None:
 # =============================================================================
 # Data Access Functions
 # =============================================================================
-
-def _load_portfolio() -> dict:
-    """Load portfolio data from portfolio.json."""
-    try:
-        with open(PORTFOLIO_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        return {"error": str(e)}
 
 
 def _calculate_portfolio_stats(portfolio_data: dict) -> dict:
@@ -103,7 +90,7 @@ def _calculate_portfolio_stats(portfolio_data: dict) -> dict:
         dict with us_stock_usd, us_cash_usd, kr_stock_krw, kr_cash_krw, etc.
     """
     if portfolio_data is None:
-        portfolio_data = _load_portfolio()
+        portfolio_data = load_json(ConfigFile.PORTFOLIO, default={"error": "Failed to load portfolio"})
 
     if "error" in portfolio_data:
         return {"error": portfolio_data["error"]}
@@ -203,7 +190,7 @@ def _get_merged_portfolio_stat(portfolio_data: dict):
     }
     """
     if portfolio_data is None:
-        portfolio_data = _load_portfolio()
+        portfolio_data = load_json(ConfigFile.PORTFOLIO, default={"error": "Failed to load portfolio"})
 
     if "error" in portfolio_data:
         return {}, 0.0
@@ -309,7 +296,7 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
         return {"error": "KIS Thread not authenticated"}
 
     # Check cache first (unless force_refresh)
-    cached = get_cached_portfolio(force_refresh=force_refresh)
+    cached = _get_cached_portfolio(force_refresh=force_refresh)
     if cached is not None:
         add_alert("[Data] Using cached portfolio", "DEBUG")
         logging.debug("[DataService] Returning cached portfolio data")
@@ -335,12 +322,11 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
     # Process the successful response (raw portfolio dict)
     raw_portfolio = response.result
 
-    try:
-        with open(PORTFOLIO_FILE, 'w', encoding='utf-8') as f:
-            json.dump(raw_portfolio, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logging.error(f"[Data] Failed to save portfolio: {e}")
-        add_alert(f"Failed to save portfolio: {e}", "ERROR")
+    # Process the successful response (raw portfolio dict)
+    raw_portfolio = response.result
+
+    if not save_json(ConfigFile.PORTFOLIO, raw_portfolio):
+        add_alert(f"Failed to save portfolio", "ERROR")
 
     # --- Processing Logic (formerly in get_portfolio) ---
     result = {
@@ -396,19 +382,13 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
     targets = {}
     try:
         try:
-            from data.calculate_weights import calculate_target_weights, load_config
+            from data.calculate_weights import calculate_target_weights
         except ImportError:
             def calculate_target_weights(c, cfg, fg=50.0): return {}, 0, 0.2
-            def load_config(p): return {}
 
         # Path resolution for weights config (in KIS_config directory)
-        import os
-        config_path = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_weights.json")
-
-        if not os.path.exists(config_path):
-            logging.warning(f"[Data] portfolio_weights.json not found at {config_path}")
-
-        config = load_config(config_path)
+        # Load config using new utils
+        config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
 
         # Get F&G index from cached utility
         try:
@@ -438,76 +418,11 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
         # Do NOT cache incomplete data
     else:
         # Cache only complete data
-        set_portfolio_cache(result)
+        _set_portfolio_cache(result)
         add_alert("[Data] Portfolio loaded", "SUCCESS")
     logging.info("[DataService] Portfolio data cached successfully")
 
     return result
-
-
-def convert_portfolio_to_account_format(portfolio: dict) -> dict:
-    """
-    Convert get_portfolio() output format to the format expected by print_account_info().
-
-    Args:
-        portfolio: Output from get_portfolio()
-
-    Returns:
-        dict in the format expected by print_account_info() in handle_account_info.py
-    """
-    if portfolio.get("error"):
-        return portfolio
-
-    merged = portfolio.get("merged_data", {})
-    stats = portfolio.get("stats", {})
-    exchange_rate = portfolio.get("exchange_rate", None)
-
-    domestic_stocks = []
-    overseas_stocks = []
-
-    for ticker, info in merged.items():
-        # Skip cash entries
-        if info.get("type") == "CASH":
-            continue
-
-        currency = info.get("currency", "USD")
-        qty = info.get("qty", 0)
-        cur_price = info.get("cur_price", 0)
-        total_investment = info.get("total_investment", 0)
-
-        # Calculate avg_price and pnl
-        avg_price = total_investment / qty if qty > 0 else 0
-        current_value = qty * cur_price
-        pnl_amt = current_value - total_investment
-        pnl_rate = (pnl_amt / total_investment * 100) if total_investment > 0 else 0
-
-        stock_data = {
-            "name": info.get("name", "Unknown"),
-            "qty": qty,
-            "cur_price": cur_price,
-            "avg_price": avg_price,
-            "pnl_rate": pnl_rate,
-            "pnl_amt": pnl_amt,
-            "symbol": ticker
-        }
-
-        if currency == "KRW":
-            domestic_stocks.append(stock_data)
-        else:
-            stock_data["exchange"] = "US"
-            overseas_stocks.append(stock_data)
-
-    return {
-        "domestic_stocks": domestic_stocks,
-        "overseas_stocks": overseas_stocks,
-        "domestic_asset": {},
-        "overseas_asset": {
-            "frcr_drwg_psbl_amt_1": stats.get("us_cash_usd", 0)
-        },
-        "exchange_rate": exchange_rate,
-        "krw_orderable": stats.get("kr_cash_krw", 0),
-        "error": None
-    }
 
 
 def invalidate_cache() -> None:
@@ -515,7 +430,7 @@ def invalidate_cache() -> None:
     Clear the portfolio cache.
     Call this when data is known to be stale (e.g., after placing an order).
     """
-    clear_portfolio_cache()
+    _clear_portfolio_cache()
     logging.info("[DataService] Portfolio cache invalidated")
 
 
@@ -537,13 +452,11 @@ def get_weight_diffs():
     exchange_rate = portfolio_data.get("exchange_rate", None)
 
     # Load portfolio config to get group constituents
-    config_path = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_weights.json")
-    constituents_set = set()
-    main_ticker_constituents = {}  # main_ticker -> [constituents]
-
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
+        config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
+
+        constituents_set = set()
+        main_ticker_constituents = {}
 
         for group in config.get('groups', []):
             main_ticker = group.get('main_ticker')
@@ -651,9 +564,8 @@ def get_weight_diffs():
     # Calculate cash weight info
     cash_info = {}
     try:
-        from data.calculate_weights import get_cash_weight, load_config
-        config_path = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_weights.json")
-        config = load_config(config_path)
+        from data.calculate_weights import get_cash_weight
+        config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
         cash_strategy = config.get('cash_strategy', {'min': 0.1, 'mid': 0.2, 'max': 0.3})
 
         from utils import get_fear_and_greed
