@@ -79,7 +79,7 @@ def calculate_orders() -> dict:
         return result
 
     # 2. Fetch Portfolio Data (Efficiency: Fetch once for all)
-    portfolio = get_portfolio_data()
+    portfolio = get_portfolio_data(scope="kis")
     if portfolio.get('error'):
          result["global_error"] = f"Portfolio Error: {portfolio['error']}"
          return result
@@ -540,7 +540,7 @@ def get_daily_report() -> dict:
 
     # If we might need fresh data (holiday or calculation), fetch portfolio once
     if not today_entry:
-        generated_portfolio = get_portfolio_data()
+        generated_portfolio = get_portfolio_data(scope="kis")
 
     calculated_fresh = None
 

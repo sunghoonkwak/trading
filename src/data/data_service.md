@@ -12,9 +12,14 @@ UI 모듈(`portfolio.py`, `handle_account_info.py`)과 데이터 소스(`KIS Thr
 
 ## Key Functions (핵심 기능)
 
-### `get_portfolio_data(force_refresh=False)`
+### `get_portfolio_data(force_refresh=False, scope="all")`
 전체 포트폴리오 데이터를 조회하는 메인 함수입니다.
 
+- **`scope` Parameter**:
+    - `"all"` (기본값): 전체 포트폴리오 (KIS API + GSheet)
+    - `"kis"`: 한국투자증권 계좌만 (전략 실행용)
+    - `"passive"`: 거치식 투자 계좌들만 (GSheet)
+    - 캐시는 항상 전체 데이터로 저장되며, `scope` 필터링은 반환 직전에 적용.
 - **Caching Logic**:
     - 메모리 캐시 유효(기본 5분) 시 캐시 반환.
     - `force_refresh=True` 또는 캐시 만료 시 `KIS Thread`에 요청 전송.

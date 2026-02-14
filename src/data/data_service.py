@@ -74,6 +74,47 @@ def _clear_portfolio_cache() -> None:
     _portfolio_cache = None
 
 
+def _filter_by_scope(raw_portfolio: dict, scope: str) -> dict:
+    """
+    Filter raw portfolio data by account scope.
+
+    Args:
+        raw_portfolio: Raw portfolio dict with holdings, accounts, cash_holdings
+        scope: "all" | "kis" | "passive"
+
+    Returns:
+        Filtered portfolio dict (shallow copy with filtered lists)
+    """
+    if scope == "all":
+        return raw_portfolio
+
+    accounts = raw_portfolio.get("accounts", [])
+    kis_account_ids = {a["id"] for a in accounts if a.get("name") == "한국투자증권"}
+    kis_account_names = {a["name"] for a in accounts if a["id"] in kis_account_ids}
+
+    if scope == "kis":
+        target_ids = kis_account_ids
+        target_names = kis_account_names
+    else:  # passive
+        all_ids = {a["id"] for a in accounts}
+        target_ids = all_ids - kis_account_ids
+        target_names = {a["name"] for a in accounts if a["id"] in target_ids}
+
+    filtered = dict(raw_portfolio)
+    filtered["holdings"] = [
+        h for h in raw_portfolio.get("holdings", [])
+        if h.get("account_id") in target_ids
+    ]
+    filtered["cash_holdings"] = [
+        c for c in raw_portfolio.get("cash_holdings", [])
+        if c.get("account_name") in target_names
+    ]
+    filtered["accounts"] = [
+        a for a in accounts if a["id"] in target_ids
+    ]
+    return filtered
+
+
 # =============================================================================
 # Data Access Functions
 # =============================================================================
@@ -275,7 +316,7 @@ def _get_merged_portfolio_stat(portfolio_data: dict):
 
     return merged, total_val_usd
 
-def get_portfolio_data(force_refresh: bool = False) -> dict:
+def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> dict:
     """
     Get portfolio data with caching support.
 
@@ -287,6 +328,8 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
 
     Args:
         force_refresh: If True, bypass cache and force a new request
+        scope: Account filter - "all" (default), "kis" (strategy account),
+               or "passive" (buy-and-hold accounts)
 
     Returns:
         dict: Portfolio data from get_portfolio() or error dict
@@ -297,7 +340,7 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
     if cached is not None:
         add_alert("[Data] Using cached portfolio", "DEBUG")
         logging.debug("[DataService] Returning cached portfolio data")
-        return cached
+        return _apply_scope(cached, scope)
 
     # Cache miss - request from KIS Thread
     if not is_kis_ready():
@@ -419,7 +462,77 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
         add_alert("[Data] Portfolio loaded", "SUCCESS")
     logging.info("[DataService] Portfolio data cached successfully")
 
-    return result
+    return _apply_scope(result, scope)
+
+
+def _apply_scope(result: dict, scope: str) -> dict:
+    """Apply scope filtering to processed portfolio result."""
+    if scope == "all":
+        return result
+
+    # Determine target account names based on scope
+    accounts = result.get("accounts", [])
+    kis_account_ids = {a["id"] for a in accounts if a.get("name") == "한국투자증권"}
+    kis_names = {a["name"] for a in accounts if a["id"] in kis_account_ids}
+
+    if scope == "kis":
+        target_ids = kis_account_ids
+        target_names = kis_names
+    else:  # passive
+        target_ids = {a["id"] for a in accounts} - kis_account_ids
+        target_names = {a["name"] for a in accounts if a["id"] in target_ids}
+
+    # Filter holdings and accounts
+    filtered_holdings = [
+        h for h in result.get("holdings", [])
+        if h.get("account_id") in target_ids
+    ]
+    filtered_accounts = [a for a in accounts if a["id"] in target_ids]
+
+    # Load raw cash_holdings from saved portfolio file (result doesn't store raw cash)
+    saved_portfolio = load_json(ConfigFile.PORTFOLIO, default={})
+    all_cash = saved_portfolio.get("cash_holdings", [])
+    filtered_cash = [c for c in all_cash if c.get("account_name") in target_names]
+
+    # Build filtered raw portfolio for stat recalculation
+    filtered_raw_portfolio = {
+        "metadata": result.get("metadata", {}),
+        "holdings": filtered_holdings,
+        "asset_info": saved_portfolio.get("asset_info", {}),
+        "cash_holdings": filtered_cash,
+    }
+
+    # Recalculate stats and merged data for filtered scope
+    stats = _calculate_portfolio_stats(filtered_raw_portfolio)
+    merged_data, total_value_usd = _get_merged_portfolio_stat(filtered_raw_portfolio)
+
+    # Build price_map from filtered holdings
+    price_map = {}
+    for h in filtered_holdings:
+        ticker = h.get("ticker", "")
+        cur_price = h.get("cur_price", 0.0)
+        if ticker and cur_price > 0:
+            price_map[ticker] = cur_price
+
+    scoped = dict(result)
+    scoped["holdings"] = filtered_holdings
+    scoped["accounts"] = filtered_accounts
+    scoped["merged_data"] = merged_data
+    scoped["total_value_usd"] = total_value_usd
+    scoped["price_map"] = price_map
+    scoped["stats"] = stats if "error" not in stats else result.get("stats", {})
+
+    # Recalculate weights for scoped data
+    current_weights = {}
+    if total_value_usd > 0:
+        for ticker, data in merged_data.items():
+            current_weights[ticker] = data["current_value_usd"] / total_value_usd
+    scoped["current_weights"] = current_weights
+
+    # No target weights for scoped views (strategies have their own targets)
+    scoped["targets"] = {}
+
+    return scoped
 
 
 def invalidate_cache() -> None:

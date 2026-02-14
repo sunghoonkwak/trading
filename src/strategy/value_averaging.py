@@ -36,7 +36,7 @@ def get_daily_report():
     from data.data_service import get_portfolio_data
 
     # Fetch portfolio data internally
-    portfolio_data = get_portfolio_data()
+    portfolio_data = get_portfolio_data(scope="kis")
     if portfolio_data.get('error'):
         return {"error": portfolio_data['error']}
 
