@@ -60,13 +60,13 @@ def format_portfolio_summary(data: dict) -> str:
     return "\n".join(lines)
 
 
-def format_weight_diffs(diffs: list = None, total_usd: float = 0, cash_info: dict = None) -> str:
+def format_weight_diffs(diffs: list, total_usd: float, cash_info: dict) -> str:
     """
     Format weight differences for Telegram message.
     Args:
-        diffs: Optional list of diffs. If None, fetches fresh.
+        diffs: List of diffs.
         total_usd: Total portfolio value in USD.
-        cash_info: Optional dict with current/target cash weights.
+        cash_info: Dict with current/target cash weights.
     Returns:
         Formatted string with weight differences
     """
@@ -76,9 +76,6 @@ def format_weight_diffs(diffs: list = None, total_usd: float = 0, cash_info: dic
         fg_index = int(get_fear_and_greed())
     except ImportError:
         fg_index = 50
-
-    if diffs is None:
-        diffs, total_usd, cash_info = get_weight_diffs()
 
     if not diffs:
         return f"⚖️ <b>Portfolio Rebalancing</b> (F&G: {fg_index})\n\nEverything is balanced!"
@@ -526,7 +523,8 @@ async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio_weight."""
     loop = asyncio.get_running_loop()
-    diffs, total_usd, cash_info = await loop.run_in_executor(None, get_weight_diffs)
+    # /portfolio_weight is restricted to passive/long-term accounts
+    diffs, total_usd, cash_info = await loop.run_in_executor(None, get_weight_diffs, "passive")
     msg = format_weight_diffs(diffs, total_usd, cash_info)
     await wrap_reply(update, msg, parse_mode='HTML')
 

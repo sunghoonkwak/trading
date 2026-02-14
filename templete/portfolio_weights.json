@@ -1,24 +1,18 @@
 {
     "cash_strategy": {
-        "min": 0.1,
-        "mid": 0.2,
-        "max": 0.3
+        "min": 0.05,
+        "mid": 0.10,
+        "max": 0.15
     },
     "groups": [
         {
             "name": "Nasdaq100",
-            "target_score": 85,
+            "target_score": 100,
             "main_ticker": "QQQM",
             "constituents": [
                 "QQQ",
                 "379810"
             ]
-        },
-        {
-            "name": "Nasdaq100 leverage x2",
-            "target_score": 15,
-            "main_ticker": "QLD",
-            "constituents": []
         },
         {
             "name": "S&P500",
@@ -42,7 +36,7 @@
             "ticker": "SOXL",
             "ratio": 0
         },
-		{
+        {
             "ticker": "TQQQ",
             "ratio": 0
         },

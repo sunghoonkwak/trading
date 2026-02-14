@@ -65,7 +65,7 @@ def calculate_target_weights(
         Tuple of (target_weights, total_score, cash_weight)
     """
     # 1. Calculate cash weight based on F&G
-    cash_strategy = config.get('cash_strategy', {'min': 0.1, 'mid': 0.2, 'max': 0.3})
+    cash_strategy = config.get('cash_strategy', {'min': 0.05, 'mid': 0.10, 'max': 0.15})
     cash_weight = get_cash_weight(fear_greed_index, cash_strategy)
 
     # 2. Leverage allocation in Extreme Fear (SOXL 5%, TQQQ 5%)

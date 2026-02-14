@@ -529,8 +529,20 @@ def _apply_scope(result: dict, scope: str) -> dict:
             current_weights[ticker] = data["current_value_usd"] / total_value_usd
     scoped["current_weights"] = current_weights
 
-    # No target weights for scoped views (strategies have their own targets)
-    scoped["targets"] = {}
+    # Calculate targets for passive scope (for rebalancing)
+    targets = {}
+    if scope == "passive" and total_value_usd > 0:
+        try:
+            from data.calculate_weights import calculate_target_weights
+            config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
+            from utils import get_fear_and_greed
+            fear_greed_index = get_fear_and_greed()
+            targets, score, cash_weight = calculate_target_weights(current_weights, config, fear_greed_index)
+        except Exception as e:
+            logging.error(f"[DataService] Scoped weight calc error: {e}")
+            targets = {}
+
+    scoped["targets"] = targets
 
     return scoped
 
@@ -544,9 +556,12 @@ def invalidate_cache() -> None:
     logging.info("[DataService] Portfolio cache invalidated")
 
 
-def get_weight_diffs():
+def get_weight_diffs(scope: str = "all"):
     """
     Calculate weight differences between current and target allocations.
+
+    Args:
+        scope: Account filter - "all" or "passive"
 
     Returns:
         list: Sorted list of diffs (by abs_diff descending), each containing:
@@ -554,7 +569,7 @@ def get_weight_diffs():
     """
     import os
 
-    portfolio_data = get_portfolio_data()
+    portfolio_data = get_portfolio_data(scope=scope)
     merged_data = portfolio_data.get("merged_data", {})
     current_weights = portfolio_data.get("current_weights", {})
     targets = portfolio_data.get("targets", {})
@@ -676,7 +691,7 @@ def get_weight_diffs():
     try:
         from data.calculate_weights import get_cash_weight
         config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
-        cash_strategy = config.get('cash_strategy', {'min': 0.1, 'mid': 0.2, 'max': 0.3})
+        cash_strategy = config.get('cash_strategy', {'min': 0.05, 'mid': 0.10, 'max': 0.15})
 
         from utils import get_fear_and_greed
         fg_index = get_fear_and_greed()
