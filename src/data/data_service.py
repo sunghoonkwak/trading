@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Data Service Module
+Data Service Module (Refactored)
 
-This module provides centralized data access for the Main Thread.
-It handles caching, KIS Thread requests, and data transformation.
-
-All data requests from menu handlers (handle_account_info, handle_place_order, etc.)
-should go through this module.
+This module provides centralized data access for the application.
+It separates data fetching, caching, and transformation logic.
 """
 import logging
-from typing import Optional
+from typing import Optional, Dict, List, Tuple, Any
 from datetime import datetime
 from dataclasses import dataclass
 
@@ -17,699 +14,310 @@ from thread_comm import ThreadRequest, RequestType
 from kis.kis_thread import request_portfolio, wait_for_response
 from thread_state import is_kis_ready
 from display import add_alert
-from utils import ConfigFile, load_json, save_json
+from utils import ConfigFile, load_json, save_json, get_fear_and_greed
+from trading_config import get_stock_info
 
 # =============================================================================
-# Portfolio Cache
+# Cache Management
 # =============================================================================
 
 @dataclass
 class PortfolioCache:
-    """
-    Cache container for portfolio data.
-
-    Attributes:
-        data: The cached get_portfolio() result
-        timestamp: When the data was fetched
-        expire_seconds: Cache expiration time (default: 5 minutes)
-    """
-    data: dict
+    data: Dict
     timestamp: datetime
-    expire_seconds: int = 300  # 5 minutes
+    expire_seconds: int = 300
 
     def is_expired(self) -> bool:
-        """Check if the cache has expired."""
-        elapsed = (datetime.now() - self.timestamp).total_seconds()
-        return elapsed > self.expire_seconds
+        return (datetime.now() - self.timestamp).total_seconds() > self.expire_seconds
 
+class PortfolioCacheManager:
+    _cache: Optional[PortfolioCache] = None
 
-_portfolio_cache: Optional[PortfolioCache] = None
+    @classmethod
+    def get(cls, force_refresh: bool = False) -> Optional[Dict]:
+        if force_refresh or cls._cache is None or cls._cache.is_expired():
+            return None
+        return cls._cache.data
 
+    @classmethod
+    def set(cls, data: Dict):
+        cls._cache = PortfolioCache(data=data, timestamp=datetime.now())
 
-def _get_cached_portfolio(force_refresh: bool = False) -> Optional[dict]:
-    """Get cached portfolio data, or None if expired/missing."""
-    global _portfolio_cache
-
-    if force_refresh:
-        return None
-
-    if _portfolio_cache is None or _portfolio_cache.is_expired():
-        return None
-
-    return _portfolio_cache.data
-
-
-def _set_portfolio_cache(data: dict) -> None:
-    """Update the portfolio cache with new data."""
-    global _portfolio_cache
-    _portfolio_cache = PortfolioCache(
-        data=data,
-        timestamp=datetime.now()
-    )
-
-
-def _clear_portfolio_cache() -> None:
-    """Clear the portfolio cache."""
-    global _portfolio_cache
-    _portfolio_cache = None
-
-
-def _filter_by_scope(raw_portfolio: dict, scope: str) -> dict:
-    """
-    Filter raw portfolio data by account scope.
-
-    Args:
-        raw_portfolio: Raw portfolio dict with holdings, accounts, cash_holdings
-        scope: "all" | "kis" | "passive"
-
-    Returns:
-        Filtered portfolio dict (shallow copy with filtered lists)
-    """
-    if scope == "all":
-        return raw_portfolio
-
-    accounts = raw_portfolio.get("accounts", [])
-    kis_account_ids = {a["id"] for a in accounts if a.get("name") == "한국투자증권"}
-    kis_account_names = {a["name"] for a in accounts if a["id"] in kis_account_ids}
-
-    if scope == "kis":
-        target_ids = kis_account_ids
-        target_names = kis_account_names
-    else:  # passive
-        all_ids = {a["id"] for a in accounts}
-        target_ids = all_ids - kis_account_ids
-        target_names = {a["name"] for a in accounts if a["id"] in target_ids}
-
-    filtered = dict(raw_portfolio)
-    filtered["holdings"] = [
-        h for h in raw_portfolio.get("holdings", [])
-        if h.get("account_id") in target_ids
-    ]
-    filtered["cash_holdings"] = [
-        c for c in raw_portfolio.get("cash_holdings", [])
-        if c.get("account_name") in target_names
-    ]
-    filtered["accounts"] = [
-        a for a in accounts if a["id"] in target_ids
-    ]
-    return filtered
-
+    @classmethod
+    def invalidate(cls):
+        cls._cache = None
 
 # =============================================================================
-# Data Access Functions
+# Portfolio Transformation Logic
 # =============================================================================
 
+class PortfolioProcessor:
+    """Handles merging, statistics, and weight calculations for portfolio data."""
 
-def _calculate_portfolio_stats(portfolio_data: dict) -> dict:
-    """
-    Calculate portfolio statistics with USD/KRW breakdown.
+    @staticmethod
+    def calculate_stats(raw_data: Dict) -> Dict:
+        """Calculate USD/KRW totals and percentages with full breakdown."""
+        metadata = raw_data.get("metadata", {})
+        ex_rate = metadata.get("exchange_rate", 1.0)
+        
+        asset_info = raw_data.get("asset_info", {})
+        holdings = raw_data.get("holdings", [])
+        cash_holdings = raw_data.get("cash_holdings", [])
 
-    Args:
-        portfolio_data: Full portfolio data from get_portfolio()
+        # 1. Stock Values
+        us_stock_usd = 0.0
+        kr_stock_krw = 0.0
+        for h in holdings:
+            ticker = h.get("ticker", "")
+            val = h.get("qty", 0) * h.get("cur_price", h.get("avg_price", 0))
+            if asset_info.get(ticker, {}).get("currency") == "KRW":
+                kr_stock_krw += val
+            else:
+                us_stock_usd += val
 
-    Returns:
-        dict with us_stock_usd, us_cash_usd, kr_stock_krw, kr_cash_krw, etc.
-    """
-    if portfolio_data is None:
-        portfolio_data = load_json(ConfigFile.PORTFOLIO, default={"error": "Failed to load portfolio"})
+        # 2. Cash Values
+        us_cash_usd = sum(c.get("amount", 0) for c in cash_holdings if c.get("currency") == "USD")
+        kr_cash_krw = sum(c.get("amount", 0) for c in cash_holdings if c.get("currency") == "KRW")
 
-    if "error" in portfolio_data:
-        return {"error": portfolio_data["error"]}
+        # 3. Conversions
+        us_stock_krw = us_stock_usd * ex_rate
+        us_cash_krw = us_cash_usd * ex_rate
+        kr_stock_usd = kr_stock_krw / ex_rate if ex_rate > 0 else 0
+        kr_cash_usd = kr_cash_krw / ex_rate if ex_rate > 0 else 0
 
-    # Extract exchange_rate from metadata
-    exchange_rate = portfolio_data.get("metadata", {}).get("exchange_rate")
-    if exchange_rate is None:
-        return {"error": "exchange_rate not found in portfolio metadata"}
+        # 4. Totals
+        total_stock_usd = us_stock_usd + kr_stock_usd
+        total_cash_usd = us_cash_usd + kr_cash_usd
+        total_stock_krw = us_stock_krw + kr_stock_krw
+        total_cash_krw = us_cash_krw + kr_cash_krw
+        
+        total_usd = total_stock_usd + total_cash_usd
+        total_krw = total_stock_krw + total_cash_krw
 
-    # Initialize totals
-    us_stock_usd = 0.0
-    us_cash_usd = 0.0
-    kr_stock_krw = 0.0
-    kr_cash_krw = 0.0
+        # 5. Ratios
+        us_pct = ((us_stock_usd + us_cash_usd) / total_usd * 100) if total_usd > 0 else 0
+        kr_pct = ((kr_stock_usd + kr_cash_usd) / total_usd * 100) if total_usd > 0 else 0
+        
+        us_cash_ratio = (us_cash_usd / (us_stock_usd + us_cash_usd) * 100) if (us_stock_usd + us_cash_usd) > 0 else 0
+        kr_cash_ratio = (kr_cash_krw / (kr_stock_krw + kr_cash_krw) * 100) if (kr_stock_krw + kr_cash_krw) > 0 else 0
 
-    # Calculate stock values using holdings cur_price
-    asset_info = portfolio_data.get("asset_info", {})
-    holdings = portfolio_data.get("holdings", [])
-
-    for h in holdings:
-        ticker = h.get("ticker", "")
-        qty = h.get("qty", 0)
-        avg_price = h.get("avg_price", 0)
-        cur_price = h.get("cur_price", avg_price)  # Fallback to avg_price
-        value = qty * cur_price
-
-        # Determine currency from asset_info
-        info = asset_info.get(ticker, {})
-        currency = info.get("currency", "USD")
-
-        if currency == "USD":
-            us_stock_usd += value
-        else:
-            kr_stock_krw += value
-
-    # Calculate cash holdings
-    cash_holdings = portfolio_data.get("cash_holdings", [])
-    for c in cash_holdings:
-        amount = c.get("amount", 0)
-        currency = c.get("currency", "USD")
-        if currency == "USD":
-            us_cash_usd += amount
-        else:
-            kr_cash_krw += amount
-
-    # Convert with exchange rate
-    us_stock_krw = us_stock_usd * exchange_rate
-    us_cash_krw = us_cash_usd * exchange_rate
-    kr_stock_usd = kr_stock_krw / exchange_rate if exchange_rate > 0 else 0
-    kr_cash_usd = kr_cash_krw / exchange_rate if exchange_rate > 0 else 0
-
-    # Calculate totals
-    total_usd = us_stock_usd + us_cash_usd + kr_stock_usd + kr_cash_usd
-    total_krw = us_stock_krw + us_cash_krw + kr_stock_krw + kr_cash_krw
-
-    # Percentages - based on USD total
-    us_pct = ((us_stock_usd + us_cash_usd) / total_usd * 100) if total_usd > 0 else 0
-    kr_pct = ((kr_stock_usd + kr_cash_usd) / total_usd * 100) if total_usd > 0 else 0
-
-    # Cash ratios within each currency's total assets
-    us_total_assets = us_stock_usd + us_cash_usd
-    kr_total_assets = kr_stock_krw + kr_cash_krw
-    us_cash_ratio = (us_cash_usd / us_total_assets * 100) if us_total_assets > 0 else 0
-    kr_cash_ratio = (kr_cash_krw / kr_total_assets * 100) if kr_total_assets > 0 else 0
-
-    return {
-        "us_stock_usd": us_stock_usd,
-        "us_cash_usd": us_cash_usd,
-        "us_stock_krw": us_stock_krw,
-        "us_cash_krw": us_cash_krw,
-        "kr_stock_usd": kr_stock_usd,
-        "kr_cash_usd": kr_cash_usd,
-        "kr_stock_krw": kr_stock_krw,
-        "kr_cash_krw": kr_cash_krw,
-        "total_stock_usd": us_stock_usd + kr_stock_usd,
-        "total_cash_usd": us_cash_usd + kr_cash_usd,
-        "total_stock_krw": us_stock_krw + kr_stock_krw,
-        "total_cash_krw": us_cash_krw + kr_cash_krw,
-        "us_pct": us_pct,
-        "kr_pct": kr_pct,
-        "us_cash_ratio": us_cash_ratio,
-        "kr_cash_ratio": kr_cash_ratio
-    }
-
-def _get_merged_portfolio_stat(portfolio_data: dict):
-    """
-    Load portfolio, merge holdings by ticker, and calculate total value.
-    Returns:
-        (merged_dict, total_value_usd)
-
-    merged_dict format:
-    {
-        ticker: {
-            "qty", "total_investment_krw", "cur_price", "name", "currency",
-            "current_value_usd", "current_value_krw", ...
-        }
-    }
-    """
-    if portfolio_data is None:
-        portfolio_data = load_json(ConfigFile.PORTFOLIO, default={"error": "Failed to load portfolio"})
-
-    if "error" in portfolio_data:
-        return {}, 0.0
-
-    # Extract exchange_rate from metadata
-    exchange_rate = portfolio_data.get("metadata", {}).get("exchange_rate")
-    if exchange_rate is None:
-        logging.error("exchange_rate not found in portfolio metadata")
-        return {}, 0.0
-
-    asset_info = portfolio_data.get("asset_info", {})
-    holdings = portfolio_data.get("holdings", [])
-    cash_holdings = portfolio_data.get("cash_holdings", [])
-
-    merged = {}
-    total_val_usd = 0.0
-
-    # 1. Process Stocks
-    for h in holdings:
-        ticker = h.get("ticker", "")
-        qty = h.get("qty", 0)
-        avg_price = h.get("avg_price", 0)
-        cur_price = h.get("cur_price", avg_price)  # Fallback to avg_price
-        info = asset_info.get(ticker, {})
-        name = h.get("name", info.get("name", ticker))
-        currency = info.get("currency", "USD")
-
-        if ticker not in merged:
-            merged[ticker] = {
-                "qty": 0.0,
-                "total_investment": 0.0,
-                "cur_price": cur_price,
-                "name": name,
-                "currency": currency,
-                "type": "STOCK"
-            }
-
-        # Aggregate
-        merged[ticker]["qty"] += qty
-        merged[ticker]["total_investment"] += qty * avg_price
-        if cur_price > 0:
-            merged[ticker]["cur_price"] = cur_price
-
-    # 2. Process Cash (USD/KRW) - Create as pseudo-tickers for weight calc
-    usd_cash = sum(c["amount"] for c in cash_holdings if c.get("currency") == "USD")
-    krw_cash = sum(c["amount"] for c in cash_holdings if c.get("currency") == "KRW")
-
-    if usd_cash > 0:
-        merged["USD cash"] = {
-            "qty": usd_cash, "total_investment": usd_cash, "cur_price": 1.0,
-            "name": "USD cash", "currency": "USD", "type": "CASH"
+        return {
+            "us_stock_usd": us_stock_usd, "us_cash_usd": us_cash_usd,
+            "us_stock_krw": us_stock_krw, "us_cash_krw": us_cash_krw,
+            "kr_stock_krw": kr_stock_krw, "kr_cash_krw": kr_cash_krw,
+            "kr_stock_usd": kr_stock_usd, "kr_cash_usd": kr_cash_usd,
+            "total_stock_usd": total_stock_usd, "total_cash_usd": total_cash_usd,
+            "total_stock_krw": total_stock_krw, "total_cash_krw": total_cash_krw,
+            "total_usd": total_usd, "total_krw": total_krw,
+            "us_pct": us_pct, "kr_pct": kr_pct,
+            "us_cash_ratio": us_cash_ratio, "kr_cash_ratio": kr_cash_ratio
         }
 
-    if krw_cash > 0:
-        merged["KRW cash"] = {
-            "qty": krw_cash, "total_investment": krw_cash, "cur_price": 1.0,
-            "name": "KRW cash", "currency": "KRW", "type": "CASH"
-        }
+    @staticmethod
+    def merge_holdings(raw_data: Dict) -> Tuple[Dict, float]:
+        """Merge holdings by ticker and include cash as pseudo-tickers."""
+        metadata = raw_data.get("metadata", {})
+        ex_rate = metadata.get("exchange_rate", 1.0)
+        asset_info = raw_data.get("asset_info", {})
+        
+        merged = {}
+        total_usd = 0.0
 
-    # 3. Calculate Values & Total
-    for ticker, data in merged.items():
-        qty = data["qty"]
-        cur_price = data["cur_price"]
-        currency = data["currency"]
+        # Process Stocks
+        for h in raw_data.get("holdings", []):
+            ticker = h.get("ticker", "")
+            info = asset_info.get(ticker, {})
+            currency = info.get("currency", "USD")
+            
+            if ticker not in merged:
+                merged[ticker] = {
+                    "qty": 0.0, "total_investment": 0.0, "name": h.get("name", ticker),
+                    "currency": currency, "type": "STOCK", "cur_price": h.get("cur_price", 0)
+                }
+            
+            merged[ticker]["qty"] += h.get("qty", 0)
+            merged[ticker]["total_investment"] += h.get("qty", 0) * h.get("avg_price", 0)
 
-        # Value in native currency
-        val_native = qty * cur_price
-        data["current_value_native"] = val_native
+        # Process Cash
+        for c in raw_data.get("cash_holdings", []):
+            curr = c.get("currency", "USD")
+            key = f"{curr} cash"
+            if key not in merged:
+                merged[key] = {"qty": 0, "cur_price": 1.0, "name": key, "currency": curr, "type": "CASH"}
+            merged[key]["qty"] += c.get("amount", 0)
 
-        # Convert to USD for uniform weight calculation
-        if currency == "USD":
-            val_usd = val_native
-            val_krw = val_native * exchange_rate
-        else:
-            val_krw = val_native
-            val_usd = val_native / exchange_rate if exchange_rate > 0 else 0
+        # Calculate Values
+        for t, data in merged.items():
+            val_native = data["qty"] * data["cur_price"]
+            if data["currency"] == "USD":
+                data["current_value_usd"] = val_native
+                data["current_value_krw"] = val_native * ex_rate
+            else:
+                data["current_value_krw"] = val_native
+                data["current_value_usd"] = val_native / ex_rate
+            total_usd += data["current_value_usd"]
 
-        data["current_value_usd"] = val_usd
-        data["current_value_krw"] = val_krw
+        return merged, total_usd
 
-        total_val_usd += val_usd
+# =============================================================================
+# Main Service Functions
+# =============================================================================
 
-    return merged, total_val_usd
-
-def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> dict:
+def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     """
-    Get portfolio data with caching support.
-
-    This function:
-    1. Checks cache for valid data
-    2. If cache hit, returns cached data immediately
-    3. If cache miss/expired, requests from KIS Thread
-    4. Stores response in cache and returns
-
-    Args:
-        force_refresh: If True, bypass cache and force a new request
-        scope: Account filter - "all" (default), "kis" (strategy account),
-               or "passive" (buy-and-hold accounts)
-
-    Returns:
-        dict: Portfolio data from get_portfolio() or error dict
+    Orchestrates portfolio data fetching and processing.
     """
-
-    # Check cache first (unless force_refresh)
-    cached = _get_cached_portfolio(force_refresh=force_refresh)
-    if cached is not None:
+    # 1. Try Cache
+    cached = PortfolioCacheManager.get(force_refresh)
+    if cached:
         add_alert("[Data] Using cached portfolio", "DEBUG")
-        logging.debug("[DataService] Returning cached portfolio data")
-        return _apply_scope(cached, scope)
+        return _apply_scope_filter(cached, scope)
 
-    # Cache miss - request from KIS Thread
+    # 2. Fetch from KIS
     if not is_kis_ready():
-        return {"error": "KIS Thread not authenticated"}
+        return {"error": "KIS Thread not ready"}
 
     add_alert("[Data] Fetching portfolio...", "INFO")
-    logging.info("[DataService] Requesting portfolio from KIS Thread")
-
     request_id = request_portfolio(force_refresh=force_refresh)
     response = wait_for_response(request_id, timeout=60.0)
 
-    if response is None:
-        error_msg = "Portfolio request timed out"
-        logging.error(f"[DataService] {error_msg}")
-        return {"error": error_msg}
+    if not response or not response.success:
+        return {"error": response.error if response else "Timeout"}
 
-    if not response.success:
-        error_msg = response.error or "Unknown error"
-        logging.error(f"[DataService] Portfolio request failed: {error_msg}")
-        return {"error": error_msg}
-
-    # Process the successful response (raw portfolio dict)
     raw_portfolio = response.result
+    save_json(ConfigFile.PORTFOLIO, raw_portfolio)
 
-    if not save_json(ConfigFile.PORTFOLIO, raw_portfolio):
-        add_alert(f"Failed to save portfolio", "ERROR")
+    # 3. Process Data
+    processor = PortfolioProcessor()
+    merged_data, total_usd = processor.merge_holdings(raw_portfolio)
+    stats = processor.calculate_stats(raw_portfolio)
 
-    # --- Processing Logic (formerly in get_portfolio) ---
     result = {
-        "merged_data": {},
-        "total_value_usd": 0.0,
-        "current_weights": {},
-        "targets": {},
-        "stats": {},
-        "exchange_rate": None,
-        "error": None
+        "raw": raw_portfolio,
+        "merged_data": merged_data,
+        "total_value_usd": total_usd,
+        "stats": stats,
+        "exchange_rate": raw_portfolio.get("metadata", {}).get("exchange_rate"),
+        "price_map": {t: d["cur_price"] for t, d in merged_data.items() if d["type"] == "STOCK"},
+        "accounts": raw_portfolio.get("accounts", []),
+        "holdings": raw_portfolio.get("holdings", []),
+        "metadata": raw_portfolio.get("metadata", {})
     }
 
-    # Extract metadata and prices
-    metadata = raw_portfolio.get("metadata", {})
-    exchange_rate = float(metadata.get("exchange_rate", None))
-    result["exchange_rate"] = exchange_rate
-
-    current_prices = {}
-    holdings = raw_portfolio.get("holdings", [])
-    for h in holdings:
-        ticker = h.get("ticker", "")
-        cur_price = h.get("cur_price", 0.0)
-        if ticker and cur_price > 0:
-            current_prices[ticker] = cur_price
-
-    result["price_map"] = current_prices
-
-    # Calculate stats using imported helper
-    stats = _calculate_portfolio_stats(raw_portfolio)
-    if "error" in stats:
-        result["error"] = stats["error"]
-        return result
-    result["stats"] = stats
-
-    # Get merged data using imported helper
-    merged_data, total_value_usd = _get_merged_portfolio_stat(raw_portfolio)
-    result["merged_data"] = merged_data
-    result["total_value_usd"] = total_value_usd
-
-    # Include raw lists for consumers (e.g. web_server)
-    result["holdings"] = raw_portfolio.get("holdings", [])
-    result["accounts"] = raw_portfolio.get("accounts", [])
-    result["metadata"] = raw_portfolio.get("metadata", {})
-
-    # Calculate current weights
-    current_weights = {}
-    if total_value_usd > 0:
-        for ticker, data in merged_data.items():
-            current_weights[ticker] = data["current_value_usd"] / total_value_usd
-    result["current_weights"] = current_weights
-
-    # Calculate target weights
-    targets = {}
+    # 4. Calculate Weights
     try:
-        try:
-            from data.calculate_weights import calculate_target_weights
-        except ImportError:
-            def calculate_target_weights(c, cfg, fg=50.0): return {}, 0, 0.2
-
-        # Path resolution for weights config (in KIS_config directory)
-        # Load config using new utils
-        config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
-
-        # Get F&G index from cached utility
-        try:
-            from utils import get_fear_and_greed
-            fear_greed_index = get_fear_and_greed()
-        except ImportError:
-            fear_greed_index = 50.0
-
-        targets, score, cash_weight = calculate_target_weights(current_weights, config, fear_greed_index)
+        from data.calculate_weights import calculate_target_weights
+        weights_cfg = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
+        cur_weights = {t: d["current_value_usd"] / total_usd for t, d in merged_data.items() if total_usd > 0}
+        result["current_weights"] = cur_weights
+        result["targets"], _, _ = calculate_target_weights(cur_weights, weights_cfg, get_fear_and_greed())
     except Exception as e:
-        logging.error(f"[DataService] Weight calc error: {e}")
-        targets = {}
+        logging.error(f"Weight calc error: {e}")
+        result["targets"] = {}
 
-    result["targets"] = targets
-
-    # Check if data is complete (no GSheet/KIS errors)
-    has_gsheet_error = metadata.get("gsheet_error")
-    has_kis_error = metadata.get("kis_error")
-
-    if has_gsheet_error or has_kis_error:
-        # Log which data source failed
-        if has_gsheet_error:
-            add_alert(f"[Data] GSheet error: {has_gsheet_error}", "WARN")
-        if has_kis_error:
-            add_alert(f"[Data] KIS error: {has_kis_error}", "WARN")
-        add_alert("[Data] Portfolio loaded (partial - not cached)", "WARN")
-        # Do NOT cache incomplete data
-    else:
-        # Cache only complete data
-        _set_portfolio_cache(result)
+    # 5. Cache if no critical errors
+    if not (result["metadata"].get("gsheet_error") or result["metadata"].get("kis_error")):
+        PortfolioCacheManager.set(result)
         add_alert("[Data] Portfolio loaded", "SUCCESS")
-    logging.info("[DataService] Portfolio data cached successfully")
+    else:
+        add_alert("[Data] Portfolio loaded (partial)", "WARN")
 
-    return _apply_scope(result, scope)
+    return _apply_scope_filter(result, scope)
 
+def _apply_scope_filter(data: Dict, scope: str) -> Dict:
+    """Filters processed data by account scope (all/kis/passive)."""
+    if scope == "all": return data
 
-def _apply_scope(result: dict, scope: str) -> dict:
-    """Apply scope filtering to processed portfolio result."""
-    if scope == "all":
-        return result
-
-    # Determine target account names based on scope
-    accounts = result.get("accounts", [])
-    kis_account_ids = {a["id"] for a in accounts if a.get("name") == "한국투자증권"}
-    kis_names = {a["name"] for a in accounts if a["id"] in kis_account_ids}
-
-    if scope == "kis":
-        target_ids = kis_account_ids
-        target_names = kis_names
-    else:  # passive
-        target_ids = {a["id"] for a in accounts} - kis_account_ids
-        target_names = {a["name"] for a in accounts if a["id"] in target_ids}
-
-    # Filter holdings and accounts
-    filtered_holdings = [
-        h for h in result.get("holdings", [])
-        if h.get("account_id") in target_ids
-    ]
-    filtered_accounts = [a for a in accounts if a["id"] in target_ids]
-
-    # Load raw cash_holdings from saved portfolio file (result doesn't store raw cash)
-    saved_portfolio = load_json(ConfigFile.PORTFOLIO, default={})
-    all_cash = saved_portfolio.get("cash_holdings", [])
-    filtered_cash = [c for c in all_cash if c.get("account_name") in target_names]
-
-    # Build filtered raw portfolio for stat recalculation
-    filtered_raw_portfolio = {
-        "metadata": result.get("metadata", {}),
-        "holdings": filtered_holdings,
-        "asset_info": saved_portfolio.get("asset_info", {}),
-        "cash_holdings": filtered_cash,
+    raw = data["raw"]
+    accounts = raw.get("accounts", [])
+    kis_ids = {a["id"] for a in accounts if a.get("name") == "한국투자증권"}
+    
+    target_ids = kis_ids if scope == "kis" else ({a["id"] for a in accounts} - kis_ids)
+    
+    # Re-run processing on filtered raw data
+    filtered_raw = {
+        "metadata": raw.get("metadata", {}),
+        "asset_info": raw.get("asset_info", {}),
+        "holdings": [h for h in raw.get("holdings", []) if h.get("account_id") in target_ids],
+        "cash_holdings": [c for c in raw.get("cash_holdings", []) if c.get("account_id") in target_ids]
     }
+    
+    if not filtered_raw["cash_holdings"]:
+        target_names = {a["name"] for a in accounts if a["id"] in target_ids}
+        filtered_raw["cash_holdings"] = [c for c in raw.get("cash_holdings", []) if c.get("account_name") in target_names]
 
-    # Recalculate stats and merged data for filtered scope
-    stats = _calculate_portfolio_stats(filtered_raw_portfolio)
-    merged_data, total_value_usd = _get_merged_portfolio_stat(filtered_raw_portfolio)
+    processor = PortfolioProcessor()
+    merged, total = processor.merge_holdings(filtered_raw)
+    stats = processor.calculate_stats(filtered_raw)
+    
+    scoped_result = dict(data)
+    scoped_result.update({
+        "merged_data": merged, "total_value_usd": total, "stats": stats,
+        "holdings": filtered_raw["holdings"],
+        "current_weights": {t: d["current_value_usd"] / total for t, d in merged.items() if total > 0}
+    })
+    return scoped_result
 
-    # Build price_map from filtered holdings
-    price_map = {}
-    for h in filtered_holdings:
-        ticker = h.get("ticker", "")
-        cur_price = h.get("cur_price", 0.0)
-        if ticker and cur_price > 0:
-            price_map[ticker] = cur_price
+def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
+    """Calculates rebalancing differences."""
+    portfolio = get_portfolio_data(scope=scope)
+    merged = portfolio.get("merged_data", {})
+    total_usd = portfolio.get("total_value_usd", 0.0)
+    targets = portfolio.get("targets", {})
+    ex_rate = portfolio.get("exchange_rate", 1.0)
 
-    scoped = dict(result)
-    scoped["holdings"] = filtered_holdings
-    scoped["accounts"] = filtered_accounts
-    scoped["merged_data"] = merged_data
-    scoped["total_value_usd"] = total_value_usd
-    scoped["price_map"] = price_map
-    scoped["stats"] = stats if "error" not in stats else result.get("stats", {})
-
-    # Recalculate weights for scoped data
-    current_weights = {}
-    if total_value_usd > 0:
-        for ticker, data in merged_data.items():
-            current_weights[ticker] = data["current_value_usd"] / total_value_usd
-    scoped["current_weights"] = current_weights
-
-    # Calculate targets for passive scope (for rebalancing)
-    targets = {}
-    if scope == "passive" and total_value_usd > 0:
-        try:
-            from data.calculate_weights import calculate_target_weights
-            config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
-            from utils import get_fear_and_greed
-            fear_greed_index = get_fear_and_greed()
-            targets, score, cash_weight = calculate_target_weights(current_weights, config, fear_greed_index)
-        except Exception as e:
-            logging.error(f"[DataService] Scoped weight calc error: {e}")
-            targets = {}
-
-    scoped["targets"] = targets
-
-    return scoped
-
-
-def invalidate_cache() -> None:
-    """
-    Clear the portfolio cache.
-    Call this when data is known to be stale (e.g., after placing an order).
-    """
-    _clear_portfolio_cache()
-    logging.info("[DataService] Portfolio cache invalidated")
-
-
-def get_weight_diffs(scope: str = "all"):
-    """
-    Calculate weight differences between current and target allocations.
-
-    Args:
-        scope: Account filter - "all" or "passive"
-
-    Returns:
-        list: Sorted list of diffs (by abs_diff descending), each containing:
-            ticker, name, cur_w, tgt_w, diff, abs_diff, qty_diff
-    """
-    import os
-
-    portfolio_data = get_portfolio_data(scope=scope)
-    merged_data = portfolio_data.get("merged_data", {})
-    current_weights = portfolio_data.get("current_weights", {})
-    targets = portfolio_data.get("targets", {})
-    total_value_usd = portfolio_data.get("total_value_usd", 0.0)
-    exchange_rate = portfolio_data.get("exchange_rate", None)
-
-    # Load portfolio config to get group constituents
+    # 1. Aggregate Groups
     try:
-        config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
+        cfg = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
+        group_map = {g['main_ticker']: g.get('constituents', []) for g in cfg.get('groups', [])}
+        constituents = {c for sublist in group_map.values() for c in sublist}
+    except:
+        group_map, constituents = {}, set()
 
-        constituents_set = set()
-        main_ticker_constituents = {}
+    cur_weights = dict(portfolio.get("current_weights", {}))
+    for main, subs in group_map.items():
+        for s in subs:
+            if s in cur_weights:
+                cur_weights[main] = cur_weights.get(main, 0.0) + cur_weights.pop(s, 0.0)
 
-        for group in config.get('groups', []):
-            main_ticker = group.get('main_ticker')
-            constituents = group.get('constituents', [])
-            if main_ticker and constituents:
-                constituents_set.update(constituents)
-                main_ticker_constituents[main_ticker] = constituents
-    except Exception as e:
-        logging.warning(f"[get_weight_diffs] Failed to load config: {e}")
-
-    # Merge constituents' current weight into main ticker
-    merged_current_weights = dict(current_weights)
-    for main_ticker, constituents in main_ticker_constituents.items():
-        constituent_weight_sum = 0.0
-        for c in constituents:
-            if c in merged_current_weights:
-                constituent_weight_sum += merged_current_weights.pop(c, 0.0)
-        merged_current_weights[main_ticker] = merged_current_weights.get(main_ticker, 0.0) + constituent_weight_sum
-
+    # 2. Calculate Diffs
     diffs = []
-
-    # We care about all tickers in either Targets OR merged Current (excluding constituents)
-    all_tickers = (set(merged_current_weights.keys()) | set(targets.keys())) - constituents_set
-
+    all_tickers = (set(cur_weights.keys()) | set(targets.keys())) - constituents
+    
     for t in all_tickers:
-        cur_w = merged_current_weights.get(t, 0.0)
-        tgt_w = targets.get(t, 0.0)
-
-        # Filter Cash
-        data = merged_data.get(t, {})
-        if data.get("type") == "CASH" or "cash" in t.lower() or "예수금" in t:
-            continue
-
-        diff = tgt_w - cur_w  # Target - Current
-        name = data.get("name", t)
-
-        # Calculate quantity diff
-        val_diff_usd = diff * total_value_usd
-        cur_price = data.get("cur_price", 0)
-        currency = data.get("currency", "USD")
-
-        # Fallback: Fetch price if not in portfolio
-        if cur_price <= 0:
-            try:
-                # 1. Try WebSocket (fastest)
-                try:
-                    from strategy.raoeo import get_current_price
-                    cur_price = get_current_price(t)
-                except ImportError:
-                    pass
-
-                # 2. Determine market (KR vs US)
-                from trading_config import get_stock_info
-                stock_info = get_stock_info(t)
-                is_kr = False
-                if t.isdigit():
-                    is_kr = True
-                elif stock_info:
-                    mkt = stock_info.get("market", "").upper()
-                    if mkt in ["KOSPI", "KOSDAQ", "KONEX", "KRX"]:
-                        is_kr = True
-
-                # 3. Fetch from API if still 0
-                if cur_price <= 0:
-                    if is_kr:
-                        from kis.kis_api.domestic_stock.inquire_price.inquire_price import inquire_price
-                        from kis.kis_api import kis_auth as ka
-                        env_dv = "demo" if ka.isPaperTrading() else "real"
-                        # "J" is generic for KRX
-                        df = inquire_price(env_dv, "J", t)
-                        if df is not None and not df.empty and 'stck_prpr' in df.columns:
-                            cur_price = float(df.iloc[0]['stck_prpr'])
-                    else:
-                        from kis.wrapper import fetch_price
-                        cur_price = fetch_price(t)
-
-                # 4. Set appropriate currency if fetching succeeded
-                if cur_price > 0:
-                    currency = "KRW" if is_kr else "USD"
-
-            except Exception as e:
-                logging.warning(f"Failed to fetch fallback price for {t}: {e}")
+        if "cash" in t.lower(): continue
+        
+        cur_w, tgt_w = cur_weights.get(t, 0.0), targets.get(t, 0.0)
+        diff = tgt_w - cur_w
+        data = merged.get(t, {})
+        
+        # Quantity calculation
+        price = data.get("cur_price", 0.0)
+        if price <= 0:
+            from kis.wrapper import fetch_price
+            price = fetch_price(t)
 
         qty_diff = 0
-        if cur_price > 0:
-            if currency == "KRW":
-                val_diff_krw = val_diff_usd * exchange_rate
-                qty_diff = val_diff_krw / cur_price
-            else:
-                qty_diff = val_diff_usd / cur_price
+        if price > 0:
+            val_diff_native = (diff * total_usd) * (ex_rate if data.get("currency") == "KRW" else 1.0)
+            qty_diff = int(val_diff_native / price)
 
         diffs.append({
-            "ticker": t,
-            "name": name,
-            "cur_w": cur_w,
-            "tgt_w": tgt_w,
-            "diff": diff,
-            "abs_diff": abs(diff),
-            "qty_diff": int(qty_diff)
+            "ticker": t, "name": data.get("name", t), "cur_w": cur_w, "tgt_w": tgt_w,
+            "diff": diff, "abs_diff": abs(diff), "qty_diff": qty_diff
         })
 
-    # Sort by absolute difference descending
     diffs.sort(key=lambda x: x["abs_diff"], reverse=True)
 
-    # Calculate cash weight info
-    cash_info = {}
+    # 3. Cash Info
+    current_cash = sum(d["current_value_usd"] for d in merged.values() if d["type"] == "CASH")
+    target_cash = 0.1
     try:
         from data.calculate_weights import get_cash_weight
-        config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
-        cash_strategy = config.get('cash_strategy', {'min': 0.05, 'mid': 0.10, 'max': 0.15})
+        target_cash = get_cash_weight(get_fear_and_greed(), cfg.get('cash_strategy', {}))
+    except: pass
 
-        from utils import get_fear_and_greed
-        fg_index = get_fear_and_greed()
-        target_cash_weight = get_cash_weight(fg_index, cash_strategy)
+    return diffs, total_usd, {"current": current_cash/total_usd if total_usd > 0 else 0, "target": target_cash}
 
-        # Current cash weight
-        current_cash = 0.0
-        for t, data in merged_data.items():
-            if data.get("type") == "CASH" or "cash" in t.lower():
-                current_cash += data.get("current_value_usd", 0)
-        current_cash_weight = current_cash / total_value_usd if total_value_usd > 0 else 0
-
-        cash_info = {
-            "current": current_cash_weight,
-            "target": target_cash_weight,
-            "diff": target_cash_weight - current_cash_weight
-        }
-    except Exception as e:
-        logging.warning(f"[get_weight_diffs] Failed to calculate cash info: {e}")
-
-    return diffs, total_value_usd, cash_info
+def invalidate_cache():
+    PortfolioCacheManager.invalidate()

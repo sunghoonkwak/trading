@@ -1,84 +1,45 @@
-# Data Service (`data_service.py`)
+# Data Service (`src/data/data_service.py`)
 
-`data_service.py`는 애플리케이션의 **데이터 중앙 공급소** 역할을 하는 핵심 모듈입니다.
-UI 모듈(`portfolio.py`, `handle_account_info.py`)과 데이터 소스(`KIS Thread`, `Portfolio File`) 사이의 중계자 역할을 수행합니다.
+애플리케이션 전반에서 사용되는 포트폴리오 및 시장 데이터를 관리하는 중앙 서비스 모듈입니다.
+데이터 조회(I/O), 캐싱, 그리고 복잡한 데이터 변환 로직을 분리하여 제공합니다.
 
-## Purpose (목적)
+# Core Logic (핵심 로직)
 
-1. **Centralized Access**: 모든 데이터 요청을 이 모듈로 단일화하여 데이터 흐름을 추적하고 관리하기 쉽게 합니다.
-2. **Caching**: 무분별한 API 호출을 방지하기 위해 데이터를 메모리 및 파일(`portfolio.json`)에 캐싱합니다.
-3. **Data Unification**: KIS API의 국내/해외 잔고 데이터와 환율 정보 등을 하나의 통일된 구조로 병합하여 제공합니다.
-4. **Resilience**: 시세 정보 누락 시 WebSocket이나 추가 API 호출을 통해 데이터를 자동 보정합니다.
+1. **캐시 관리 (`PortfolioCacheManager`)**: 5분(300초) 동안 유효한 메모리 캐시를 관리하여 불필요한 API 호출을 줄입니다.
+2. **데이터 처리 (`PortfolioProcessor`)**: 
+   - KIS API에서 받은 원시 데이터를 병합(Merge)하고 보유 종목별 평단가, 수익률 등을 계산합니다.
+   - 현금(USD/KRW)을 가상의 종목으로 취급하여 비중 계산에 포함시킵니다.
+   - 포트폴리오 통계(국가별 비중, 총 평가액 등)를 산출합니다.
+3. **스코프 필터링**: 전체 계좌, KIS 계좌, 패시브 계좌 등 목적에 맞게 데이터를 필터링하여 제공합니다.
+4. **리밸런싱 계산**: 현재 비중과 목표 비중을 비교하여 필요한 매매 수량을 산출합니다.
 
-## Key Functions (핵심 기능)
+# Key Functions (주요 함수)
 
-### `get_portfolio_data(force_refresh=False, scope="all")`
-전체 포트폴리오 데이터를 조회하는 메인 함수입니다.
+## `get_portfolio_data`
+캐시를 확인하거나 KIS 스레드에 요청하여 최신 포트폴리오 데이터를 가져옵니다.
 
-- **`scope` Parameter**:
-    - `"all"` (기본값): 전체 포트폴리오 (KIS API + GSheet)
-    - `"kis"`: 한국투자증권 계좌만 (전략 실행용)
-    - `"passive"`: 거치식 투자 계좌들만 (GSheet)
-    - 캐시는 항상 전체 데이터로 저장되며, `scope` 필터링은 반환 직전에 적용.
-- **Caching Logic**:
-    - 메모리 캐시 유효(기본 5분) 시 캐시 반환.
-    - `force_refresh=True` 또는 캐시 만료 시 `KIS Thread`에 요청 전송.
-    - `KIS Thread` 응답 대기 및 수신 후 `portfolio.json` 저장 및 캐시 갱신.
-    - **GSheet/KIS 에러 시**: `metadata`에 `gsheet_error` 또는 `kis_error`가 있으면 **캐시하지 않음** (불완전한 데이터 재사용 방지).
-- **Data Processing**:
-    - `merged_data`: 국내/해외 종목을 티커 키 기반으로 통합.
-    - `stats`: 국가별 자산 총액, 비중, 현금 비중 등 통계 계산.
-    - `targets`: `portfolio_weights.json` 기반 목표 비중 계산.
+- **입력 (Input)**:
+  - `force_refresh` (bool): 캐시 무시 여부.
+  - `scope` (str): 필터링 범위 ("all", "kis", "passive").
+- **출력 (Output)**: `dict` (병합된 보유 현황, 통계, 비중 정보 등).
 
-### `get_weight_diffs()`
-현재 포트폴리오와 목표 비중 간의 차이를 분석하여 리밸런싱 정보를 계산합니다.
+## `get_weight_diffs`
+현재 비중과 목표 비중의 차이를 계산하여 리밸런싱 정보를 제공합니다.
 
-- **Group Constituents Handling**:
-    - `portfolio_weights.json`의 그룹 설정에서 `constituents`를 추출합니다.
-    - Constituents의 보유비중은 `main_ticker`에 합산되어 표시됩니다.
-    - Constituents는 리포트에서 개별적으로 표시되지 않습니다.
-- **Weight Calculation**: `calculate_weights.py` 로직을 통해 목표 비중 산출 (F&G 지수 기반 현금 배분).
-- **Qty Calculation**: (목표 금액 - 현재 금액) / 현재가.
-- **Smart Price Fetching**:
-    - 보유하지 않은 종목(수량 0)이라도 `qty_diff`를 계산하기 위해 가격을 조회합니다.
-    - **1순위**: 보유 종목의 현재가 (`merged_data`)
-    - **2순위**: 실시간 WebSocket 시세 (`menu.raoeo.get_current_price`)
-    - **3순위**: KIS API 조회 (국내 `inquire_price` / 해외 `fetch_price`)
+- **출력 (Output)**: `Tuple[List[Dict], float, Dict]` (차이 목록, 총 가치, 현금 정보).
 
-## Data Structure (`portfolio.json`)
+# Configuration (`portfolio_weights.json`)
+리밸런싱을 위한 목표 비중 설정 파일을 참조합니다.
 
-`get_portfolio_data()`가 반환하고 파일로 저장하는 데이터의 구조입니다.
+# Usage Example (사용 예시)
 
-```json
-{
-  "merged_data": {
-    "AAPL": {
-      "qty": 10,
-      "cur_price": 150.0,
-      "current_value_usd": 1500.0,
-      "type": "STOCK",
-      "currency": "USD",
-      ...
-    },
-    "005930": { ... }
-  },
-  "stats": {
-    "us_stock_usd": ...,
-    "kr_stock_krw": ...,
-    "execution_rate": ...
-  },
-  "targets": {
-    "AAPL": 0.15,
-    "QQQ": 0.20
-  },
-  "metadata": {
-    "exchange_rate": 1300.5
-  }
-}
+```python
+from data.data_service import get_portfolio_data
+
+# 전체 포트폴리오 데이터 조회
+data = get_portfolio_data(scope="all")
+print(f"Total Value: ${data['total_value_usd']:.2f}")
+
+# KIS 계좌 전용 데이터 조회
+kis_data = get_portfolio_data(scope="kis")
 ```
-
-## Dependencies
-- **Source**: `kis.kis_thread` (API communication)
-- **Calculation**: `calculate_weights.py` (Target weights)
-- **Config**: `~/KIS_config/portfolio_weights.json` (Rebalancing rules)
-- **Cache**: `~/KIS_config/portfolio.json` (Cached portfolio data)
