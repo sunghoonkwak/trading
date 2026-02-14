@@ -1,373 +1,168 @@
-import json
+# -*- coding: utf-8 -*-
+"""
+Value Averaging Strategy Module (Refactored)
+
+This module implements the Value Averaging strategy logic.
+It is now a pure calculation module without direct API dependencies.
+"""
 import logging
-import os
-from datetime import datetime
-from zoneinfo import ZoneInfo
-from typing import Dict, Any, List, Optional
-from utils import ConfigFile, load_json, save_json, is_market_holiday
+from typing import Dict, List, Tuple
+from strategy.base import StrategyOrder, OrderSide
 
-from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
-from kis.kis_api import kis_auth as ka
+# Constants
+LOC_ORDER_TYPE = "34"  # Limit On Close
+MARKET_ORDER_TYPE = "00"
 
-# Mapping for exchange codes: short (price fetching) to full (order API)
-EXCHANGE_CODE_MAP = {
-    "NAS": "NASD",
-    "NYS": "NYSE",
-    "AMS": "AMEX",
-    "NASD": "NASD",
-    "NYSE": "NYSE",
-    "AMEX": "AMEX",
-    "SEHK": "SEHK",
-    "SHAA": "SHAA",
-    "SZAA": "SZAA",
-    "TKSE": "TKSE",
-    "HASE": "HASE",
-    "VNSE": "VNSE"
-}
-
-def get_daily_report():
+def calculate_orders(
+    targets_config: Dict,
+    portfolio: Dict,
+    current_prices: Dict[str, float],
+    history_data: List[Dict],
+    today_date: str  # YYYY-MM-DD (US Eastern Time expected)
+) -> Tuple[List[StrategyOrder], Dict[str, Dict]]:
     """
-    Calculate the Value Averaging orders for today (supports multiple strategies).
+    Calculate buy/sell orders based on Value Averaging strategy.
+
+    Args:
+        targets_config: Configuration for each target ticker.
+        portfolio: Current holdings data.
+        current_prices: Current market price for each ticker.
+        history_data: Loaded history list from JSON.
+        today_date: The date string to use for history checks.
 
     Returns:
-        dict: Calculation result with results per ticker and aggregated orders.
+        Tuple[List[StrategyOrder], Dict[str, Dict]]:
+            1. List of orders to be executed.
+            2. Context dictionary for each ticker (for history saving/logging).
+               Structure: { "SOXL": { "day_count": 5, "target_value": 1000, ... } }
     """
-    from kis.wrapper import fetch_price
-    from data.data_service import get_portfolio_data
-
-    # Fetch portfolio data internally
-    portfolio_data = get_portfolio_data(scope="kis")
-    if portfolio_data.get('error'):
-        return {"error": portfolio_data['error']}
-
-    price_map = portfolio_data.get('price_map', {})
-    merged_portfolio = portfolio_data.get('merged_data', {})
-
-    config = load_json(ConfigFile.STRATEGY_CONFIG, default={}).get("value_averaging", {})
-    targets_config = config.get('targets', {})
+    orders: List[StrategyOrder] = []
+    context_map: Dict[str, Dict] = {}
 
     if not targets_config:
-        return {"error": "No targets configured in value_averaging.json"}
+        logging.warning("VA: No targets configured.")
+        return orders, context_map
 
-    # Load history (list-based)
-    hist_data = load_json(ConfigFile.VA_HISTORY, default=[])
-    today_et = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
-
-    results = []
-    total_orders = []
-
-    for target_ticker, strategy in targets_config.items():
-        # Skip disabled strategies
-        if not strategy.get('enabled', True):
+    for ticker, config in targets_config.items():
+        if not config.get('enabled', True):
             continue
 
-        exchange = strategy.get('exchange', 'AMS')
+        # 1. Config Parameters
+        daily_budget = config.get('daily_budget', 0)
+        target_cap = config.get('target', 0)
+        threshold_rate = config.get('threshold_rate', 0.15)
+        
+        # 2. Market Data
+        cur_price = current_prices.get(ticker, 0.0)
+        holding = portfolio.get(ticker, {})
+        
+        # Fallback to holding's price if current price is missing
+        if cur_price <= 0:
+            cur_price = float(holding.get('cur_price', 0.0))
 
-        # New Config Params
-        daily_budget = strategy.get('daily_budget', 0)
-        target_cap = strategy.get('target', 0)
-        # Default threshold rate 15% (0.15) if not set
-        threshold_rate = strategy.get('threshold_rate', 0.15)
+        # Current Value Calculation
+        # Assuming config currency matches the stock's currency (USD for US stocks)
+        current_value_usd = float(holding.get('current_value_usd', 0.0))
+        current_value_krw = float(holding.get('current_value_krw', 0.0))
+        currency = holding.get('currency', 'USD')
+        
+        current_val = current_value_usd if currency == 'USD' else current_value_krw
 
-        # Get current price
-        current_price = price_map.get(target_ticker, 0.0)
-        if current_price <= 0:
-            try:
-                current_price = fetch_price(target_ticker)
-            except Exception:
-                pass
-
-        # Get ticker-specific history from list
-        ticker_history_entry = None
-        ticker_history_date = None
-
-        for entry in hist_data:
-            if target_ticker in entry.get('targets', {}):
-                ticker_history_entry = entry['targets'][target_ticker]
-                ticker_history_date = entry['date']
+        # 3. History & Day Count Logic
+        ticker_hist_entry = None
+        ticker_hist_date = None
+        
+        for entry in history_data:
+            if ticker in entry.get('targets', {}):
+                ticker_hist_entry = entry['targets'][ticker]
+                ticker_hist_date = entry['date']
                 break
-
-        # Extract target data from portfolio
-        target_data = merged_portfolio.get(target_ticker, {})
-        if current_price <= 0:
-            current_price = target_data.get('cur_price', 0)
-
-        current_value_usd = target_data.get('current_value_usd', 0)
-        current_value_krw = target_data.get('current_value_krw', 0)
-
-        is_us_stock = target_data.get('currency', 'USD') == 'USD'
-        # Use USD value for US stocks (assuming config is in USD)
-        current_value = current_value_usd if is_us_stock else current_value_krw
-
-        # Day count calculation
+        
         last_day_count = 0
-        using_existing_today_record = False
-
-        if ticker_history_entry:
-            last_day_count = ticker_history_entry.get('day_count', 0)
-            if ticker_history_date == today_et:
-                 using_existing_today_record = True
-
-        if using_existing_today_record:
-             day_count = last_day_count
+        using_existing_today = False
+        
+        if ticker_hist_entry:
+            last_day_count = int(ticker_hist_entry.get('day_count', 0))
+            if ticker_hist_date == today_date:
+                using_existing_today = True
+        
+        # Determine Day Count
+        if using_existing_today:
+            day_count = last_day_count
         else:
-             day_count = last_day_count + 1
+            day_count = last_day_count + 1
 
-        # Check execution status
+        # Check if already executed today
         executed_today = False
-        executed_orders = []
-
-        if using_existing_today_record:
-            results_list = ticker_history_entry.get('results', [])
-
-            # Check if any actual order was executed
+        if using_existing_today:
+            results_list = ticker_hist_entry.get('results', [])
             for res in results_list:
+                # Check for successful execution or specific skip types?
+                # Original logic: checks if executed=True and type is not skip/None
                 if res.get('executed') and res.get('type') not in ['skip', None]:
-                    executed_orders.append({
-                        "qty": res.get('qty', 0),
-                        "price": res.get('price', 0),
-                        "order_type": res.get('order_type', 'LOC'),
-                        "type": res.get('type', 'buy'),
-                        "time": res.get('time', ''),
-                        "message": res.get('message', '')
-                    })
+                    executed_today = True
+                    break
 
-            executed_today = bool(executed_orders)
-
-        already_executed = executed_today
-
-        # --- SIMPLIFIED TARGET CALCULATION ---
+        # 4. Target Calculation
         target_progress = day_count * daily_budget
-        # Cap at target if set
+        
         if target_cap > 0:
             target_value_accumulated = min(target_cap, target_progress)
         else:
             target_value_accumulated = target_progress
-
-        daily_target_amount = target_value_accumulated - current_value
-
+            
+        daily_target_amount = target_value_accumulated - current_val
+        
         # Divergence Calculation
-        # abs(diff) / target_value
         divergence_rate = 0.0
-        # If target_value is 0 (start), we might handle it.
-        # But usually target_value >= daily_budget (day 1)
         if target_value_accumulated > 0:
             divergence_rate = abs(daily_target_amount) / target_value_accumulated
         elif daily_target_amount > 0:
-            # If target is 0 but we need to buy (start fresh?)
-            # This case implies target_value_accumulated is 0.
-            # If day_count > 0, target_value should be > 0.
-            divergence_rate = 1.0 # Max divergence
+            # Case: Start fresh (target=0 but need to buy)
+            divergence_rate = 1.0
 
-        # Determine orders
-        orders = []
-        if not already_executed and current_price > 0:
-            # Check Threshold
-            if divergence_rate >= threshold_rate:
-                if daily_target_amount > 0:
-                    buy_amount = daily_target_amount
-                    buy_qty = int(buy_amount / current_price)
-
-                    if buy_qty > 0:
-                        order = {
-                            "type": "buy_value_averaging",
-                            "ticker": target_ticker,
-                            "exchange": exchange,
-                            "qty": buy_qty,
-                            "price": round(current_price * 1.05, 2), # 105% LOC
-                            "order_type": "LOC",
-                            "desc": f"Value Averaging Day {day_count}",
-                            "daily_target": daily_target_amount
-                        }
-                        orders.append(order)
-                        total_orders.append(order)
-
-                elif daily_target_amount < 0:
-                    sell_amount = abs(daily_target_amount)
-                    sell_qty = int(sell_amount / current_price)
-
-                    if sell_qty > 0:
-                        order = {
-                            "type": "sell_value_averaging",
-                            "ticker": target_ticker,
-                            "exchange": exchange,
-                            "qty": sell_qty,
-                            "price": 0,
-                            "order_type": "Market",
-                            "desc": f"Value Averaging Sell Day {day_count}",
-                            "daily_target": daily_target_amount
-                        }
-                        orders.append(order)
-                        total_orders.append(order)
-
-        results.append({
-            "target_ticker": target_ticker,
-            "exchange": exchange,
+        # Context for logging/history
+        context_map[ticker] = {
             "day_count": day_count,
             "daily_budget": daily_budget,
-            "target_value_accumulated": target_value_accumulated,
-            "target_cap": target_cap,
-            "current_value": current_value,
+            "target_value": target_value_accumulated,
+            "current_value": current_val,
             "daily_target_amount": daily_target_amount,
             "divergence_rate": divergence_rate,
             "threshold_rate": threshold_rate,
-            "current_price": current_price,
-            "orders": orders,
-            "already_executed": already_executed,
-            "executed_orders": executed_orders,
-            "error": None
-        })
-
-    # Determine status
-    status = "calculated"
-    if is_market_holiday("NYSE"):
-        status = "market_holiday"
-
-    return {
-        "status": status,
-        "date": today_et,
-        "results": results,
-        "total_orders": total_orders,
-        "error": None
-    }
-
-
-def execute_single_order(ticker: str, order: dict) -> dict:
-    """
-    Execute a single order for one ticker.
-
-    Args:
-        ticker: Stock ticker symbol
-        order: Order dict with qty, price, exchange, order_type, etc.
-
-    Returns:
-        dict: Execution result with success, message, etc.
-    """
-    cano = ka.getTREnv().my_acct
-    acnt_prdt_cd = ka.getTREnv().my_prod
-
-    ord_dv = "buy"
-    if "sell" in order.get('type', '').lower():
-        ord_dv = "sell"
-
-    # For sell, we might need a different order division code or handling
-    # order_type mapping: "LOC" -> "34", "Market" -> "00" (usually)
-    ord_dvsn = "34" # LOC default
-    if order.get('order_type') == "Market":
-        ord_dvsn = "00"
-
-    # Map exchange code to ensure compatibility with order API
-    ovrs_excg_cd = EXCHANGE_CODE_MAP.get(order['exchange'], order['exchange'])
-
-    res, err_msg = order_overseas_stock(
-        cano=cano,
-        acnt_prdt_cd=acnt_prdt_cd,
-        ovrs_excg_cd=ovrs_excg_cd,
-        pdno=ticker,
-        ord_qty=str(order['qty']),
-        ovrs_ord_unpr=str(order['price']),
-        ord_dv=ord_dv,
-        ctac_tlno="",
-        mgco_aptm_odno="",
-        ord_svr_dvsn_cd="0",
-        ord_dvsn=ord_dvsn,
-        env_dv="demo" if ka.isPaperTrading() else "real"
-    )
-
-    success = False
-    msg = "Failed"
-    if res is not None and not res.empty:
-        success = True
-        msg = "Order Placed"
-    elif err_msg:
-        msg = err_msg
-
-    result = {
-        "ticker": ticker,
-        "order": {
-            "type": order.get('type', 'buy'),
-            "qty": order['qty'],
-            "price": order['price'],
-            "order_type": order.get('order_type', 'LOC'),
-            "desc": order.get('desc', ''),
-            "daily_target": order.get('daily_target', 0)
-        },
-        "success": success,
-        "message": msg
-    }
-
-    return result
-
-
-def save_ticker_result(ticker: str, day_count: int, result: dict, executed: bool):
-    """
-    Save a single history entry for one ticker.
-
-    Format:
-    {
-        "QLD": {
-            "YYYY-MM-DD": {
-                "day_count": 22,
-                "tried_count": N,
-                "results": [...]
-            }
-        }
-    }
-    """
-    hist_data = load_json(ConfigFile.VA_HISTORY, default=[])
-    today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
-    now_time = datetime.now(ZoneInfo("America/New_York")).strftime("%H:%M:%S")
-
-    # Find today's entry
-    today_index = -1
-    for i, entry in enumerate(hist_data):
-        if entry['date'] == today:
-            today_index = i
-            break
-
-    if today_index == -1:
-        # Create new entry for today
-        new_entry = {
-            "date": today,
-            "targets": {}
-        }
-        hist_data.insert(0, new_entry)
-        today_index = 0
-
-    today_entry = hist_data[today_index]
-
-    if ticker not in today_entry["targets"]:
-         today_entry["targets"][ticker] = {
-            "day_count": day_count,
-            "tried_count": 0,
-            "results": []
+            "already_executed": executed_today
         }
 
-    target_entry = today_entry["targets"][ticker]
+        # 5. Generate Order
+        if not executed_today and cur_price > 0:
+            if divergence_rate >= threshold_rate:
+                
+                # BUY Case
+                if daily_target_amount > 0:
+                    buy_qty = int(daily_target_amount / cur_price)
+                    if buy_qty > 0:
+                        buy_price = round(cur_price * 1.05, 2)  # 5% buffer for LOC
+                        orders.append(StrategyOrder(
+                            symbol=ticker,
+                            side=OrderSide.BUY,
+                            quantity=buy_qty,
+                            price=buy_price,
+                            order_type=LOC_ORDER_TYPE,
+                            reason=f"VA Day {day_count} (Target: {daily_target_amount:.2f})"
+                        ))
 
-    # Flatten result for storage
-    order = result.get('order')
+                # SELL Case
+                elif daily_target_amount < 0:
+                    sell_amount = abs(daily_target_amount)
+                    sell_qty = int(sell_amount / cur_price)
+                    if sell_qty > 0:
+                        orders.append(StrategyOrder(
+                            symbol=ticker,
+                            side=OrderSide.SELL,
+                            quantity=sell_qty,
+                            price=0.0,  # Market Price
+                            order_type=MARKET_ORDER_TYPE,
+                            reason=f"VA Sell Day {day_count} (Target: {daily_target_amount:.2f})"
+                        ))
 
-    storage_entry = {
-        "time": now_time,
-        "type": order.get('type', 'skip') if order else 'skip',
-        "qty": order.get('qty', 0) if order else 0,
-        "price": order.get('price', 0) if order else 0,
-        "order_type": order.get('order_type') if order else None,
-        "desc": order.get('desc') if order else None,
-        "executed": executed,
-        "success": result.get('success', False),
-        "message": result.get('message', '')
-    }
-
-    target_entry["results"].append(storage_entry)
-    target_entry["tried_count"] = len(target_entry["results"])
-
-    # Update day_count if this execution actually happened (and it's higher)
-    current_day_count = target_entry.get("day_count", 0)
-    if day_count > current_day_count:
-        target_entry["day_count"] = day_count
-    elif current_day_count == 0:
-        target_entry["day_count"] = day_count
-
-    save_json(ConfigFile.VA_HISTORY, hist_data)
+    return orders, context_map
