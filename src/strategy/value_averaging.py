@@ -24,89 +24,39 @@ EXCHANGE_CODE_MAP = {
     "VNSE": "VNSE"
 }
 
-# Config / History File Paths (same as kis_auth.py)
-CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
-CONFIG_FILE = os.path.join(CONFIG_ROOT, 'value_averaging.json')
-HISTORY_FILE = os.path.join(CONFIG_ROOT, 'value_averaging_history.json')
-
+from strategy import storage
 
 def load_config() -> Dict[str, Any]:
-    """Load value_averaging.json config."""
-    try:
-        if not os.path.exists(CONFIG_FILE):
-            return {}
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logging.error(f"Failed to load value averaging config: {e}")
-        return {}
-
-
-def save_config(config: Dict[str, Any]) -> bool:
-    """Save value_averaging.json config."""
-    try:
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4, ensure_ascii=False)
-        return True
-    except Exception as e:
-        logging.error(f"Failed to save value averaging config: {e}")
-        return False
+    """Load value_averaging config from unified strategy config."""
+    return storage.get_strategy_config("value_averaging")
 
 
 def get_strategy_config(config: Dict[str, Any], ticker: str) -> Dict[str, Any]:
-    """Get strategy config for a specific ticker, merging with default_settings."""
-    default_settings = config.get('default_settings', {})
+    """Get strategy config for a specific ticker."""
     targets = config.get('targets', {})
-
-    strategy = targets.get(ticker)
-    if strategy:
-        # Merge default_settings with strategy (strategy takes priority)
-        merged = {**default_settings, **strategy}
-        return merged
-    return {}
+    return targets.get(ticker, {})
 
 
 def load_history() -> List[Dict[str, Any]]:
     """
-    Load value_averaging_history.json.
-
-    Format:
-    [
-        {
-            "date": "2026-02-06",
-            "targets": {
-                "QLD": {
-                    "day_count": 22,
-                    "tried_count": 2,
-                    "results": [...]
-                },
-                "TQQQ": { ... }
-            }
-        },
-        ...
-    ]
+    Load value_averaging_history.json via storage module.
     """
     try:
-        if not os.path.exists(HISTORY_FILE):
+        data = storage.load_history("value_averaging")
+        # Ensure it's a list
+        if isinstance(data, dict):
+            # Fallback or empty if old format somehow persists (though we migrated)
             return []
-        with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            # Ensure it's a list
-            if isinstance(data, dict):
-                # Fallback or empty if old format somehow persists (though we migrated)
-                return []
-            return data
+        return data if isinstance(data, list) else []
     except Exception as e:
         logging.error(f"Failed to load value averaging history: {e}")
         return []
 
 
 def save_history(history_data: List[Dict[str, Any]]) -> bool:
-    """Save value_averaging_history.json."""
+    """Save value_averaging_history.json via storage module."""
     try:
-        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump(history_data, f, indent=4, ensure_ascii=False)
-        return True
+        return storage.save_history("value_averaging", history_data)
     except Exception as e:
         logging.error(f"Failed to save value averaging history: {e}")
         return False
@@ -133,7 +83,6 @@ def get_daily_report():
 
     config = load_config()
     targets_config = config.get('targets', {})
-    default_settings = config.get('default_settings', {})
 
     if not targets_config:
         return {"error": "No targets configured in value_averaging.json"}
@@ -150,15 +99,13 @@ def get_daily_report():
         if not strategy.get('enabled', True):
             continue
 
-        # Merge with default settings
-        merged_strategy = {**default_settings, **strategy}
-        exchange = merged_strategy.get('exchange', 'AMS')
+        exchange = strategy.get('exchange', 'AMS')
 
         # New Config Params
-        daily_budget = merged_strategy.get('daily_budget', 0)
-        target_cap = merged_strategy.get('target', 0)
+        daily_budget = strategy.get('daily_budget', 0)
+        target_cap = strategy.get('target', 0)
         # Default threshold rate 15% (0.15) if not set
-        threshold_rate = merged_strategy.get('threshold_rate', 0.15)
+        threshold_rate = strategy.get('threshold_rate', 0.15)
 
         # Get current price
         current_price = price_map.get(target_ticker, 0.0)

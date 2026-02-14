@@ -4,24 +4,26 @@
 
 ## Configuration (설정)
 
-`value_averaging.json` 파일 구조:
+`~/KIS_config/strategy_config.json` 파일 구조 (Value Averaging 섹션):
 
 ```json
 {
-    "targets": {
-        "QLD": {
-            "enabled": true,
-            "exchange": "AMS",
-            "target": 5000,
-            "daily_budget": 100,
-            "threshold_rate": 0.15
-        },
-        "TQQQ": {
-            "enabled": true,
-            "exchange": "NAS",
-            "target": 5000,
-            "daily_budget": 50,
-            "threshold_rate": 0.15
+    "value_averaging": {
+        "targets": {
+            "QLD": {
+                "enabled": true,
+                "exchange": "AMS",
+                "target": 5000,
+                "daily_budget": 100,
+                "threshold_rate": 0.15
+            },
+            "TQQQ": {
+                "enabled": true,
+                "exchange": "NAS",
+                "target": 5000,
+                "daily_budget": 50,
+                "threshold_rate": 0.15
+            }
         }
     }
 }
@@ -29,7 +31,6 @@
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `default_settings` | obj | 모든 전략에 적용되는 기본값 |
 | `targets` | dict | 종목별 전략 설정 딕셔너리 (Key: Ticker) |
 | `enabled` | bool | 전략 활성화 여부 |
 | `exchange` | str | 거래소 코드 (AMS, NAS 등) |
@@ -46,8 +47,7 @@
 
 #### Strategy Logic
 1. `enabled: true`인 모든 **Target**을 순회합니다.
-2. 종목별로 `default_settings`와 병합합니다.
-3. **Day Count 계산**:
+2. **Day Count 계산**:
    - 히스토리에서 가장 최근 날짜의 기록을 확인합니다.
    - 만약 오늘 기록이 이미 존재하면(성공/스킵 불문) 그 Day Count를 유지합니다.
    - 오늘 기록이 없으면, 최근 기록의 `day_count + 1`을 사용하여 새로운 Day를 시작합니다.

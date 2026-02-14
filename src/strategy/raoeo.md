@@ -8,22 +8,24 @@
 
 ## Configuration (설정)
 
-`~/KIS_config/raoeo.json` 파일 구조:
+`~/KIS_config/strategy_config.json` 파일 구조 (RAOEO 섹션):
 
 ```json
 {
-    "targets": {
-        "SOXL": {
-            "seed": 1000,
-            "exchange": "AMS",
-            "duration": 40,
-            "sell_profit": 0.10
-        },
-        "FAS": {
-            "seed": 1000,
-            "exchange": "AMS",
-            "duration": 40,
-            "sell_profit": 0.10
+    "raoeo": {
+        "targets": {
+            "SOXL": {
+                "seed": 1000,
+                "exchange": "AMS",
+                "duration": 40,
+                "sell_profit": 0.10
+            },
+            "FAS": {
+                "seed": 1000,
+                "exchange": "AMS",
+                "duration": 40,
+                "sell_profit": 0.10
+            }
         }
     }
 }

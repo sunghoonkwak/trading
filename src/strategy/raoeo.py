@@ -21,11 +21,7 @@ from kis.kis_api.overseas_stock.order.order import order as order_overseas
 import trading_state
 import trading_config
 
-# Config directory (same as kis_auth.py)
-CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
-# Updated to use new config/history files
-CONFIG_FILE = os.path.join(CONFIG_ROOT, "raoeo.json")
-HISTORY_FILE = os.path.join(CONFIG_ROOT, "raoeo_history.json")
+from strategy import storage
 
 # LOC order type code for US stocks
 LOC_ORDER_TYPE = "34"
@@ -34,33 +30,9 @@ LIMIT_ORDER_TYPE = "00"
 
 def load_config() -> dict:
     """
-    Load configuration from raoeo.json.
+    Load configuration from strategy_config.json via storage module.
     """
-    try:
-        if not os.path.exists(CONFIG_FILE):
-             # Fallback to old file if new one doesn't exist (during migration period)
-             old_file = os.path.join(CONFIG_ROOT, "raoeo.json")
-             if os.path.exists(old_file):
-                 add_alert(f"New config not found, using old: {old_file}", "WARNING")
-                 with open(old_file, 'r', encoding='utf-8') as f:
-                     data = json.load(f)
-                     # Adapt old format to new format structure strictly for internal use
-                     old_config = data.get('config', {})
-                     target = old_config.get('target')
-                     if target:
-                         return {"targets": {target: old_config}}
-                     return {} # Invalid old config
-
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        return data # Returns dict with "targets" key
-    except FileNotFoundError:
-        add_alert(f"Config file not found: {CONFIG_FILE}", "ERROR")
-        return {}
-    except json.JSONDecodeError as e:
-        add_alert(f"Invalid JSON in config: {e}", "ERROR")
-        return {}
+    return storage.get_strategy_config("raoeo")
 
 
 def get_current_price(symbol: str, exchange: str = "NASD") -> float:
@@ -465,10 +437,9 @@ def save_history(calculated_result: dict, execution_summary: dict = None) -> boo
                     order['error'] = matched.get('error')
 
     try:
-        history_list = []
-        if os.path.exists(HISTORY_FILE):
-             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-                 history_list = json.load(f)
+        history_list = storage.load_history("raoeo")
+        if not isinstance(history_list, list):
+             history_list = []
 
         # Find today's entry
         existing_idx = -1
@@ -502,10 +473,7 @@ def save_history(calculated_result: dict, execution_summary: dict = None) -> boo
             }
             history_list.insert(0, new_entry)
 
-        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump(history_list, f, indent=4, ensure_ascii=False)
-
-        return True
+        return storage.save_history("raoeo", history_list)
 
     except Exception as e:
         add_alert(f"Failed to save history: {e}", "ERROR")
@@ -521,12 +489,11 @@ def check_today_history() -> Optional[dict]:
     today_str = datetime.now(tz_us).strftime("%Y-%m-%d")
 
     try:
-        if os.path.exists(HISTORY_FILE):
-            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-                history_list = json.load(f)
-                for entry in history_list:
-                    if entry.get('date') == today_str:
-                        return entry
+        history_list = storage.load_history("raoeo")
+        if isinstance(history_list, list):
+            for entry in history_list:
+                if entry.get('date') == today_str:
+                    return entry
     except Exception as e:
         add_alert(f"Error checking history: {e}", "ERROR")
 

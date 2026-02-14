@@ -1,0 +1,36 @@
+{
+    "raoeo": {
+        "targets": {
+            "SOXL": {
+                "seed": 20000,
+                "exchange": "AMS",
+                "duration": 40,
+                "sell_profit": 0.1
+            },
+            "FAS": {
+                "seed": 10000,
+                "exchange": "AMS",
+                "duration": 60,
+                "sell_profit": 0.06
+            }
+        }
+    },
+    "value_averaging": {
+        "targets": {
+            "QLD": {
+                "enabled": true,
+                "exchange": "AMS",
+                "target": 5000,
+                "daily_budget": 100,
+                "threshold_rate": 0.15
+            },
+            "TQQQ": {
+                "enabled": true,
+                "exchange": "NAS",
+                "target": 5000,
+                "daily_budget": 50,
+                "threshold_rate": 0.15
+            }
+        }
+    }
+}

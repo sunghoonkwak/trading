@@ -35,9 +35,9 @@
 ├── telegram.txt              # 텔레그램 봇 토큰/채팅 ID (옵션)
 ├── portfolio.json            # 캐싱된 포트폴리오 데이터
 ├── portfolio_weights.json    # 포트폴리오 비중 설정
-├── raoeo.json                # RAOEO 전략 설정 (Config)
+├── portfolio_weights.json    # 포트폴리오 비중 설정
+├── strategy_config.json      # 통합 전략 설정 (RAOEO, Value Averaging)
 ├── raoeo_history.json        # RAOEO 매매 히스토리
-├── value_averaging.json      # Value Averaging 설정
 ├── value_averaging_history.json # Value Averaging 히스토리
 └── memo.json                 # 텔레그램 메모 저장소
 ```
