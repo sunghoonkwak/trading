@@ -1,39 +1,35 @@
-# Main Entry Point (`main.py`)
+# Trading System Main (`src/main.py`)
 
-## 개요
-프로그램의 진입점으로, 시스템 초기화, 인증, 서비스 시작을 순차적으로 수행합니다.
-모든 과정은 자동화되어 있으며, 사용자 개입 없이 실행 즉시 트레이딩 준비 상태가 됩니다.
+KIS 자동매매 시스템의 진입점(Entry Point)입니다. 
+전체적인 시스템 초기화, 각 서비스 스레드 기동, 그리고 안정적인 실행을 위한 메인 루프를 관리합니다.
 
-## 실행 프로세스 (Startup Sequence)
+# Core Logic (핵심 로직)
 
-### 0. 로깅 설정 (Logging Setup)
-- `WebSocket_latest.log` 파일에 로그를 기록합니다.
-- 기존 로그 파일이 있는 경우 `logs/` 디렉토리로 타임스탬프를 붙여 아카이빙합니다 (Log Rotation).
-- 서드파티 라이브러리(httpx, telegram 등)의 로그 레벨을 INFO로 설정하여 노이즈를 줄입니다.
+1. **초기화 (`setup_logging`)**: 로깅 환경을 설정하고 기존 로그를 아카이빙합니다.
+2. **시스템 기동 (`run`)**: 다음 순서로 각 서브시스템을 초기화합니다.
+   - 텔레그램 봇: 알림 및 명령 수신용.
+   - KIS API: REST 인증 및 실시간 웹소켓 연결.
+   - 스케줄러: 정해진 시간에 매매 로직 실행.
+   - 웹 서버: 실시간 모니터링 대시보드 제공.
+3. **데몬 모드**: 시스템이 종료되지 않도록 메인 스레드에서 무한 대기하며, 종료 시 모든 리소스를 안전하게 해제합니다.
 
-### 1. 텔레그램 초기화 (Telegram Auto-init)
-- `telegram_bot` 모듈을 초기화하고 봇 연결을 시도합니다.
-- 실패 시에도 경고 메시지를 출력하고 다음 단계로 진행합니다.
+# Key Functions (주요 함수)
 
-### 2. KIS API 초기화 (KIS API Init)
-- **KIS Thread 시작**: API 요청을 처리할 데몬 스레드를 시작합니다.
-- **REST API 인증**: 토큰 발급 및 접근 권한을 확인합니다.
-- **WebSocket 인증**: 실시간 시세 수신을 위한 웹소켓 키를 발급받습니다.
-- **Pipe Server 생성**: 백엔드와 웹서버/이벤트뷰어 간 통신을 위한 파이프를 생성합니다.
-- **WebSocket 연결**: KIS 증권사 서버와 웹소켓 연결을 맺습니다.
-- **주문 동기화 (Order Sync)**: 미체결 주문 내역을 조회하여 메모리에 동기화합니다.
-- **스케줄러 시작 (Scheduler Start)**: 일일 리포트 자동 생성을 위한 스케줄러를 시작합니다.
+## `TradingSystem.run`
+시스템의 전체 시작 프로세스를 실행합니다.
 
-### 3. 웹 Event Viewer 시작 (Web Server Start)
-- `web_server.py`를 **백그라운드 데몬 스레드**로 실행합니다.
-- 메인 스레드를 차단하지 않으면서 `http://<ip>:8080` 포트에서 웹 UI를 제공합니다.
+## `TradingSystem.shutdown`
+모든 스레드와 네트워크 연결을 순차적으로 중지합니다.
 
-### 4. 메인 루프 (Main Loop)
-- **데몬 모드**: 모든 초기화가 완료되면 `while True` 루프에 진입하여 `1초` 간격으로 대기합니다.
-- 프로그램이 종료되지 않도록 유지하며, 백그라운드 스레드(`KIS Thread`, `Web Server`)들이 계속 동작할 수 있게 합니다.
-- `Docker` 환경에 적합하도록 설계되었습니다.
+# Configuration (`KIS_config/`)
+사용자의 인증 정보 및 전략 설정 파일을 로드하기 위해 `~/KIS_config` 경로를 참조합니다.
 
-## Web Mode vs Terminal Mode
-이전 버전과 달리 **단일 모드**로 통합되었습니다.
-- **항상** 웹 서버와 터미널 메뉴가 동시에 실행됩니다.
-- 모든 알림은 웹과 터미널 양쪽에 동시에 출력됩니다.
+# Usage Example (사용 예시)
+
+```python
+from main import TradingSystem
+
+if __name__ == "__main__":
+    app = TradingSystem()
+    app.run()
+```

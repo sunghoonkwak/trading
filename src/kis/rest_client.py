@@ -7,7 +7,7 @@ Handles REST API requests including authentication and portfolio data fetching.
 import logging
 from typing import Dict, Any
 from kis.kis_api import kis_auth as ka
-from thread_state import update_kis_state, AuthStatus
+from state.system_state import update_kis_state, AuthStatus
 
 class RESTClient:
     """Encapsulates KIS REST API operations."""

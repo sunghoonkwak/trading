@@ -14,7 +14,7 @@ from thread_comm import (
     kis_request_queue, kis_response_queue,
     ThreadRequest, ThreadResponse, RequestType
 )
-from thread_state import ThreadStatus, update_kis_state
+from state.system_state import ThreadStatus, update_kis_state
 from kis.rest_client import RESTClient
 from kis.ws_manager import WSManager
 

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from thread_comm import ThreadRequest, RequestType
 from kis.kis_thread import request_portfolio, wait_for_response
-from thread_state import is_kis_ready
+from state.system_state import is_kis_ready
 from display import add_alert
 from data.config_manager import ConfigFile, load_json, save_json
 from utils.market_utils import get_fear_and_greed

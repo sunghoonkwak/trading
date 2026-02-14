@@ -8,7 +8,7 @@ import logging
 import threading
 from typing import Optional, List
 from kis.kis_api import kis_auth as ka
-from thread_state import update_kis_state, WebSocketStatus
+from state.system_state import update_kis_state, WebSocketStatus
 import trading_config
 from display import add_alert
 

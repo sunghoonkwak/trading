@@ -27,7 +27,7 @@ except ImportError:
 
 # Import core modules
 import trading_config
-import trading_state
+import state.market_state as trading_state
 import display
 from kis import event_pipe
 
@@ -157,7 +157,7 @@ class TradingSystem:
         """Initializes the Telegram bot."""
         print("[Startup] Step 1: Initializing Telegram Bot...")
         try:
-            from thread_state import ThreadStatus, update_telegram_state
+            from state.system_state import ThreadStatus, update_telegram_state
             from telegram_bot.telegram_bot import initialize_telegram
 
             update_telegram_state(thread_status=ThreadStatus.STARTING)

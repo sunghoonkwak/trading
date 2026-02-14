@@ -7,7 +7,7 @@ import logging
 import pandas as pd
 from datetime import datetime
 
-import trading_state
+import state.market_state as trading_state
 import trading_config
 from trading_config import strip_market_prefix
 from kis import event_pipe

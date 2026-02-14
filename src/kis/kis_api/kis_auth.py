@@ -865,7 +865,7 @@ class KISWebSocket:
     def _update_ws_status(self, status: str):
         """Update WebSocket connection status in thread_state."""
         try:
-            from thread_state import update_kis_state, WebSocketStatus
+            from state.system_state import update_kis_state, WebSocketStatus
             status_map = {
                 "connected": WebSocketStatus.CONNECTED,
                 "connecting": WebSocketStatus.CONNECTING,
