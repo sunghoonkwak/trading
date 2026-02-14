@@ -109,6 +109,15 @@ class MemoDeleteRequest(BaseModel):
     text: str
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Serve favicon."""
+    favicon_path = os.path.join(web_dir, "favicon.ico")
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    return {"error": "favicon.ico not found"}
+
+
 @app.get("/")
 async def get_index():
     """Serve main event viewer page."""
