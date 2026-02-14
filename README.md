@@ -84,7 +84,7 @@
 | `/placed_orders` | Show open orders |
 | **전략 (Strategy)** | |
 | `/raoeo` | RAOEO status & order |
-| `/value_average` | Value Averaging order |
+| `/value_averaging` | Value Averaging order (Bulk Execution) |
 | **기타 (Misc)** | |
 | `/daily_report [date]` | View past reports |
 | `/memo` | View recent memos (1 week) |

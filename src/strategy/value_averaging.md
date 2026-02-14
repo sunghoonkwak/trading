@@ -8,21 +8,20 @@
 
 ```json
 {
-    "default_settings": {
-        "duration": 200
-    },
     "targets": {
         "QLD": {
             "enabled": true,
             "exchange": "AMS",
-            "daily_budget": 84.34,
-            "target_weight_initial": 0.0325
+            "target": 5000,
+            "daily_budget": 100,
+            "threshold_rate": 0.15
         },
         "TQQQ": {
             "enabled": true,
             "exchange": "NAS",
-            "daily_budget": 41.68,
-            "target_weight_initial": 0.016
+            "target": 5000,
+            "daily_budget": 50,
+            "threshold_rate": 0.15
         }
     }
 }
@@ -34,9 +33,9 @@
 | `targets` | dict | 종목별 전략 설정 딕셔너리 (Key: Ticker) |
 | `enabled` | bool | 전략 활성화 여부 |
 | `exchange` | str | 거래소 코드 (AMS, NAS 등) |
-| `duration` | int | 투자 기간 (일) - 개별 override 가능 |
-| `daily_budget` | float | 일별 투자 예산 (자동 계산됨) |
-| `target_weight_initial` | float | 초기 목표 비중 (0.0 - 1.0) |
+| `target` | float | 최대 목표 금액 (Max Target) |
+| `daily_budget` | float | 일별 투자 금액 (Day Count * Daily Budget = Target Progress) |
+| `threshold_rate` | float | 괴리율 임계값 (예: 0.15 = 15%). 목표 대비 차이가 이 비율 이상일 때만 주문. |
 
 ---
 
@@ -53,15 +52,20 @@
    - 만약 오늘 기록이 이미 존재하면(성공/스킵 불문) 그 Day Count를 유지합니다.
    - 오늘 기록이 없으면, 최근 기록의 `day_count + 1`을 사용하여 새로운 Day를 시작합니다.
 4. **휴장일 체크**: `is_market_holiday("NYSE")`를 통해 휴장일 여부를 판단합니다. 휴장일인 경우 `status`를 `"market_holiday"`로 설정하고 주문 리스트를 비웁니다.
-5. 누적 목표 가치 계산: `day_count × daily_budget`
-5. **괴리율 계산 및 주문 생성 (15% 임계값)**:
-   - **매수**: `현재 평가금` < `누적 목표` * 0.85 (85% 미만) 인 경우
-     - 수량 = (누적 목표 - 현재 평가금) / 현재가
-     - 주문: 현재가 105% (LOC)
-   - **매도**: `현재 평가금` > `누적 목표` * 1.15 (115% 초과) 인 경우
-     - 수량 = (현재 평가금 - 누적 목표) / 현재가
-     - 주문: 시장가 (Market)
-   - 그 외(±15% 이내): 주문 없음 (Hold)
+5. **목표 가치 계산**:
+   - `Target Progress` = `day_count` × `daily_budget`
+   - `Target Value Accumulated` = `min(target, Target Progress)` (최대 목표 금액 설정 시 캡 적용)
+   - `Daily Target Amount` = `Target Value Accumulated` - `Current Value`
+6. **괴리율 계산 및 주문 생성**:
+   - `Divergence Rate` = `abs(Daily Target Amount) / Target Value Accumulated`
+   - **주문 조건**: `Divergence Rate` >= `threshold_rate` (설정값, 기본 0.15) 인 경우에만 주문 생성.
+     - **매수**: `Daily Target Amount` > 0
+       - 수량 = `Daily Target Amount` / 현재가
+       - 주문: 현재가 105% (LOC)
+     - **매도**: `Daily Target Amount` < 0
+       - 수량 = `abs(Daily Target Amount)` / 현재가
+       - 주문: 시장가 (Market)
+     - **Hold**: 괴리율이 `threshold_rate` 미만인 경우 주문 없음.
 
 #### Returns
 ```python
@@ -87,7 +91,7 @@
 
 ### execute_single_order
 단일 종목에 대한 주문을 KIS API를 통해 실행합니다.
-- `/portfolio_va`의 순차 처리 과정에서 호출됩니다.
+- `/value_averaging`의 일괄 실행 과정에서 호출됩니다.
 - LOC 주문을 생성하여 전송합니다.
 
 ### save_ticker_result
@@ -136,7 +140,7 @@
 
 ## Integration
 
-- **Telegram**: `/portfolio_va` 명령어에서 호출 (순차 실행 지원)
+- **Telegram**: `/value_averaging` 명령어에서 호출 (일괄 실행 지원)
 - **Terminal UI**: 실행 기능은 제거됨 (Telegram 사용 권장)
 
 > **휴장일**: `get_daily_report()`에서 `status: "market_holiday"`를 반환하며, 이 경우 주문 실행이 차단되고 Day Count가 증가하지 않습니다. 텔레그램 리포트 하단에 휴장일 경고가 표시됩니다.

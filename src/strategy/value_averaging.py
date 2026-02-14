@@ -3,8 +3,6 @@ import logging
 import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from datetime import datetime
-from zoneinfo import ZoneInfo
 from typing import Dict, Any, List, Optional
 
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
@@ -130,11 +128,8 @@ def get_daily_report():
     if portfolio_data.get('error'):
         return {"error": portfolio_data['error']}
 
-    targets = portfolio_data.get('targets', {})
     price_map = portfolio_data.get('price_map', {})
     merged_portfolio = portfolio_data.get('merged_data', {})
-    total_value_usd = portfolio_data.get('total_value_usd', 0)
-    exchange_rate = portfolio_data.get('exchange_rate', 0)
 
     config = load_config()
     targets_config = config.get('targets', {})
@@ -149,7 +144,6 @@ def get_daily_report():
 
     results = []
     total_orders = []
-    config_updated = False
 
     for target_ticker, strategy in targets_config.items():
         # Skip disabled strategies
@@ -158,11 +152,13 @@ def get_daily_report():
 
         # Merge with default settings
         merged_strategy = {**default_settings, **strategy}
-        duration = merged_strategy.get('duration', 100)
         exchange = merged_strategy.get('exchange', 'AMS')
 
-        # Get target weight
-        target_weight = targets.get(target_ticker, 0.0)
+        # New Config Params
+        daily_budget = merged_strategy.get('daily_budget', 0)
+        target_cap = merged_strategy.get('target', 0)
+        # Default threshold rate 15% (0.15) if not set
+        threshold_rate = merged_strategy.get('threshold_rate', 0.15)
 
         # Get current price
         current_price = price_map.get(target_ticker, 0.0)
@@ -173,12 +169,9 @@ def get_daily_report():
                 pass
 
         # Get ticker-specific history from list
-        # We need to find the latest valid entry for this ticker
         ticker_history_entry = None
         ticker_history_date = None
 
-        # Sort history by date descending just in case, though usually it is.
-        # Assuming index 0 is latest for now, but safest to iterate.
         for entry in hist_data:
             if target_ticker in entry.get('targets', {}):
                 ticker_history_entry = entry['targets'][target_ticker]
@@ -194,25 +187,8 @@ def get_daily_report():
         current_value_krw = target_data.get('current_value_krw', 0)
 
         is_us_stock = target_data.get('currency', 'USD') == 'USD'
-        total_asset_val = total_value_usd if is_us_stock else (total_value_usd * exchange_rate)
-
-        # Get or initialize daily_budget
-        daily_budget = strategy.get('daily_budget', 0)
-
-        if not ticker_history_entry:  # First run for this ticker
-            if target_weight <= 0:
-                results.append({
-                    "target_ticker": target_ticker,
-                    "error": f"Target weight for {target_ticker} is 0 or not found."
-                })
-                continue
-
-            daily_budget = (total_asset_val * target_weight) / duration
-            # Update strategy in config
-            if target_ticker in targets_config:
-                targets_config[target_ticker]['daily_budget'] = daily_budget
-                targets_config[target_ticker]['target_weight_initial'] = target_weight
-                config_updated = True
+        # Use USD value for US stocks (assuming config is in USD)
+        current_value = current_value_usd if is_us_stock else current_value_krw
 
         # Day count calculation
         last_day_count = 0
@@ -220,100 +196,100 @@ def get_daily_report():
 
         if ticker_history_entry:
             last_day_count = ticker_history_entry.get('day_count', 0)
-
             if ticker_history_date == today_et:
                  using_existing_today_record = True
 
-        # Determine day_count
         if using_existing_today_record:
-             # Even if we are re-running (because executed_today is False), we use the SAME day count
              day_count = last_day_count
         else:
-             # New day block
              day_count = last_day_count + 1
 
-        # Determine if we should consider this ticker "already finished" for today
-        # User wants to re-try if it was only SKIPPED today.
-        # So already_executed is True ONLY if we actually BOUGHT specific items today.
+        # Check execution status
         executed_today = False
-        executed_orders = [] # Initialize here for scope
+        executed_orders = []
 
         if using_existing_today_record:
             results_list = ticker_history_entry.get('results', [])
-            executed_today = any(r.get('executed', False) for r in results_list)
 
-            if executed_today:
-                for res in results_list:
-                    # Check if any ACTUAL order was placed (type is not skip)
-                    if res.get('executed') and res.get('type') not in ['skip', None]:
-                        executed_orders.append({
-                            "qty": res.get('qty', 0),
-                            "price": res.get('price', 0),
-                            "order_type": res.get('order_type', 'LOC'),
-                            "type": res.get('type', 'buy'),
-                            "time": res.get('time', ''),
-                            "message": res.get('message', '')
-                        })
+            # Check if any actual order was executed
+            for res in results_list:
+                if res.get('executed') and res.get('type') not in ['skip', None]:
+                    executed_orders.append({
+                        "qty": res.get('qty', 0),
+                        "price": res.get('price', 0),
+                        "order_type": res.get('order_type', 'LOC'),
+                        "type": res.get('type', 'buy'),
+                        "time": res.get('time', ''),
+                        "message": res.get('message', '')
+                    })
 
-            # Recalculate 'executed_today' based on whether an ACUTAL order exists
-            # intended behavior: if previous attempts were skips, executed_today stays False
-            # so we can re-evaluate.
             executed_today = bool(executed_orders)
 
         already_executed = executed_today
 
-        # Calculate targets and thresholds
-        target_value_accumulated = day_count * daily_budget
-        current_value = current_value_usd if is_us_stock else current_value_krw
-
-        # 15% Thresholds
-        buy_threshold = target_value_accumulated * 0.85
-        sell_threshold = target_value_accumulated * 1.15
+        # --- SIMPLIFIED TARGET CALCULATION ---
+        target_progress = day_count * daily_budget
+        # Cap at target if set
+        if target_cap > 0:
+            target_value_accumulated = min(target_cap, target_progress)
+        else:
+            target_value_accumulated = target_progress
 
         daily_target_amount = target_value_accumulated - current_value
 
-        # Determine orders (skip if already executed today)
+        # Divergence Calculation
+        # abs(diff) / target_value
+        divergence_rate = 0.0
+        # If target_value is 0 (start), we might handle it.
+        # But usually target_value >= daily_budget (day 1)
+        if target_value_accumulated > 0:
+            divergence_rate = abs(daily_target_amount) / target_value_accumulated
+        elif daily_target_amount > 0:
+            # If target is 0 but we need to buy (start fresh?)
+            # This case implies target_value_accumulated is 0.
+            # If day_count > 0, target_value should be > 0.
+            divergence_rate = 1.0 # Max divergence
+
+        # Determine orders
         orders = []
         if not already_executed and current_price > 0:
-            # Case 1: Buy Condition (Current Value < 90% of Target)
-            if current_value < buy_threshold:
-                # Buy amount = gap to target (fill the hole)
-                buy_amount = daily_target_amount
-                buy_qty = int(buy_amount / current_price)
+            # Check Threshold
+            if divergence_rate >= threshold_rate:
+                if daily_target_amount > 0:
+                    buy_amount = daily_target_amount
+                    buy_qty = int(buy_amount / current_price)
 
-                if buy_qty > 0:
-                    order = {
-                        "type": "buy_value_averaging",
-                        "ticker": target_ticker,
-                        "exchange": exchange,
-                        "qty": buy_qty,
-                        "price": round(current_price * 1.05, 2), # 105% LOC
-                        "order_type": "LOC",
-                        "desc": f"Value Averaging Day {day_count}",
-                        "daily_target": daily_target_amount
-                    }
-                    orders.append(order)
-                    total_orders.append(order)
+                    if buy_qty > 0:
+                        order = {
+                            "type": "buy_value_averaging",
+                            "ticker": target_ticker,
+                            "exchange": exchange,
+                            "qty": buy_qty,
+                            "price": round(current_price * 1.05, 2), # 105% LOC
+                            "order_type": "LOC",
+                            "desc": f"Value Averaging Day {day_count}",
+                            "daily_target": daily_target_amount
+                        }
+                        orders.append(order)
+                        total_orders.append(order)
 
-            # Case 2: Sell Condition (Current Value > 110% of Target)
-            elif current_value > sell_threshold:
-                # Sell amount = Excess amount
-                sell_amount = current_value - target_value_accumulated
-                sell_qty = int(sell_amount / current_price)
+                elif daily_target_amount < 0:
+                    sell_amount = abs(daily_target_amount)
+                    sell_qty = int(sell_amount / current_price)
 
-                if sell_qty > 0:
-                     order = {
-                        "type": "sell_value_averaging",
-                        "ticker": target_ticker,
-                        "exchange": exchange,
-                        "qty": sell_qty,
-                        "price": 0, # Market price for sell usually, or we can use 0 for market
-                        "order_type": "Market", # User requested Market sell
-                        "desc": f"Value Averaging Sell Day {day_count}",
-                        "daily_target": -sell_amount # Negative for sell logic indication if needed
-                    }
-                     orders.append(order)
-                     total_orders.append(order)
+                    if sell_qty > 0:
+                        order = {
+                            "type": "sell_value_averaging",
+                            "ticker": target_ticker,
+                            "exchange": exchange,
+                            "qty": sell_qty,
+                            "price": 0,
+                            "order_type": "Market",
+                            "desc": f"Value Averaging Sell Day {day_count}",
+                            "daily_target": daily_target_amount
+                        }
+                        orders.append(order)
+                        total_orders.append(order)
 
         results.append({
             "target_ticker": target_ticker,
@@ -321,32 +297,22 @@ def get_daily_report():
             "day_count": day_count,
             "daily_budget": daily_budget,
             "target_value_accumulated": target_value_accumulated,
+            "target_cap": target_cap,
             "current_value": current_value,
             "daily_target_amount": daily_target_amount,
+            "divergence_rate": divergence_rate,
+            "threshold_rate": threshold_rate,
             "current_price": current_price,
-            "target_weight": target_weight,
             "orders": orders,
             "already_executed": already_executed,
             "executed_orders": executed_orders,
             "error": None
         })
 
-    # Save updated config if needed
-    if config_updated:
-        config['targets'] = targets_config
-        save_config(config)
-
     # Determine status
     status = "calculated"
     if is_market_holiday("NYSE"):
         status = "market_holiday"
-        # Force clear orders on holiday
-        for r in results:
-            r['orders'] = []
-        total_orders = []
-
-    if not results and not total_orders and not error_msg:
-         status = "error" if error_msg else "init" # Should not happen if strategies exist
 
     return {
         "status": status,
