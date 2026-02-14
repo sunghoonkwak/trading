@@ -131,7 +131,7 @@ async def get_index():
 async def get_memos():
     """Fetch all memos from memo.json."""
     try:
-        from utils import ConfigFile, load_json
+        from data.config_manager import ConfigFile, load_json
         messages = load_json(ConfigFile.MEMO, default={})
         return messages
     except Exception as e:
@@ -143,7 +143,7 @@ async def get_memos():
 async def delete_memo(request: MemoDeleteRequest):
     """Delete a specific memo."""
     try:
-        from utils import ConfigFile, load_json, save_json
+        from data.config_manager import ConfigFile, load_json, save_json
         messages = load_json(ConfigFile.MEMO, default={})
 
         date_key = request.date
@@ -358,7 +358,7 @@ def _fetch_orders_for_sync():
     try:
         from kis.wrapper import fetch_open_orders
         import trading_config
-        from utils import get_fixed_width
+        from utils.format_utils import get_fixed_width
         from datetime import datetime
 
         df, num_us, num_kr = fetch_open_orders()

@@ -8,7 +8,7 @@ import html
 import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from utils import ConfigFile, load_json, save_json
+from data.config_manager import ConfigFile, load_json, save_json
 
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes

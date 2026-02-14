@@ -13,7 +13,7 @@ from trading_config import strip_market_prefix
 from kis import event_pipe
 from kis.event_pipe import print_viewer
 from display import add_alert, remove_order_state
-from utils import get_fixed_width, format_number
+from utils.format_utils import get_fixed_width, format_number
 from kis.wrapper import request_sync
 from telegram_bot.telegram_utils import send_notification
 

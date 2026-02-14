@@ -22,7 +22,7 @@ Allocation logic:
    - TQQQ: 5% fixed
 """
 
-from utils import ConfigFile, load_json
+from data.config_manager import ConfigFile, load_json
 
 
 def get_cash_weight(fear_greed_index: float, cash_strategy: dict) -> float:

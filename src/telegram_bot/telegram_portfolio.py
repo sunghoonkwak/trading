@@ -34,7 +34,7 @@ def format_portfolio_summary(data: dict) -> str:
 
     # Get F&G index
     try:
-        from utils import get_fear_and_greed
+        from utils.market_utils import get_fear_and_greed
         fg_index = int(get_fear_and_greed())
     except ImportError:
         fg_index = 50
@@ -72,7 +72,7 @@ def format_weight_diffs(diffs: list, total_usd: float, cash_info: dict) -> str:
     """
     # Get F&G index
     try:
-        from utils import get_fear_and_greed
+        from utils.market_utils import get_fear_and_greed
         fg_index = int(get_fear_and_greed())
     except ImportError:
         fg_index = 50

@@ -17,7 +17,8 @@ from typing import Dict, List, Tuple, Any
 
 from strategy import raoeo, value_averaging
 from strategy.base import StrategyOrder, OrderSide
-from utils import ConfigFile, load_json, save_json, is_market_holiday
+from data.config_manager import ConfigFile, load_json, save_json
+from utils.market_utils import is_market_holiday
 from kis import wrapper
 from kis.kis_api import kis_auth as ka
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock

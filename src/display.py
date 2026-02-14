@@ -22,7 +22,7 @@ COLOR_YELLOW = "\033[93m"
 COLOR_CYAN = "\033[96m"
 COLOR_GRAY = "\033[90m"
 
-from utils import get_fixed_width
+from utils.format_utils import get_fixed_width
 
 def add_alert(message: str, level: str = "INFO"):
     """Print alert to terminal (simple scroll-based)."""
