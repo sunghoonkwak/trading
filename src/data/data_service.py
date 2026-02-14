@@ -291,9 +291,6 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
     Returns:
         dict: Portfolio data from get_portfolio() or error dict
     """
-    # Check if KIS Thread is ready
-    if not is_kis_ready():
-        return {"error": "KIS Thread not authenticated"}
 
     # Check cache first (unless force_refresh)
     cached = _get_cached_portfolio(force_refresh=force_refresh)
@@ -303,6 +300,9 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
         return cached
 
     # Cache miss - request from KIS Thread
+    if not is_kis_ready():
+        return {"error": "KIS Thread not authenticated"}
+
     add_alert("[Data] Fetching portfolio...", "INFO")
     logging.info("[DataService] Requesting portfolio from KIS Thread")
 
@@ -318,9 +318,6 @@ def get_portfolio_data(force_refresh: bool = False) -> dict:
         error_msg = response.error or "Unknown error"
         logging.error(f"[DataService] Portfolio request failed: {error_msg}")
         return {"error": error_msg}
-
-    # Process the successful response (raw portfolio dict)
-    raw_portfolio = response.result
 
     # Process the successful response (raw portfolio dict)
     raw_portfolio = response.result
