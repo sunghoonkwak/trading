@@ -28,7 +28,7 @@
 `/raoeo` 명령어의 진입점. RAOEO 상태를 표시하고 주문 확인 버튼을 제공합니다. 마켓 휴장일인 경우 리포트에 경고가 표시되며 주문 버튼이 비활성화됩니다.
 
 ### handle_raoeo_callback
-Yes/No 버튼 클릭 콜백 처리. Yes 선택 시 `execute_orders()` 호출 후 히스토리에 저장합니다.
+Yes/No 버튼 클릭 콜백 처리. Yes 선택 시 `execute_all_orders()` 호출 후 히스토리에 저장합니다.
 
 ### raoeo_timeout_handler
 60초 세션 타임아웃 처리. 메시지를 "⏱️ RAOEO session expired."로 업데이트합니다.

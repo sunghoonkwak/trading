@@ -302,36 +302,6 @@ def _process_single_target(ticker: str, config: dict, portfolio_holdings: dict) 
     return res
 
 
-def execute_orders(orders_map: dict) -> Dict[str, list]:
-    """
-    Execute orders for multiple targets.
-
-    Args:
-        orders_map: Dict mapping ticker -> list of order dicts (from result['targets'][ticker]['orders'])
-
-    Returns:
-        Dict[str, list]: map of ticker -> execution results list
-    """
-    final_results = {}
-    cano = ka.getTREnv().my_acct
-    prod = ka.getTREnv().my_prod
-
-    # We need to look up exchange for each ticker.
-    # The caller typically has access to config, but here we might just rely on
-    # the order object if we injected it, OR look it up again.
-    # Ideally, the order object should have exchange info or we pass it.
-    # Refactoring: Let's assume order dict itself DOES NOT have exchange.
-    # We should get exchange from config.
-
-    # Actually, execute_orders is called with a flat list in old code.
-    # New design: We iterate through the `result['targets']` structure in `main.py` or wherever calls this.
-    # But to keep `raoeo.py` self-contained/backward-ish compatible, let's accept `calculated_result`?
-    # Or just `orders_map`.
-
-    # Wait, the prompt implies `execute_orders` signature change.
-    # Let's change signature to accept the `whole result object` or just the map.
-    pass
-
 def execute_all_orders(calculated_result: dict) -> dict:
     """
     Execute ALL orders found in the calculated result.

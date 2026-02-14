@@ -90,7 +90,7 @@
 
 ---
 
-### execute_orders
+### execute_all_orders
 계산된 모든 주문을 KIS API를 통해 순차적으로 실행합니다.
 
 ---
