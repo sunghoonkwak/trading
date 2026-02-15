@@ -192,4 +192,18 @@ def calculate_orders(
                 reason=f"Phase2: Upper Buy"
             ))
 
+        # ---------------------------------------------------------
+        # Logic C: Logging Summary
+        # ---------------------------------------------------------
+        phase = "Phase0" if spent_amount < ten_pct_seed else "Phase1" if spent_amount < half_seed else "Phase2"
+        ticker_orders = [o for o in orders if o.symbol == ticker]
+        buy_orders = [o for o in ticker_orders if o.side == OrderSide.BUY]
+        sell_orders = [o for o in ticker_orders if o.side == OrderSide.SELL]
+        
+        logging.info(
+            f"[RAOEO] {ticker:<5} | {phase} | "
+            f"Hold: {spent_amount:8.2f} / {seed:8.2f} ({spent_amount/seed*100:5.1f}%) | "
+            f"Orders: Buyx{len(buy_orders)}, Sellx{len(sell_orders)}"
+        )
+
     return orders

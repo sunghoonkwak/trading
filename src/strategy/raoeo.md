@@ -26,6 +26,14 @@
   - `current_prices` (dict): 실시간 현재가.
 - **출력 (Output)**: `List[StrategyOrder]` (실행할 주문 객체 리스트)
 
+# Logging & Monitoring (로깅 및 모니터링)
+
+- **요약 로그**: 각 종목별로 계산이 완료될 때마다 다음 정보를 `INFO` 레벨로 기록합니다.
+    - 현재 단계 (Phase 0, 1, 2)
+    - 투자 진척도 (보유 금액 / 전체 시드머니 및 백분율)
+    - 생성된 주문 요약 (매수 및 매도 주문 개수)
+- **경고 로그**: 가격 데이터가 없거나 설정값이 유효하지 않은 경우 `WARNING` 또는 `ERROR` 로그를 남깁니다.
+
 # Configuration (`strategy_config.json`)
 
 ```json

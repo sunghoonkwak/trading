@@ -24,6 +24,7 @@
   - `order_data` (dict): 대상 주문 정보
   - `new_price` (str, optional): 정정할 가격
 - **출력 (Output)**: `Tuple[Optional[pd.DataFrame], Optional[str]]` (결과 데이터, 에러 메시지)
+- **로깅 (Logging)**: 모든 취소/정정 요청 시 주문 번호와 시장 정보를 기록하며, API 응답 결과(성공/실패 메시지)를 `INFO` 레벨로 남깁니다.
 
 # Configuration (None)
 

@@ -56,7 +56,7 @@ class LogManager:
 
         # 5. Suppress noisy third-party logs
         for lib in ["httpx", "httpcore", "telegram", "apscheduler", "websockets", "asyncio"]:
-            logging.getLogger(lib).setLevel(logging.INFO)
+            logging.getLogger(lib).setLevel(logging.WARNING)
 
         # 6. Log Initial Messages
         for msg in rotation_msgs:

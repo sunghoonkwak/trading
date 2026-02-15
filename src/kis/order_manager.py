@@ -53,25 +53,41 @@ class OrderManager:
         cano = ka.getTREnv().my_acct
         prod = ka.getTREnv().my_prod
         t_ord = {k.lower(): v for k, v in order_data.items()}
+        order_no = t_ord.get('odno', 'Unknown')
+        action_name = "CANCEL" if action_type == '2' else "CORRECT"
 
-        if market == "KR":
-            return order_rvsecncl(
-                env_dv="real", cano=cano, acnt_prdt_cd=prod,
-                krx_fwdg_ord_orgno=t_ord.get('ord_gno_brno', t_ord.get('krx_fwdg_ord_orgno', '')),
-                orgn_odno=t_ord.get('odno'),
-                ord_dvsn=t_ord.get('ord_dvsn_cd', t_ord.get('ord_dvsn', '00')),
-                rvse_cncl_dvsn_cd="02" if action_type == '2' else "01",
-                ord_qty=t_ord.get('psbl_qty'),
-                ord_unpr=new_price if action_type == '1' else "0",
-                qty_all_ord_yn="Y", excg_id_dvsn_cd=t_ord.get('excg_id_dvsn_cd', 'KRX')
-            )
-        else:
-            qty = t_ord.get('nccs_qty', t_ord.get('ft_ord_qty4', t_ord.get('ord_qty', 0)))
-            return order_rvsecncl_overseas(
-                cano=cano, acnt_prdt_cd=prod, ovrs_excg_cd=t_ord.get('ovrs_excg_cd', 'NASD'),
-                pdno=t_ord.get('pdno'), orgn_odno=t_ord.get('odno'),
-                rvse_cncl_dvsn_cd="02" if action_type == '2' else "01",
-                ord_qty=str(qty),
-                ovrs_ord_unpr=new_price if action_type == '1' else "0",
-                mgco_aptm_odno="", ord_svr_dvsn_cd="0", env_dv="real"
-            )
+        logging.info(f"[OrderManager] Requesting {action_name} for order {order_no} ({market})")
+
+        try:
+            if market == "KR":
+                res_df, msg = order_rvsecncl(
+                    env_dv="real", cano=cano, acnt_prdt_cd=prod,
+                    krx_fwdg_ord_orgno=t_ord.get('ord_gno_brno', t_ord.get('krx_fwdg_ord_orgno', '')),
+                    orgn_odno=order_no,
+                    ord_dvsn=t_ord.get('ord_dvsn_cd', t_ord.get('ord_dvsn', '00')),
+                    rvse_cncl_dvsn_cd="02" if action_type == '2' else "01",
+                    ord_qty=t_ord.get('psbl_qty'),
+                    ord_unpr=new_price if action_type == '1' else "0",
+                    qty_all_ord_yn="Y", excg_id_dvsn_cd=t_ord.get('excg_id_dvsn_cd', 'KRX')
+                )
+            else:
+                qty = t_ord.get('nccs_qty', t_ord.get('ft_ord_qty4', t_ord.get('ord_qty', 0)))
+                res_df, msg = order_rvsecncl_overseas(
+                    cano=cano, acnt_prdt_cd=prod, ovrs_excg_cd=t_ord.get('ovrs_excg_cd', 'NASD'),
+                    pdno=t_ord.get('pdno'), orgn_odno=order_no,
+                    rvse_cncl_dvsn_cd="02" if action_type == '2' else "01",
+                    ord_qty=str(qty),
+                    ovrs_ord_unpr=new_price if action_type == '1' else "0",
+                    mgco_aptm_odno="", ord_svr_dvsn_cd="0", env_dv="real"
+                )
+            
+            if res_df is not None:
+                logging.info(f"[OrderManager] {action_name} success: {order_no} | Msg: {msg}")
+            else:
+                logging.warning(f"[OrderManager] {action_name} failed: {order_no} | Msg: {msg}")
+            
+            return res_df, msg
+            
+        except Exception as e:
+            logging.error(f"[OrderManager] {action_name} exception: {order_no} | Error: {e}")
+            return None, str(e)

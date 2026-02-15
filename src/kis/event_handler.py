@@ -177,7 +177,7 @@ def _handle_domestic_order(row) -> bool:
         time_v = row['STCK_CNTG_HOUR']
         time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
 
-        logging.info(f"--- H0STCNI0 FULL DUMP ---\n{row.to_dict()}")
+        logging.debug(f"--- H0STCNI0 FULL DUMP ---\n{row.to_dict()}")
 
         cntg_yn = row['CNTG_YN']
         rctf_cls = row['RCTF_CLS']
