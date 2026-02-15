@@ -1,145 +1,109 @@
-# KIS 실시간 트레이딩 시스템 (KIS Real-time Trading System)
+# 🚀 KIS Real-time Trading System
 
-이 프로젝트는 **한국투자증권(KIS) API**를 활용한 실시간 트레이딩 시스템입니다.
-**웹 기반 이벤트 뷰어(Event Viewer)**와 **터미널 메뉴(Terminal Menu)**를 결합하여 모니터링과 제어를 동시에 수행할 수 있습니다.
+[![Python Version](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Docker](https://img.shields.io/badge/Docker-Supported-blue.svg)](https://www.docker.com/)
 
-## ✨ 주요 기능
+**한국투자증권(KIS) API**를 기반으로 한 고성능 실시간 자동매매 시스템입니다.  
+복잡한 터미널 대신 **현대적인 웹 대시보드**와 **텔레그램**을 통해 언제 어디서든 당신의 자산을 관리하세요.
 
-- **자동 초기화 (Automated Startup)**: 실행 시 텔레그램, KIS API, 웹 서버가 자동으로 초기화됩니다.
-- **웹 이벤트 뷰어 (Web Event Viewer)**:
-  - 실시간 주문(Orders), 시세(Quotes), 메모(Memos), 시스템 로그(System Logs)를 WebSocket으로 모니터링합니다.
-  - 현대적인 다크 모드 UI와 효율적인 화면 분할(좌우 5:5)을 제공합니다.
-  - 접속 주소: `http://<서버IP>:8080`
-- **전략 (Strategies)**:
-  - **RAOEO (Unlimited Buying)**: 다중 종목(Multi-Target) 동시 운영 지원 (예: SOXL, FAS 등), 개별 설정 및 휴장일 자동 대응.
-  - **Value Averaging**: 목표 비중 기반 분할 매수/매도 전략.
-- **터미널 제어 인터페이스 (Terminal Control)**:
-  - Docker 환경에 최적화되어, 인터랙티브 메뉴 대신 **웹 대시보드**와 **텔레그램**을 주 제어 수단으로 사용합니다.
-- **실시간 알림 및 원격 제어**: 텔레그램 봇을 통해 매매 알림을 받고 명령어로 조회/주문이 가능합니다.
-- **도커 지원 (Dockerized)**: 컨테이너 환경에서 손쉽게 배포 및 실행이 가능합니다.
+---
 
-## 🚀 시작하기
+## 🏛️ System Architecture
 
-### 필수 요구사항
-- **Python 3.9+** (직접 실행 시)
-- Docker & Docker Compose (Docker 실행 시 선택 사항)
-- **설정 파일** (`~/KIS_config/` 디렉토리 또는 볼륨 마운트 필요):
+본 시스템은 안정성과 확장성을 위해 멀티 스레드 기반의 이벤트 중심 아키텍처를 채택하고 있습니다.
 
-### 📁 외부 설정 디렉토리 (`~/KIS_config/`)
-모든 민감한 설정 파일은 프로젝트 외부에 저장됩니다. `templete/` 디렉토리에 있는 예제 파일들을 `~/KIS_config/`로 복사하여 설정할 수 있습니다:
-```
-~/KIS_config/
-├── kis_devlp.yaml            # KIS API 설정 (모의/실전)
-├── credentials.enc           # 암호화된 API 키
-├── service-account.json      # Google Sheets 서비스 계정
-├── telegram.txt              # 텔레그램 봇 토큰/채팅 ID (옵션)
-├── portfolio.json            # 캐싱된 포트폴리오 데이터
-├── portfolio_weights.json    # 포트폴리오 비중 설정
-├── portfolio_weights.json    # 포트폴리오 비중 설정
-├── strategy_config.json      # 통합 전략 설정 (RAOEO, Value Averaging)
-├── raoeo_history.json        # RAOEO 매매 히스토리
-├── value_averaging_history.json # Value Averaging 히스토리
-└── memo.json                 # 텔레그램 메모 저장소
-```
+- **Core Engine**: KIS REST API & WebSocket을 통한 실시간 데이터 처리
+- **Strategies**: 독립된 로직 모듈 (RAOEO, VA, Rebalancing)
+- **Monitoring**: FastAPI 기반의 실시간 WebSocket 대시보드 (Event Viewer)
+- **Remote Control**: 모듈화된 텔레그램 봇 핸들러를 통한 양방향 통신
 
-### 설치 및 실행
+---
 
-1. **Docker로 실행 (권장)**
-   환경 설정 없이 바로 실행할 수 있는 가장 간편한 방법입니다. `docker compose` 명령어를 사용합니다.
-   ```bash
-   # 데몬 모드(백그라운드)로 빌드 및 실행
-   docker compose up -d --build
+## 💡 주요 특징 (Core Features)
 
-   # 로그 확인
-   docker logs -f my-trading-bot
-   ```
-   *참고: Docker 모드에서는 터미널 메뉴가 비활성화되며 자동으로 데몬 모드로 전환됩니다.*
+- **⚡ 실시간성**: WebSocket을 통해 호가, 체결, 잔고 변동을 지연 없이 모니터링합니다.
+- **🖥️ 웹 이벤트 뷰어**: 다크 모드 기반의 세련된 UI로 실시간 로그와 시세를 한눈에 확인합니다.
+- **🤖 스마트 알림**: 모든 주문 체결 내역이 즉시 텔레그램으로 전송됩니다.
+- **🛡️ 안정성**: Docker 컨테이너 환경을 지원하여 24시간 중단 없는 매매 환경을 제공합니다.
+- **📈 자동화된 보고**: 매일 매매 결과와 포트폴리오 상태를 자동으로 리포팅합니다.
 
-2. **Python 직접 실행 (고급 사용자)**
-   개발 목적으로 소스 코드를 직접 수정하며 실행할 때 적합합니다.
-   ```bash
-   # 1. 가상환경 활성화 (선택 사항)
-   source venv/bin/activate
+---
 
-   # 2. 필수 라이브러리 설치
-   # Linux
-   pip install -r requirements.txt
-   # Windows
-   # pip install -r requirements-windows.txt
+## 📊 투자 전략 (Investment Strategies)
 
-   # 3. 실행 (src 디렉토리의 main.py 실행)
-   # PYTHONPATH 설정 필요할 수 있음
-   python src/main.py
-   ```
+이 시스템은 수학적 확률과 시스템의 힘을 믿는 투자자를 위한 세 가지 핵심 전략을 제공합니다.
 
-## 📱 Telegram 봇 명령어
+### 1. RAOEO (무한 매수법 - Unlimited Buying)
+*높은 변동성을 수익으로 전환하는 코스트 에버리징의 극치*
+- **전략 핵심**: 변동성이 클수록 수익으로 연결되는 구조입니다. 하락장에서 기계적으로 매집하여 반등 시 수익을 확정합니다.
+- **장점**: 충분한 시드가 준비되어 현금 비중을 높게 유지할 수 있을수록 전략적 우위가 강력해지며, 심리적 안정을 제공합니다.
+- **적합한 상황**: TQQQ, SOXL 등 변동성이 매우 큰 레버리지 ETF 운용 시.
 
-🤖 **Trading Bot Initialized**
+### 2. Value Averaging (VA - 목표 가치 적립식)
+*단순 정액 적립을 넘어선 스마트한 가치 조절 전략*
+- **전략 핵심**: 시간이 흐름에 따라 내 자산이 가져야 할 '목표 가치'를 설정하고, 현재 가치와의 괴리만큼 매매합니다.
+- **⚠️ 자산 규모의 함정**: 투자 초기에는 평단가 조절 효과가 탁월하지만, **총 투자액(Size)이 커지면** 새로 투입되는 소액의 적립금으로는 전체 평단가를 낮추는 방어 효과가 현저히 떨어집니다. 따라서 자산 규모에 맞는 적절한 투입금 설정이 필수적입니다.
+- **적합한 상황**: 자산 형성 초기 단계의 적립식 투자자.
 
-| 명령어 | 설명 |
+### 3. Strategic Rebalancing (전략적 자산 배분)
+*데이터와 시스템이 주도하는 "공짜 점심" 변동성 수확*
+- **변동성 수확 (Volatility Harvesting)**: 주가가 제자리걸음을 하더라도, 위아래로 흔들리는 노이즈를 먹고 자랍니다. 고점에서 팔고 저점에서 사는 행위를 무한 반복하여 수량을 늘립니다.
+- **MDD 제어 및 생존력**: TQQQ와 같은 공격 자산과 SCHD 같은 방어 자산을 조합하여 폭락장에서도 "저가 매수 기회"로 강제 전환시키는 멘탈 방어막을 제공합니다.
+- **절세 및 복리 효과**: 추가 현금 흐름(입금)이 있다면 매도 없이 **'입금'만으로 비중을 조절**할 수 있습니다. 이는 양도세(22%) 발생을 이연시켜 복리 효과를 극대화합니다.
+
+| 투자 방식 | 무지성 존버 | 단타/스윙 | **전략적 리밸런싱 (Bot)** |
+| :--- | :--- | :--- | :--- |
+| **의사결정** | 감정 (공포/탐욕) | 차트/감 | **데이터 (JSON 설정값)** |
+| **하락장 대응** | 기도/방치 | 손절 (뇌동매매) | **기계적 추매 (자동)** |
+| **자본 효율** | 낮음 | 보통 | **최상 (현금/주식 최적화)** |
+
+---
+
+## 📱 Interface & Remote Control
+
+### 🌐 Web Dashboard (Event Viewer)
+브라우저에서 실시간으로 시스템 상태를 확인하세요 (`http://localhost:8080`).
+- **좌측**: 주문 내역(Orders), 실시간 시세(Quotes), 메모(Memos)
+- **우측**: 시스템 전체 로그(System Log)를 실시간 스트리밍
+
+### 🤖 Telegram Bot Commands
+텔레그램을 통해 외부에서도 완벽하게 제어할 수 있습니다.
+
+| 명령어 | 기능 설명 |
 | :--- | :--- |
-| **포트폴리오 (Portfolio)** | |
-| `/portfolio` | Portfolio check (interactive) |
-| `/portfolio_weight` | Rebalancing suggestions |
-| `/placed_orders` | Show open orders |
-| **전략 (Strategy)** | |
-| `/raoeo` | RAOEO status & order |
-| `/value_averaging` | Value Averaging order (Bulk Execution) |
-| **기타 (Misc)** | |
-| `/daily_report [date]` | View past reports |
-| `/memo` | View recent memos (1 week) |
+| **💰 자산 조회** | |
+| `/portfolio` | 전체 포트폴리오 현황 및 종목별 상세 조회 (인터랙티브) |
+| `/portfolio_weight` | 현재 비중과 목표 비중 비교 및 리밸런싱 제안 |
+| `/placed_orders` | 현재 미체결 주문 목록 확인 |
+| **📈 전략 실행** | |
+| `/strategy` | **RAOEO & VA** 전략 통합 조회 및 즉시 주문 실행 |
+| `/rebalance` | **TQQQ+SCHD** 리밸런싱 전략 조회 및 즉시 주문 실행 |
+| **📋 기록 및 보고** | |
+| `/daily_report` | 일일 매매 리포트 아카이브 조회 (`/daily_report 20260215`) |
+| `/memo` | 최근 1주일간 기록된 투자 메모 일괄 조회 |
+| *(일반 메시지)* | 봇에게 메시지를 보내면 자동으로 날짜별 **투자 메모**로 저장됩니다. |
 
-## 🕹️ 사용 방법
+---
 
-### 1. 웹 대시보드 (Web Dashboard)
-- **접속**: 브라우저에서 `http://localhost:8080` (또는 서버 IP) 접속.
-- **구성 (5:5 분할 레이아웃)**:
-  - **좌측 (50%)**:
-    - **Orders**: 실시간 체결 및 접수 내역 (상단)
-    - **Quotes**: 실시간 호가/시세 변동 (중단)
-    - **Memos**: 최근 기록된 메모 내역 (하단)
-  - **우측 (50%)**:
-    - **System Log**: 시스템 상태 및 에러 로그 (자동 줄바꿈 지원)
+## 🚀 Quick Start
 
-### 2. 터미널 메뉴 (비활성화됨)
-Docker 환경에서는 인터랙티브 터미널 메뉴가 사용되지 않습니다. 모든 제어는 **웹 대시보드** 또는 **텔레그램 봇**을 통해 수행하십시오.
+### 1. 환경 설정 (Setup)
+보안을 위해 설정 파일은 프로젝트 외부(`~/KIS_config/`)에서 관리합니다. `templete/` 디렉토리를 참조하세요.
 
-## 📂 프로젝트 구조
+| 파일명 | 용도 | 주요 설정 항목 |
+| :--- | :--- | :--- |
+| **kis_devlp.yaml** | KIS API 인증 | 앱 키, 계정 번호, 접속 도메인 |
+| **strategy_config.json** | 통합 전략 설정 | RAOEO/VA/Rebalancing 세부 파라미터 |
+| **telegram.txt** | 텔레그램 알림 | 봇 토큰 및 수신용 채팅 ID |
 
-```
-.
-├── src/                        # 소스 코드 디렉토리
-│   ├── main.py                 # 진입점 (시스템 초기화 및 메인 루프)
-│   ├── web_server.py           # FastAPI 웹 서버 (WebSocket & API)
-│   ├── display.py              # 로그 메시지 및 터미널 출력 처리
-│   ├── thread_comm.py          # 스레드 간 IPC 통신 관리
-│   ├── thread_state.py         # 시스템 스레드 상태 추적
-│   ├── trading_config.py       # 트레이딩 관련 설정 로더
-│   ├── trading_state.py        # 실시간 매매 상태 관리
-│   ├── kis/                    # KIS API 연동 모듈
-│   │   ├── wrapper.py          # KIS API 통합 래퍼 (주문/시세)
-│   │   ├── kis_thread.py       # KIS 실시간 데이터 수신 스레드
-│   │   ├── event_handler.py    # KIS 이벤트 처리 및 배포
-│   │   ├── event_pipe.py       # 레거시 IPC 파이프 (유지보수용)
-│   │   └── kis_api/            # 저수준 KIS REST/WebSocket API
-│   ├── strategy/               # 매매 전략 로직
-│   │   ├── raoeo.py            # 무한 매수 (RAOEO) 전략
-│   │   └── value_averaging.py  # 밸류 에버리징 (VA) 전략
-│   ├── portfolio/              # 포트폴리오 및 잔고 관리
-│   ├── telegram_bot/           # 텔레그램 봇 (모듈화된 핸들러)
-│   │   ├── telegram_bot.py     # 메인 봇 인스턴스 및 라우팅
-│   │   ├── telegram_portfolio.py # 포트폴리오 관련 명령 처리
-│   │   └── ... (기타 모듈)
-│   ├── scheduler/              # 스케줄러 (보고서 생성 등 자동 작업)
-│   ├── data/                   # 데이터 저장 및 로컬 DB 관리
-│   ├── web/                    # 프론트엔드 (HTML/JS/CSS)
-│   └── utils.py                # 공용 유틸리티 함수
-├── Dockerfile                  # 도커 빌드 설정
-├── docker-compose.yml          # 도커 컴포즈 설정
-├── requirements.txt            # 파이썬 의존성
-└── README.md                   # 프로젝트 문서
+### 2. 실행 (Run with Docker)
+```bash
+docker compose up -d --build
+docker logs -f my-trading-bot
 ```
 
-## ⚠️ 참고 사항
-- **터미널 출력**: 모든 시스템 알림은 터미널에도 출력됩니다. 하지만 메뉴 조작 중 출력이 섞일 수 있으므로 **웹 뷰어** 확인을 권장합니다.
-- **로그 파일**: `WebSocket_latest.log`에 모든 로그가 저장되며, 실행 시마다 `logs/` 디렉토리로 백업(Rotation)됩니다.
+---
+
+## ⚠️ Disclaimer
+본 시스템은 투자 보조 도구일 뿐이며, 투자에 대한 모든 책임은 사용자 본인에게 있습니다. 반드시 **모의투자 계좌**에서 충분한 테스트를 거친 후 실전에 적용하시기 바랍니다.
