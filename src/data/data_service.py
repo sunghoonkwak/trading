@@ -242,9 +242,6 @@ def _apply_scope_filter(data: Dict, scope: str) -> Dict:
     # DEBUG LOG
     logging.info(f"[Filter] Scope: {scope}, TargetIDs: {target_ids}")
     all_cash = raw.get("cash_holdings", [])
-    logging.info(f"[Filter] Raw Cash Count: {len(all_cash)}")
-    for c in all_cash:
-        logging.info(f"  - Cash: {c.get('account_name')} | ID: {c.get('account_id')} | Amt: {c.get('amount')}")
 
     # Re-run processing on filtered raw data
     target_names = {a["name"] for a in accounts if a["id"] in target_ids}
