@@ -48,6 +48,7 @@ def load_telegram_credentials() -> tuple[Optional[str], Optional[str]]:
 
 async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /daily_report [YYYYMMDD]"""
+    logging.info(f"[TG] /daily_report from user")
     args = context.args
     target_date = ""
 

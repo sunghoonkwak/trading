@@ -2,6 +2,10 @@
 trigger: always_on
 ---
 
+# Prohibited Modifications
+1. **Official API Preservation**: Do not modify the `src/kis/kis_api/` directory as it contains the official Korea Investment & Securities sample code.
+2. **Mandatory Confirmation**: Always ask for user permission before making any code modifications.
+
 # Development Workflow
 1. **Understand**: Examine code structure and logs. Identify the root cause or requirement.
 2. **Plan**: Propose a step-by-step plan to the user.

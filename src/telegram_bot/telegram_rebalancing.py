@@ -28,7 +28,7 @@ def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
 
 async def cmd_rebalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /rebalance command."""
-    logging.info(f"[TG] /rebalance from {update.effective_user.id}")
+    logging.info(f"[TG] /rebalance from user")
     
     try:
         reb_rep = run_rebalancing_strategy(execute=False)

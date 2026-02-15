@@ -326,7 +326,7 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
 async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio - Entry point for ConversationHandler."""
 
-    logging.info(f"[TG] Portfolio session started for user {update.effective_user.id}")
+    logging.info(f"[TG] /portfolio from user")
     # Get portfolio data and cache in user_data
     loop = asyncio.get_running_loop()
     data = await loop.run_in_executor(None, get_portfolio_data)
@@ -435,6 +435,7 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /cancel command to exit conversation."""
+    logging.info(f"[TG] /cancel from user")
     context.user_data.pop('portfolio_data', None)
     await wrap_reply(update, "👋 Portfolio session closed.", parse_mode='HTML')
     return ConversationHandler.END
@@ -512,7 +513,7 @@ def format_placed_orders(df, num_us: int, num_kr: int) -> str:
 
 async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /placed_orders - Show open orders."""
-    logging.info(f"[TG] /placed_orders from user {update.effective_user.id}")
+    logging.info(f"[TG] /placed_orders from user")
 
     loop = asyncio.get_running_loop()
     df, num_us, num_kr = await loop.run_in_executor(None, fetch_open_orders)
@@ -522,6 +523,7 @@ async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio_weight."""
+    logging.info(f"[TG] /portfolio_weight from user")
     loop = asyncio.get_running_loop()
     # /portfolio_weight is restricted to passive/long-term accounts
     diffs, total_usd, cash_info = await loop.run_in_executor(None, get_weight_diffs, "passive")

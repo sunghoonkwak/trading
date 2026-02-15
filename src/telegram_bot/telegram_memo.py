@@ -51,6 +51,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def cmd_memo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /memo - show recent 7 days of messages."""
+    logging.info(f"[TG] /memo from user")
     messages = load_json(ConfigFile.MEMO, default={})
     if not messages:
         await wrap_reply(update, "📭 No saved messages.")

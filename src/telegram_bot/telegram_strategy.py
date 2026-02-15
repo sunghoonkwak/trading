@@ -29,7 +29,7 @@ def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
 
 async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /strategy command."""
-    logging.info(f"[TG] /strategy from {update.effective_user.id}")
+    logging.info(f"[TG] /strategy from user")
     
     try:
         raoeo_rep = run_raoeo_strategy(execute=False)
