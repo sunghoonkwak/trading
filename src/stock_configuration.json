@@ -224,7 +224,7 @@
                 255
             ],
             "disabled": false,
-            "telegram_button": true
+            "telegram_button": false
         },
         {
             "ticker": "TQQQ",
