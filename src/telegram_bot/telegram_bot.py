@@ -108,7 +108,7 @@ def initialize_telegram():
 
         async def main():
             global _app
-            
+
             # Async Error Handler
             async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
                 if context.error is None: return
@@ -120,7 +120,7 @@ def initialize_telegram():
 
             # Build Application
             _app = Application.builder().token(_bot_token).build()
-            
+
             # Register Handlers
             set_telegram_bot(_app.bot, _chat_id)
             register_portfolio_handlers(_app)
@@ -153,8 +153,11 @@ def initialize_telegram():
 
             # Polling
             logging.info("[Telegram] Starting polling...")
-            await _app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-            
+            await _app.updater.start_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
+
             # Wait forever
             await asyncio.Event().wait()
 
