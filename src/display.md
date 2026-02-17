@@ -3,6 +3,7 @@
 ## 개요
 터미널 출력과 시스템 알림을 처리하는 모듈입니다.
 웹 기반 Event Viewer 도입으로 인해 역할이 축소 및 변경되었습니다.
+`kis.event_pipe` 모듈을 **Lazy Import**하여 초기화 시점의 의존성 문제를 해결했습니다.
 
 ## 주요 기능
 
@@ -12,7 +13,7 @@
 2. **Web Viewer**: `kis.event_pipe`가 연결되어 있다면 `SYS` 메시지(INFO 레벨)를 전송하여 웹 대시보드 System Log에 표시합니다.
 3. **Terminal Output**:
    - 모든 알림 메시지는 터미널에도 컬러 텍스트로 **항상 출력**됩니다.
-   - Web Viewer 및 로그 파일에도 동일하게 기록됩니다.
+   - `event_pipe` 연결 여부와 관계없이 터미널 출력은 보장됩니다.
 
 ### `update_order_state(...)`
 주문 상태 변경 시 호출됩니다.

@@ -80,6 +80,7 @@
 *   **`create_pipe_server()`**: Named Pipe (Windows) 또는 Unix Socket (Linux)을 초기화합니다.
 *   **`wait_for_client()`**: 클라이언트가 연결될 때까지 대기합니다.
 *   **`reset_pipe_server()`**: 연결 끊김 및 재연결 주기를 관리합니다.
+*   **`set_web_broadcast_callback(callback)`**: `web_server.py`로부터 콜백 함수를 등록받아, Pipe 연결 여부와 상관없이 웹 클라이언트로 메시지를 브로드캐스트합니다.
 
 ### Client-Side Functions (Event Viewer)
 *   **`connect_pipe_client()`**: 서버의 IPC에 연결합니다.

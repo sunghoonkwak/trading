@@ -8,11 +8,29 @@ import logging
 from datetime import datetime
 
 # Try to import event_pipe for order forwarding
-try:
-    from kis import event_pipe
-    PIPE_AVAILABLE = True
-except ImportError:
-    PIPE_AVAILABLE = False
+# Lazy loaded event_pipe
+_event_pipe_module = None
+_pipe_import_attempted = False
+
+def _get_event_pipe():
+    global _event_pipe_module, _pipe_import_attempted
+    if _event_pipe_module:
+        return _event_pipe_module
+
+    if _pipe_import_attempted:
+        return None
+
+    try:
+        from kis import event_pipe
+        _event_pipe_module = event_pipe
+        return _event_pipe_module
+    except ImportError:
+        pass # Silent fail is okay here, handled by caller or PIPE_AVAILABLE check
+    except Exception:
+        pass
+
+    _pipe_import_attempted = True
+    return None
 
 # Colors (still useful for terminal output)
 COLOR_RESET = "\033[0m"
@@ -40,8 +58,9 @@ def add_alert(message: str, level: str = "INFO"):
     print(f"alert:[{timestamp}] {color}{message}{COLOR_RESET}")
 
     # Also send to web dashboard via event_pipe if available
-    if PIPE_AVAILABLE:
-        event_pipe.send_log("ALT", f"[{level}] {message}")
+    pipe = _get_event_pipe()
+    if pipe:
+        pipe.send_log("ALT", f"[{level}] {message}")
 
 def update_order_state(order_id: str, ticker: str, name: str, side: str,
                        price: str, qty: str, state: str, notify: bool = True):
@@ -49,11 +68,12 @@ def update_order_state(order_id: str, ticker: str, name: str, side: str,
 
     Format: ODR|ticker|name|side|qty|price|state|order_id
     """
-    if PIPE_AVAILABLE:
+    pipe = _get_event_pipe()
+    if pipe:
         # Include name for display in viewer
         fixed_name = get_fixed_width(name, 20)
         order_msg = f"{fixed_name}|{ticker}|{side}|{qty}|{price}|{state}|{order_id}"
-        event_pipe.send_log("ODR", order_msg)
+        pipe.send_log("ODR", order_msg)
 
     if notify:
         add_alert(f"{side} {ticker} {qty} @ {price} [{state}]", "INFO")
@@ -61,18 +81,21 @@ def update_order_state(order_id: str, ticker: str, name: str, side: str,
 
 def remove_order_state(order_id: str):
     """Remove order (send REMOVED state to viewer)."""
-    if PIPE_AVAILABLE:
-        event_pipe.send_log("ODR", f"REMOVED|{order_id}")
+    pipe = _get_event_pipe()
+    if pipe:
+        pipe.send_log("ODR", f"REMOVED|{order_id}")
 
 def clear_order_states():
     """Clear all orders in Event Viewer."""
-    if PIPE_AVAILABLE:
-        event_pipe.send_log("CLR", "ORDERS")
+    pipe = _get_event_pipe()
+    if pipe:
+        pipe.send_log("CLR", "ORDERS")
 
 def clear_quotes():
     """Clear all quotes in Event Viewer."""
-    if PIPE_AVAILABLE:
-        event_pipe.send_log("CLR", "QUOTES")
+    pipe = _get_event_pipe()
+    if pipe:
+        pipe.send_log("CLR", "QUOTES")
 
 
 def show_in_result_area(lines):

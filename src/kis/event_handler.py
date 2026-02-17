@@ -14,7 +14,7 @@ from kis import event_pipe
 from kis.event_pipe import print_viewer
 from display import add_alert, remove_order_state
 from utils.format_utils import get_fixed_width, format_number
-from kis.wrapper import request_sync
+from kis.wrapper import sync_open_orders
 from telegram_bot.telegram_utils import send_notification
 
 
@@ -235,7 +235,7 @@ def _handle_domestic_order(row) -> bool:
             remove_order_state(order_no)
 
         # Delayed auto-sync with debouncing
-        request_sync()
+        sync_open_orders()
         return True
     except Exception as e:
         print_viewer("SYS", "ERROR", f"Error parsing H0STCNI0: {e}")
@@ -345,7 +345,7 @@ def _handle_overseas_order(tr_id: str, row) -> bool:
             remove_order_state(order_no)
 
         # Delayed auto-sync with debouncing
-        request_sync()
+        sync_open_orders()
         return True
     except Exception as e:
         print_viewer("SYS", "ERROR", f"Error parsing overseas notification: {e}")
