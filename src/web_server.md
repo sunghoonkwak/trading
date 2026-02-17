@@ -44,9 +44,10 @@ WebSocket 연결을 관리합니다.
 - `disconnect(websocket)`: 연결 종료 및 목록에서 제거.
 - `broadcast(message)`: 모든 연결된 클라이언트에게 메시지 전송. (Thread-safe)
 
-### `_broadcast_callback(msg_type, message)`
+### `_broadcast_callback(msg_type, message, time_str=None)`
 `kis.event_pipe`에서 호출되는 콜백 함수입니다.
 이벤트를 수신하여 WebSocket 메시지 포맷(`{"type":..., "data":..., "time":...}`)으로 변환 후 브로드캐스트합니다.
+- `time_str`이 제공되면 해당 시간을 사용하고, 없으면 현재 서버 시간(`datetime.now()`)을 사용합니다.
 
 ### `lifespan(app)`
 애플리케이션 시작/종료 시 실행되는 Context Manager입니다.

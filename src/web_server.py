@@ -62,14 +62,15 @@ manager = ConnectionManager()
 _event_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
-def _broadcast_callback(msg_type: str, message: str):
+def _broadcast_callback(msg_type: str, message: str, time_str: str = None):
     """Callback for event_pipe to broadcast messages to web clients."""
     global _event_loop
     if _event_loop is None:
         logging.error("[WebServer] Cannot broadcast: _event_loop is None")
         return
     try:
-        data = f'{{"type":"{msg_type}","data":"{message.replace(chr(34), chr(39))}","time":"{datetime.now().strftime("%H:%M:%S")}"}}'
+        final_time = time_str if time_str else datetime.now().strftime("%H:%M:%S")
+        data = f'{{"type":"{msg_type}","data":"{message.replace(chr(34), chr(39))}","time":"{final_time}"}}'
         asyncio.run_coroutine_threadsafe(manager.broadcast(data), _event_loop)
     except Exception as e:
         logging.error(f"[WebServer] Broadcast error: {e}")

@@ -60,7 +60,7 @@ def set_web_broadcast_callback(callback):
     logging.info("[Pipe] Web broadcast callback registered")
 
 
-def print_viewer(msg_type, level, log):
+def print_viewer(msg_type, level, log, time_str=None):
     """Log to file and send to separate terminal viewer via pipe."""
     # Always log to file using standard logging
     if level == "ERROR":
@@ -71,7 +71,7 @@ def print_viewer(msg_type, level, log):
 
     # Send to separate terminal viewer (only INFO/ERROR)
     if level in ["INFO", "ERROR"]:
-        send_log(msg_type, log)
+        send_log(msg_type, log, time_str)
 
 
 def create_pipe_server():
@@ -155,14 +155,14 @@ def wait_for_client():
             return False
 
 
-def send_log(msg_type: str, message: str) -> bool:
+def send_log(msg_type: str, message: str, time_str: str = None) -> bool:
     """Send log message through pipe. Non-blocking via queue."""
     global _last_write_warning
 
     # Always try web broadcast first (works even without pipe connection)
     if _web_broadcast_callback:
         try:
-            _web_broadcast_callback(msg_type, message)
+            _web_broadcast_callback(msg_type, message, time_str)
         except Exception as e:
             logging.debug(f"[Pipe] Web broadcast failed: {e}")
 

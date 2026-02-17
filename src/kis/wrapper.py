@@ -96,8 +96,14 @@ def sync_open_orders():
                     q_val = row_l.get('nccs_qty', row_l.get('ft_ord_qty4', row_l.get('ord_qty', 0)))
                     qty = str(int(float(q_val)))
 
+                # Parse order time (ord_tmd: HHMMSS)
+                raw_time = row_l.get('ord_tmd', '')
+                time_str = None
+                if raw_time and len(raw_time) == 6:
+                    time_str = f"{raw_time[:2]}:{raw_time[2:4]}:{raw_time[4:]}"
+
                 # Pass formatted strings to display (price first, then qty)
-                update_order_state(odno, pdno, stock_info.get('name', api_name), side, price, qty, "PLACED", notify=False)
+                update_order_state(odno, pdno, stock_info.get('name', api_name), side, price, qty, "PLACED", notify=False, time_str=time_str)
         return True
     except Exception as e:
         add_alert(f"Sync failed: {e}", "ERROR")

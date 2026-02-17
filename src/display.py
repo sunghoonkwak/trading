@@ -42,9 +42,9 @@ COLOR_GRAY = "\033[90m"
 
 from utils.format_utils import get_fixed_width
 
-def add_alert(message: str, level: str = "INFO"):
+def add_alert(message: str, level: str = "INFO", time_str: str = None):
     """Print alert to terminal (simple scroll-based)."""
-    timestamp = datetime.now().strftime("%H:%M:%S")
+    timestamp = time_str if time_str else datetime.now().strftime("%H:%M:%S")
 
     logging.info(f"[Alert] [{level}] {message}")
 
@@ -60,10 +60,10 @@ def add_alert(message: str, level: str = "INFO"):
     # Also send to web dashboard via event_pipe if available
     pipe = _get_event_pipe()
     if pipe:
-        pipe.send_log("ALT", f"[{level}] {message}")
+        pipe.send_log("ALT", f"[{level}] {message}", time_str)
 
 def update_order_state(order_id: str, ticker: str, name: str, side: str,
-                       price: str, qty: str, state: str, notify: bool = True):
+                       price: str, qty: str, state: str, notify: bool = True, time_str: str = None):
     """Send order update to Event Viewer via pipe.
 
     Format: ODR|ticker|name|side|qty|price|state|order_id
@@ -73,10 +73,10 @@ def update_order_state(order_id: str, ticker: str, name: str, side: str,
         # Include name for display in viewer
         fixed_name = get_fixed_width(name, 20)
         order_msg = f"{fixed_name}|{ticker}|{side}|{qty}|{price}|{state}|{order_id}"
-        pipe.send_log("ODR", order_msg)
+        pipe.send_log("ODR", order_msg, time_str)
 
     if notify:
-        add_alert(f"{side} {ticker} {qty} @ {price} [{state}]", "INFO")
+        add_alert(f"{side} {ticker} {qty} @ {price} [{state}]", "INFO", time_str)
 
 
 def remove_order_state(order_id: str):

@@ -39,15 +39,17 @@
 
 ### Logging Functions
 
-#### `print_viewer(msg_type, level, log)`
+#### `print_viewer(msg_type, level, log, time_str=None)`
 주요 로깅 인터페이스입니다.
 *   `logging` 모듈을 통해 파일에 기록합니다.
 *   `level`이 `"INFO"` 또는 `"ERROR"`인 경우 IPC를 통해 뷰어로 전송합니다.
+*   `time_str`이 제공되면 웹 브로드캐스트 시 해당 시간을 사용합니다.
 
-#### `send_log(msg_type, message)`
+#### `send_log(msg_type, message, time_str=None)`
 메시지를 Write Queue에 추가합니다 (Non-blocking).
 *   Queue가 가득 차면 오래된 메시지를 버리고 새 메시지를 추가합니다.
 *   항상 최신 이벤트가 전달되도록 보장합니다.
+*   `time_str` 파라미터를 웹 브로드캐스트 콜백으로 전달하여 커스텀 타임스탬프를 지원합니다.
 
 ### Async Write System (비동기 쓰기 시스템)
 
