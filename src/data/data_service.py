@@ -224,7 +224,8 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
 
     # 5. Cache if no critical errors
     if not (result["metadata"].get("gsheet_error") or result["metadata"].get("kis_error")):
-        PortfolioCacheManager.set(result)
+        if scope == "all":
+            PortfolioCacheManager.set(result)
         add_alert("[Data] Portfolio loaded", "SUCCESS")
     else:
         add_alert("[Data] Portfolio loaded (partial)", "WARN")
