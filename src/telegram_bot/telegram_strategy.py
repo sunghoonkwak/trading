@@ -30,7 +30,7 @@ def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
 async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /strategy command."""
     logging.info(f"[TG] /strategy from user")
-    
+
     try:
         raoeo_rep = run_raoeo_strategy(execute=False)
         va_rep = run_va_strategy(execute=False)
@@ -41,46 +41,51 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data['strategy_raoeo'] = raoeo_rep
     context.user_data['strategy_va'] = va_rep
-    
+
     report_text = format_strategy_report(raoeo_rep, va_rep)
-    
+
     # Check if executable (calculated and not holiday)
     is_holiday = raoeo_rep.get('status') == 'market_holiday' or va_rep.get('status') == 'market_holiday'
-    has_orders = (bool(raoeo_rep.get('orders')) or bool(va_rep.get('orders'))) and not is_holiday
-    
+
+    # Hide button if RAOEO is already successfully executed
+    raoeo_has_orders = bool(raoeo_rep.get('orders')) and raoeo_rep.get('status') != 'already_executed'
+    va_has_orders = bool(va_rep.get('orders')) # VA logic remains similar for now
+
+    has_orders = (raoeo_has_orders or va_has_orders) and not is_holiday
+
     keyboard = build_confirm_keyboard(has_orders)
-    
+
     sent_msg = await wrap_reply(update, report_text, parse_mode='HTML', reply_markup=keyboard)
     if sent_msg:
         context.user_data['strategy_msg_id'] = sent_msg.message_id
-        
+
     return STRATEGY_CONFIRM if has_orders else ConversationHandler.END
 
 async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
-    
+
     if data == "strategy_no":
         await wrap_edit(update, "❌ <b>Cancelled.</b>", parse_mode='HTML')
         context.user_data.pop('strategy_raoeo', None)
         context.user_data.pop('strategy_va', None)
         return ConversationHandler.END
-        
+
     if data == "strategy_yes":
         await wrap_edit(update, "⏳ <b>Executing orders...</b>", parse_mode='HTML')
-        
+
         try:
             raoeo_res = run_raoeo_strategy(execute=True)
             va_res = run_va_strategy(execute=True)
-            
+
             final_report = format_strategy_report(raoeo_res, va_res)
             await wrap_edit(update, final_report, parse_mode='HTML')
-            
+
         except Exception as e:
             logging.error(f"Strategy Exec Error: {e}", exc_info=True)
             await wrap_edit(update, f"❌ Execution Failed: {e}", parse_mode='HTML')
-            
+
         context.user_data.pop('strategy_raoeo', None)
         context.user_data.pop('strategy_va', None)
         return ConversationHandler.END

@@ -15,8 +15,14 @@
 
 # Key Functions (주요 함수)
 
-## `run_raoeo_strategy` / `run_va_strategy`
-각 전략의 전체 사이클(조회 -> 계산 -> 실행)을 수행합니다.
+## `run_raoeo_strategy`
+RAOEO 전략의 전체 사이클을 수행합니다.
+- **히스토리 우선**: 금일 이미 실행된 내역이 히스토리에 있으면 재계산 없이 이를 복원합니다.
+- **실패 재시도**: `execute=True` 호출 시, 히스토리 중 실패한 주문들만 골라 재실행하며 히스토리를 업데이트합니다.
+- **이미 완료**: 모든 주문이 성공한 경우 재실행 없이 종료합니다.
+
+## `run_va_strategy`
+Value Averaging 전략 전용 사이클을 수행합니다.
 
 ## `run_rebalancing_strategy`
 리밸런싱 전략 전용 사이클을 수행합니다. KIS 전용 데이터를 사용하며, 안전 집행 로직이 포함되어 있습니다.
@@ -29,6 +35,12 @@ KIS 미체결 주문을 조회하여 US 시장의 pending 매수 주문 총액(U
 
 ## `execute_single_order`
 개별 `StrategyOrder` 객체를 KIS API 포맷으로 변환하여 실행합니다.
+
+## `_restore_orders_from_history`
+히스토리 entry에서 주문 목록을 `StrategyOrder` 객체로 복원하고, 각 주문의 success 상태와 함께 반환합니다.
+
+## `_update_raoeo_history`
+재실행 결과를 기존 히스토리 entry에 반영합니다. 실패했던 주문이 성공으로 변경될 때 사용됩니다.
 
 ## `_save_raoeo_history`
 RAOEO 전략의 실행 결과(Report)를 `raoeo_history.json` 파일에 저장합니다. 주문이 실행되지 않아도 계산 결과가 있으면 저장할 수 있습니다.

@@ -52,8 +52,17 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
             if t_orders:
                 for o in t_orders:
                     lines.append(f"    • {o}")
-                if raoeo_report.get('status') == 'market_holiday':
+
+                # Status-specific messages
+                status = raoeo_report.get('status', '')
+                if status == 'market_holiday':
                     lines.append("    🚫 Market Holiday (Skipped)")
+                elif status == 'from_history':
+                    lines.append("    📋 From history (Contains failed orders - Execute All to retry)")
+                elif status == 'already_executed':
+                    lines.append("    ✅ Already executed today")
+                elif status == 'partial_re_execution':
+                    lines.append("    🔄 Re-executed failed orders")
             elif raoeo_report.get('status') == 'market_holiday':
                 lines.append("    🚫 Market Holiday")
             else:

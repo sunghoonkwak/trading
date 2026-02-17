@@ -172,22 +172,85 @@ def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
 # RAOEO Execution
 # -------------------------------------------------------------------------
 
+def _restore_orders_from_history(history_entry: Dict) -> List[Tuple[StrategyOrder, bool]]:
+    """
+    Restore orders from history with success status.
+
+    Args:
+        history_entry: History entry containing orders data
+
+    Returns:
+        List of tuples: (StrategyOrder, success_status)
+    """
+    orders_data = history_entry.get("orders", [])
+    restored = []
+
+    for order_data in orders_data:
+        try:
+            order = StrategyOrder(
+                symbol=order_data["ticker"],
+                side=OrderSide[order_data["side"]],
+                quantity=order_data["qty"],
+                price=order_data["price"],
+                order_type=order_data["type"],
+                reason=order_data.get("reason", "")
+            )
+            success = order_data.get("success", False)
+            restored.append((order, success))
+        except Exception as e:
+            logging.error(f"Failed to restore order: {order_data}, error: {e}")
+            continue
+
+    return restored
+
+def _update_raoeo_history(today_entry: Dict, new_results: List[Dict]):
+    """
+    Update today's history entry with re-execution results.
+
+    Args:
+        today_entry: The history entry for today
+        new_results: List of execution results to update
+    """
+    hist_data = load_json(ConfigFile.RAOEO_HISTORY, default=[])
+    today_date = today_entry.get("date")
+
+    # Find today's entry and update
+    for entry in hist_data:
+        if entry.get("date") == today_date:
+            # Update timestamp for re-execution
+            entry["time"] = datetime.now(pytz.timezone('US/Eastern')).strftime("%H:%M:%S")
+
+            for result in new_results:
+                order = result["order"]
+                # Find matching order and update status
+                for hist_order in entry.get("orders", []):
+                    if (hist_order["ticker"] == order.symbol and
+                        hist_order["side"] == order.side.name and
+                        hist_order["qty"] == order.quantity):
+                        hist_order["success"] = result["success"]
+                        hist_order["message"] = result["message"]
+                        break
+            break
+
+    save_json(ConfigFile.RAOEO_HISTORY, hist_data)
+
 def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
     """
     Run RAOEO strategy cycle.
 
     Args:
-        execute: If True, executes the calculated orders.
+        execute: If True, executes the calculated orders (or re-executes failed ones).
 
     Returns:
         Dict containing report data:
         {
             "date": "YYYY-MM-DD",
-            "status": "market_holiday" | "executed" | "calculated" | "error",
+            "status": "from_history" | "already_executed" | "partial_re_execution" |
+                      "market_holiday" | "executed" | "calculated" | "error",
             "orders": [StrategyOrder objects...],
             "execution_results": [{"order": ..., "success": True, "message": ...}, ...],
             "holdings": {...},
-            "config": {...}, # Added config to report
+            "config": {...},
             "error": str
         }
     """
@@ -203,7 +266,69 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
     }
 
     try:
-        # 1. Load Data
+        # 1. Check for today's history (always, regardless of execute flag)
+        hist_data = load_json(ConfigFile.RAOEO_HISTORY, default=[])
+        today_entry = next(
+            (h for h in hist_data if h.get("date") == today_str and h.get("orders")),
+            None
+        )
+
+        if today_entry:
+            logging.info(f"RAOEO: Found today's history at {today_entry.get('time', '?')}. Restoring orders...")
+
+            # Restore orders with success status
+            orders_with_status = _restore_orders_from_history(today_entry)
+
+            all_orders = [o for o, _ in orders_with_status]
+            failed_orders = [o for o, success in orders_with_status if not success]
+
+            report["orders"] = all_orders
+            report["config"] = today_entry.get("config", {})
+
+            if not execute:
+                if not failed_orders:
+                    # All succeeded - indicate already executed
+                    report["status"] = "already_executed"
+                    logging.info("RAOEO: All orders from history were successful.")
+                else:
+                    # Some failed - indicate from history (not re-executed)
+                    report["status"] = "from_history"
+                    logging.info(f"RAOEO: Returning {len(all_orders)} orders from history ({len(failed_orders)} failed).")
+                return report
+
+            # execute=True
+            if not failed_orders:
+                # All succeeded - no re-execution needed
+                report["status"] = "already_executed"
+                logging.info(f"RAOEO: All {len(all_orders)} orders already executed successfully.")
+                return report
+            else:
+                # Re-execute only failed orders
+                logging.info(f"RAOEO: Re-executing {len(failed_orders)} failed orders.")
+                results = []
+                success_count = 0
+
+                for order in failed_orders:
+                    success, msg = execute_single_order(order)
+                    results.append({
+                        "order": order,
+                        "success": success,
+                        "message": msg
+                    })
+                    if success: success_count += 1
+
+                report["status"] = "partial_re_execution"
+                report["execution_results"] = results
+
+                # Update history with new results
+                _update_raoeo_history(today_entry, results)
+
+                logging.info(f"RAOEO: Re-executed {len(failed_orders)} orders, {success_count} succeeded.")
+                return report
+
+        # 2. No history - proceed with normal calculation
+
+        # 2. Load Data
         holdings, prices = get_market_data(force_refresh=True)
         report["holdings"] = holdings
 
