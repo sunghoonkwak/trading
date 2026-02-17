@@ -251,8 +251,8 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
             else:
                 report["status"] = "partial_execution"
 
-            # TODO: Save History Logic (Optional, but recommended)
-            # save_raoeo_history(orders, results)
+            # Save History
+            _save_raoeo_history(report)
 
     except Exception as e:
         logging.error(f"RAOEO Service Error: {e}", exc_info=True)
@@ -260,6 +260,56 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
         report["error"] = str(e)
 
     return report
+
+def _save_raoeo_history(report: Dict):
+    """Saves RAOEO execution details to JSON history."""
+    # Only save if there were orders or it was a calculated/executed run
+    if not report.get("orders") and report.get("status") not in ["executed", "calculated", "partial_execution"]:
+        return
+
+    hist_data = load_json(ConfigFile.RAOEO_HISTORY, default=[])
+    now = datetime.now(pytz.timezone('US/Eastern'))
+
+    # Create history entry
+    entry = {
+        "date": now.strftime("%Y-%m-%d"),
+        "time": now.strftime("%H:%M:%S"),
+        "status": report.get("status"),
+        "config": report.get("config", {}),
+        "holdings_snapshot": report.get("holdings", {}),
+        "orders": []
+    }
+
+    # Add execution results if available
+    if report.get("execution_results"):
+        for res in report.get("execution_results", []):
+            order = res["order"]
+            entry["orders"].append({
+                "ticker": order.symbol,
+                "side": order.side.name,
+                "qty": order.quantity,
+                "price": order.price,
+                "type": order.order_type,
+                "reason": order.reason,
+                "success": res["success"],
+                "message": res["message"]
+            })
+    # If no execution results (e.g. calculation only), add calculated orders
+    elif report.get("orders"):
+         for order in report.get("orders", []):
+            entry["orders"].append({
+                "ticker": order.symbol,
+                "side": order.side.name,
+                "qty": order.quantity,
+                "price": order.price,
+                "type": order.order_type,
+                "reason": order.reason,
+                "success": False,
+                "message": "Calculated Only"
+            })
+
+    hist_data.insert(0, entry)
+    save_json(ConfigFile.RAOEO_HISTORY, hist_data[:200]) # Keep last 200 entries
 
 # -------------------------------------------------------------------------
 # Value Averaging Execution

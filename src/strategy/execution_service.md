@@ -30,6 +30,10 @@ KIS 미체결 주문을 조회하여 US 시장의 pending 매수 주문 총액(U
 ## `execute_single_order`
 개별 `StrategyOrder` 객체를 KIS API 포맷으로 변환하여 실행합니다.
 
+## `_save_raoeo_history`
+RAOEO 전략의 실행 결과(Report)를 `raoeo_history.json` 파일에 저장합니다. 주문이 실행되지 않아도 계산 결과가 있으면 저장할 수 있습니다.
+
+
 # Usage Example (사용 예시)
 
 ```python
