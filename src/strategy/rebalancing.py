@@ -20,10 +20,10 @@ def calculate_orders(
     Returns: (orders_list, info_dict)
     """
     orders: List[StrategyOrder] = []
-    
+
     seed = float(config.get("seed", 0))
     assets = config.get("assets", [])
-    
+
     info = {
         "usd_cash": 0.0,
         "total_available": 0.0,
@@ -32,26 +32,26 @@ def calculate_orders(
         "seed": seed,
         "asset_status": {}
     }
-    
+
     if not assets or seed <= 0:
         logging.warning("Rebalancing: Invalid assets or seed.")
         return orders, info
 
     threshold = config.get("rebalance_threshold", 0.05)
-    
+
     # 1. Calculate Current State
     asset_data = {}
     total_current_val_in_group = 0.0
-    
+
     for a in assets:
         ticker = a["ticker"]
         target_w = a["target_weight"]
-        
+
         holding = portfolio.get(ticker, {})
         cur_price = current_prices.get(ticker, 0.0)
         if cur_price <= 0:
             cur_price = float(holding.get("cur_price", 0.0))
-        
+
         if cur_price <= 0:
             logging.warning(f"Rebalancing: No price for {ticker}. Skipping.")
             return [], info
@@ -59,14 +59,14 @@ def calculate_orders(
         qty = float(holding.get("qty", 0.0))
         current_val = qty * cur_price
         total_current_val_in_group += current_val
-        
+
         asset_data[ticker] = {
             "target_weight": target_w,
             "current_value": current_val,
             "qty": qty,
             "cur_price": cur_price
         }
-        
+
         info["asset_status"][ticker] = {
             "qty": qty,
             "cur_val": round(current_val, 2)
@@ -77,16 +77,34 @@ def calculate_orders(
     usd_cash_data = portfolio.get("USD cash", {})
     usd_cash = float(usd_cash_data.get("qty", 0))
     info["usd_cash"] = usd_cash
-    
+
     total_potential_val = total_current_val_in_group + usd_cash
     # We aim for Seed, but if we have less money, we balance what we have.
     target_base = min(seed, total_potential_val)
-    
+
     logging.info(f"Rebalancing: Total Group Value: ${total_potential_val:.2f}, Target Base: ${target_base:.2f}")
+
+    # [NEW] Populate Weight Info for Reporting
+    for ticker, data in asset_data.items():
+        if total_current_val_in_group > 0:
+            cur_w = (data["current_value"] / total_current_val_in_group) * 100
+        else:
+            cur_w = 0.0
+
+        target_w = data["target_weight"] * 100
+        diff_w = cur_w - target_w
+
+        # Update info
+        if ticker in info["asset_status"]:
+            info["asset_status"][ticker].update({
+                "cur_w": round(cur_w, 2),
+                "diff_w": round(diff_w, 2),
+                "target_w": round(target_w, 2)
+            })
 
     # 3. Check Trigger
     needs_rebalance = False
-    if total_current_val_in_group < seed * 0.95: 
+    if total_current_val_in_group < seed * 0.95:
         needs_rebalance = True
     else:
         for ticker, data in asset_data.items():
@@ -103,7 +121,7 @@ def calculate_orders(
     for ticker, data in asset_data.items():
         target_val = target_base * data["target_weight"]
         diff_val = target_val - data["current_value"]
-        
+
         if diff_val < 0:
             # SELL
             sell_qty = int(abs(diff_val) / data["cur_price"])
@@ -136,5 +154,5 @@ def calculate_orders(
 
     info["total_available"] = usd_cash
     info["total_buy_required"] = total_buy_required
-    
+
     return orders, info

@@ -4,7 +4,7 @@
 
 # Core Logic (핵심 로직)
 
-1. **목표가 설정**: 
+1. **목표가 설정**:
    - 현재 총 보유 금액(Stock + Cash)과 설정된 `seed` 금액 중 작은 값을 `target_base`로 잡습니다.
    - `target_base`에 각 자산의 `target_weight`를 곱하여 공평한 목표 보유 금액을 산정합니다.
 2. **트리거 체크**: 현재 총 보유 금액이 Seed의 95% 미만이거나(초기 진입), 특정 자산의 비중이 `rebalance_threshold` 이상 벌어질 경우 리밸런싱을 수행합니다.
@@ -20,7 +20,8 @@
   - `config` (Dict): `seed`, `assets`, `rebalance_threshold` 정보를 포함한 설정
   - `portfolio` (Dict): 현재 보유 종목 및 현금 잔고 정보
   - `current_prices` (Dict): 각 종목의 현재 시장가
-- **출력 (Output)**: `Tuple[List[StrategyOrder], Dict]` (주문 리스트 및 상세 상태 정보)
+- **출력 (Output)**: `Tuple[List[StrategyOrder], Dict]`
+   - `info["asset_status"]`에 각 자산별 `cur_w`(현재비중), `target_w`(목표비중), `diff_w`(괴리율) 정보 포함
 
 # Configuration (`strategy_config.json`)
 
