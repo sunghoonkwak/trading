@@ -52,6 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
     initMktToggle();
     connectWebSocket();
     fetchMemos(); // New
+
+    // Auto-refresh orders every 30 seconds
+    setInterval(() => refreshOrders(true), 30000);
 });
 
 function initElements() {
@@ -418,14 +421,18 @@ function clearLogs() {
     }
 }
 
-function refreshOrders() {
+function refreshOrders(isAuto = false) {
     if (ws && ws.readyState === WebSocket.OPEN) {
         orders.clear();
         updateOrdersPanel();
         ws.send('sync_orders');
-        addLog('Refreshing orders...', 'info');
+        if (!isAuto) {
+            addLog('Refreshing orders...', 'info');
+        }
     } else {
-        addLog('Cannot refresh: WebSocket not connected', 'warning');
+        if (!isAuto) {
+            addLog('Cannot refresh: WebSocket not connected', 'warning');
+        }
     }
 }
 
