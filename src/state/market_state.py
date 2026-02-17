@@ -48,7 +48,7 @@ class MarketStateManager:
                     'price': 0.0, 'ask': 0.0, 'bid': 0.0, 'change': 0.0,
                     'rate': 0.0, 'vol': 0, 'time': '000000'
                 }
-            
+
             # 2. Validate and Update
             target = self._data[ticker]
             for key, val in update_dict.items():
@@ -57,7 +57,7 @@ class MarketStateManager:
                     if key in ['price', 'ask', 'bid', 'vol'] and (not isinstance(val, (int, float)) or val < 0):
                         continue
                     target[key] = val
-            
+
             # 3. Handle Persistence Trigger
             if not self._first_data_received:
                 self._first_data_received = True
@@ -85,10 +85,10 @@ class MarketStateManager:
             if os.path.exists(STOCK_DATA_FILE):
                 with open(STOCK_DATA_FILE, 'r', encoding='utf-8') as f:
                     content = json.load(f)
-                
+
                 saved_state = content.get('stock_data', {})
                 saved_time_str = content.get('updated_at', 'Unknown')
-                
+
                 if not saved_state or saved_time_str == 'Unknown':
                     return False
 
@@ -107,7 +107,7 @@ class MarketStateManager:
         try:
             with self._lock:
                 data_copy = {k: v.copy() for k, v in self._data.items()}
-            
+
             # Filter corrupted keys
             for ticker in list(data_copy.keys()):
                 if not ticker or len(ticker) > 12 or any(ord(c) < 32 for c in ticker):
@@ -131,13 +131,13 @@ class MarketStateManager:
         if self._persistence_running:
             return
         self._persistence_running = True
-        
+
         def worker():
             while self._persistence_running:
                 time.sleep(MARKET_STATE_SAVE_INTERVAL)
                 if self._persistence_running:
                     self.save_to_disk()
-        
+
         t = threading.Thread(target=worker, daemon=True, name="MarketStateSaver")
         t.start()
 
@@ -154,8 +154,16 @@ _manager = MarketStateManager()
 def get_market_manager() -> MarketStateManager:
     return _manager
 
+# Module-level alias so code like `import state.market_state as m; m.stock_data_state[...]`
+# works without going through the class instance explicitly.
+stock_data_state: Dict = _manager._data
+
+def notify_data_received():
+    """Legacy hook – persistence is handled by MarketStateManager internally."""
+    pass
+
 # Functional aliases for easier migration
 def update_ticker(ticker: str, data: Dict): _manager.update_ticker(ticker, data)
 def get_ticker_data(ticker: str) -> Optional[Dict]: return _manager.get_ticker(ticker)
-def get_all_market_data() -> Dict: 
+def get_all_market_data() -> Dict:
     with _manager._lock: return _manager._data.copy()
