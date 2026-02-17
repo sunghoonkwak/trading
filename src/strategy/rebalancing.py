@@ -104,14 +104,24 @@ def calculate_orders(
 
     # 3. Check Trigger
     needs_rebalance = False
-    if total_current_val_in_group < seed * 0.95:
-        needs_rebalance = True
-    else:
+
+    # Condition 1: Cash available to buy at least 1 share of underweight stock
+    available_for_buy = target_base - total_current_val_in_group
+    if available_for_buy > 0:
         for ticker, data in asset_data.items():
-            current_w = data["current_value"] / total_current_val_in_group if total_current_val_in_group > 0 else 0
-            if abs(current_w - data["target_weight"]) > threshold:
+            target_val = target_base * data["target_weight"]
+            if data["current_value"] < target_val and available_for_buy >= data["cur_price"]:
+                logging.info(f"Rebalancing trigger: Can buy underweight {ticker} with ${available_for_buy:.2f} cash")
                 needs_rebalance = True
                 break
+
+    # Condition 2: Weight spread between stocks exceeds threshold
+    if not needs_rebalance and total_current_val_in_group > 0:
+        weights = [d["current_value"] / total_current_val_in_group for d in asset_data.values()]
+        weight_spread = max(weights) - min(weights)
+        if weight_spread > threshold:
+            logging.info(f"Rebalancing trigger: Weight spread {weight_spread:.2%} > threshold {threshold:.2%}")
+            needs_rebalance = True
 
     if not needs_rebalance:
         return [], info
