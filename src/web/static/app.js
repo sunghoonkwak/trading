@@ -22,7 +22,7 @@ const tickerOrder = [
     // Leverage ETFs
     'SOXL', 'FAS', 'TQQQ', 'QLD',
     // ETFs
-    'QQQM', 'VOO', 'TLT',
+    'QQQM', 'VOO', 'SCHD', 'TLT',
     // Individual Stocks
     'GOOGL', 'TSM', 'NVDA', 'AVGO', 'QCOM', 'BLK'
 ]; // Tickers will layout in this order. Others will follow alphabetically.
