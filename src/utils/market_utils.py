@@ -42,7 +42,7 @@ def get_fear_and_greed() -> float:
             _fg_cache["last_update"] = now
     except Exception as e:
         logging.warning(f"[MarketUtils] Failed to fetch F&G index: {e}")
-    
+
     return _fg_cache["value"]
 
 def is_market_holiday(name: str = "NYSE", date: Optional[datetime] = None) -> bool:
@@ -56,9 +56,14 @@ def is_market_holiday(name: str = "NYSE", date: Optional[datetime] = None) -> bo
     if date is None:
         date = datetime.utcnow()
     elif isinstance(date, str):
-        try:
-            date = datetime.strptime(date, "%Y%m%d")
-        except ValueError:
+        for fmt in ("%Y%m%d", "%Y-%m-%d"):
+            try:
+                date = datetime.strptime(date, fmt)
+                break
+            except ValueError:
+                continue
+        if isinstance(date, str):
+            # Failed to parse
             return False
 
     try:
