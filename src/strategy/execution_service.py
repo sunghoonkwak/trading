@@ -378,7 +378,20 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
             report["status"] = "disabled"
             return report
 
-        # 2. Calculate (Always calculate to show in report)
+        # 2. Check if already executed today (prevent duplicate LOC orders)
+        if execute:
+            hist_data = load_json(ConfigFile.REBALANCING_HISTORY, default=[])
+            today_entry = next(
+                (h for h in hist_data if h.get("date") == today_str and h.get("orders")),
+                None
+            )
+            if today_entry:
+                logging.info(f"Rebalancing: Already executed today at {today_entry.get('time', '?')}. Skipping.")
+                report["status"] = "already_executed"
+                report["info"] = {"message": f"Already executed at {today_entry.get('time', '?')}"}
+                return report
+
+        # 3. Calculate (Always calculate to show in report)
         orders, info = rebalancing.calculate_orders(
             config=reb_conf,
             portfolio=holdings,
@@ -387,7 +400,7 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
         report["orders"] = orders
         report["info"] = info
 
-        # 3. Check Status & Holiday
+        # 4. Check Status & Holiday
         is_holiday = is_market_holiday("NYSE", today_str)
 
         if is_holiday:
@@ -401,7 +414,7 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
             for ticker, status in info.get('asset_status', {}).items():
                 logging.info(f"  [{ticker}] CurWeight: {status['cur_w']}% (Diff: {status['diff_w']}%p)")
 
-        # 4. Execute (if requested and possible)
+        # 5. Execute (if requested and possible)
         # Only execute if status is 'calculated' (implies NOT holiday)
         if execute and report["status"] == "calculated":
             import time
