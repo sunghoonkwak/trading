@@ -61,7 +61,7 @@ class PortfolioProcessor:
         """Calculate USD/KRW totals and percentages with full breakdown."""
         metadata = raw_data.get("metadata", {})
         ex_rate = metadata.get("exchange_rate", 1.0)
-        
+
         asset_info = raw_data.get("asset_info", {})
         holdings = raw_data.get("holdings", [])
         cash_holdings = raw_data.get("cash_holdings", [])
@@ -92,14 +92,14 @@ class PortfolioProcessor:
         total_cash_usd = us_cash_usd + kr_cash_usd
         total_stock_krw = us_stock_krw + kr_stock_krw
         total_cash_krw = us_cash_krw + kr_cash_krw
-        
+
         total_usd = total_stock_usd + total_cash_usd
         total_krw = total_stock_krw + total_cash_krw
 
         # 5. Ratios
         us_pct = ((us_stock_usd + us_cash_usd) / total_usd * 100) if total_usd > 0 else 0
         kr_pct = ((kr_stock_usd + kr_cash_usd) / total_usd * 100) if total_usd > 0 else 0
-        
+
         us_cash_ratio = (us_cash_usd / (us_stock_usd + us_cash_usd) * 100) if (us_stock_usd + us_cash_usd) > 0 else 0
         kr_cash_ratio = (kr_cash_krw / (kr_stock_krw + kr_cash_krw) * 100) if (kr_stock_krw + kr_cash_krw) > 0 else 0
 
@@ -121,7 +121,7 @@ class PortfolioProcessor:
         metadata = raw_data.get("metadata", {})
         ex_rate = metadata.get("exchange_rate", 1.0)
         asset_info = raw_data.get("asset_info", {})
-        
+
         merged = {}
         total_usd = 0.0
 
@@ -130,13 +130,13 @@ class PortfolioProcessor:
             ticker = h.get("ticker", "")
             info = asset_info.get(ticker, {})
             currency = info.get("currency", "USD")
-            
+
             if ticker not in merged:
                 merged[ticker] = {
                     "qty": 0.0, "total_investment": 0.0, "name": h.get("name", ticker),
                     "currency": currency, "type": "STOCK", "cur_price": h.get("cur_price", 0)
                 }
-            
+
             merged[ticker]["qty"] += h.get("qty", 0)
             merged[ticker]["total_investment"] += h.get("qty", 0) * h.get("avg_price", 0)
 
@@ -182,8 +182,10 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     if not is_kis_ready():
         return {"error": "KIS Thread not ready"}
 
+    # Skip GSheet when only KIS data is needed (e.g., strategy execution)
+    kis_only = (scope == "kis")
     add_alert("[Data] Fetching portfolio...", "INFO")
-    request_id = request_portfolio(force_refresh=force_refresh)
+    request_id = request_portfolio(force_refresh=force_refresh, kis_only=kis_only)
     response = wait_for_response(request_id, timeout=60.0)
 
     if not response or not response.success:
@@ -236,9 +238,9 @@ def _apply_scope_filter(data: Dict, scope: str) -> Dict:
     raw = data["raw"]
     accounts = raw.get("accounts", [])
     kis_ids = {a["id"] for a in accounts if a.get("name") == "한국투자증권"}
-    
+
     target_ids = kis_ids if scope == "kis" else ({a["id"] for a in accounts} - kis_ids)
-    
+
     # DEBUG LOG
     logging.info(f"[Filter] Scope: {scope}, TargetIDs: {target_ids}")
     all_cash = raw.get("cash_holdings", [])
@@ -246,7 +248,7 @@ def _apply_scope_filter(data: Dict, scope: str) -> Dict:
     # Re-run processing on filtered raw data
     target_names = {a["name"] for a in accounts if a["id"] in target_ids}
     filtered_cash = [c for c in all_cash if (c.get("account_id") in target_ids or c.get("account_name") in target_names)]
-    
+
     logging.info(f"[Filter] Filtered Cash Count: {len(filtered_cash)}")
 
     filtered_raw = {
@@ -259,7 +261,7 @@ def _apply_scope_filter(data: Dict, scope: str) -> Dict:
     processor = PortfolioProcessor()
     merged, total = processor.merge_holdings(filtered_raw)
     stats = processor.calculate_stats(filtered_raw)
-    
+
     scoped_result = dict(data)
     scoped_result.update({
         "merged_data": merged, "total_value_usd": total, "stats": stats,
@@ -293,14 +295,14 @@ def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
     # 2. Calculate Diffs
     diffs = []
     all_tickers = (set(cur_weights.keys()) | set(targets.keys())) - constituents
-    
+
     for t in all_tickers:
         if "cash" in t.lower(): continue
-        
+
         cur_w, tgt_w = cur_weights.get(t, 0.0), targets.get(t, 0.0)
         diff = tgt_w - cur_w
         data = merged.get(t, {})
-        
+
         # Quantity calculation
         price = data.get("cur_price", 0.0)
         if price <= 0:

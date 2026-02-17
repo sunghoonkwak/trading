@@ -22,15 +22,14 @@ class PortfolioManager:
     ]
 
     @classmethod
-    def get_integrated_portfolio(cls) -> Dict[str, Any]:
+    def get_integrated_portfolio(cls, kis_only: bool = False) -> Dict[str, Any]:
         """Main entry point to get the full integrated portfolio."""
-        from kis.gsheet import connect_google_sheet, parse_worksheet_data
         from display import add_alert
 
         # 1. Fetch KIS Data
         add_alert("[KIS] Fetching KIS API data...", "INFO")
         kis_raw_data = cls._fetch_kis_account_data()
-        
+
         kis_portfolio = {}
         if not kis_raw_data.get('error'):
             kis_portfolio = cls._convert_kis_to_standard(kis_raw_data)
@@ -38,11 +37,14 @@ class PortfolioManager:
         else:
             add_alert(f"KIS Error: {kis_raw_data['error']}", "WARN")
 
-        # 2. Fetch GSheet Data
-        add_alert("[KIS] Fetching GSheet data...", "INFO")
-        gsheet_data, gs_errors = cls._fetch_gsheet_all()
-        if gs_errors:
-            add_alert(f"GSheet Warning: {gs_errors}", "WARN")
+        # 2. Fetch GSheet Data (skip when kis_only)
+        gsheet_data = {"accounts": {}, "holdings": [], "asset_info": {}, "cash_holdings": []}
+        gs_errors = None
+        if not kis_only:
+            add_alert("[KIS] Fetching GSheet data...", "INFO")
+            gsheet_data, gs_errors = cls._fetch_gsheet_all()
+            if gs_errors:
+                add_alert(f"GSheet Warning: {gs_errors}", "WARN")
 
         # 3. Merge and Normalize
         return cls._merge_all(kis_portfolio, gsheet_data, kis_raw_data.get('exchange_rate'), kis_raw_data.get('error'), gs_errors)
@@ -130,7 +132,7 @@ class PortfolioManager:
             ticker = s.get('symbol', '')
             if not ticker or s.get('qty', 0) <= 0: continue
             is_us = ticker in [x.get('symbol') for x in kis_data['overseas_stocks']]
-            
+
             asset_info[ticker] = {
                 "name": s.get('name', ticker), "market": "US" if is_us else "KR",
                 "asset_type": "Stock", "currency": "USD" if is_us else "KRW"

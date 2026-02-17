@@ -29,14 +29,79 @@ from data.data_service import get_portfolio_data
 # Common Helpers
 # -------------------------------------------------------------------------
 
-def get_market_data() -> Tuple[Dict, Dict]:
+def _get_pending_buy_amount() -> float:
+    """
+    Fetch open orders from KIS and calculate total reserved USD for pending buys.
+    This accounts for LOC orders that KIS doesn't deduct from available cash.
+    """
+    try:
+        df, num_us, num_kr = wrapper.fetch_open_orders()
+        if df.empty:
+            logging.info("[PendingOrders] No open orders found")
+            return 0.0
+
+        total_reserved = 0.0
+        for _, row in df.iterrows():
+            row_l = {k.lower(): v for k, v in row.to_dict().items()}
+
+            # Only US market buy orders
+            if row_l.get('_market') != 'US':
+                continue
+            if row_l.get('sll_buy_dvsn_cd') != '02':  # 02 = Buy
+                continue
+
+            # Get price and quantity
+            price = float(row_l.get('ft_ord_unpr3', 0) or row_l.get('ft_ord_unpr4', 0) or
+                         row_l.get('ovrs_ord_unpr', 0) or row_l.get('ord_unpr', 0) or 0)
+            qty = float(row_l.get('nccs_qty', 0) or row_l.get('ft_ord_qty4', 0) or
+                       row_l.get('ord_qty', 0) or 0)
+
+            if price > 0 and qty > 0:
+                amount = price * qty
+                ticker = row_l.get('pdno', 'N/A')
+                logging.info(f"[PendingOrders] {ticker} BUY {int(qty)} @ ${price:.2f} = ${amount:.2f}")
+                total_reserved += amount
+
+        logging.info(f"[PendingOrders] Total reserved for pending buys: ${total_reserved:.2f}")
+        return total_reserved
+
+    except Exception as e:
+        logging.error(f"[PendingOrders] Failed to fetch open orders: {e}")
+        return 0.0
+
+
+def _adjust_cash_for_pending_orders(holdings: Dict) -> Dict:
+    """
+    Adjust USD cash in holdings by subtracting pending buy order amounts.
+    Returns a modified copy of holdings.
+    """
+    pending_amount = _get_pending_buy_amount()
+    if pending_amount <= 0:
+        return holdings
+
+    adjusted = dict(holdings)
+    if "USD cash" in adjusted:
+        adjusted["USD cash"] = dict(adjusted["USD cash"])
+        original_cash = float(adjusted["USD cash"].get("qty", 0))
+        adjusted_cash = max(0, original_cash - pending_amount)
+        adjusted["USD cash"]["qty"] = adjusted_cash
+        logging.info(f"[PendingOrders] USD cash adjusted: ${original_cash:.2f} → ${adjusted_cash:.2f} (reserved: ${pending_amount:.2f})")
+
+    return adjusted
+
+
+def get_market_data(force_refresh: bool = False) -> Tuple[Dict, Dict]:
     """
     Fetch current portfolio and prices for all configured strategy targets.
     Returns: (portfolio_holdings, current_prices_map)
     """
     # 1. Portfolio
-    portfolio = get_portfolio_data(scope="kis")
+    portfolio = get_portfolio_data(force_refresh=force_refresh, scope="kis")
     holdings = portfolio.get('merged_data', {})
+
+    # 1.5. Adjust cash for pending orders (KIS doesn't deduct LOC orders)
+    if force_refresh:
+        holdings = _adjust_cash_for_pending_orders(holdings)
 
     # 2. Config & Prices
     strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
@@ -139,7 +204,7 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
 
     try:
         # 1. Load Data
-        holdings, prices = get_market_data()
+        holdings, prices = get_market_data(force_refresh=True)
         report["holdings"] = holdings
 
         strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
@@ -222,7 +287,7 @@ def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
 
     try:
         # 1. Load Data
-        holdings, prices = get_market_data()
+        holdings, prices = get_market_data(force_refresh=True)
 
         strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
         va_conf = strategy_config.get('value_averaging', {}).get('targets', {})
@@ -355,8 +420,11 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
 
     try:
         # 1. Load Data (Scope: KIS only for rebalancing)
-        portfolio_res = get_portfolio_data(scope="kis")
+        portfolio_res = get_portfolio_data(force_refresh=True, scope="kis")
         holdings = portfolio_res.get('merged_data', {})
+
+        # 1.5. Adjust cash for pending orders (KIS doesn't deduct LOC orders)
+        holdings = _adjust_cash_for_pending_orders(holdings)
 
         # 2. Fetch Prices for Rebalancing Assets
         strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})

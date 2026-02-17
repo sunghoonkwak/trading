@@ -32,7 +32,8 @@ def _handle_request(request: ThreadRequest) -> ThreadResponse:
         elif request.request_type == RequestType.KIS_WS_AUTH:
             result = RESTClient.authenticate_ws()
         elif request.request_type == RequestType.GET_PORTFOLIO:
-            result = RESTClient.get_portfolio()
+            kis_only = request.kwargs.get("kis_only", False)
+            result = RESTClient.get_portfolio(kis_only=kis_only)
         else:
             return ThreadResponse(request.request_id, success=False, error=f"Unsupported: {request.request_type}")
 
@@ -106,8 +107,8 @@ def request_kis_ws_auth() -> str:
     kis_request_queue.put(req)
     return req.request_id
 
-def request_portfolio(force_refresh: bool = False) -> str:
-    req = ThreadRequest(RequestType.GET_PORTFOLIO, kwargs={"force_refresh": force_refresh})
+def request_portfolio(force_refresh: bool = False, kis_only: bool = False) -> str:
+    req = ThreadRequest(RequestType.GET_PORTFOLIO, kwargs={"force_refresh": force_refresh, "kis_only": kis_only})
     kis_request_queue.put(req)
     return req.request_id
 

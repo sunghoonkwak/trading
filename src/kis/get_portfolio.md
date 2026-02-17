@@ -13,6 +13,8 @@
 ## `get_portfolio`
 전체 포트폴리오 데이터를 조회하고 가공하여 반환합니다.
 
+- **입력 (Input)**:
+  - `kis_only` (bool): `True`면 GSheet을 건너뛰고 KIS 데이터만 조회
 - **출력 (Output)**: `dict` (통합 포트폴리오 데이터)
 
 # Configuration (None)

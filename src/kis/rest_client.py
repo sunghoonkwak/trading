@@ -76,11 +76,11 @@ class RESTClient:
 
     @staticmethod
     @retry_on_exception(max_retries=2, delay=1.0)
-    def get_portfolio() -> Dict[str, Any]:
+    def get_portfolio(kis_only: bool = False) -> Dict[str, Any]:
         """Fetch portfolio data with basic retry."""
         try:
             from kis.get_portfolio import get_portfolio
-            result = get_portfolio()
+            result = get_portfolio(kis_only=kis_only)
             if result.get("error"):
                 raise KISAPIError(result["error"])
             return result
