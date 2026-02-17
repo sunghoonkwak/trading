@@ -38,7 +38,7 @@ def start_scheduler():
     logging.info("[Scheduler] Scheduler started.")
     logging.info(" - 07:00 : Portfolio Report")
     logging.info(" - 21:00 : Order Report (RAOEO/VA)")
-    logging.info(" - Every 5m : Periodic Rebalancing (23:40-05:40)")
+    logging.info(" - Every 5m : Periodic Rebalancing (09:40-15:40 ET)")
 
     t = threading.Thread(target=run_scheduler_loop, daemon=True)
     t.start()
