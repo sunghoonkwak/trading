@@ -460,11 +460,23 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
                 report["info"] = {"message": f"Already executed at {today_entry.get('time', '?')}"}
                 return report
 
+        # 2.5. Calculate RAOEO daily budget to reserve from cash
+        raoeo_conf = strategy_config.get('raoeo', {}).get('targets', {})
+        raoeo_daily_total = 0.0
+        for ticker, tcfg in raoeo_conf.items():
+            r_seed = float(tcfg.get('seed', 0))
+            r_duration = int(tcfg.get('duration', 1))
+            if r_duration > 0 and r_seed > 0:
+                raoeo_daily_total += r_seed / r_duration
+        if raoeo_daily_total > 0:
+            logging.info(f"Rebalancing: Reserving ${raoeo_daily_total:.2f} for RAOEO daily budget")
+
         # 3. Calculate (Always calculate to show in report)
         orders, info = rebalancing.calculate_orders(
             config=reb_conf,
             portfolio=holdings,
-            current_prices=prices
+            current_prices=prices,
+            reserved_cash=raoeo_daily_total
         )
         report["orders"] = orders
         report["info"] = info

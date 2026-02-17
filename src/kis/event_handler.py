@@ -177,7 +177,7 @@ def _handle_domestic_order(row) -> bool:
         time_v = row['STCK_CNTG_HOUR']
         time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
 
-        logging.debug(f"--- H0STCNI0 FULL DUMP ---\n{row.to_dict()}")
+        logging.info(f"--- H0STCNI0 FULL DUMP ---\n{row.to_dict()}")
 
         cntg_yn = row['CNTG_YN']
         rctf_cls = row['RCTF_CLS']
@@ -245,9 +245,8 @@ def _handle_domestic_order(row) -> bool:
 def _handle_overseas_order(tr_id: str, row) -> bool:
     """Handle overseas order notifications (H0GSCNI0, H0GSCNI9)."""
     try:
-        if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
-            raw_list = row.tolist() if hasattr(row, 'tolist') else list(row)
-            logging.debug(f"[{tr_id} RAW] {raw_list}")
+        raw_dict = row.to_dict() if hasattr(row, 'to_dict') else dict(row)
+        logging.info(f"--- {tr_id} FULL DUMP ---\n{raw_dict}")
 
         code = str(row.get('STCK_SHRN_ISCD', 'Unknown')).strip()
         if code.startswith('000') and len(code) > 8:

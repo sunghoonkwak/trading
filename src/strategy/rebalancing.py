@@ -13,7 +13,8 @@ from constants import ORDER_TYPE_US_LOC
 def calculate_orders(
     config: Dict,
     portfolio: Dict,
-    current_prices: Dict[str, float]
+    current_prices: Dict[str, float],
+    reserved_cash: float = 0.0
 ) -> Tuple[List[StrategyOrder], Dict]:
     """
     Calculate buy/sell orders based on fixed weight rebalancing with a Seed cap.
@@ -75,8 +76,11 @@ def calculate_orders(
     # 2. Determine Real Target Base
     # Total potential value = current stock + current cash
     usd_cash_data = portfolio.get("USD cash", {})
-    usd_cash = float(usd_cash_data.get("qty", 0))
+    usd_cash_raw = float(usd_cash_data.get("qty", 0))
+    usd_cash = max(0, usd_cash_raw - reserved_cash)
     info["usd_cash"] = usd_cash
+    if reserved_cash > 0:
+        logging.info(f"Rebalancing: USD cash ${usd_cash_raw:.2f} - reserved ${reserved_cash:.2f} = ${usd_cash:.2f}")
 
     total_potential_val = total_current_val_in_group + usd_cash
     # We aim for Seed, but if we have less money, we balance what we have.
@@ -142,7 +146,7 @@ def calculate_orders(
                     symbol=ticker,
                     side=OrderSide.SELL,
                     quantity=sell_qty,
-                    price=0.0,
+                    price=round(data["cur_price"], 2),
                     order_type="00",
                     reason=f"➔ Est.Total: ${expected_total:,.1f} ({pct:.1f}%)"
                 ))
