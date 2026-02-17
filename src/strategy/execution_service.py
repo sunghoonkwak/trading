@@ -21,6 +21,7 @@ from data.config_manager import ConfigFile, load_json, save_json
 from utils.market_utils import is_market_holiday
 from kis import wrapper
 from kis.kis_api import kis_auth as ka
+import trading_config
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
 from data.data_service import get_portfolio_data
 
@@ -76,7 +77,7 @@ def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
             exec_type = "00"  # Limit
 
         # Simple Exchange Mapping
-        stock_info = wrapper.get_stock_info(order.symbol)
+        stock_info = trading_config.get_stock_info(order.symbol)
         market = stock_info.get('market', 'NASD')
         exchange_map = {"NAS": "NASD", "NYS": "NYSE", "AMS": "AMEX"}
         ovrs_excg_cd = exchange_map.get(market, market)
