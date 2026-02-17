@@ -140,29 +140,31 @@ def calculate_orders(
             # SELL
             sell_qty = int(abs(diff_val) / data["cur_price"])
             if sell_qty > 0:
+                price = round(data["cur_price"] - 0.01, 2)
                 expected_total = (data["qty"] - sell_qty) * data["cur_price"]
                 pct = (expected_total / target_base * 100) if target_base > 0 else 0
                 orders.append(StrategyOrder(
                     symbol=ticker,
                     side=OrderSide.SELL,
                     quantity=sell_qty,
-                    price=round(data["cur_price"], 2),
+                    price=price,
                     order_type="00",
                     reason=f"➔ Est.Total: ${expected_total:,.1f} ({pct:.1f}%)"
                 ))
         elif diff_val > 0:
-            # BUY (Apply 3% buffer for LOC margin check)
-            buy_qty = int(diff_val / (data["cur_price"] * 1.03))
+            # BUY (Limit Order at price + 0.01)
+            buy_qty = int(diff_val / (data["cur_price"] + 0.01))
             if buy_qty > 0:
-                total_buy_required += (buy_qty * data["cur_price"] * 1.03)
+                price = round(data["cur_price"] + 0.01, 2)
+                total_buy_required += (buy_qty * price)
                 expected_total = (data["qty"] + buy_qty) * data["cur_price"]
                 pct = (expected_total / target_base * 100) if target_base > 0 else 0
                 orders.append(StrategyOrder(
                     symbol=ticker,
                     side=OrderSide.BUY,
                     quantity=buy_qty,
-                    price=round(data["cur_price"] * 1.03, 2),
-                    order_type="34",
+                    price=price,
+                    order_type="00",
                     reason=f"➔ Est.Total: ${expected_total:,.1f} ({pct:.1f}%)"
                 ))
 
