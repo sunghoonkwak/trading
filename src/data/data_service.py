@@ -157,6 +157,16 @@ class PortfolioProcessor:
             else:
                 data["current_value_krw"] = val_native
                 data["current_value_usd"] = val_native / ex_rate
+
+            # Calculate average price
+            if data.get("type") == "CASH":
+                data["avg_price"] = 1.0
+                data["total_investment"] = data["qty"]
+            elif data.get("qty", 0) > 0:
+                data["avg_price"] = data.get("total_investment", 0.0) / data["qty"]
+            else:
+                data["avg_price"] = 0.0
+
             total_usd += data["current_value_usd"]
 
         return merged, total_usd

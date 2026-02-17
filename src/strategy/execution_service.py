@@ -276,7 +276,6 @@ def _save_raoeo_history(report: Dict):
         "time": now.strftime("%H:%M:%S"),
         "status": report.get("status"),
         "config": report.get("config", {}),
-        "holdings_snapshot": report.get("holdings", {}),
         "orders": []
     }
 
