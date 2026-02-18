@@ -19,9 +19,7 @@ class ConfigFile(Enum):
     """
     PORTFOLIO = ("portfolio.json", False)
     MEMO = ("memo.json", False)
-    VA_HISTORY = ("value_averaging_history.json", False)
-    RAOEO_HISTORY = ("raoeo_history.json", False)
-    REBALANCING_HISTORY = ("rebalancing_history.json", False)
+    STRATEGY_HISTORY = ("strategy_history.json", False)
     STRATEGY_CONFIG = ("strategy_config.json", True)
     PORTFOLIO_WEIGHTS = ("portfolio_weights.json", True)
 

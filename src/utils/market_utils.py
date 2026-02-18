@@ -6,8 +6,9 @@ Provides helper functions for market indicators (Fear & Greed) and calendar (hol
 """
 import time
 import logging
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, time as dt_time
+from typing import Optional, Tuple
+import pytz
 
 # Optional external dependencies
 try:
@@ -24,6 +25,31 @@ except ImportError:
 
 # Internal cache for Fear & Greed Index
 _fg_cache = {"value": 50.0, "last_update": 0.0}
+
+def get_us_market_status() -> Tuple[bool, str]:
+    """
+    Checks if current time is within allowed US trading hours (05:00 - 16:00 ET).
+    Returns (is_allowed, message)
+    """
+    tz_et = pytz.timezone('US/Eastern')
+    now_et = datetime.now(tz_et)
+    
+    # Check weekend
+    if now_et.weekday() >= 5:
+        return False, "Market closed (Weekend)"
+
+    # Check holiday
+    if is_market_holiday("NYSE", now_et):
+        return False, "Market closed (Holiday)"
+
+    current_time = now_et.time()
+    start_time = dt_time(5, 0)  # 05:00 ET
+    end_time = dt_time(16, 0)    # 16:00 ET
+
+    if start_time <= current_time <= end_time:
+        return True, "Trading Allowed"
+    else:
+        return False, f"Trading not allowed (Current ET: {now_et.strftime('%H:%M')})"
 
 def get_fear_and_greed() -> float:
     """

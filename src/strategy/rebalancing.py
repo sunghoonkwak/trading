@@ -17,6 +17,7 @@ def calculate_orders(
 ) -> Tuple[List[StrategyOrder], Dict]:
     """
     Calculate buy/sell orders based on fixed weight rebalancing with a Seed cap.
+    Pure calculation — no market status checks.
     Returns: (orders_list, info_dict)
     """
     orders: List[StrategyOrder] = []
@@ -30,7 +31,7 @@ def calculate_orders(
         "total_buy_required": 0.0,
         "scale_factor": 1.0,
         "seed": seed,
-        "asset_status": {}
+        "asset_status": {},
     }
 
     if not assets or seed <= 0:
@@ -59,6 +60,7 @@ def calculate_orders(
         qty = float(holding.get("qty", 0.0))
         current_val = qty * cur_price
         total_current_val_in_group += current_val
+        avg_price = float(holding.get("avg_price", 0.0))
 
         asset_data[ticker] = {
             "target_weight": target_w,
@@ -69,7 +71,9 @@ def calculate_orders(
 
         info["asset_status"][ticker] = {
             "qty": qty,
-            "cur_val": round(current_val, 2)
+            "cur_val": round(current_val, 2),
+            "cur_price": cur_price,
+            "avg_price": avg_price
         }
 
     # 2. Determine Real Target Base
@@ -170,4 +174,6 @@ def calculate_orders(
     info["total_available"] = usd_cash
     info["total_buy_required"] = total_buy_required
 
+    # We return the orders even if not allowed, so they can be shown in reports.
+    # The execution service will check is_allowed before placing them.
     return orders, info

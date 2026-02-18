@@ -1,47 +1,40 @@
-# Telegram Strategy Module (`src/telegram_bot/telegram_strategy.py`)
+# Telegram Strategy Handler (`src/telegram_bot/telegram_strategy.py`)
 
-텔레그램 봇의 `/strategy` 명령어 처리를 담당하는 모듈입니다.
-사용자에게 현재 전략(RAOEO, Value Averaging)의 상태 보고서를 보여주고, 실행(Execute) 승인을 받으면 주문을 실행합니다.
+`/strategy` 명령어를 처리하여 RAOEO 및 Value Averaging 전략의 현황을 확인하거나 수동으로 실행하는 핸들러입니다.
 
 # Core Logic (핵심 로직)
 
-1. **상태 조회**: `execution_service.py`를 호출하여 계산된 보고서를 가져옵니다 (`execute=False`).
-2. **보고서 출력**: 주문이 없거나 휴장일인 경우에도 사용자에게 현재 상태(예산, 괴리율 등)를 보여줍니다.
-3. **승인 프로세스**: 실행 가능한 주문이 있으면 `InlineKeyboardButton`으로 `Execute` 버튼을 생성합니다.
-4. **실행**: 사용자가 승인하면 `execution_service.py`를 호출하여 실제 주문을 실행하고 결과를 업데이트합니다.
+1. **Strategy Status Check (전략 상태 확인)**:
+   - `execution_service.run_raoeo_strategy`와 `run_va_strategy`를 호출하여 현재 시장 상황과 주문 생성 여부를 확인합니다.
+   - 이때 `execute=False`로 호출하여 실제 주문은 전송하지 않고 시뮬레이션 결과만 받습니다.
+
+2. **Interactive Execution (대화형 실행)**:
+   - 생성된 리포트를 사용자에게 보여주고, 실행 가능한 주문이 있다면 "실행(Execute)" 버튼을 제공합니다.
+   - 사용자가 버튼을 클릭하면 `execute=True`로 다시 전략을 호출하여 주문을 전송합니다.
 
 # Key Functions (주요 함수)
 
-## `format_strategy_report`
-RAOEO와 Value Averaging 보고서를 통합하여 가독성 높은 텍스트로 변환합니다.
+## `handle_strategy_command`
+`/strategy` 명령어 입력 시 호출되는 메인 함수입니다.
+- 두 전략(RAOEO, VA)을 차례로 실행하고 통합 리포트를 생성하여 전송합니다.
 
-- **입력 (Input)**: `raoeo_report` (dict), `va_report` (dict).
-- **출력 (Output)**: `str` (텔레그램 메시지 텍스트).
+## `execute_strategy_callback`
+사용자가 "Execute All" 버튼을 눌렀을 때 호출되는 콜백 함수입니다.
+- `pending_orders`가 있는 경우에만 실행을 시도하며, 결과를 다시 사용자에게 리포팅합니다.
+- 실행 후에는 히스토리가 업데이트되므로 중복 실행되지 않습니다.
 
-## `cmd_strategy`
-`/strategy` 명령어 핸들러입니다.
-- **기능**: 보고서 생성 및 버튼 표시.
-- **반환**: `ConversationHandler` 상태 (확인 대기 중).
-
-## `handle_strategy_callback`
-사용자의 버튼 클릭(실행/취소)을 처리합니다.
-- **기능**: 실행 버튼 클릭 시 `execute=True`로 전략 실행.
-
-# Configuration (`telegram.txt`)
-
-```
-bot_token,chat_id
-```
-텔레그램 봇 토큰과 채팅 ID는 `~/KIS_config/telegram.txt` 파일에서 로드됩니다.
+# Configuration (None)
+별도의 설정 파일이 없습니다.
 
 # Usage Example (사용 예시)
 
-```python
-# 텔레그램에서 명령어 입력
+**Telegram 채팅방**:
+```
 /strategy
-
-# 결과
-📊 Strategy Report - 2026-02-14
-...
-[✅ Execute All] [❌ Cancel]
+```
+**Bot 응답**:
+```
+📊 Strategy Report
+... (리포트 내용) ...
+[Execute All] (버튼)
 ```

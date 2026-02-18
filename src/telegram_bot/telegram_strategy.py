@@ -14,7 +14,7 @@ from telegram.ext import (
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 from strategy.execution_service import run_raoeo_strategy, run_va_strategy
 from strategy.report_formatter import format_strategy_report
-from strategy.base import StrategyOrder, OrderSide
+from strategy.base import StrategyOrder, StrategyStatus, OrderSide
 
 STRATEGY_CONFIRM = 0
 
@@ -44,14 +44,15 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     report_text = format_strategy_report(raoeo_rep, va_rep)
 
-    # Check if executable (calculated and not holiday)
-    is_holiday = raoeo_rep.get('status') == 'market_holiday' or va_rep.get('status') == 'market_holiday'
+    # Check if executable
+    is_blocked = lambda r: r.get('status') in (
+        StrategyStatus.HOLIDAY, StrategyStatus.DISABLED, StrategyStatus.NON_MARKET_TIME
+    )
 
-    # Hide button if RAOEO is already successfully executed
-    raoeo_has_orders = bool(raoeo_rep.get('orders')) and raoeo_rep.get('status') != 'already_executed'
-    va_has_orders = bool(va_rep.get('orders')) # VA logic remains similar for now
+    raoeo_has_orders = bool(raoeo_rep.get('pending_orders')) and not is_blocked(raoeo_rep)
+    va_has_orders = bool(va_rep.get('pending_orders')) and not is_blocked(va_rep)
 
-    has_orders = (raoeo_has_orders or va_has_orders) and not is_holiday
+    has_orders = raoeo_has_orders or va_has_orders
 
     keyboard = build_confirm_keyboard(has_orders)
 

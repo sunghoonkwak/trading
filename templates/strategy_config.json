@@ -1,13 +1,16 @@
 {
     "raoeo": {
+        "enabled": true,
         "targets": {
             "SOXL": {
+                "enabled": true,
                 "seed": 20000,
                 "exchange": "AMS",
                 "duration": 40,
                 "sell_profit": 0.1
             },
             "FAS": {
+                "enabled": true,
                 "seed": 10000,
                 "exchange": "AMS",
                 "duration": 60,
@@ -16,6 +19,7 @@
         }
     },
     "value_averaging": {
+        "enabled": true,
         "targets": {
             "QLD": {
                 "enabled": true,
@@ -37,8 +41,14 @@
         "enabled": true,
         "seed": 5000,
         "assets": [
-            {"ticker": "TQQQ", "target_weight": 0.5},
-            {"ticker": "SCHD", "target_weight": 0.5}
+            {
+                "ticker": "TQQQ",
+                "target_weight": 0.5
+            },
+            {
+                "ticker": "SCHD",
+                "target_weight": 0.5
+            }
         ],
         "rebalance_threshold": 0.05
     }

@@ -2,28 +2,31 @@
 """
 Strategy Execution Service (Centralized)
 
-This module handles the orchestration of strategy execution, including:
-1. Fetching data (Portfolio, Prices, History)
-2. Calculating orders (via pure strategy modules)
-3. Executing orders (via KIS API)
-4. Saving history
-5. Generating reports
+This module handles the orchestration of strategy execution:
+1. Unified 6-step flow for all strategies
+2. Centralized market status & history management
+3. Single integrated history file (strategy_history.json)
 """
 import logging
-import json
+import time
 from datetime import datetime
-import pytz
 from typing import Dict, List, Tuple, Any
 
+import pytz
+
 from strategy import raoeo, value_averaging, rebalancing
-from strategy.base import StrategyOrder, OrderSide
+from strategy.base import StrategyOrder, StrategyStatus, OrderSide
 from data.config_manager import ConfigFile, load_json, save_json
-from utils.market_utils import is_market_holiday
+from utils.market_utils import get_us_market_status, is_market_holiday
 from kis import wrapper
 from kis.kis_api import kis_auth as ka
 from core import trading_config
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
 from data.data_service import get_portfolio_data
+
+# Timezone constant
+TZ_ET = pytz.timezone('US/Eastern')
+
 
 # -------------------------------------------------------------------------
 # Common Helpers
@@ -44,13 +47,11 @@ def _get_pending_buy_amount() -> float:
         for _, row in df.iterrows():
             row_l = {k.lower(): v for k, v in row.to_dict().items()}
 
-            # Only US market buy orders
             if row_l.get('_market') != 'US':
                 continue
             if row_l.get('sll_buy_dvsn_cd') != '02':  # 02 = Buy
                 continue
 
-            # Get price and quantity
             price = float(row_l.get('ft_ord_unpr3', 0) or row_l.get('ft_ord_unpr4', 0) or
                          row_l.get('ovrs_ord_unpr', 0) or row_l.get('ord_unpr', 0) or 0)
             qty = float(row_l.get('nccs_qty', 0) or row_l.get('ft_ord_qty4', 0) or
@@ -95,15 +96,12 @@ def get_market_data(force_refresh: bool = False) -> Tuple[Dict, Dict]:
     Fetch current portfolio and prices for all configured strategy targets.
     Returns: (portfolio_holdings, current_prices_map)
     """
-    # 1. Portfolio
     portfolio = get_portfolio_data(force_refresh=force_refresh, scope="kis")
     holdings = portfolio.get('merged_data', {})
 
-    # 1.5. Adjust cash for pending orders (KIS doesn't deduct LOC orders)
     if force_refresh:
         holdings = _adjust_cash_for_pending_orders(holdings)
 
-    # 2. Config & Prices
     strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
     raoeo_conf = strategy_config.get('raoeo', {}).get('targets', {})
     va_conf = strategy_config.get('value_averaging', {}).get('targets', {})
@@ -114,16 +112,15 @@ def get_market_data(force_refresh: bool = False) -> Tuple[Dict, Dict]:
     current_prices = {}
 
     for t in all_tickers:
-        # Try fetching real-time price
         price = wrapper.fetch_price(t)
         if price > 0:
             current_prices[t] = price
         else:
-            # Fallback: check portfolio if held
             if t in holdings:
                 current_prices[t] = float(holdings[t].get('cur_price', 0))
 
     return holdings, current_prices
+
 
 def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
     """Execute a single strategy order via KIS API."""
@@ -133,15 +130,12 @@ def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
 
         ord_dv = "buy" if order.side == OrderSide.BUY else "sell"
 
-        # Price protection for Market Sell (US)
-        # If price is 0 and it's a SELL, we use a very low price to act as Market Sell
         exec_price = order.price
         exec_type = order.order_type
         if order.side == OrderSide.SELL and order.price == 0:
-            exec_price = 0.01 # Market-like sell for US Limit
-            exec_type = "00"  # Limit
+            exec_price = 0.01
+            exec_type = "00"
 
-        # Simple Exchange Mapping
         stock_info = trading_config.get_stock_info(order.symbol)
         market = stock_info.get('market', 'NASD')
         exchange_map = {"NAS": "NASD", "NYS": "NYSE", "AMS": "AMEX"}
@@ -168,21 +162,60 @@ def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-# -------------------------------------------------------------------------
-# RAOEO Execution
-# -------------------------------------------------------------------------
 
-def _restore_orders_from_history(history_entry: Dict) -> List[Tuple[StrategyOrder, bool]]:
+def _get_market_status(today_str: str) -> Dict:
     """
-    Restore orders from history with success status.
-
-    Args:
-        history_entry: History entry containing orders data
-
-    Returns:
-        List of tuples: (StrategyOrder, success_status)
+    Centralized market status determination.
+    Returns: { "is_market_open": bool, "is_holiday": bool, "message": str }
     """
-    orders_data = history_entry.get("orders", [])
+    is_holiday = is_market_holiday("NYSE", today_str)
+    if is_holiday:
+        return {"is_market_open": False, "is_holiday": True, "message": "Market closed (Holiday)"}
+
+    is_allowed, market_msg = get_us_market_status()
+    return {"is_market_open": is_allowed, "is_holiday": False, "message": market_msg}
+
+
+def _build_base_report(today_str: str, market_status: Dict) -> Dict:
+    """Create base report structure used by all strategies."""
+    return {
+        "date": today_str,
+        "status": None,
+        "market_status": market_status,
+        "orders": [],
+        "succeeded_orders": [],
+        "pending_orders": [],
+        "execution_results": [],
+        "info": {},
+        "error": None,
+    }
+
+
+# -------------------------------------------------------------------------
+# Unified History Management
+# -------------------------------------------------------------------------
+
+def _load_history() -> list:
+    """Load unified strategy history."""
+    return load_json(ConfigFile.STRATEGY_HISTORY, default=[])
+
+
+def _get_today_entry(hist_data: list, today_str: str) -> Dict:
+    """Find or create today's entry in history."""
+    for entry in hist_data:
+        if entry.get("date") == today_str:
+            return entry
+    return None
+
+
+def _restore_orders_from_strategy_history(
+    strategy_data: Dict
+) -> List[Tuple[StrategyOrder, bool]]:
+    """
+    Restore orders from a strategy's history section with success status.
+    Returns: List of (StrategyOrder, success_status) tuples
+    """
+    orders_data = strategy_data.get("orders", [])
     restored = []
 
     for order_data in orders_data:
@@ -192,7 +225,7 @@ def _restore_orders_from_history(history_entry: Dict) -> List[Tuple[StrategyOrde
                 side=OrderSide[order_data["side"]],
                 quantity=order_data["qty"],
                 price=order_data["price"],
-                order_type=order_data["type"],
+                order_type=order_data.get("order_type", "00"),
                 reason=order_data.get("reason", "")
             )
             success = order_data.get("success", False)
@@ -203,237 +236,264 @@ def _restore_orders_from_history(history_entry: Dict) -> List[Tuple[StrategyOrde
 
     return restored
 
-def _update_raoeo_history(today_entry: Dict, new_results: List[Dict]):
+
+def _save_strategy_to_history(
+    today_str: str,
+    strategy_key: str,
+    strategy_data: Dict
+):
+    """Save a strategy's result to the unified history file."""
+    hist_data = _load_history()
+
+    # Find or create today's entry
+    today_entry = _get_today_entry(hist_data, today_str)
+    if not today_entry:
+        today_entry = {"date": today_str}
+        hist_data.insert(0, today_entry)
+
+    # Update strategy section
+    today_entry[strategy_key] = strategy_data
+
+    # Keep last 200 entries
+    save_json(ConfigFile.STRATEGY_HISTORY, hist_data[:200])
+
+
+def _build_strategy_history_data(
+    report: Dict,
+    strategy_key: str,
+    extra_fields: Dict = None
+) -> Dict:
+    """Build the history data dict for a strategy from its report."""
+    now_et = datetime.now(TZ_ET)
+    data = {
+        "time": now_et.strftime("%H:%M:%S"),
+        "status": report["status"].value if isinstance(report["status"], StrategyStatus) else report["status"],
+        "orders": [],
+    }
+
+    # Add extra fields (e.g., targets_context for VA, context for Rebalancing)
+    if extra_fields:
+        data.update(extra_fields)
+
+    # Build order list from execution results or calculated orders
+    if report.get("execution_results"):
+        for res in report["execution_results"]:
+            order = res["order"]
+            data["orders"].append({
+                "ticker": order.symbol,
+                "side": order.side.name,
+                "qty": order.quantity,
+                "price": order.price,
+                "order_type": order.order_type,
+                "reason": order.reason,
+                "success": res["success"],
+                "message": res["message"],
+            })
+    elif report.get("orders"):
+        for order in report["orders"]:
+            data["orders"].append({
+                "ticker": order.symbol,
+                "side": order.side.name,
+                "qty": order.quantity,
+                "price": order.price,
+                "order_type": order.order_type,
+                "reason": order.reason,
+                "success": False,
+                "message": "Calculated Only",
+            })
+
+    return data
+
+
+def _execute_orders(
+    orders: List[StrategyOrder],
+    sell_first: bool = False,
+    sell_wait_seconds: int = 0,
+) -> List[Dict]:
     """
-    Update today's history entry with re-execution results.
-
-    Args:
-        today_entry: The history entry for today
-        new_results: List of execution results to update
+    Execute a list of orders. Optionally execute sells first with a wait.
+    Returns: list of execution result dicts
     """
-    hist_data = load_json(ConfigFile.RAOEO_HISTORY, default=[])
-    today_date = today_entry.get("date")
+    results = []
 
-    # Find today's entry and update
-    for entry in hist_data:
-        if entry.get("date") == today_date:
-            # Update timestamp for re-execution
-            entry["time"] = datetime.now(pytz.timezone('US/Eastern')).strftime("%H:%M:%S")
+    if sell_first:
+        sell_orders = [o for o in orders if o.side == OrderSide.SELL]
+        buy_orders = [o for o in orders if o.side == OrderSide.BUY]
 
-            for result in new_results:
-                order = result["order"]
-                # Find matching order and update status
-                for hist_order in entry.get("orders", []):
-                    if (hist_order["ticker"] == order.symbol and
-                        hist_order["side"] == order.side.name and
-                        hist_order["qty"] == order.quantity):
-                        hist_order["success"] = result["success"]
-                        hist_order["message"] = result["message"]
-                        break
-            break
+        for order in sell_orders:
+            success, msg = execute_single_order(order)
+            results.append({"order": order, "success": success, "message": msg})
 
-    save_json(ConfigFile.RAOEO_HISTORY, hist_data)
+        if sell_orders and buy_orders and sell_wait_seconds > 0:
+            logging.info(f"Sells done. Waiting {sell_wait_seconds}s for cash update...")
+            time.sleep(sell_wait_seconds)
+
+        for order in buy_orders:
+            success, msg = execute_single_order(order)
+            results.append({"order": order, "success": success, "message": msg})
+    else:
+        for order in orders:
+            success, msg = execute_single_order(order)
+            results.append({"order": order, "success": success, "message": msg})
+
+    return results
+
+
+# -------------------------------------------------------------------------
+# RAOEO Execution
+# -------------------------------------------------------------------------
 
 def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
     """
-    Run RAOEO strategy cycle.
-
-    Args:
-        execute: If True, executes the calculated orders (or re-executes failed ones).
-
-    Returns:
-        Dict containing report data:
-        {
-            "date": "YYYY-MM-DD",
-            "status": "from_history" | "already_executed" | "partial_re_execution" |
-                      "market_holiday" | "executed" | "calculated" | "error",
-            "orders": [StrategyOrder objects...],
-            "execution_results": [{"order": ..., "success": True, "message": ...}, ...],
-            "holdings": {...},
-            "config": {...},
-            "error": str
-        }
+    Run RAOEO strategy with unified 6-step flow.
     """
-    today_str = datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d")
-    report = {
-        "date": today_str,
-        "status": "init",
-        "orders": [],
-        "execution_results": [],
-        "holdings": {},
-        "config": {},
-        "error": None
-    }
+    today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
+    market_status = _get_market_status(today_str)
+    report = _build_base_report(today_str, market_status)
 
     try:
-        # 1. Check for today's history (always, regardless of execute flag)
-        hist_data = load_json(ConfigFile.RAOEO_HISTORY, default=[])
-        today_entry = next(
-            (h for h in hist_data if h.get("date") == today_str and h.get("orders")),
-            None
-        )
+        # Step 1: Check enabled
+        strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
+        raoeo_section = strategy_config.get('raoeo', {})
 
-        if today_entry:
-            logging.info(f"RAOEO: Found today's history at {today_entry.get('time', '?')}. Restoring orders...")
+        if not raoeo_section.get('enabled', True):
+            report["status"] = StrategyStatus.DISABLED
+            return report
 
-            # Restore orders with success status
-            orders_with_status = _restore_orders_from_history(today_entry)
+        raoeo_conf = raoeo_section.get('targets', {})
+
+        # Filter enabled tickers only
+        active_targets = {
+            t: c for t, c in raoeo_conf.items() if c.get('enabled', True)
+        }
+
+        if not active_targets:
+            report["status"] = StrategyStatus.DISABLED
+            return report
+
+        # Step 2: Market status (already determined above)
+
+        # Step 3: Check today's history
+        hist_data = _load_history()
+        today_entry = _get_today_entry(hist_data, today_str)
+        raoeo_hist = today_entry.get("raoeo") if today_entry else None
+
+        if raoeo_hist and raoeo_hist.get("orders"):
+            # Step 4: History exists — separate succeeded/pending
+            logging.info(f"RAOEO: Found today's history at {raoeo_hist.get('time', '?')}")
+            orders_with_status = _restore_orders_from_strategy_history(raoeo_hist)
 
             all_orders = [o for o, _ in orders_with_status]
-            failed_orders = [o for o, success in orders_with_status if not success]
+            succeeded = [o for o, s in orders_with_status if s]
+            failed = [o for o, s in orders_with_status if not s]
 
             report["orders"] = all_orders
-            report["config"] = today_entry.get("config", {})
+            report["succeeded_orders"] = succeeded
+            report["pending_orders"] = failed
 
-            if not execute:
-                if not failed_orders:
-                    # All succeeded - indicate already executed
-                    report["status"] = "already_executed"
-                    logging.info("RAOEO: All orders from history were successful.")
-                else:
-                    # Some failed - indicate from history (not re-executed)
-                    report["status"] = "from_history"
-                    logging.info(f"RAOEO: Returning {len(all_orders)} orders from history ({len(failed_orders)} failed).")
-                return report
+            if not failed:
+                report["status"] = StrategyStatus.EXECUTED
+                logging.info("RAOEO: All orders from history were successful.")
 
-            # execute=True
-            if not failed_orders:
-                # All succeeded - no re-execution needed
-                report["status"] = "already_executed"
-                logging.info(f"RAOEO: All {len(all_orders)} orders already executed successfully.")
+                if not execute:
+                    return report
+                # execute=True but all done
                 return report
             else:
-                # Re-execute only failed orders
-                logging.info(f"RAOEO: Re-executing {len(failed_orders)} failed orders.")
-                results = []
-                success_count = 0
+                if not execute:
+                    report["status"] = StrategyStatus.PARTIAL
+                    return report
 
-                for order in failed_orders:
-                    success, msg = execute_single_order(order)
-                    results.append({
-                        "order": order,
-                        "success": success,
-                        "message": msg
-                    })
-                    if success: success_count += 1
+                # Re-execute failed orders
+                if not market_status["is_market_open"]:
+                    report["status"] = StrategyStatus.NON_MARKET_TIME
+                    return report
 
-                report["status"] = "partial_re_execution"
+                logging.info(f"RAOEO: Re-executing {len(failed)} failed orders.")
+                results = _execute_orders(failed)
                 report["execution_results"] = results
 
-                # Update history with new results
-                _update_raoeo_history(today_entry, results)
+                success_count = sum(1 for r in results if r['success'])
+                report["status"] = StrategyStatus.EXECUTED if success_count == len(failed) else StrategyStatus.PARTIAL
 
-                logging.info(f"RAOEO: Re-executed {len(failed_orders)} orders, {success_count} succeeded.")
+                # Update history
+                hist_entry_data = _build_strategy_history_data(report)
+                # Merge: keep succeeded, update failed
+                merged_orders = []
+                for o in succeeded:
+                    merged_orders.append({
+                        "ticker": o.symbol, "side": o.side.name,
+                        "qty": o.quantity, "price": o.price,
+                        "order_type": o.order_type, "reason": o.reason,
+                        "success": True, "message": "Success",
+                    })
+                for res in results:
+                    o = res["order"]
+                    merged_orders.append({
+                        "ticker": o.symbol, "side": o.side.name,
+                        "qty": o.quantity, "price": o.price,
+                        "order_type": o.order_type, "reason": o.reason,
+                        "success": res["success"], "message": res["message"],
+                    })
+                hist_entry_data["orders"] = merged_orders
+                _save_strategy_to_history(today_str, "raoeo", hist_entry_data)
+
                 return report
 
-        # 2. No history - proceed with normal calculation
+        # Step 5: No history — calculate
+        if market_status["is_holiday"]:
+            report["status"] = StrategyStatus.HOLIDAY
+            return report
 
-        # 2. Load Data
         holdings, prices = get_market_data(force_refresh=True)
-        report["holdings"] = holdings
+        report["info"]["holdings"] = holdings
 
-        strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
-        raoeo_conf = strategy_config.get('raoeo', {}).get('targets', {})
-        report["config"] = raoeo_conf
+        orders, calc_info = raoeo.calculate_orders(
+            targets_config=active_targets,
+            portfolio=holdings,
+            current_prices=prices
+        )
+        report["orders"] = orders
+        report["pending_orders"] = orders
+        report["info"].update(calc_info)
 
-        # 2. Check Holiday (but still return data)
-        is_holiday = is_market_holiday("NYSE", today_str)
+        if not orders:
+            report["status"] = StrategyStatus.SKIPPED
+            return report
 
-        if not is_holiday:
-            # 3. Calculate (Only if not holiday)
-            orders = raoeo.calculate_orders(
-                targets_config=raoeo_conf,
-                portfolio=holdings,
-                current_prices=prices
-            )
-            report["orders"] = orders
-
-            if not orders:
-                report["status"] = "no_orders"
+        # Step 6: Execute if requested
+        if not execute:
+            if not market_status["is_market_open"]:
+                report["status"] = StrategyStatus.NON_MARKET_TIME
             else:
-                report["status"] = "calculated"
-        else:
-            report["status"] = "market_holiday"
+                report["status"] = StrategyStatus.SKIPPED
+            return report
 
-        # 4. Execute (if requested and possible)
-        if execute and report["status"] == "calculated":
-            results = []
-            success_count = 0
+        if not market_status["is_market_open"]:
+            report["status"] = StrategyStatus.NON_MARKET_TIME
+            return report
 
-            for order in orders:
-                success, msg = execute_single_order(order)
-                results.append({
-                    "order": order,
-                    "success": success,
-                    "message": msg
-                })
-                if success: success_count += 1
+        results = _execute_orders(orders)
+        report["execution_results"] = results
 
-            report["execution_results"] = results
+        success_count = sum(1 for r in results if r['success'])
+        report["status"] = StrategyStatus.EXECUTED if success_count == len(orders) else StrategyStatus.PARTIAL
 
-            if success_count == len(orders):
-                report["status"] = "executed"
-            else:
-                report["status"] = "partial_execution"
+        # Update succeeded/pending based on results
+        report["succeeded_orders"] = [r["order"] for r in results if r["success"]]
+        report["pending_orders"] = [r["order"] for r in results if not r["success"]]
 
-            # Save History
-            _save_raoeo_history(report)
+        # Save history
+        hist_data = _build_strategy_history_data(report)
+        _save_strategy_to_history(today_str, "raoeo", hist_data)
 
     except Exception as e:
         logging.error(f"RAOEO Service Error: {e}", exc_info=True)
-        report["status"] = "error"
+        report["status"] = StrategyStatus.ERROR
         report["error"] = str(e)
 
     return report
 
-def _save_raoeo_history(report: Dict):
-    """Saves RAOEO execution details to JSON history."""
-    # Only save if there were orders or it was a calculated/executed run
-    if not report.get("orders") and report.get("status") not in ["executed", "calculated", "partial_execution"]:
-        return
-
-    hist_data = load_json(ConfigFile.RAOEO_HISTORY, default=[])
-    now = datetime.now(pytz.timezone('US/Eastern'))
-
-    # Create history entry
-    entry = {
-        "date": now.strftime("%Y-%m-%d"),
-        "time": now.strftime("%H:%M:%S"),
-        "status": report.get("status"),
-        "config": report.get("config", {}),
-        "orders": []
-    }
-
-    # Add execution results if available
-    if report.get("execution_results"):
-        for res in report.get("execution_results", []):
-            order = res["order"]
-            entry["orders"].append({
-                "ticker": order.symbol,
-                "side": order.side.name,
-                "qty": order.quantity,
-                "price": order.price,
-                "type": order.order_type,
-                "reason": order.reason,
-                "success": res["success"],
-                "message": res["message"]
-            })
-    # If no execution results (e.g. calculation only), add calculated orders
-    elif report.get("orders"):
-         for order in report.get("orders", []):
-            entry["orders"].append({
-                "ticker": order.symbol,
-                "side": order.side.name,
-                "qty": order.quantity,
-                "price": order.price,
-                "type": order.order_type,
-                "reason": order.reason,
-                "success": False,
-                "message": "Calculated Only"
-            })
-
-    hist_data.insert(0, entry)
-    save_json(ConfigFile.RAOEO_HISTORY, hist_data[:200]) # Keep last 200 entries
 
 # -------------------------------------------------------------------------
 # Value Averaging Execution
@@ -441,158 +501,147 @@ def _save_raoeo_history(report: Dict):
 
 def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
     """
-    Run Value Averaging strategy cycle.
-
-    Args:
-        execute: If True, executes orders and saves history.
-
-    Returns:
-        Dict containing report data (similar structure to RAOEO).
+    Run Value Averaging strategy with unified 6-step flow.
     """
-    today_str = datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d")
-    report = {
-        "date": today_str,
-        "status": "init",
-        "orders": [],
-        "execution_results": [],
-        "context": {}, # For debugging/logging
-        "error": None
-    }
+    today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
+    market_status = _get_market_status(today_str)
+    report = _build_base_report(today_str, market_status)
 
     try:
-        # 1. Load Data
+        # Step 1: Check enabled
+        strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
+        va_section = strategy_config.get('value_averaging', {})
+
+        if not va_section.get('enabled', True):
+            report["status"] = StrategyStatus.DISABLED
+            return report
+
+        va_conf = va_section.get('targets', {})
+
+        if not va_conf:
+            report["status"] = StrategyStatus.DISABLED
+            return report
+
+        # Step 2: Market status (already determined)
+
+        # Step 3: Check today's history
+        hist_data = _load_history()
+        today_entry = _get_today_entry(hist_data, today_str)
+        va_hist = today_entry.get("va") if today_entry else None
+
+        if va_hist and va_hist.get("orders"):
+            # Step 4: History exists
+            logging.info(f"VA: Found today's history at {va_hist.get('time', '?')}")
+            orders_with_status = _restore_orders_from_strategy_history(va_hist)
+
+            all_orders = [o for o, _ in orders_with_status]
+            succeeded = [o for o, s in orders_with_status if s]
+            failed = [o for o, s in orders_with_status if not s]
+
+            report["orders"] = all_orders
+            report["succeeded_orders"] = succeeded
+            report["pending_orders"] = failed
+
+            # Restore targets_context
+            report["info"]["targets_context"] = va_hist.get("targets_context", {})
+
+            if not failed:
+                report["status"] = StrategyStatus.EXECUTED
+                return report
+            else:
+                if not execute:
+                    report["status"] = StrategyStatus.PARTIAL
+                    return report
+
+                if not market_status["is_market_open"]:
+                    report["status"] = StrategyStatus.NON_MARKET_TIME
+                    return report
+
+                results = _execute_orders(failed)
+                report["execution_results"] = results
+
+                success_count = sum(1 for r in results if r['success'])
+                report["status"] = StrategyStatus.EXECUTED if success_count == len(failed) else StrategyStatus.PARTIAL
+
+                # Update history with merged results
+                merged_orders = []
+                for o in succeeded:
+                    merged_orders.append({
+                        "ticker": o.symbol, "side": o.side.name,
+                        "qty": o.quantity, "price": o.price,
+                        "order_type": o.order_type, "reason": o.reason,
+                        "success": True, "message": "Success",
+                    })
+                for res in results:
+                    o = res["order"]
+                    merged_orders.append({
+                        "ticker": o.symbol, "side": o.side.name,
+                        "qty": o.quantity, "price": o.price,
+                        "order_type": o.order_type, "reason": o.reason,
+                        "success": res["success"], "message": res["message"],
+                    })
+
+                save_data = _build_strategy_history_data(report, "va",
+                    extra_fields={"targets_context": va_hist.get("targets_context", {})})
+                save_data["orders"] = merged_orders
+                _save_strategy_to_history(today_str, "va", save_data)
+
+                return report
+
+        # Step 5: No history — calculate
+        if market_status["is_holiday"]:
+            report["status"] = StrategyStatus.HOLIDAY
+            return report
+
         holdings, prices = get_market_data(force_refresh=True)
 
-        strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
-        va_conf = strategy_config.get('value_averaging', {}).get('targets', {})
-        va_history = load_json(ConfigFile.VA_HISTORY, default=[])
-
-        # 2. Calculate (Always calculate for VA, even on holiday to show status)
-        orders, context = value_averaging.calculate_orders(
+        # VA needs history for day_count calculation
+        orders, context_map = value_averaging.calculate_orders(
             targets_config=va_conf,
             portfolio=holdings,
             current_prices=prices,
-            history_data=va_history,
+            history_data=hist_data,
             today_date=today_str
         )
 
         report["orders"] = orders
-        report["context"] = context
+        report["pending_orders"] = orders
+        report["info"]["targets_context"] = {
+            t: {"day_count": ctx.get("day_count", 0)} for t, ctx in context_map.items()
+        }
+        report["info"]["context_map"] = context_map
 
-        # Check Status
-        is_holiday = is_market_holiday("NYSE", today_str)
-
-        if is_holiday:
-            report["status"] = "market_holiday"
-        elif not orders:
-            report["status"] = "no_orders"
+        if not orders:
+            report["status"] = StrategyStatus.SKIPPED
+        elif not execute:
+            report["status"] = StrategyStatus.NON_MARKET_TIME if not market_status["is_market_open"] else StrategyStatus.SKIPPED
+        elif not market_status["is_market_open"]:
+            report["status"] = StrategyStatus.NON_MARKET_TIME
         else:
-            report["status"] = "calculated"
-
-        # 3. Execute (if requested and possible)
-        # Only execute if calculated orders exist and NOT holiday
-        if execute and report["status"] == "calculated":
-            results = []
-            success_count = 0
-
-            for order in orders:
-                success, msg = execute_single_order(order)
-                results.append({
-                    "order": order,
-                    "success": success,
-                    "message": msg
-                })
-
-                # Save Individual Result
-                _save_va_history_entry(
-                    ticker=order.symbol,
-                    context=context.get(order.symbol, {}),
-                    order=order,
-                    success=success,
-                    message=msg
-                )
-
-                if success: success_count += 1
-
-            # Save Skips (targets with no orders)
-            _save_va_skips(context, orders)
-
+            # Execute
+            results = _execute_orders(orders)
             report["execution_results"] = results
 
-            if success_count == len(orders):
-                report["status"] = "executed"
-            else:
-                report["status"] = "partial_execution"
+            success_count = sum(1 for r in results if r['success'])
+            report["status"] = StrategyStatus.EXECUTED if success_count == len(orders) else StrategyStatus.PARTIAL
+            report["succeeded_orders"] = [r["order"] for r in results if r["success"]]
+            report["pending_orders"] = [r["order"] for r in results if not r["success"]]
 
-        # Even if holiday, if execute=True requested (by scheduler/user force), we might want to log?
-        # But usually we skip execution on holiday.
+        # Save history (always save for VA — day_count tracking)
+        targets_context = {
+            t: {"day_count": ctx.get("day_count", 0)} for t, ctx in context_map.items()
+        }
+        save_data = _build_strategy_history_data(report, "va",
+            extra_fields={"targets_context": targets_context})
+        _save_strategy_to_history(today_str, "va", save_data)
 
     except Exception as e:
         logging.error(f"VA Service Error: {e}", exc_info=True)
-        report["status"] = "error"
+        report["status"] = StrategyStatus.ERROR
         report["error"] = str(e)
 
     return report
 
-def _save_va_history_entry(ticker, context, order, success, message):
-    """Helper to save VA history."""
-    hist_data = load_json(ConfigFile.VA_HISTORY, default=[])
-    today = datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d")
-    now_time = datetime.now(pytz.timezone('US/Eastern')).strftime("%H:%M:%S")
-
-    # Find/Create Today Entry
-    today_entry = next((item for item in hist_data if item["date"] == today), None)
-    if not today_entry:
-        today_entry = {"date": today, "targets": {}}
-        hist_data.insert(0, today_entry)
-
-    if ticker not in today_entry["targets"]:
-        today_entry["targets"][ticker] = {
-            "day_count": context.get("day_count", 0),
-            "results": []
-        }
-
-    target_entry = today_entry["targets"][ticker]
-
-    result_entry = {
-        "time": now_time,
-        "type": order.side.name if order else "skip",
-        "qty": order.quantity if order else 0,
-        "price": order.price if order else 0,
-        "success": success,
-        "message": message
-    }
-    target_entry["results"].append(result_entry)
-
-    save_json(ConfigFile.VA_HISTORY, hist_data)
-
-def _save_va_skips(context, orders):
-    """Save 'skip' history for targets that had no orders."""
-    order_tickers = {o.symbol for o in orders}
-    for ticker, ctx in context.items():
-        if ticker not in order_tickers and not ctx.get('already_executed'):
-             _save_va_history_entry(ticker, ctx, None, True, "Skipped")
-
-def _restore_rebalancing_execution_results(history_entry: Dict) -> List[Dict]:
-    """Restore execution results from history entry for rebalancing."""
-    results = []
-    for o_data in history_entry.get("orders", []):
-        try:
-            order = StrategyOrder(
-                symbol=o_data["ticker"],
-                side=OrderSide[o_data["side"]],
-                quantity=o_data["qty"],
-                price=o_data["price"],
-                order_type="00",
-                reason=""
-            )
-            results.append({
-                "order": order,
-                "success": o_data.get("success", False),
-                "message": o_data.get("message", "Restored from history")
-            })
-        except: continue
-    return results
 
 # -------------------------------------------------------------------------
 # Rebalancing Execution
@@ -600,50 +649,59 @@ def _restore_rebalancing_execution_results(history_entry: Dict) -> List[Dict]:
 
 def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
     """
-    Run Static Weight Rebalancing strategy cycle.
+    Run Rebalancing strategy with unified 6-step flow.
     """
-    tz_et = pytz.timezone('US/Eastern')
-    now_et = datetime.now(tz_et)
-    today_str = now_et.strftime("%Y-%m-%d")
-    
-    report = {
-        "date": today_str,
-        "status": "init",
-        "orders": [],
-        "execution_results": [],
-        "info": {},
-        "config": {},
-        "error": None
-    }
+    today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
+    market_status = _get_market_status(today_str)
+    report = _build_base_report(today_str, market_status)
 
     try:
-        # 1. Check for 'Already Executed' status FIRST
-        hist_data = load_json(ConfigFile.REBALANCING_HISTORY, default=[])
-        today_entry = next(
-            (h for h in hist_data if str(h.get("date")).strip() == today_str and h.get("orders")),
-            None
-        )
-        
-        already_executed = False
-        if today_entry:
-            logging.info(f"[Rebalancing] Found execution record for {today_str}")
-            already_executed = True
-            report["status"] = "already_executed"
-            report["execution_results"] = _restore_rebalancing_execution_results(today_entry)
-            report["info"]["exec_time"] = today_entry.get("time")
+        # Step 1: Check enabled
+        strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
+        reb_conf = strategy_config.get('rebalancing', {})
 
-        # 2. Load Data
+        if not reb_conf.get('enabled', False):
+            report["status"] = StrategyStatus.DISABLED
+            return report
+
+        # Step 2: Market status (already determined)
+
+        # Step 3: Check today's history
+        hist_data = _load_history()
+        today_entry = _get_today_entry(hist_data, today_str)
+        reb_hist = today_entry.get("rebalancing") if today_entry else None
+
+        if reb_hist and reb_hist.get("orders"):
+            # Step 4: History exists
+            logging.info(f"[Rebalancing] Found today's history at {reb_hist.get('time', '?')}")
+            orders_with_status = _restore_orders_from_strategy_history(reb_hist)
+
+            all_orders = [o for o, _ in orders_with_status]
+            succeeded = [o for o, s in orders_with_status if s]
+            failed = [o for o, s in orders_with_status if not s]
+
+            report["orders"] = all_orders
+            report["succeeded_orders"] = succeeded
+            report["pending_orders"] = failed
+            report["info"]["context"] = reb_hist.get("context", {})
+
+            if not failed:
+                report["status"] = StrategyStatus.EXECUTED
+            else:
+                report["status"] = StrategyStatus.PARTIAL
+
+            # Rebalancing doesn't re-execute — always return as-is
+            return report
+
+        # Step 5: No history — calculate
+        if market_status["is_holiday"]:
+            report["status"] = StrategyStatus.HOLIDAY
+            return report
+
+        # Load portfolio data
         portfolio_res = get_portfolio_data(force_refresh=True, scope="kis")
         holdings = portfolio_res.get('merged_data', {})
         holdings = _adjust_cash_for_pending_orders(holdings)
-
-        strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
-        reb_conf = strategy_config.get('rebalancing', {})
-        report["config"] = reb_conf
-
-        if not reb_conf.get("enabled", False):
-            report["status"] = "disabled"
-            return report
 
         reb_assets = reb_conf.get('assets', [])
         prices = {}
@@ -654,105 +712,65 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
                 p = wrapper.fetch_price(t)
             prices[t] = p
 
-        # 2.5. RAOEO Budget Reservation
+        # RAOEO budget reservation
         raoeo_conf = strategy_config.get('raoeo', {}).get('targets', {})
         raoeo_daily_total = 0.0
         for ticker, tcfg in raoeo_conf.items():
+            if not tcfg.get('enabled', True):
+                continue
             r_seed = float(tcfg.get('seed', 0))
             r_duration = int(tcfg.get('duration', 1))
             if r_duration > 0 and r_seed > 0:
                 raoeo_daily_total += r_seed / r_duration
 
-        # 3. Calculate Orders
-        orders, info = rebalancing.calculate_orders(
+        # Calculate
+        orders, calc_info = rebalancing.calculate_orders(
             config=reb_conf,
             portfolio=holdings,
             current_prices=prices,
             reserved_cash=raoeo_daily_total
         )
+
         report["orders"] = orders
-        
-        # Merge info into report["info"]
-        for k, v in info.items():
-            if k not in report["info"]:
-                report["info"][k] = v
+        report["pending_orders"] = orders
+        report["info"].update(calc_info)
 
-        # 4. Final Status Determination
-        is_holiday = is_market_holiday("NYSE", today_str)
+        if not orders:
+            report["status"] = StrategyStatus.SKIPPED
+            return report
 
-        if is_holiday:
-            report["status"] = "market_holiday"
-        elif already_executed:
-            report["status"] = "already_executed"
-        elif not orders:
-            report["status"] = "no_orders"
-        else:
-            report["status"] = "calculated"
+        # Step 6: Execute if requested
+        if not execute:
+            report["status"] = StrategyStatus.NON_MARKET_TIME if not market_status["is_market_open"] else StrategyStatus.SKIPPED
+            return report
 
-        # 5. Execute phase (Guarded)
-        if execute and report["status"] == "calculated" and not already_executed:
-            import time
-            results = []
-            sell_orders = [o for o in orders if o.side == OrderSide.SELL]
-            buy_orders = [o for o in orders if o.side == OrderSide.BUY]
+        if not market_status["is_market_open"]:
+            report["status"] = StrategyStatus.NON_MARKET_TIME
+            return report
 
-            for order in sell_orders:
-                success, msg = execute_single_order(order)
-                results.append({"order": order, "success": success, "message": msg})
+        results = _execute_orders(orders, sell_first=True, sell_wait_seconds=60)
+        report["execution_results"] = results
 
-            if sell_orders and buy_orders:
-                logging.info("[Rebalancing] Sells done. Waiting 60s for cash update...")
-                time.sleep(60)
+        success_count = sum(1 for r in results if r['success'])
+        report["status"] = StrategyStatus.EXECUTED if success_count == len(orders) else StrategyStatus.PARTIAL
+        report["succeeded_orders"] = [r["order"] for r in results if r["success"]]
+        report["pending_orders"] = [r["order"] for r in results if not r["success"]]
 
-            for order in buy_orders:
-                success, msg = execute_single_order(order)
-                results.append({"order": order, "success": success, "message": msg})
-
-            report["execution_results"] = results
-            success_count = sum(1 for r in results if r['success'])
-            report["status"] = "executed" if success_count == len(orders) else "partial_execution"
-            
-            _save_rebalancing_history(report)
+        # Save history
+        context = {
+            "seed": calc_info.get("seed"),
+            "usd_cash": calc_info.get("usd_cash"),
+            "total_available": calc_info.get("total_available"),
+            "scale_factor": calc_info.get("scale_factor"),
+            "asset_status": calc_info.get("asset_status", {}),
+        }
+        save_data = _build_strategy_history_data(report, "rebalancing",
+            extra_fields={"context": context})
+        _save_strategy_to_history(today_str, "rebalancing", save_data)
 
     except Exception as e:
         logging.error(f"Rebalancing Service Error: {e}", exc_info=True)
-        report["status"] = "error"
+        report["status"] = StrategyStatus.ERROR
         report["error"] = str(e)
 
     return report
-
-
-
-def _save_rebalancing_history(report: Dict):
-    """Saves rebalancing execution details to JSON history."""
-    if not report.get("execution_results") and report.get("status") != "no_orders":
-        return
-
-    hist_data = load_json(ConfigFile.REBALANCING_HISTORY, default=[])
-    now = datetime.now(pytz.timezone('US/Eastern'))
-
-    info = report.get("info", {})
-    entry = {
-        "date": now.strftime("%Y-%m-%d"),
-        "time": now.strftime("%H:%M:%S"),
-        "seed": info.get("seed"),
-        "usd_cash": info.get("usd_cash"),
-        "total_available": info.get("total_available"),
-        "scale_factor": info.get("scale_factor"),
-        "assets": info.get("asset_status", {}),
-        "orders": []
-    }
-
-    for res in report.get("execution_results", []):
-        order = res["order"]
-        entry["orders"].append({
-            "ticker": order.symbol,
-            "side": order.side.name,
-            "qty": order.quantity,
-            "price": order.price,
-            "success": res["success"],
-            "message": res["message"]
-        })
-
-    hist_data.insert(0, entry)
-    save_json(ConfigFile.REBALANCING_HISTORY, hist_data[:200]) # Keep last 200 entries

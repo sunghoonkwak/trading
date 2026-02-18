@@ -1,56 +1,66 @@
-# Strategy Execution Service (`src/strategy/execution_service.py`)
+# Execution Service (`src/strategy/execution_service.py`)
 
-전략 실행의 **중앙 제어 타워** 역할을 하는 서비스 모듈입니다.
-데이터 조회, 전략 계산, 주문 실행, 이력 저장, 보고서 생성 등 전체 프로세스를 조율(Orchestration)합니다.
+이 모듈은 모든 전략(`RAOEO`, `Value Averaging`, `Rebalancing`)의 실행주기를 관리하고 조율하는 역할을 합니다.
 
 # Core Logic (핵심 로직)
 
-1. **데이터 준비**: 포트폴리오(KIS API), 현재가, 설정 파일 등을 로드합니다. `force_refresh=True`로 항상 최신 데이터를 가져오며, `scope="kis"`일 때 GSheet을 건너뛰어 속도를 최적화합니다.
-2. **미체결 주문 차감**: KIS API가 pending LOC 주문을 Available Cash에 반영하지 않으므로, 미체결 매수 주문 금액을 조회하여 USD cash에서 직접 차감합니다.
-3. **전략 계산**: `raoeo`, `value_averaging`, `rebalancing` 모듈의 함수를 호출하여 주문 목록을 생성합니다. 휴장일에도 계산은 수행하여 보고서에 포함합니다.
-4. **주문 실행**: `execute=True` 플래그가 있으면 KIS API를 통해 실제 주문을 전송합니다.
-5. **안전 집행 (Rebalancing)**: 리밸런싱의 경우 매도 대금이 입금될 시간을 확보하기 위해 **매도 우선 실행 후 60초 대기**, 그 다음 매수를 실행합니다. 매도는 현재 시장가로 Limit 매도합니다.
-6. **RAOEO 예산 예약**: 리밸런싱 실행 시 RAOEO 일일 버짓 합계를 available cash에서 차감하여, 리밸런싱이 RAOEO 매수에 필요한 현금을 사용하지 않도록 보호합니다.
-7. **이력 저장**: 실행 결과를 각 전략별 JSON 파일로 저장합니다.
+1. **Unified Execution Flow (통합 실행 흐름)**:
+   - 모든 전략은 `Enabled Check` -> `Market Check` -> `History Check` -> `Determine Action` -> `Execute` -> `Report`의 동일한 6단계 과정을 거칩니다.
+
+2. **Centralized Market Status (시장 상태 중앙 관리)**:
+   - `utils.market_utils`를 통해 휴장일 및 장 운영 시간을 확인하고, 이를 모든 전략 실행에 반영합니다.
+
+3. **Unified History Management (통합 히스토리 관리)**:
+   - `strategy_history.json` 파일 하나에 모든 전략의 실행 결과를 날짜별로 통합 저장합니다.
+   - 실행 이력이 있는 경우, 성공한 주문(`succeeded`)은 건너뛰고 실패한 주문(`pending`)만 선별하여 재실행을 시도합니다.
 
 # Key Functions (주요 함수)
 
-## `run_raoeo_strategy`
-RAOEO 전략의 전체 사이클을 수행합니다.
-- **히스토리 우선**: 금일 이미 실행된 내역이 히스토리에 있으면 재계산 없이 이를 복원합니다.
-- **실패 재시도**: `execute=True` 호출 시, 히스토리 중 실패한 주문들만 골라 재실행하며 히스토리를 업데이트합니다.
-- **이미 완료**: 모든 주문이 성공한 경우 재실행 없이 종료합니다.
+## `run_raoeo_strategy`, `run_va_strategy`, `run_rebalancing_strategy`
+각 전략을 실행하고 결과를 반환합니다.
 
-## `run_va_strategy`
-Value Averaging 전략 전용 사이클을 수행합니다.
+- **입력 (Input)**:
+  - `execute` (bool): `True`이면 실제 주문을 전송합니다. `False`이면 계산 결과만 반환합니다.
+- **출력 (Output)**: `Dict` (표준화된 리포트 객체)
+  - `status`: 실행 결과 (`executed`, `partial`, `skipped`, `holiday`, `disabled` 등)
+  - `orders`: 생성된 전체 주문 목록
+  - `succeeded_orders`: 이미 체결 완료된 주문 목록
+  - `pending_orders`: 체결 필요한(대기 중인) 주문 목록
+  - `market_status`: 시장 상태 정보 (`is_market_open`, `message`)
 
-## `run_rebalancing_strategy`
-리밸런싱 전략 전용 사이클을 수행합니다. KIS 전용 데이터를 사용하며, 안전 집행 로직이 포함되어 있습니다.
+## `_execute_orders`
+주문 목록을 받아 순차적으로 KIS API를 통해 실행합니다.
 
-## `_get_pending_buy_amount`
-KIS 미체결 주문을 조회하여 US 시장의 pending 매수 주문 총액(USD)을 계산합니다. 개별 주문 내역을 로그에 기록합니다.
+- **입력 (Input)**:
+  - `orders` (List[StrategyOrder]): 실행할 주문 객체 리스트
+  - `sell_first` (bool): 매도 주문 먼저 실행 여부 (리밸런싱용)
+- **출력 (Output)**: `List[Dict]` (실행 결과 리스트: `success`, `message` 포함)
 
-## `_adjust_cash_for_pending_orders`
-`holdings`의 `USD cash`에서 미체결 매수 금액을 차감한 복사본을 반환합니다.
+# Configuration (`strategy_config.json`)
 
-## `execute_single_order`
-개별 `StrategyOrder` 객체를 KIS API 포맷으로 변환하여 실행합니다.
+각 전략 섹션(`raoeo`, `value_averaging`, `rebalancing`)의 `enabled` 필드를 확인하여 실행 여부를 결정합니다.
 
-## `_restore_orders_from_history`
-히스토리 entry에서 주문 목록을 `StrategyOrder` 객체로 복원하고, 각 주문의 success 상태와 함께 반환합니다.
-
-## `_update_raoeo_history`
-재실행 결과를 기존 히스토리 entry에 반영합니다. 실패했던 주문이 성공으로 변경될 때 사용됩니다.
-
-## `_save_raoeo_history`
-RAOEO 전략의 실행 결과(Report)를 `raoeo_history.json` 파일에 저장합니다. 주문이 실행되지 않아도 계산 결과가 있으면 저장할 수 있습니다.
-
+```json
+{
+  "raoeo": {
+    "enabled": true, // 전략 전체 활성화 여부
+    "targets": {
+      "SOXL": { "enabled": true } // 개별 종목 활성화 여부
+    }
+  }
+}
+```
 
 # Usage Example (사용 예시)
 
 ```python
-from strategy.execution_service import run_rebalancing_strategy
+from strategy.execution_service import run_raoeo_strategy
 
-# 실제 주문 실행 (매도 후 60초 대기 로직 포함)
-result = run_rebalancing_strategy(execute=True)
+# 1. 단순 계산 및 리포트 확인 (주문 전송 X)
+report = run_raoeo_strategy(execute=False)
+print(report['status'])
+
+# 2. 실제 주문 실행
+if report['status'] == 'skipped' or report['status'] == 'partial':
+    result = run_raoeo_strategy(execute=True)
 ```

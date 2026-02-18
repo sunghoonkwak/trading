@@ -2,10 +2,22 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+
 class OrderSide(Enum):
     BUY = "BUY"
     SELL = "SELL"
     HOLD = "HOLD"
+
+
+class StrategyStatus(Enum):
+    """Unified status values for all strategy execution results."""
+    EXECUTED = "executed"
+    PARTIAL = "partial"
+    SKIPPED = "skipped"
+    HOLIDAY = "holiday"
+    NON_MARKET_TIME = "non_market_time"
+    DISABLED = "disabled"
+    ERROR = "error"
 
 @dataclass
 class StrategyOrder:

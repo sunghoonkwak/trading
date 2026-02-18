@@ -1,26 +1,39 @@
-# Telegram Rebalancing (`src/telegram_bot/telegram_rebalancing.py`)
+# Telegram Rebalancing Handler (`src/telegram_bot/telegram_rebalancing.py`)
 
-텔레그램을 통해 리밸런싱 전략의 상태를 조회하고 수동으로 실행할 수 있는 인터페이스를 제공하는 모듈입니다.
+`/rebalance` 명령어를 처리하여 포트폴리오 리밸런싱 현황을 확인하거나 수동으로 실행하는 핸들러입니다.
 
 # Core Logic (핵심 로직)
 
-1. **상태 조회**: `/rebalance` 명령어 입력 시 현재 비중 상태와 필요한 리밸런싱 주문을 계산하여 보고합니다.
-2. **수동 실행**: 사용자가 텔레그램 버튼을 통해 승인하면 즉시 주문을 집행합니다.
-3. **세션 관리**: 실행/취소 시 관련 데이터를 정리하고 일정 시간 응답이 없으면 세션을 종료합니다.
+1. **Rebalancing Status Check (리밸런싱 상태 확인)**:
+   - `execution_service.run_rebalancing_strategy`를 호출하여 리밸런싱 필요성과 주문 생성 여부를 확인합니다.
+   - 이때 `execute=False` 모드로 호출하여 시뮬레이션 결과만 받습니다.
+
+2. **Interactive Execution (대화형 실행)**:
+   - 생성된 리포트(현재 비중, 목표 비중, 필요 주문)를 보여주고, 실행 가능한 주문이 있으면 "실행(Execute)" 버튼을 제공합니다.
+   - 사용자가 버튼을 클릭하면 `execute=True`로 다시 전략을 호출하여 주문을 전송합니다.
 
 # Key Functions (주요 함수)
 
-## `cmd_rebalance`
-`/rebalance` 명령어에 반응하여 현재 리밸런싱 상태 리포트를 전송합니다.
+## `handle_rebalance_command`
+`/rebalance` 명령어 입력 시 호출되는 메인 함수입니다.
+- 리밸런싱 전략을 실행하고 결과 리포트를 생성하여 전송합니다.
 
-## `handle_reb_callback`
-텔레그램의 'Execute' 또는 'Cancel' 버튼 클릭 이벤트를 처리합니다.
+## `execute_rebalance_callback`
+사용자가 "Execute Rebalance" 버튼을 눌렀을 때 호출되는 콜백 함수입니다.
+- `pending_orders`가 있는 경우 실행을 시도하며, 결과를 다시 사용자에게 리포팅합니다.
 
-## `register_rebalancing_handlers`
-텔레그램 봇 애플리케이션에 리밸런싱 관련 핸들러를 등록합니다.
+# Configuration (None)
+별도의 설정 파일이 없습니다.
 
 # Usage Example (사용 예시)
 
-텔레그램 채팅창에서:
-- `/rebalance`: 현재 리밸런싱 필요 여부 확인
-- 버튼 클릭: 주문 집행 또는 취소
+**Telegram 채팅방**:
+```
+/rebalance
+```
+**Bot 응답**:
+```
+📊 Rebalancing Report
+... (자산 비중 및 주문 내역) ...
+[Execute Rebalance] (버튼)
+```

@@ -1,7 +1,7 @@
 # Strategy Base (`src/strategy/base.py`)
 
 전략 모듈 간에 공유되는 **기본 데이터 구조**를 정의하는 모듈입니다.
-특히 주문 객체(`StrategyOrder`)의 표준 포맷을 제공하여 전략 계산 로직과 실행 로직 간의 결합도를 낮춥니다.
+특히 주문 객체(`StrategyOrder`)와 실행 상태(`StrategyStatus`)의 표준 포맷을 제공하여 전략 계산 로직과 실행 로직 간의 결합도를 낮춥니다.
 
 # Core Logic (핵심 로직)
 
@@ -15,6 +15,16 @@
 - `BUY`: 매수
 - `SELL`: 매도
 - `HOLD`: 관망
+
+## `StrategyStatus` (Enum)
+전략 실행 결과를 통합 관리하기 위한 상태값입니다.
+- `EXECUTED`: 모든 주문 성공
+- `PARTIAL`: 일부 주문 실패 (재실행 필요)
+- `SKIPPED`: 조건 미달로 주문 없음
+- `HOLIDAY`: 휴장일로 실행 안 함
+- `NON_MARKET_TIME`: 장 운영 시간이 아님
+- `DISABLED`: 전략 비활성화 상태
+- `ERROR`: 실행 중 오류 발생
 
 ## `StrategyOrder` (dataclass)
 전략 계산 결과로 생성되는 단일 주문 정보를 담습니다.
@@ -37,7 +47,10 @@
 # Usage Example (사용 예시)
 
 ```python
-from strategy.base import StrategyOrder, OrderSide
+from strategy.base import StrategyOrder, OrderSide, StrategyStatus
+
+# 상태값 사용
+status = StrategyStatus.EXECUTED
 
 # 주문 생성
 order = StrategyOrder(
@@ -47,7 +60,4 @@ order = StrategyOrder(
     price=35.5,
     reason="Phase 1 Buy"
 )
-
-print(order)
-# 출력: [SOXL] BUY 10 ($35.50) - Phase 1 Buy
 ```
