@@ -9,6 +9,7 @@ let reconnectAttempts = 0;
 let maxReconnectAttempts = 10;
 let autoScroll = true;
 let showMktLogs = false;
+let autoRefreshOrders = true;
 
 // Data stores
 const orders = new Map();
@@ -37,6 +38,7 @@ const elements = {
     statusText: null,
     ordersPanel: null,
     ordersCount: null,
+    ordersAutoToggle: null,
     quotesPanel: null,
     quotesCount: null,
     logPanel: null,
@@ -50,11 +52,16 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
     initElements();
     initMktToggle();
+    initOrdersAutoToggle();
     connectWebSocket();
     fetchMemos(); // New
 
     // Auto-refresh orders every 30 seconds
-    setInterval(() => refreshOrders(true), 30000);
+    setInterval(() => {
+        if (autoRefreshOrders) {
+            refreshOrders(true);
+        }
+    }, 30000);
 });
 
 function initElements() {
@@ -63,6 +70,7 @@ function initElements() {
     elements.statusText = connStatus?.querySelector('.status-text');
     elements.ordersPanel = document.getElementById('orders-panel');
     elements.ordersCount = document.getElementById('orders-count');
+    elements.ordersAutoToggle = document.getElementById('orders-auto-toggle');
     elements.quotesPanel = document.getElementById('quotes-panel');
     elements.quotesCount = document.getElementById('quotes-count');
     elements.logPanel = document.getElementById('log-panel');
@@ -77,6 +85,16 @@ function initMktToggle() {
         elements.mktToggle.addEventListener('click', () => {
             showMktLogs = !showMktLogs;
             elements.mktToggle.classList.toggle('active', showMktLogs);
+        });
+    }
+}
+
+function initOrdersAutoToggle() {
+    if (elements.ordersAutoToggle) {
+        elements.ordersAutoToggle.addEventListener('click', () => {
+            autoRefreshOrders = !autoRefreshOrders;
+            elements.ordersAutoToggle.classList.toggle('active', autoRefreshOrders);
+            addLog(`Orders auto-refresh: ${autoRefreshOrders ? 'ON' : 'OFF'}`, 'info');
         });
     }
 }
