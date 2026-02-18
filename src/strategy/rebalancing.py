@@ -8,7 +8,6 @@ It calculates orders to bring assets back to their target weights.
 import logging
 from typing import Dict, List, Tuple
 from strategy.base import StrategyOrder, OrderSide
-from constants import ORDER_TYPE_US_LOC
 
 def calculate_orders(
     config: Dict,
