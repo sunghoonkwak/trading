@@ -573,6 +573,27 @@ def _save_va_skips(context, orders):
         if ticker not in order_tickers and not ctx.get('already_executed'):
              _save_va_history_entry(ticker, ctx, None, True, "Skipped")
 
+def _restore_rebalancing_execution_results(history_entry: Dict) -> List[Dict]:
+    """Restore execution results from history entry for rebalancing."""
+    results = []
+    for o_data in history_entry.get("orders", []):
+        try:
+            order = StrategyOrder(
+                symbol=o_data["ticker"],
+                side=OrderSide[o_data["side"]],
+                quantity=o_data["qty"],
+                price=o_data["price"],
+                order_type="00",
+                reason=""
+            )
+            results.append({
+                "order": order,
+                "success": o_data.get("success", False),
+                "message": o_data.get("message", "Restored from history")
+            })
+        except: continue
+    return results
+
 # -------------------------------------------------------------------------
 # Rebalancing Execution
 # -------------------------------------------------------------------------
@@ -581,7 +602,10 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
     """
     Run Static Weight Rebalancing strategy cycle.
     """
-    today_str = datetime.now(pytz.timezone('US/Eastern')).strftime("%Y-%m-%d")
+    tz_et = pytz.timezone('US/Eastern')
+    now_et = datetime.now(tz_et)
+    today_str = now_et.strftime("%Y-%m-%d")
+    
     report = {
         "date": today_str,
         "status": "init",
@@ -593,48 +617,44 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
     }
 
     try:
-        # 1. Load Data (Scope: KIS only for rebalancing)
+        # 1. Check for 'Already Executed' status FIRST
+        hist_data = load_json(ConfigFile.REBALANCING_HISTORY, default=[])
+        today_entry = next(
+            (h for h in hist_data if str(h.get("date")).strip() == today_str and h.get("orders")),
+            None
+        )
+        
+        already_executed = False
+        if today_entry:
+            logging.info(f"[Rebalancing] Found execution record for {today_str}")
+            already_executed = True
+            report["status"] = "already_executed"
+            report["execution_results"] = _restore_rebalancing_execution_results(today_entry)
+            report["info"]["exec_time"] = today_entry.get("time")
+
+        # 2. Load Data
         portfolio_res = get_portfolio_data(force_refresh=True, scope="kis")
         holdings = portfolio_res.get('merged_data', {})
-
-        # 1.5. Adjust cash for pending orders (KIS doesn't deduct LOC orders)
         holdings = _adjust_cash_for_pending_orders(holdings)
 
-        # 2. Fetch Prices for Rebalancing Assets
         strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
         reb_conf = strategy_config.get('rebalancing', {})
         report["config"] = reb_conf
-
-        reb_assets = reb_conf.get('assets', [])
-        prices = {}
-        for a in reb_assets:
-            t = a['ticker']
-            # Try from portfolio first
-            p = float(holdings.get(t, {}).get('cur_price', 0))
-            if p <= 0:
-                # If not held, fetch from API
-                p = wrapper.fetch_price(t)
-            prices[t] = p
-            logging.info(f"Rebalancing: Price for {t} set to ${p}")
 
         if not reb_conf.get("enabled", False):
             report["status"] = "disabled"
             return report
 
-        # 2. Check if already executed today (prevent duplicate LOC orders)
-        if execute:
-            hist_data = load_json(ConfigFile.REBALANCING_HISTORY, default=[])
-            today_entry = next(
-                (h for h in hist_data if h.get("date") == today_str and h.get("orders")),
-                None
-            )
-            if today_entry:
-                logging.info(f"Rebalancing: Already executed today at {today_entry.get('time', '?')}. Skipping.")
-                report["status"] = "already_executed"
-                report["info"] = {"message": f"Already executed at {today_entry.get('time', '?')}"}
-                return report
+        reb_assets = reb_conf.get('assets', [])
+        prices = {}
+        for a in reb_assets:
+            t = a['ticker']
+            p = float(holdings.get(t, {}).get('cur_price', 0))
+            if p <= 0:
+                p = wrapper.fetch_price(t)
+            prices[t] = p
 
-        # 2.5. Calculate RAOEO daily budget to reserve from cash
+        # 2.5. RAOEO Budget Reservation
         raoeo_conf = strategy_config.get('raoeo', {}).get('targets', {})
         raoeo_daily_total = 0.0
         for ticker, tcfg in raoeo_conf.items():
@@ -642,10 +662,8 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
             r_duration = int(tcfg.get('duration', 1))
             if r_duration > 0 and r_seed > 0:
                 raoeo_daily_total += r_seed / r_duration
-        if raoeo_daily_total > 0:
-            logging.info(f"Rebalancing: Reserving ${raoeo_daily_total:.2f} for RAOEO daily budget")
 
-        # 3. Calculate (Always calculate to show in report)
+        # 3. Calculate Orders
         orders, info = rebalancing.calculate_orders(
             config=reb_conf,
             portfolio=holdings,
@@ -653,56 +671,47 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
             reserved_cash=raoeo_daily_total
         )
         report["orders"] = orders
-        report["info"] = info
+        
+        # Merge info into report["info"]
+        for k, v in info.items():
+            if k not in report["info"]:
+                report["info"][k] = v
 
-        # 4. Check Status & Holiday
+        # 4. Final Status Determination
         is_holiday = is_market_holiday("NYSE", today_str)
 
         if is_holiday:
             report["status"] = "market_holiday"
+        elif already_executed:
+            report["status"] = "already_executed"
         elif not orders:
             report["status"] = "no_orders"
         else:
             report["status"] = "calculated"
-            # Log detailed status
-            logging.info(f"Rebalancing: Calculated {len(orders)} orders for Seed ${info.get('seed')}")
-            for ticker, status in info.get('asset_status', {}).items():
-                logging.info(f"  [{ticker}] CurWeight: {status['cur_w']}% (Diff: {status['diff_w']}%p)")
 
-        # 5. Execute (if requested and possible)
-        # Only execute if status is 'calculated' (implies NOT holiday)
-        if execute and report["status"] == "calculated":
+        # 5. Execute phase (Guarded)
+        if execute and report["status"] == "calculated" and not already_executed:
             import time
             results = []
-
-            # Separate Sells and Buys to ensure cash is secured first
             sell_orders = [o for o in orders if o.side == OrderSide.SELL]
             buy_orders = [o for o in orders if o.side == OrderSide.BUY]
 
-            # Step A: Execute Sells First
             for order in sell_orders:
                 success, msg = execute_single_order(order)
                 results.append({"order": order, "success": success, "message": msg})
 
-            # Step B: Wait for cash update (1 minute)
             if sell_orders and buy_orders:
-                logging.info("Rebalancing: Sells executed. Waiting 60s for cash update...")
+                logging.info("[Rebalancing] Sells done. Waiting 60s for cash update...")
                 time.sleep(60)
 
-            # Step C: Execute Buys
             for order in buy_orders:
                 success, msg = execute_single_order(order)
                 results.append({"order": order, "success": success, "message": msg})
 
             report["execution_results"] = results
             success_count = sum(1 for r in results if r['success'])
-
-            if success_count == len(orders):
-                report["status"] = "executed"
-            else:
-                report["status"] = "partial_execution"
-
-            # Save History
+            report["status"] = "executed" if success_count == len(orders) else "partial_execution"
+            
             _save_rebalancing_history(report)
 
     except Exception as e:
@@ -711,6 +720,8 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
         report["error"] = str(e)
 
     return report
+
+
 
 def _save_rebalancing_history(report: Dict):
     """Saves rebalancing execution details to JSON history."""

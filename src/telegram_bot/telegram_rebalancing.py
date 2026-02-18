@@ -42,8 +42,12 @@ async def cmd_rebalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     report_text = format_rebalancing_report(reb_rep)
     
     # Check if executable
-    is_holiday = reb_rep.get('status') == 'market_holiday'
-    has_orders = bool(reb_rep.get('orders')) and not is_holiday
+    status = reb_rep.get('status')
+    is_holiday = status == 'market_holiday'
+    is_already_done = status == 'already_executed'
+    
+    # has_orders is true only if there are orders AND it's not a holiday AND not already executed
+    has_orders = bool(reb_rep.get('orders')) and not is_holiday and not is_already_done
     
     keyboard = build_confirm_keyboard(has_orders)
     

@@ -138,50 +138,68 @@ def format_rebalancing_report(reb_report: Dict) -> str:
 
     if reb_report.get('error'):
         lines.append(f"  ⚠️ Error: {reb_report['error']}")
-    elif reb_report.get('status') == 'disabled':
+        return "\n".join(lines)
+
+    status = reb_report.get('status')
+    if status == 'disabled':
         lines.append("  ⚪ Disabled")
-    elif reb_report.get('status') == 'already_executed':
-        msg = reb_report.get('info', {}).get('message', 'Already executed today')
-        lines.append(f"  ⏩ {msg}")
-    else:
-        info = reb_report.get('info', {})
-        if info:
-            seed = info.get('seed', 0)
-            cash = info.get('usd_cash', 0)
-            avail = info.get('total_available', 0)
-            lines.append(f"  🎯 <b>Target Seed: ${seed:,.0f}</b>")
-            lines.append(f"  💰 <b>Available Cash: ${avail:,.2f}</b> (Pure: ${cash:,.2f})")
-            if info.get('scale_factor', 1.0) < 1.0:
-                lines.append(f"  ⚠️ Scaled by {info['scale_factor']*100:.1f}% due to cash limit")
-            lines.append("")
+        return "\n".join(lines)
 
-        orders = reb_report.get('orders', [])
-        if orders:
-            # Show current holdings first
-            lines.append("  <b>Current KIS Holdings:</b>")
-            for ticker, status in info.get('asset_status', {}).items():
-                lines.append(f"    • {ticker}: {status['qty']} shares (${status['cur_val']:,.1f})")
-            lines.append("")
+    # Show Header Info (Seed, Cash) if available
+    info = reb_report.get('info', {})
+    if info:
+        seed = info.get('seed', 0)
+        cash = info.get('usd_cash', 0)
+        avail = info.get('total_available', 0)
+        lines.append(f"  🎯 <b>Target Seed: ${seed:,.0f}</b>")
+        lines.append(f"  💰 <b>Available Cash: ${avail:,.2f}</b> (Pure: ${cash:,.2f})")
+        
+        if info.get('scale_factor', 1.0) < 1.0:
+            lines.append(f"  ⚠️ Scaled by {info['scale_factor']*100:.1f}% due to cash limit")
+        lines.append("")
 
-            for o in orders:
-                lines.append(f"  • {o}")
-            if reb_report.get('status') == 'market_holiday':
-                lines.append("    🚫 Market Holiday (Will not execute)")
-        elif reb_report.get('status') == 'market_holiday':
-            lines.append("  🚫 Market Holiday")
-        else:
-            lines.append("  ✅ Within threshold (No orders needed).")
+    # Always show current asset status if available
+    asset_status = info.get('asset_status', {})
+    if asset_status:
+        lines.append("  <b>Current KIS Holdings & Weights:</b>")
+        for ticker, data in asset_status.items():
+            cur_w = data.get('cur_w', 0)
+            tgt_w = data.get('target_w', 0)
+            diff_w = data.get('diff_w', 0)
+            qty = data.get('qty', 0)
+            val = data.get('cur_val', 0)
+            
+            diff_sign = "+" if diff_w > 0 else ""
+            lines.append(f"    • {ticker}: {cur_w}% ({diff_sign}{diff_w}%p) | {qty}sh (${val:,.1f})")
+        lines.append("")
 
-    # Execution Results
+    # Status specific messages
+    if status == 'already_executed':
+        exec_time = info.get('exec_time', 'earlier today')
+        lines.append(f"  ✅ <b>Already executed at {exec_time}</b>")
+    elif status == 'market_holiday':
+        lines.append("  🚫 <b>Market Holiday (Execution Skipped)</b>")
+    elif status == 'no_orders':
+        lines.append("  ✅ <b>Within threshold (No orders needed)</b>")
+
+    # Orders List
+    orders = reb_report.get('orders', [])
+    if orders and status != 'already_executed':
+        lines.append("  <b>Proposed Orders:</b>")
+        for o in orders:
+            lines.append(f"    • {o}")
+
+    # Execution Results (Show historical or real-time results)
     exec_results = reb_report.get('execution_results', [])
     if exec_results:
         lines.append("\n" + "─" * 20)
-        lines.append("<b>Execution Results:</b>")
+        title = "<b>Executed Orders (History):</b>" if status == 'already_executed' else "<b>Execution Results:</b>"
+        lines.append(title)
         for res in exec_results:
-            status = "✅" if res['success'] else "❌"
+            st_icon = "✅" if res['success'] else "❌"
             order = res['order']
             msg = res.get('message', '')
-            err_str = f" ({msg})" if not res['success'] else ""
-            lines.append(f"  {status} {order.symbol} {order.side.name} {order.quantity} @ {order.price}{err_str}")
+            err_str = f" ({msg})" if not res['success'] and msg else ""
+            lines.append(f"  {st_icon} {order.symbol} {order.side.name} {order.quantity} @ {order.price}{err_str}")
 
     return "\n".join(lines)
