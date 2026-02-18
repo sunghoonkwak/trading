@@ -193,7 +193,7 @@ body {
 .viewer-section.quotes-section {
     flex: 0 0 auto;
     min-height: 0;
-    max-height: 35vh;
+    /* Removed max-height to allow downward growth without scrollbar */
     transition: all 0.3s ease-out;
 }
 

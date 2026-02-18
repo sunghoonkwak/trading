@@ -26,7 +26,24 @@ const tickerOrder = [
     'QQQM', 'VOO', 'SCHD', 'TLT',
     // Individual Stocks
     'GOOGL', 'TSM', 'NVDA', 'AVGO', 'QCOM', 'BLK'
-]; // Tickers will layout in this order. Others will follow alphabetically.
+]; // Tickers will layout in this order. Others will follow alphabetically
+
+const tickerNames = {
+    'SOXL': 'DIREXION SEMICONDUCTOR DAILY 3X',
+    'FAS': 'DIREXION FINANCIAL DAILY 3X',
+    'TQQQ': 'PROSHARES QQQ 3X',
+    'QLD': 'PROSHARES QQQ 2X',
+    'QQQM': 'Invesco NASDAQ 100 ETF',
+    'VOO': 'SPDR S&P 500 ETF Trust',
+    'SCHD': 'SCHWAB US DIVIDEND EQUITY',
+    'TLT': 'iShares 20+ Year Treasury Bond ETF',
+    'GOOGL': 'Google LLC',
+    'TSM': 'Taiwan Semi Manufacturing',
+    'NVDA': 'NVIDIA Corporation',
+    'AVGO': 'Broadcom Inc.',
+    'QCOM': 'QUALCOMM, Inc.',
+    'BLK': 'BlackRock, Inc.'
+};
 
 // Cancel modal state
 let pendingCancelOrderId = null;
@@ -53,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initElements();
     initMktToggle();
     initOrdersAutoToggle();
+    updateQuotesPanel(); // Initial draw for placeholders
     connectWebSocket();
     fetchMemos(); // New
 
@@ -284,39 +302,52 @@ function updateOrdersPanel() {
 function updateQuotesPanel() {
     if (!elements.quotesPanel) return;
 
-    if (quotes.size === 0) {
+    // 1. Identify all tickers to display (always include tickerOrder)
+    const displayedTickers = [...tickerOrder];
+
+    // 2. Add tickers from quotes that are NOT in tickerOrder
+    const extraTickers = [];
+    for (const ticker of quotes.keys()) {
+        if (!displayedTickers.includes(ticker)) {
+            extraTickers.push(ticker);
+        }
+    }
+
+    // Sort extra tickers alphabetically
+    extraTickers.sort();
+    const finalTickers = [...displayedTickers, ...extraTickers];
+
+    if (finalTickers.length === 0) {
         elements.quotesPanel.innerHTML = '<div class="empty-state">Waiting for quotes...</div>';
     } else {
-        const entries = Array.from(quotes.entries());
-
-        // Sort based on tickerOrder
-        entries.sort((a, b) => {
-            const tickerA = a[0];
-            const tickerB = b[0];
-            const indexA = tickerOrder.indexOf(tickerA);
-            const indexB = tickerOrder.indexOf(tickerB);
-
-            // Both in list: Sort by index
-            if (indexA !== -1 && indexB !== -1) {
-                return indexA - indexB;
+        elements.quotesPanel.innerHTML = finalTickers.map(ticker => {
+            const quote = quotes.get(ticker);
+            if (quote) {
+                return `<div class="quote-entry">${formatQuoteColumns(quote.content, quote.time)}</div>`;
+            } else {
+                // Placeholder for missing data (only for tickerOrder)
+                const name = tickerNames[ticker] || ticker;
+                return `<div class="quote-entry">${formatPlaceholderQuote(name, ticker)}</div>`;
             }
-            // Only A in list: A comes first
-            if (indexA !== -1) return -1;
-            // Only B in list: B comes first
-            if (indexB !== -1) return 1;
-
-            // Neither in list: Sort alphabetically
-            return tickerA.localeCompare(tickerB);
-        });
-
-        elements.quotesPanel.innerHTML = entries.map(([ticker, quote]) => {
-            return `<div class="quote-entry">${formatQuoteColumns(quote.content, quote.time)}</div>`;
         }).join('');
     }
 
     if (elements.quotesCount) {
-        elements.quotesCount.textContent = quotes.size;
+        elements.quotesCount.textContent = finalTickers.length;
     }
+}
+
+function formatPlaceholderQuote(name, ticker) {
+    const displayName = truncateName(name, 25);
+    return `
+        <span class="time" style="margin-right:8px">--:--:--</span>
+        <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block;color:var(--text-dim)" title="${escapeHtml(name)}">${escapeHtml(displayName)}</span>
+        <span style="width:55px;display:inline-block" class="ticker-link" onclick="openTickerModal('${escapeHtml(ticker)}')">${escapeHtml(ticker)}</span>
+        <span style="width:80px;display:inline-block;color:var(--text-dim)">---</span>
+        <span style="width:140px;display:inline-block;color:var(--text-dim)">---</span>
+        <span style="width:140px;display:inline-block;color:var(--text-dim)">---</span>
+        <span style="display:inline-block;color:var(--text-dim)">---</span>
+    `;
 }
 
 function formatQuoteColumns(content, time) {
@@ -326,12 +357,14 @@ function formatQuoteColumns(content, time) {
         return colorizeQuote(content);
     }
 
-    const name = escapeHtml(parts[0]?.trim() || '');
+    const name = parts[0]?.trim() || '';
     const ticker = escapeHtml(parts[1]?.trim() || '');
     const bid = parts[2]?.trim() || '';
     const last = parts[3]?.trim() || '';
     const diff = parts[4]?.trim() || '';
     const ask = parts[5]?.trim() || '';
+
+    const displayName = truncateName(name, 25);
 
     // Colorize diff
     let diffHtml = escapeHtml(diff);
@@ -346,13 +379,19 @@ function formatQuoteColumns(content, time) {
 
     return `
         <span class="time" style="margin-right:8px">${time}</span>
-        <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block">${name}</span>
+        <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block" title="${escapeHtml(name)}">${escapeHtml(displayName)}</span>
         <span style="width:55px;display:inline-block" class="ticker-link" onclick="openTickerModal('${escapeHtml(ticker)}')">${escapeHtml(ticker)}</span>
         <span style="width:80px;display:inline-block">${escapeHtml(bid)}</span>
         <span style="width:140px;display:inline-block">${lastHtml}</span>
         <span style="width:140px;display:inline-block">${diffHtml}</span>
         <span style="display:inline-block">${escapeHtml(ask)}</span>
     `;
+}
+
+function truncateName(name, maxLen) {
+    if (!name) return '';
+    if (name.length <= maxLen) return name;
+    return name.substring(0, maxLen - 3) + '...';
 }
 
 function colorizeQuote(content) {
@@ -490,7 +529,7 @@ function closeTickerModal() {
         modal.classList.add('hidden');
         // Clear chart to stop resource usage?
         // document.getElementById('tv-chart-container').innerHTML = '';
-        // Keeping it might be faster if re-opened. Let's leave it.
+        // Keeping it might be faster if re-opened. Let's leave it
     }
 }
 
@@ -507,8 +546,8 @@ function loadTradingViewChart(ticker) {
         // Korean stock usually 6 digits
         symbol = `KRX:${ticker}`;
     } else {
-        // For US/Overseas, simply use the ticker. TradingView is smart enough to find the main listing.
-        // This solves issues where ETFs are on NYSE Arca (e.g. SOXL) instead of NASDAQ.
+        // For US/Overseas, simply use the ticker. TradingView is smart enough to find the main listing
+        // This solves issues where ETFs are on NYSE Arca (e.g. SOXL) instead of NASDAQ
         symbol = ticker;
     }
 
@@ -734,7 +773,7 @@ function renderMemos(data) {
         // Reverse messages to show newest first? Or keep chronological?
         // Usually chronological within a day is better for chat logs, but for memos maybe newest first?
         // Let's keep original order (chronological) as per user request "date order" (implicit)
-        // actually user said "날짜순으로 표시하고" which usually means sorted by date.
+        // actually user said "날짜순으로 표시하고" which usually means sorted by date
 
         msgs.forEach((msg, index) => {
             // format: "HH:MM:SS : message text"
@@ -802,14 +841,14 @@ function toggleMemo(elementId, encodedText, shortHeader) {
     const toggleBtn = entry.querySelector('.memo-toggle-btn');
 
     const isExpanded = entry.classList.contains('expanded');
-    // Actually msg includes timestamp. Let's start clean.
+    // Actually msg includes timestamp. Let's start clean
 
-    // We need just the text part.
-    // The encodedText passed to toggleMemo is the FULL msg (Time : Text).
-    // But we usually want to toggle the TEXT part.
-    // In render loop, we extracted `text`. We should pass THAT or re-extract.
+    // We need just the text part
+    // The encodedText passed to toggleMemo is the FULL msg (Time : Text)
+    // But we usually want to toggle the TEXT part
+    // In render loop, we extracted `text`. We should pass THAT or re-extract
     // Simpler: Just toggle CSS class and use data attribute?
-    // Or swap content.
+    // Or swap content
 
     if (isExpanded) {
         // Collapse
