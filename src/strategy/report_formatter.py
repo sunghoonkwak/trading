@@ -64,7 +64,9 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
 
     # --- RAOEO Section ---
     lines.append("\n🔹 <b>RAOEO</b>")
-    lines.append(_format_market_status_line(raoeo_report))
+    ms_line = _format_market_status_line(raoeo_report)
+    if ms_line:
+        lines.append(ms_line)
 
     if raoeo_report.get('error'):
         lines.append(f"  ⚠️ Error: {raoeo_report['error']}")
@@ -107,11 +109,13 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
             # Status message
             lines.append(f"\n  {_get_status_display(raoeo_report)}")
         else:
-            lines.append(f"  {_get_status_display(raoeo_report)}")
+            lines.append(f"\n  {_get_status_display(raoeo_report)}")
 
     # --- VA Section ---
     lines.append("\n🔹 <b>Value Averaging</b>")
-    lines.append(_format_market_status_line(va_report))
+    ms_line = _format_market_status_line(va_report)
+    if ms_line:
+        lines.append(ms_line)
 
     if va_report.get('error'):
         lines.append(f"  ⚠️ Error: {va_report['error']}")

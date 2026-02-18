@@ -417,7 +417,7 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
                 report["status"] = StrategyStatus.EXECUTED if success_count == len(failed) else StrategyStatus.PARTIAL
 
                 # Update history
-                hist_entry_data = _build_strategy_history_data(report)
+                hist_entry_data = _build_strategy_history_data(report, "raoeo")
                 # Merge: keep succeeded, update failed
                 merged_orders = []
                 for o in succeeded:
@@ -484,7 +484,7 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
         report["pending_orders"] = [r["order"] for r in results if not r["success"]]
 
         # Save history
-        hist_data = _build_strategy_history_data(report)
+        hist_data = _build_strategy_history_data(report, "raoeo")
         _save_strategy_to_history(today_str, "raoeo", hist_data)
 
     except Exception as e:
