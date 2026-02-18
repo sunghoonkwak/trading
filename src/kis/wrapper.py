@@ -10,9 +10,9 @@ import threading
 import pandas as pd
 from kis.kis_api import kis_auth as ka
 from kis.order_manager import OrderManager
-from display import update_order_state, add_alert, clear_order_states
+from core.display import update_order_state, add_alert, clear_order_states
 from utils.format_utils import format_number
-import trading_config
+from core import trading_config
 
 class PriceFetcher:
     """Handles REST-based price fetching with fallback logic."""

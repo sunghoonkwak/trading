@@ -21,6 +21,7 @@ trigger: always_on
 # 📝 Commit Message Rules (STRICT)
 - **Structure**: `<type>(<scope>): <subject>` (Body/Footer는 선택적이나 필요 시 72자 줄바꿈 준수)
 - **Constraints**: 
+    - **Language**: Commit messages must be written in **English** only.
     - **Subject**: 50자 이내. 파일명을 절대 포함하지 말고 "의도"와 "결과"에 집중합니다.
     - **Approval**: 커밋 메시지를 먼저 보여주고 사용자의 **확인(Confirm)**을 받은 후 `git commit`을 실행합니다.
 

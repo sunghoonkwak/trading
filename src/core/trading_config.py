@@ -5,7 +5,10 @@ import json
 CONFIG = {}
 
 try:
-    _json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stock_configuration.json")
+    # Look for the config file in the parent 'src' directory
+    _src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _json_path = os.path.join(_src_dir, "stock_configuration.json")
+    
     if os.path.exists(_json_path):
         with open(_json_path, "r", encoding="utf-8") as f:
             CONFIG = json.load(f)
@@ -58,7 +61,7 @@ def update_stock_name(ticker: str, new_name: str):
 
     if changed:
         try:
-            _json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stock_configuration.json")
+            # Use the already calculated _json_path to save changes
             with open(_json_path, "w", encoding="utf-8") as f:
                 json.dump(CONFIG, f, indent=4, ensure_ascii=False)
         except Exception as e:

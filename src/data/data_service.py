@@ -10,14 +10,14 @@ from typing import Optional, Dict, List, Tuple, Any
 from datetime import datetime
 from dataclasses import dataclass
 
-from thread_comm import ThreadRequest, RequestType
+from core.thread_comm import ThreadRequest, RequestType
 from kis.kis_thread import request_portfolio, wait_for_response
 from state.system_state import is_kis_ready
-from display import add_alert
+from core.display import add_alert
 from data.config_manager import ConfigFile, load_json, save_json
 from utils.market_utils import get_fear_and_greed
-from trading_config import get_stock_info
-from constants import PORTFOLIO_CACHE_EXPIRE
+from core.trading_config import get_stock_info
+from core.constants import PORTFOLIO_CACHE_EXPIRE
 
 # =============================================================================
 # Cache Management

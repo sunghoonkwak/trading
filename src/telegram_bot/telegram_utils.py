@@ -5,7 +5,7 @@ Telegram Utilities
 import logging
 import asyncio
 from telegram import Update
-import display
+from core import display
 
 async def wrap_reply(update: Update, text: str, **kwargs):
     """

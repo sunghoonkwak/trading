@@ -61,6 +61,9 @@ manager = ConnectionManager()
 # Event loop reference for thread-safe broadcasting
 _event_loop: Optional[asyncio.AbstractEventLoop] = None
 
+# Base directory for assets (src folder)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 def _broadcast_callback(msg_type: str, message: str, time_str: str = None):
     """Callback for event_pipe to broadcast messages to web clients."""
@@ -101,7 +104,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Trading Event Viewer", lifespan=lifespan)
 
 # Mount static files
-web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+web_dir = os.path.join(BASE_DIR, "web")
 static_dir = os.path.join(web_dir, "static")
 
 if os.path.exists(static_dir):
@@ -355,9 +358,8 @@ def start_web_server(host: str = "0.0.0.0", port: int = 8080, use_ssl: bool = Tr
     log_config["handlers"]["access"]["stream"] = "ext://sys.stdout"
 
     # SSL certificate paths
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    cert_file = os.path.join(base_dir, "certs", "cert.pem")
-    key_file = os.path.join(base_dir, "certs", "key.pem")
+    cert_file = os.path.join(web_dir, "certs", "cert.pem")
+    key_file = os.path.join(web_dir, "certs", "key.pem")
 
     ssl_enabled = use_ssl and os.path.exists(cert_file) and os.path.exists(key_file)
     protocol = "https" if ssl_enabled else "http"

@@ -21,7 +21,7 @@ from data.config_manager import ConfigFile, load_json, save_json
 from utils.market_utils import is_market_holiday
 from kis import wrapper
 from kis.kis_api import kis_auth as ka
-import trading_config
+from core import trading_config
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
 from data.data_service import get_portfolio_data
 

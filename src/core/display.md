@@ -1,7 +1,7 @@
-# Display Module (`display.py`)
+# Display Module (`src/core/display.py`)
 
 ## 개요
-터미널 출력과 시스템 알림을 처리하는 모듈입니다.
+터미널 출력과 시스템 알림을 처리하는 모듈입니다. `src/core/` 패키지에 위치하여 매매 시스템의 시각적 피드백과 로그 출력을 담당합니다.
 웹 기반 Event Viewer 도입으로 인해 역할이 축소 및 변경되었습니다.
 `kis.event_pipe` 모듈을 **Lazy Import**하여 초기화 시점의 의존성 문제를 해결했습니다.
 
@@ -9,7 +9,7 @@
 
 ### `add_alert(message, level="INFO", time_str=None)`
 시스템 알림을 발생시킵니다.
-1. **Log File**: `WebSocket_latest.log`에 즉시 기록합니다.
+1. **Log File**: 로그 매니저를 통해 설정된 로그 파일에 즉시 기록합니다.
 2. **Web Viewer**: `kis.event_pipe`가 연결되어 있다면 `SYS` 메시지(INFO 레벨)를 전송하여 웹 대시보드 System Log에 표시합니다.
     - `time_str`이 제공되면 해당 시간을 사용하고, 그렇지 않으면 현재 시간을 사용합니다.
 3. **Terminal Output**:

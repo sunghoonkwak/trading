@@ -10,7 +10,7 @@ import time
 from queue import Empty
 from typing import Optional
 
-from thread_comm import (
+from core.thread_comm import (
     kis_request_queue, kis_response_queue,
     ThreadRequest, ThreadResponse, RequestType
 )
@@ -87,7 +87,7 @@ def is_kis_thread_running() -> bool:
 
 def initialize_websocket_and_pipe() -> bool:
     """Delegates WebSocket initialization to WSManager."""
-    from display import add_alert
+    from core.display import add_alert
     success = _ws_manager.initialize()
     if success:
         add_alert("[KIS] Event pipe linked", "SUCCESS")

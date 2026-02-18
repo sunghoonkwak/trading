@@ -13,7 +13,7 @@ from data.config_manager import ConfigFile, load_json, save_json
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 from .telegram_utils import wrap_reply
-import display
+from core import display
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle non-command text messages and save to message.json."""

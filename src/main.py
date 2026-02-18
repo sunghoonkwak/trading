@@ -19,9 +19,9 @@ except ImportError:
     pass
 
 # Import Core Modules
-import trading_config
+from core import trading_config
 import state.market_state as trading_state
-import display
+from core import display
 from utils.logger import LogManager
 from kis import event_pipe
 
@@ -110,13 +110,13 @@ class TradingSystem:
     def start_web_server(self):
         """Starts the Web Event Viewer dashboard."""
         print("[Startup] Step 4: Starting Web Event Viewer...")
-        from constants import DEFAULT_WEB_PORT, DEFAULT_HOST
+        from core.constants import DEFAULT_WEB_PORT, DEFAULT_HOST
         try:
-            from web_server import start_web_server
+            from core.web_server import start_web_server
             threading.Thread(target=start_web_server, kwargs={"host": DEFAULT_HOST, "port": DEFAULT_WEB_PORT}, daemon=True).start()
             print("[Startup] ✓ Web Event Viewer started in background")
-        except Exception as e:
-            logging.error(f"[Startup] Web server error: {e}")
+        except Exception:
+            logging.exception("[Startup] Web server failed to start")
 
     def shutdown(self):
         """Gracefully shuts down all systems."""

@@ -1,6 +1,6 @@
-# Global Constants (`src/constants.py`)
+# Global Constants (`src/core/constants.py`)
 
-시스템 전반에서 사용되는 고정된 설정값, 매직 넘버, API 코드 등을 중앙 집중식으로 관리하는 모듈입니다.
+시스템 전반에서 사용되는 고정된 설정값, 매직 넘버, API 코드 등을 중앙 집중식으로 관리하는 모듈입니다. `src/core/` 패키지에 위치하여 어디서든 일관된 상수를 참조할 수 있게 합니다.
 
 # Core Logic (핵심 로직)
 
@@ -16,12 +16,12 @@
 - **`ORDER_TYPE_KR_MARKET`**: 국내 주식 시장가 주문 코드 (`01`).
 - **`MARKET_STATE_SAVE_INTERVAL`**: 실시간 시세 데이터의 자동 저장 주기 (60초).
 
-# Configuration (None)
-
 # Usage Example (사용 예시)
 
 ```python
-from constants import ORDER_TYPE_US_LOC
+from core import constants
+# 또는
+from core.constants import ORDER_TYPE_US_LOC
 
 # 전략 계산 시 상수 사용
 order_type = ORDER_TYPE_US_LOC

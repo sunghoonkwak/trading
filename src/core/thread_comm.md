@@ -1,6 +1,6 @@
-# Thread Communication Module (`thread_comm.py`)
+# Thread Communication Module (`src/core/thread_comm.py`)
 
-이 모듈은 메인 스레드와 백그라운드 스레드(KIS 스레드, 텔레그램 스레드) 간의 안전하고 구조화된 통신을 위한 인프라를 정의합니다.
+이 모듈은 메인 스레드와 백그라운드 스레드(KIS 스레드, 텔레그램 스레드) 간의 안전하고 구조화된 통신을 위한 인프라를 정의합니다. `src/core/` 패키지에 위치하여 전역 스레드 상태 동기화의 핵심 채널 역할을 수행합니다.
 
 ## Purpose (목적)
 Python의 `queue.Queue`를 사용하여 스레드 간 안전한 메시지 전달을 보장하고, `dataclasses`를 활용하여 요청/응답 객체를 구조화합니다.

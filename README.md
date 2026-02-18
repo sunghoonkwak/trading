@@ -11,10 +11,29 @@
 ## 💡 주요 특징 (Core Features)
 
 - **⚡ 실시간성**: WebSocket을 통해 호가, 체결, 잔고 변동을 지연 없이 모니터링
-- **🖥️ 웹 이벤트 뷰어**: 실시간 로그와 시세를 한눈에 확인하는 다크 모드 UI (`http://localhost:8080`)
+- **🖥️ 웹 이벤트 뷰어**: 실시간 로그와 시세를 한눈에 확인하는 다크 모드 UI (`https://localhost:8080`)
 - **🤖 스마트 알림**: 주문 체결 내역 및 전략 실행 상태 즉시 텔레그램 전송
 - **🛡️ 안정성**: Docker 기반 24시간 중단 없는 매매 환경 및 자동 복구 지향
 - **📈 자동 리포트**: 매일 매매 결과와 포트폴리오 상태 자동 요약 및 전송
+
+---
+
+## 📂 프로젝트 구조 (Project Structure)
+
+```text
+trading/
+├── src/
+│   ├── main.py            # 시스템 진입점 (Entry Point)
+│   ├── core/              # 핵심 운영 및 설정 모듈 (Constants, Config, Web Server)
+│   ├── kis/               # KIS API 연동 및 데이터 파이프라인
+│   ├── strategy/          # 매매 전략 추상화 및 구현 (RAOEO, VA, Rebalancing)
+│   ├── telegram_bot/      # 텔레그램 대화형 봇 서비스
+│   ├── state/             # 시장 및 시스템 전역 상태 관리
+│   └── utils/             # 로깅, 포맷팅 등 공용 유틸리티
+├── templates/             # 설정 파일 샘플 및 문서 템플릿
+├── KIS_config/            # [개인용] API Key 및 비공개 설정 (외부 마운트 권장)
+└── docker-compose.yml     # 컨테이너 오케스트레이션
+```
 
 ---
 
@@ -46,7 +65,7 @@ TQQQ(공격)와 SCHD(방어) 등의 자산을 조합하여 변동성을 수확(V
 ## 🚀 빠른 시작 (Quick Start)
 
 ### 1. 환경 설정
-프로젝트 외부 경로(`~/KIS_config/`)에 다음 설정 파일들을 준비하세요.
+프로젝트 외부 경로(`~/KIS_config/`)에 다음 설정 파일들을 준비하세요. (샘플은 `templates/` 참조)
 - `kis_devlp.yaml`: KIS API 앱 키 및 계정 정보
 - `strategy_config.json`: 전략별 세부 파라미터
 - `telegram.txt`: 텔레그램 봇 토큰 및 수신 ID

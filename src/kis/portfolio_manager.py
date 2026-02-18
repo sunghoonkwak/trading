@@ -24,7 +24,7 @@ class PortfolioManager:
     @classmethod
     def get_integrated_portfolio(cls, kis_only: bool = False) -> Dict[str, Any]:
         """Main entry point to get the full integrated portfolio."""
-        from display import add_alert
+        from core.display import add_alert
 
         # 1. Fetch KIS Data
         add_alert("[KIS] Fetching KIS API data...", "INFO")

@@ -11,7 +11,7 @@ from datetime import datetime
 import math
 
 from strategy.base import StrategyOrder, OrderSide
-from constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
+from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
 # Constants removed (moved to constants.py)
 

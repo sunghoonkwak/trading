@@ -8,11 +8,11 @@ import pandas as pd
 from datetime import datetime
 
 import state.market_state as trading_state
-import trading_config
-from trading_config import strip_market_prefix
+from core import trading_config
+from core.trading_config import strip_market_prefix
 from kis import event_pipe
 from kis.event_pipe import print_viewer
-from display import add_alert, remove_order_state
+from core.display import add_alert, remove_order_state
 from utils.format_utils import get_fixed_width, format_number
 from kis.wrapper import sync_open_orders
 from telegram_bot.telegram_utils import send_notification

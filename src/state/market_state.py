@@ -127,7 +127,7 @@ class MarketStateManager:
 
     def _start_periodic_save(self):
         """Launches background persistence thread."""
-        from constants import MARKET_STATE_SAVE_INTERVAL
+        from core.constants import MARKET_STATE_SAVE_INTERVAL
         if self._persistence_running:
             return
         self._persistence_running = True

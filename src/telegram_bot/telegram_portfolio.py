@@ -15,14 +15,14 @@ from telegram.ext import (
     ConversationHandler, CallbackQueryHandler, MessageHandler, TypeHandler, filters
 )
 import asyncio
-import display
+from core import display
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 from datetime import datetime
 
 from data.data_service import get_weight_diffs
 from data.data_service import get_portfolio_data
 from kis.wrapper import fetch_open_orders
-import trading_config
+from core import trading_config
 
 # Conversation states
 SELECT_TICKER = 0

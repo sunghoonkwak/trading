@@ -9,8 +9,8 @@ import threading
 from typing import Optional, List
 from kis.kis_api import kis_auth as ka
 from state.system_state import update_kis_state, WebSocketStatus
-import trading_config
-from display import add_alert
+from core import trading_config
+from core.display import add_alert
 
 class WSManager:
     """Manages KIS WebSocket life cycle and subscriptions."""

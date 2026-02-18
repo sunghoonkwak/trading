@@ -9,7 +9,7 @@ import logging
 from typing import Dict, List, Tuple
 from strategy.base import StrategyOrder, OrderSide
 
-from constants import ORDER_TYPE_US_LOC, ORDER_TYPE_KR_MARKET
+from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_KR_MARKET
 
 def calculate_orders(
     targets_config: Dict,

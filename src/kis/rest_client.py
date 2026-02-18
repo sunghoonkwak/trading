@@ -11,7 +11,7 @@ from functools import wraps
 
 from kis.kis_api import kis_auth as ka
 from state.system_state import update_kis_state, AuthStatus
-from constants import API_TIMEOUT_SHORT
+from core.constants import API_TIMEOUT_SHORT
 
 class KISAPIError(Exception):
     """Base exception for KIS API errors."""

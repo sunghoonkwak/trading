@@ -21,7 +21,7 @@ from .telegram_rebalancing import register_rebalancing_handlers
 from .telegram_portfolio import register_portfolio_handlers, get_portfolio_commands_desc
 from .telegram_memo import register_memo_handler, get_memo_commands_desc
 from .telegram_utils import wrap_send, set_telegram_bot, wrap_reply
-import display
+from core import display
 
 # Module state
 _app: Optional[Application] = None

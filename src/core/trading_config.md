@@ -1,6 +1,6 @@
-# Trading Config (`trading_config.py`)
+# Trading Config (`src/core/trading_config.py`)
 
-이 모듈은 `stock_configuration.json` 파일로부터 종목별 설정 데이터를 로드하고 관리합니다.
+이 모듈은 `stock_configuration.json` 파일로부터 종목별 설정 데이터를 로드하고 관리합니다. `src/core/` 패키지에 위치하여 매매 시스템 전반에서 종목 정보를 조회하는 통합 인터페이스를 제공합니다.
 
 ## Purpose (목적)
 표시 이름, 시장 유형, UI 색상 선호도와 같은 종목 메타데이터를 중앙에서 관리하여, 코드 수정 없이도 간편하게 설정을 변경할 수 있도록 하는 것입니다.

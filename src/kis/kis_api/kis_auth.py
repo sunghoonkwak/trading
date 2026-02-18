@@ -210,7 +210,7 @@ def _getResultObject(json_data):
 def _handle_critical_error(msg):
     logging.error(msg)
     try:
-        import display
+        from core import display
         display.add_alert(msg, "ERROR")
     except ImportError:
         pass
@@ -848,7 +848,7 @@ class KISWebSocket:
     def _add_alert(self, message: str, level: str = "INFO"):
         """Add alert to UI display."""
         try:
-            import display
+            from core import display
             first_line = message.split('\n')[0][:60]
             display.add_alert(f"[WS] {first_line}", level)
         except Exception as e:

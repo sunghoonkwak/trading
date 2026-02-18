@@ -10,7 +10,7 @@ import logging
 from enum import Enum
 from typing import Any, Dict, Union
 
-from constants import CONFIG_ROOT
+from core.constants import CONFIG_ROOT
 
 class ConfigFile(Enum):
     """
