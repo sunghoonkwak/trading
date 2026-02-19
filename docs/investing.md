@@ -137,11 +137,29 @@ $$ \text{매수/매도액} = \text{목표 가치} - \text{현재 평가액} $$
 
 ---
 
-## 4. How I Manage Risk (위험 관리 원칙)
-시장은 언제든 위기를 맞을 수 있습니다. 이에 대비하여 다음과 같은 안전 장치를 마련했습니다.
-- **현금 비중 유지**: 주가가 폭락할 때 저가 매수의 기회로 삼기 위해 항상 일정 비율의 현금을 보유합니다.
-- **철저한 분산 투자**: 한국과 미국, 주식과 채권, 성장주와 배당주에 나누어 투자하여 특정 자산의 위기가 전체 자산에 미치는 영향을 최소화합니다.
+## 4. How I Manage Risk (위험 관리 및 심리 제어 시스템)
+시장은 언제든 통제 불능의 상태에 빠질 수 있습니다. 저는 인간의 본능인 '공포'와 '탐욕'을 역이용하기 위해 다음과 같은 데이터 기반 자산 배분 로직을 운영합니다.
 
+### A. Fear & Greed Index 기반 현금 및 레버리지 조절
+시스템은 매일 CNN Fear & Greed Index를 수집하여 계좌의 전체 구성을 결정합니다.
+
+| 시장 단계 (Index) | 시장 상태 | 현금 비중 (Cash) | 레버리지 할당 (SOXL/TQQQ) | 비고 |
+| :--- | :--- | :--- | :--- | :--- |
+| **F&G ≤ 20** | Extreme Fear | **10% (Min)** | **각 5% (Total 10%)** | 적극적 공격 모드 |
+| **20 < F&G ≤ 80** | Neutral | **20% (Mid)** | **0%** | 원칙적 운용 |
+| **F&G > 80** | Extreme Greed | **30% (Max)** | **0%** | 방어적 익절 모드 |
+
+### B. 주식 비중 산출 공식 (Stock Allocation Logic)
+시스템은 현금과 레버리지 할당량을 제외한 나머지 잔여 비중을 개별 주식의 **상대 점수(Relative Score)**에 따라 분배합니다.
+
+1. **현금 할당**: F&G 지수에 따라 `cash_weight` 결정 (10%, 20%, 30%).
+2. **레버리지 할당**: `leverage_total` 결정 (Extreme Fear 시 10%).
+3. **주식 총량 설정**: $\text{Stock Total} = 100\\% - \text{cash weight} - \text{leverage total}$
+4. **종목별 타겟 비중**: $\text{Target Weight} = \frac{\text{Stock Score}}{\sum \text{Stock Scores}} \times \text{Stock Total}$
+
+### C. 그룹 관리 및 이격도 제어 (Group Handling)
+- **Group Target**: 메인 티커(Main Ticker)가 그룹 전체의 타겟 점수를 보유하며, 구성 종목들이 이를 갉아먹지 않도록 설계합니다.
+- **Holding Calculation**: 메인 티커의 보유량과 구성 종목들의 보유 합계를 실시간으로 비교하여 매매 여부를 결정합니다.
 ---
 
 ## 5. Operation Routine (운용 루틴)
@@ -150,4 +168,4 @@ $$ \text{매수/매도액} = \text{목표 가치} - \text{현재 평가액} $$
 - **Yearly**: 세액 공제 혜택 점검 및 투자 원칙의 유효성 재검토
 
 ---
-**Version 1.0.1** (2026-02-19)
+**Version 1.1.0** (2026-02-19): Update: F&G thresholds 20/80, Cash 10%/20%/30%, and Leverage 10% for Extreme Fear state
