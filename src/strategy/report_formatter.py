@@ -51,6 +51,7 @@ def _get_status_display(report: Dict) -> str:
         "non_market_time": "⏰ Outside market hours",
         "disabled": "⚪ Disabled",
         "error": f"⚠️ Error: {report.get('error', 'Unknown')}",
+        "already_done": "✅ All executed (History)",
     }
     return status_map.get(status, f"❓ {status}")
 

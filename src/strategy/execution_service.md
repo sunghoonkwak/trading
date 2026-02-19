@@ -26,7 +26,7 @@
 - **입력 (Input)**:
   - `execute` (bool): `True`이면 실제 주문을 전송합니다. `False`이면 계산 결과만 반환합니다.
 - **출력 (Output)**: `Dict` (표준화된 리포트 객체)
-  - `status`: 실행 결과 (`executed`, `partial`, `skipped`, `holiday`, `disabled` 등)
+  - `status`: 실행 결과 (`executed`, `partial`, `skipped`, `holiday`, `disabled`, `already_done` 등)
   - `orders`: 생성된 전체 주문 목록
   - `succeeded_orders`: 이미 체결 완료된 주문 목록
   - `pending_orders`: 체결 필요한(대기 중인) 주문 목록

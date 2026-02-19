@@ -25,6 +25,7 @@
 - `NON_MARKET_TIME`: 장 운영 시간이 아님
 - `DISABLED`: 전략 비활성화 상태
 - `ERROR`: 실행 중 오류 발생
+- `ALREADY_DONE`: 이미 실행 완료 (중복 실행 방지용)
 
 ## `StrategyOrder` (dataclass)
 전략 계산 결과로 생성되는 단일 주문 정보를 담습니다.

@@ -18,6 +18,7 @@ class StrategyStatus(Enum):
     NON_MARKET_TIME = "non_market_time"
     DISABLED = "disabled"
     ERROR = "error"
+    ALREADY_DONE = "already_done"
 
 @dataclass
 class StrategyOrder:

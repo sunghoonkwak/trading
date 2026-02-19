@@ -624,7 +624,7 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
             report["info"]["context"] = reb_hist.get("context", {})
 
             if not failed:
-                report["status"] = StrategyStatus.EXECUTED
+                report["status"] = StrategyStatus.ALREADY_DONE
             else:
                 report["status"] = StrategyStatus.PARTIAL
 

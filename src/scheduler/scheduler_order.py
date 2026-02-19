@@ -69,13 +69,23 @@ def run_periodic_rebalancing():
     try:
         reb_res = run_rebalancing_strategy(execute=True)
 
+        from strategy.base import StrategyStatus
+
         # Notify if:
         # 1. First call of the day -> ALWAYS (regardless of holiday)
         # 2. Actual rebalancing orders exist or error occurred
-        should_notify = is_first_call or reb_res.get('orders') or reb_res.get('error')
-        # Suppress notification for already_executed on subsequent calls
-        if reb_res.get('status') == 'already_executed' and not is_first_call:
+        # 3. NOT if it's "already_done" (unless it's the first call)
+
+        status = reb_res.get('status')
+
+        if status == StrategyStatus.ALREADY_DONE:
             should_notify = False
+        elif is_first_call:
+            should_notify = True
+        else:
+            # For subsequent calls, only notify if action was taken
+            should_notify = status in [StrategyStatus.EXECUTED, StrategyStatus.PARTIAL, StrategyStatus.ERROR]
+
 
         if should_notify:
             from strategy.report_formatter import format_rebalancing_report
