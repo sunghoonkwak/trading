@@ -23,10 +23,15 @@ from .telegram_memo import register_memo_handler, get_memo_commands_desc
 from .telegram_utils import wrap_send, set_telegram_bot, wrap_reply
 from core import display
 
+import uuid
+
 # Module state
 _app: Optional[Application] = None
 _bot_token: Optional[str] = None
 _chat_id: Optional[str] = None
+_session_id: str = str(uuid.uuid4())[:8]  # Unique session ID (first 8 chars)
+_init_lock = threading.Lock()
+_is_initialized = False
 
 
 def load_telegram_credentials() -> tuple[Optional[str], Optional[str]]:
@@ -92,9 +97,15 @@ def initialize_telegram():
     Initialize Telegram bot and start polling in a background thread.
     Uses asyncio event loop explicitly to avoid set_wakeup_fd issues.
     """
-    global _app, _bot_token, _chat_id
+    global _app, _bot_token, _chat_id, _is_initialized
 
-    logging.info("[Telegram] Initializing bot...")
+    with _init_lock:
+        if _is_initialized:
+            logging.warning(f"[Telegram] Bot initialization skipped (already initialized in Session {_session_id})")
+            return True
+        _is_initialized = True
+
+    logging.info(f"[Telegram] Initializing bot... (Session: {_session_id})")
 
     _bot_token, _chat_id = load_telegram_credentials()
     if not _bot_token or not _chat_id:
@@ -139,7 +150,7 @@ def initialize_telegram():
                 port_desc = get_portfolio_commands_desc().strip()
                 memo_desc = get_memo_commands_desc().strip()
                 init_text = (
-                    "🤖 <b>Trading Bot Initialized</b>\n\n"
+                    f"🤖 <b>Trading Bot Initialized</b> (Session: <code>{_session_id}</code>)\n\n"
                     "Commands:\n"
                     f"{port_desc}\n\n"
                     "/strategy - RAOEO & VA Strategies\n"

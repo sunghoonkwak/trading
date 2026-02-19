@@ -107,4 +107,8 @@ def sync_open_orders():
         return True
     except Exception as e:
         add_alert(f"Sync failed: {e}", "ERROR")
-        return False
+
+def get_current_price(ticker: str) -> float:
+    """Get real-time price from MarketState (WebSocket cache)."""
+    from state.market_state import get_market_manager
+    return get_market_manager().get_price(ticker)

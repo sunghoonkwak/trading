@@ -156,8 +156,7 @@ def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
 
     # Only try WebSocket/API fallback if merged_data doesn't have valid price
     if cur_price <= 0 and currency == "USD":
-        from strategy.raoeo import get_current_price
-        from kis.wrapper import fetch_price
+        from kis.wrapper import get_current_price, fetch_price
 
         # Try WebSocket
         cur_price = get_current_price(ticker)
@@ -234,8 +233,7 @@ def format_ticker_not_in_portfolio(ticker: str, portfolio_data: dict) -> str:
     Returns:
         Formatted string with ticker info
     """
-    from strategy.raoeo import get_current_price
-    from kis.wrapper import fetch_price
+    from kis.wrapper import get_current_price, fetch_price
 
     targets = portfolio_data.get("targets", {})
     tgt_weight = targets.get(ticker, 0) * 100
