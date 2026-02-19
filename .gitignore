@@ -113,3 +113,4 @@ venv/
 .webassets-cache
 WebSocket_latest.log
 wheels/
+.app.lock

@@ -24,6 +24,7 @@ import state.market_state as trading_state
 from core import display
 from utils.logger import LogManager
 from kis import event_pipe
+from core import lock_manager
 
 class TradingSystem:
     """Main application class for the KIS Trading System."""
@@ -75,7 +76,7 @@ class TradingSystem:
             auth_id = request_kis_auth()
             if wait_for_response(auth_id, timeout=30.0).success:
                 print("[Startup] ✓ REST API authenticated")
-            
+
             ws_auth_id = request_kis_ws_auth()
             if wait_for_response(ws_auth_id, timeout=30.0).success:
                 print("[Startup] ✓ WebSocket authenticated")
@@ -88,7 +89,7 @@ class TradingSystem:
 
             if initialize_websocket_and_pipe():
                 print("[Startup] ✓ KIS fully initialized")
-            
+
             from kis.wrapper import sync_open_orders
             sync_open_orders()
             print("[Startup] ✓ Orders synced")
@@ -135,14 +136,20 @@ class TradingSystem:
         """Main execution loop."""
         self.setup_logging()
         print("=== KIS Real-time Trading System ===\n")
-        
+
+        # Lock Check
+        if not lock_manager.acquire_lock(self.base_dir):
+            print("\n[ERROR] Another instance is already running!")
+            print("Please stop the existing process (or Docker container) before starting a new one.\n")
+            sys.exit(1)
+
         self.initialize_telegram()
         time.sleep(0.5)
         self.initialize_kis()
         time.sleep(0.5)
         self.start_scheduler()
         self.start_web_server()
-        
+
         print("\n[Startup] Step 5: System is ready. Running in daemon mode.")
         try:
             while not self.shutdown_event.is_set():
