@@ -10,7 +10,11 @@
 2. **Centralized Market Status (시장 상태 중앙 관리)**:
    - `utils.market_utils`를 통해 휴장일 및 장 운영 시간을 확인하고, 이를 모든 전략 실행에 반영합니다.
 
-3. **Unified History Management (통합 히스토리 관리)**:
+3. **Unified Data Fetching (데이터 조회 통합)**:
+   - `get_market_data` 함수를 통해 모든 전략이 동일한 기준(KIS API 실시간 잔고 및 현재가)으로 데이터를 조회합니다.
+   - 미체결 주문에 대한 별도의 현금 차감 로직 없이, KIS API가 제공하는 주문가능 금액을 신뢰하여 사용합니다.
+
+4. **Unified History Management (통합 히스토리 관리)**:
    - `strategy_history.json` 파일 하나에 모든 전략의 실행 결과를 날짜별로 통합 저장합니다.
    - 실행 이력이 있는 경우, 성공한 주문(`succeeded`)은 건너뛰고 실패한 주문(`pending`)만 선별하여 재실행을 시도합니다.
 
@@ -27,6 +31,11 @@
   - `succeeded_orders`: 이미 체결 완료된 주문 목록
   - `pending_orders`: 체결 필요한(대기 중인) 주문 목록
   - `market_status`: 시장 상태 정보 (`is_market_open`, `message`)
+
+## `get_market_data`
+현재 포트폴리오 잔고와 전략 대상 종목들의 현재가를 조회합니다.
+- **입력**: `force_refresh` (bool)
+- **출력**: `holdings` (잔고 딕셔너리), `current_prices` (현재가 딕셔너리)
 
 ## `_execute_orders`
 주문 목록을 받아 순차적으로 KIS API를 통해 실행합니다.

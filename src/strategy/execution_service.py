@@ -32,65 +32,6 @@ TZ_ET = pytz.timezone('US/Eastern')
 # Common Helpers
 # -------------------------------------------------------------------------
 
-def _get_pending_buy_amount() -> float:
-    """
-    Fetch open orders from KIS and calculate total reserved USD for pending buys.
-    This accounts for LOC orders that KIS doesn't deduct from available cash.
-    """
-    try:
-        df, num_us, num_kr = wrapper.fetch_open_orders()
-        if df.empty:
-            logging.info("[PendingOrders] No open orders found")
-            return 0.0
-
-        total_reserved = 0.0
-        for _, row in df.iterrows():
-            row_l = {k.lower(): v for k, v in row.to_dict().items()}
-
-            if row_l.get('_market') != 'US':
-                continue
-            if row_l.get('sll_buy_dvsn_cd') != '02':  # 02 = Buy
-                continue
-
-            price = float(row_l.get('ft_ord_unpr3', 0) or row_l.get('ft_ord_unpr4', 0) or
-                         row_l.get('ovrs_ord_unpr', 0) or row_l.get('ord_unpr', 0) or 0)
-            qty = float(row_l.get('nccs_qty', 0) or row_l.get('ft_ord_qty4', 0) or
-                       row_l.get('ord_qty', 0) or 0)
-
-            if price > 0 and qty > 0:
-                amount = price * qty
-                ticker = row_l.get('pdno', 'N/A')
-                logging.info(f"[PendingOrders] {ticker} BUY {int(qty)} @ ${price:.2f} = ${amount:.2f}")
-                total_reserved += amount
-
-        logging.info(f"[PendingOrders] Total reserved for pending buys: ${total_reserved:.2f}")
-        return total_reserved
-
-    except Exception as e:
-        logging.error(f"[PendingOrders] Failed to fetch open orders: {e}")
-        return 0.0
-
-
-def _adjust_cash_for_pending_orders(holdings: Dict) -> Dict:
-    """
-    Adjust USD cash in holdings by subtracting pending buy order amounts.
-    Returns a modified copy of holdings.
-    """
-    pending_amount = _get_pending_buy_amount()
-    if pending_amount <= 0:
-        return holdings
-
-    adjusted = dict(holdings)
-    if "USD cash" in adjusted:
-        adjusted["USD cash"] = dict(adjusted["USD cash"])
-        original_cash = float(adjusted["USD cash"].get("qty", 0))
-        adjusted_cash = max(0, original_cash - pending_amount)
-        adjusted["USD cash"]["qty"] = adjusted_cash
-        logging.info(f"[PendingOrders] USD cash adjusted: ${original_cash:.2f} → ${adjusted_cash:.2f} (reserved: ${pending_amount:.2f})")
-
-    return adjusted
-
-
 def get_market_data(force_refresh: bool = False) -> Tuple[Dict, Dict]:
     """
     Fetch current portfolio and prices for all configured strategy targets.
@@ -98,9 +39,6 @@ def get_market_data(force_refresh: bool = False) -> Tuple[Dict, Dict]:
     """
     portfolio = get_portfolio_data(force_refresh=force_refresh, scope="kis")
     holdings = portfolio.get('merged_data', {})
-
-    if force_refresh:
-        holdings = _adjust_cash_for_pending_orders(holdings)
 
     strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
     raoeo_conf = strategy_config.get('raoeo', {}).get('targets', {})
@@ -698,19 +636,8 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
             report["status"] = StrategyStatus.HOLIDAY
             return report
 
-        # Load portfolio data
-        portfolio_res = get_portfolio_data(force_refresh=True, scope="kis")
-        holdings = portfolio_res.get('merged_data', {})
-        holdings = _adjust_cash_for_pending_orders(holdings)
-
-        reb_assets = reb_conf.get('assets', [])
-        prices = {}
-        for a in reb_assets:
-            t = a['ticker']
-            p = float(holdings.get(t, {}).get('cur_price', 0))
-            if p <= 0:
-                p = wrapper.fetch_price(t)
-            prices[t] = p
+        # Load market data (portfolio + prices)
+        holdings, prices = get_market_data(force_refresh=True)
 
         # RAOEO budget reservation
         raoeo_conf = strategy_config.get('raoeo', {}).get('targets', {})
