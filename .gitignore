@@ -111,6 +111,6 @@ venv/
 .vscode/
 # VS Code
 .webassets-cache
-WebSocket_latest.log
+trading_system.log
 wheels/
 .app.lock
