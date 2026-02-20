@@ -137,6 +137,12 @@ class TradingSystem:
         self.setup_logging()
         print("=== KIS Real-time Trading System ===\n")
 
+        # Ensure the script is only run within a Docker container
+        if os.environ.get('ENV_MODE') != 'docker':
+            print("\n[ERROR] This application must be run using Docker (docker-compose).")
+            print("Direct execution of src/main.py on the host environment is strictly prohibited to prevent conflicts.")
+            sys.exit(1)
+
         # Lock Check
         if not lock_manager.acquire_lock(self.base_dir):
             print("\n[ERROR] Another instance is already running!")
