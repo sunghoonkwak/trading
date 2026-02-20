@@ -17,32 +17,34 @@ class LogManager:
     """Manages the lifecycle and configuration of system logs."""
 
     @classmethod
-    def setup(cls, base_dir: str, log_name: str = "WebSocket_latest.log"):
+    def setup(cls, base_dir: str, log_name: str = "trading_system.log"):
         """Configures the root logger with rotation and custom namers."""
         # 1. Resolve Paths
         logs_dir = os.path.join(base_dir, "logs") if os.path.basename(base_dir) != "src" else os.path.join(os.path.dirname(base_dir), "logs")
         log_file = os.path.join(os.path.dirname(logs_dir), log_name)
-        
+
         if not os.path.exists(logs_dir):
             os.makedirs(logs_dir)
 
+        base_name = os.path.splitext(log_name)[0]
+
         # 2. Archive existing log if fresh session
-        rotation_msgs = cls._archive_existing_log(log_file, logs_dir)
+        rotation_msgs = cls._archive_existing_log(log_file, logs_dir, base_name)
 
         # 3. Reset Root Logger
         root_logger = logging.getLogger()
         for handler in list(root_logger.handlers):
             root_logger.removeHandler(handler)
 
-        # 4. Configure Timed Handler (6-hour rotation)
-        file_handler = TimedRotatingFileHandler(log_file, when='H', interval=6, encoding='utf-8')
+        # 4. Configure Timed Handler (Daily rotation at midnight)
+        file_handler = TimedRotatingFileHandler(log_file, when='midnight', interval=1, encoding='utf-8')
         file_handler.suffix = "%y_%m_%d_%H_%M_%S"
-        file_handler.namer = lambda name: cls._log_namer(name, logs_dir)
+        file_handler.namer = lambda name: cls._log_namer(name, logs_dir, base_name)
         file_handler.rotator = cls._log_rotator
-        
+
         formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
         file_handler.setFormatter(formatter)
-        
+
         # Console output (stream)
         stream_handler = logging.StreamHandler(sys.stdout)
         stream_handler.setFormatter(formatter)
@@ -62,11 +64,11 @@ class LogManager:
         for msg in rotation_msgs:
             logging.info(msg)
         logging.info(f"[LogManager] Logging initialized. Active log: {os.path.basename(log_file)}")
-        
+
         return log_file
 
     @staticmethod
-    def _archive_existing_log(log_file: str, logs_dir: str) -> List[str]:
+    def _archive_existing_log(log_file: str, logs_dir: str, base_name: str = "trading_system") -> List[str]:
         """Moves current log to archive with timestamp."""
         msgs = []
         if not os.path.exists(log_file):
@@ -93,7 +95,7 @@ class LogManager:
             except:
                 old_ts = datetime.now().strftime("%y_%m_%d_%H_%M_%S")
 
-        archive_name = os.path.join(logs_dir, f"WebSocket_{old_ts}.log")
+        archive_name = os.path.join(logs_dir, f"{base_name}_{old_ts}.log")
         if os.path.exists(archive_name):
             archive_name = archive_name.replace(".log", f"_{int(datetime.now().timestamp())}.log")
 
@@ -105,12 +107,12 @@ class LogManager:
         return msgs
 
     @staticmethod
-    def _log_namer(default_name: str, logs_dir: str) -> str:
+    def _log_namer(default_name: str, logs_dir: str, base_name: str = "trading_system") -> str:
         """Custom namer for TimedRotatingFileHandler."""
         base = os.path.basename(default_name)
         parts = base.split('.')
         if len(parts) >= 3:
-            return os.path.join(logs_dir, f"WebSocket_{parts[-1]}.log")
+            return os.path.join(logs_dir, f"{base_name}_{parts[-1]}.log")
         return os.path.join(logs_dir, base)
 
     @staticmethod
