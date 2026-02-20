@@ -130,7 +130,15 @@ def initialize_telegram():
                 logging.error(f"Telegram Exception: {context.error}", exc_info=context.error)
 
             # Build Application
-            _app = Application.builder().token(_bot_token).build()
+            _app = (
+                Application.builder()
+                .token(_bot_token)
+                .read_timeout(15)
+                .write_timeout(15)
+                .connect_timeout(15)
+                .pool_timeout(15)
+                .build()
+            )
 
             # Register Handlers
             set_telegram_bot(_app.bot, _chat_id)
