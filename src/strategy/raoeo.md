@@ -11,6 +11,11 @@
    - 목표 수익률(`sell_profit`) 달성 시 매도 주문 생성
    - 매수 조건 충족 시 분할 매수 주문 생성
 
+3. **Buy Price Cap (매수 가격 상한)**:
+   - KIS는 현재가의 30% 초과 매수 주문을 거절하므로, 안전 마진을 두고 **25%** 캡을 적용합니다.
+   - `_cap_buy_price()`: 계산된 매수 가격이 `cur_price * 1.25`를 초과하면 캡으로 제한합니다.
+   - 상수 `MAX_BUY_PRICE_RATIO = 1.25`로 관리됩니다.
+
 # Key Functions (주요 함수)
 
 ## `calculate_orders`

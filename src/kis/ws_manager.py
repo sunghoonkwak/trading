@@ -56,8 +56,8 @@ class WSManager:
             # 4. Set Callback & Start
             self._set_callback(on_result)
             self._ws_thread = threading.Thread(
-                target=self._ws_instance.start, 
-                args=(on_result,), 
+                target=self._ws_instance.start,
+                args=(on_result,),
                 daemon=True,
                 name="WSThread"
             )
@@ -80,6 +80,6 @@ class WSManager:
             self._ws_instance.on("message", callback)
         else:
             self._ws_instance.callback = callback
-            
+
     def is_alive(self) -> bool:
         return self._ws_thread is not None and self._ws_thread.is_alive()

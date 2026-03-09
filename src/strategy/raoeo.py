@@ -15,6 +15,19 @@ from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
 # Constants removed (moved to constants.py)
 
+# KIS rejects buy orders exceeding 30% above current price.
+# Use 25% cap as a safety margin.
+MAX_BUY_PRICE_RATIO = 1.25
+
+def _cap_buy_price(price: float, cur_price: float) -> float:
+    """Cap buy price to prevent KIS order rejection (30% limit)."""
+    max_price = round(cur_price * MAX_BUY_PRICE_RATIO, 2)
+    if price > max_price:
+        logging.info(f"[RAOEO] Buy price capped: {price:.2f} -> {max_price:.2f} (cur: {cur_price:.2f})")
+        return max_price
+    return price
+
+
 def calculate_orders(
     targets_config: Dict,
     portfolio: Dict,
@@ -115,6 +128,7 @@ def calculate_orders(
         if spent_amount < ten_pct_seed:
             base_price = avg_price if avg_price > 0 else cur_price
             buy_price_main = round(base_price * (1 + sell_profit - 0.01), 2)
+            buy_price_main = _cap_buy_price(buy_price_main, cur_price)
             buy_qty_main = int(daily_budget / buy_price_main)
             if buy_qty_main < 1: buy_qty_main = 1
 
@@ -134,6 +148,7 @@ def calculate_orders(
 
                 if remaining_fill_qty > 0:
                     buy_price_fill = round(avg_price * 0.95, 2)
+                    buy_price_fill = _cap_buy_price(buy_price_fill, cur_price)
                     ticker_orders.append(StrategyOrder(
                         symbol=ticker,
                         side=OrderSide.BUY,
@@ -146,6 +161,7 @@ def calculate_orders(
         # Phase 1: Normal Phase (10% <= Holdings < 50%)
         elif spent_amount < half_seed:
             buy_price_main = round(avg_price * (1 + sell_profit - 0.01), 2)
+            buy_price_main = _cap_buy_price(buy_price_main, cur_price)
             buy_qty_main = int(daily_budget / buy_price_main)
             if buy_qty_main < 1: buy_qty_main = 1
 
@@ -162,6 +178,7 @@ def calculate_orders(
         else:
             # Order 1: 50% of daily budget at avg price
             buy_price_1 = round(avg_price, 2)
+            buy_price_1 = _cap_buy_price(buy_price_1, cur_price)
             total_buy_qty = int(daily_budget / avg_price)
             buy_qty_1 = total_buy_qty // 2
             if buy_qty_1 < 1: buy_qty_1 = 1
@@ -177,6 +194,7 @@ def calculate_orders(
 
             # Order 2: 50% of daily budget at avg*(1+profit-1%)
             buy_price_2 = round(avg_price * (1 + sell_profit - 0.01), 2)
+            buy_price_2 = _cap_buy_price(buy_price_2, cur_price)
             buy_qty_2 = total_buy_qty - buy_qty_1
             if buy_qty_2 < 1: buy_qty_2 = 1
 
