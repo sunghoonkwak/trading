@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple, Any
 
 import pytz
+import requests
 
 from strategy import raoeo, value_averaging, rebalancing
 from strategy.base import StrategyOrder, StrategyStatus, OrderSide
@@ -97,6 +98,10 @@ def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
         if res is not None and not res.empty:
             return True, "Success"
         return False, str(err)
+    except requests.exceptions.Timeout:
+        error_msg = f"[API Timeout] execution timed out for {order.symbol}"
+        logging.error(error_msg)
+        return False, error_msg
     except Exception as e:
         return False, str(e)
 
@@ -425,6 +430,10 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
         hist_data = _build_strategy_history_data(report, "raoeo")
         _save_strategy_to_history(today_str, "raoeo", hist_data)
 
+    except requests.exceptions.Timeout as e:
+        logging.error(f"[API Timeout] RAOEO Service Timeout Error: {e}", exc_info=True)
+        report["status"] = StrategyStatus.ERROR
+        report["error"] = "API Timeout"
     except Exception as e:
         logging.error(f"RAOEO Service Error: {e}", exc_info=True)
         report["status"] = StrategyStatus.ERROR
@@ -573,6 +582,10 @@ def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
             extra_fields={"targets_context": targets_context})
         _save_strategy_to_history(today_str, "va", save_data)
 
+    except requests.exceptions.Timeout as e:
+        logging.error(f"[API Timeout] VA Service Timeout Error: {e}", exc_info=True)
+        report["status"] = StrategyStatus.ERROR
+        report["error"] = "API Timeout"
     except Exception as e:
         logging.error(f"VA Service Error: {e}", exc_info=True)
         report["status"] = StrategyStatus.ERROR
@@ -695,6 +708,10 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
             extra_fields={"context": context})
         _save_strategy_to_history(today_str, "rebalancing", save_data)
 
+    except requests.exceptions.Timeout as e:
+        logging.error(f"[API Timeout] Rebalancing Service Timeout Error: {e}", exc_info=True)
+        report["status"] = StrategyStatus.ERROR
+        report["error"] = "API Timeout"
     except Exception as e:
         logging.error(f"Rebalancing Service Error: {e}", exc_info=True)
         report["status"] = StrategyStatus.ERROR

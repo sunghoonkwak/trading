@@ -318,7 +318,10 @@ def run_daily_portfolio_report():
                 # Use rich data service for both saving and display
                 portfolio_data = get_portfolio_data()
             except Exception as e:
-                error_msg = f"[Scheduler] Failed to get portfolio: {e}"
+                if "Timeout" in str(e):
+                    error_msg = f"⚠️ [네트워크 타임아웃] KIS API 무응답 (Portfolio Data): {e}"
+                else:
+                    error_msg = f"[Scheduler] Failed to get portfolio: {e}"
                 logging.error(error_msg)
                 send_notification(error_msg)
                 return

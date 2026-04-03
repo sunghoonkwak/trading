@@ -15,6 +15,9 @@ KIS 자동매매 시스템의 진입점(Entry Point)입니다.
 
 # Key Functions (주요 함수)
 
+## Global Timeout Monkey-Patch
+`requests` 모듈의 기본 호출 로직을 전향적으로 오버라이드(Monkey-Patching)하여 외부 API 통신 지연으로 인해 스케줄러나 메인 스레드가 무한 대기에 빠지는 현상을 완전히 방지합니다. 기본적으로 30초의 타임아웃을 강제 적용합니다.
+
 ## `TradingSystem.run`
 시스템의 전체 시작 프로세스를 실행합니다. 각 서비스는 독립된 스레드에서 기동됩니다.
 

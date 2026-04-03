@@ -18,6 +18,10 @@
    - `strategy_history.json` 파일 하나에 모든 전략의 실행 결과를 날짜별로 통합 저장합니다.
    - 실행 이력이 있는 경우, 성공한 주문(`succeeded`)은 건너뛰고 실패한 주문(`pending`)만 선별하여 재실행을 시도합니다.
 
+5. **Timeout Handling (타임아웃 방어 메커니즘)**:
+   - 외부 API 응답 지연을 방지하기 위하여 `requests.exceptions.Timeout` 에러를 독립적으로 포착합니다.
+   - 타임아웃 발생 시, 스로틀이나 영구 정지 없이 `[API Timeout]` 메시지와 함께 사유를 로깅하고 `StrategyStatus.ERROR`로 무사히 보고를 마칩니다.
+
 # Key Functions (주요 함수)
 
 ## `run_raoeo_strategy`, `run_va_strategy`, `run_rebalancing_strategy`

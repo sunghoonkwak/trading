@@ -9,6 +9,20 @@ import sys
 import time
 import threading
 import logging
+import requests
+
+# Global monkey-patch to enforce a 30-second timeout on all requests
+_original_request = requests.api.request
+def _request_with_timeout(method, url, **kwargs):
+    kwargs.setdefault('timeout', 30.0)
+    return _original_request(method, url, **kwargs)
+requests.api.request = _request_with_timeout
+
+_original_session_request = requests.Session.request
+def _session_request_with_timeout(self, method, url, **kwargs):
+    kwargs.setdefault('timeout', 30.0)
+    return _original_session_request(self, method, url, **kwargs)
+requests.Session.request = _session_request_with_timeout
 
 # Force-disable any global requests-cache to prevent SQLite multi-thread errors
 try:

@@ -24,6 +24,11 @@ def run_daily_order_report():
         # Run Value Averaging (Execute Mode)
         va_res = run_va_strategy(execute=True)
 
+        raoeo_err = raoeo_res.get("error")
+        va_err = va_res.get("error")
+        if raoeo_err == "API Timeout" or va_err == "API Timeout":
+            send_notification(f"⚠️ [네트워크 타임아웃] KIS API 무응답 (Daily Report)\nRAOEO: {raoeo_err}, VA: {va_err}")
+
         # Format Unified Report
         report_text = format_strategy_report(raoeo_res, va_res)
 
@@ -34,8 +39,12 @@ def run_daily_order_report():
         logging.info("[Scheduler] Daily execution completed and report sent.")
 
     except Exception as e:
+        if "Timeout" in str(e):
+            alert_msg = f"⚠️ [네트워크 타임아웃] KIS API 무응답 (Daily Order): {e}"
+        else:
+            alert_msg = f"⚠️ Scheduler Order Error: {e}"
         logging.error(f"[Scheduler] Daily Order Job failed: {e}", exc_info=True)
-        send_notification(f"⚠️ Scheduler Order Error: {e}")
+        send_notification(alert_msg)
 
 # Module-level flag: US/Eastern date of last first-notification
 _last_first_notify_date: str = ""
@@ -88,11 +97,14 @@ def run_periodic_rebalancing():
 
 
         if should_notify:
-            from strategy.report_formatter import format_rebalancing_report
-            header = "🚀 <b>First Rebalancing Check</b>" if is_first_call else "🔄 <b>Periodic Rebalancing</b>"
-            report_text = format_rebalancing_report(reb_res)
-            send_notification(f"{header}\n\n{report_text}")
-            logging.info(f"[Scheduler] Rebalancing notification sent (FirstCall: {is_first_call})")
+            if status == StrategyStatus.ERROR and reb_res.get("error") == "API Timeout":
+                send_notification(f"⚠️ [네트워크 타임아웃] KIS API 무응답 (Periodic Rebalancing)")
+            else:
+                from strategy.report_formatter import format_rebalancing_report
+                header = "🚀 <b>First Rebalancing Check</b>" if is_first_call else "🔄 <b>Periodic Rebalancing</b>"
+                report_text = format_rebalancing_report(reb_res)
+                send_notification(f"{header}\n\n{report_text}")
+                logging.info(f"[Scheduler] Rebalancing notification sent (FirstCall: {is_first_call})")
         else:
             logging.info(f"[Scheduler] Rebalancing checked: No action needed.")
 
@@ -100,7 +112,11 @@ def run_periodic_rebalancing():
         _last_first_notify_date = us_date
 
     except Exception as e:
+        if "Timeout" in str(e):
+            alert_msg = f"⚠️ [네트워크 타임아웃] KIS API 무응답 (Rebalancing): {e}"
+        else:
+            alert_msg = f"⚠️ Periodic Rebalancing Error: {e}"
         logging.error(f"[Scheduler] Periodic Rebalancing failed: {e}", exc_info=True)
-        send_notification(f"⚠️ Periodic Rebalancing Error: {e}")
+        send_notification(alert_msg)
         # Still mark date so we don't retry first-call notification on error
         _last_first_notify_date = us_date
