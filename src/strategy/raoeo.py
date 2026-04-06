@@ -195,17 +195,17 @@ def calculate_orders(
             # Order 2: 50% of daily budget at avg*(1+profit-1%)
             buy_price_2 = round(avg_price * (1 + sell_profit - 0.01), 2)
             buy_price_2 = _cap_buy_price(buy_price_2, cur_price)
-            buy_qty_2 = total_buy_qty - buy_qty_1
-            if buy_qty_2 < 1: buy_qty_2 = 1
+            buy_qty_2 = max(0, total_buy_qty - buy_qty_1)
 
-            ticker_orders.append(StrategyOrder(
-                symbol=ticker,
-                side=OrderSide.BUY,
-                quantity=buy_qty_2,
-                price=buy_price_2,
-                order_type=ORDER_TYPE_US_LOC,
-                reason=f"Phase2: Upper Buy"
-            ))
+            if buy_qty_2 > 0:
+                ticker_orders.append(StrategyOrder(
+                    symbol=ticker,
+                    side=OrderSide.BUY,
+                    quantity=buy_qty_2,
+                    price=buy_price_2,
+                    order_type=ORDER_TYPE_US_LOC,
+                    reason=f"Phase2: Upper Buy"
+                ))
 
         orders.extend(ticker_orders)
 
