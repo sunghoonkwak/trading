@@ -86,11 +86,11 @@ def calculate_orders(
         half_seed = seed / 2
 
         # ---------------------------------------------------------
-        # Logic A: Sell Logic (Hold at least 1 share)
+        # Logic A: Sell Logic (Sell all if profit target reached)
         # ---------------------------------------------------------
         ticker_orders = []
-        if qty > 1 and avg_price > 0:
-            sellable_qty = qty - 1
+        if qty > 0 and avg_price > 0:
+            sellable_qty = qty
             target_sell_price = round(avg_price * (1 + sell_profit), 2)
 
             # Split into Limit (50%) and LOC (50%)
@@ -123,10 +123,12 @@ def calculate_orders(
         ten_pct_seed = seed * 0.1
         buy_price_main = 0.0
         buy_qty_main = 0
+        
+        # Use cur_price as fallback for avg_price (e.g., after full sell)
+        base_price = avg_price if avg_price > 0 else cur_price
 
         # Phase 0: Initial Phase (Holdings < 10% of seed)
         if spent_amount < ten_pct_seed:
-            base_price = avg_price if avg_price > 0 else cur_price
             buy_price_main = round(base_price * (1 + sell_profit - 0.01), 2)
             buy_price_main = _cap_buy_price(buy_price_main, cur_price)
             buy_qty_main = int(daily_budget / buy_price_main)
@@ -142,25 +144,24 @@ def calculate_orders(
             ))
 
             # Fill Order: Fill up to 10% of seed
-            if avg_price > 0:
-                seed_10pct_qty = int(ten_pct_seed / avg_price)
-                remaining_fill_qty = seed_10pct_qty - qty - buy_qty_main
+            seed_10pct_qty = int(ten_pct_seed / base_price)
+            remaining_fill_qty = seed_10pct_qty - qty - buy_qty_main
 
-                if remaining_fill_qty > 0:
-                    buy_price_fill = round(avg_price * 0.95, 2)
-                    buy_price_fill = _cap_buy_price(buy_price_fill, cur_price)
-                    ticker_orders.append(StrategyOrder(
-                        symbol=ticker,
-                        side=OrderSide.BUY,
-                        quantity=remaining_fill_qty,
-                        price=buy_price_fill,
-                        order_type=ORDER_TYPE_US_LOC,
-                        reason=f"Phase0: Fill 10%"
-                    ))
+            if remaining_fill_qty > 0:
+                buy_price_fill = round(base_price * 0.95, 2)
+                buy_price_fill = _cap_buy_price(buy_price_fill, cur_price)
+                ticker_orders.append(StrategyOrder(
+                    symbol=ticker,
+                    side=OrderSide.BUY,
+                    quantity=remaining_fill_qty,
+                    price=buy_price_fill,
+                    order_type=ORDER_TYPE_US_LOC,
+                    reason=f"Phase0: Fill 10%"
+                ))
 
         # Phase 1: Normal Phase (10% <= Holdings < 50%)
         elif spent_amount < half_seed:
-            buy_price_main = round(avg_price * (1 + sell_profit - 0.01), 2)
+            buy_price_main = round(base_price * (1 + sell_profit - 0.01), 2)
             buy_price_main = _cap_buy_price(buy_price_main, cur_price)
             buy_qty_main = int(daily_budget / buy_price_main)
             if buy_qty_main < 1: buy_qty_main = 1
@@ -176,10 +177,10 @@ def calculate_orders(
 
         # Phase 2: Aggressive Phase (Holdings >= 50%)
         else:
-            # Order 1: 50% of daily budget at avg price
-            buy_price_1 = round(avg_price, 2)
+            # Order 1: 50% of daily budget at base price (avg or cur)
+            buy_price_1 = round(base_price, 2)
             buy_price_1 = _cap_buy_price(buy_price_1, cur_price)
-            total_buy_qty = int(daily_budget / avg_price)
+            total_buy_qty = int(daily_budget / base_price)
             buy_qty_1 = total_buy_qty // 2
             if buy_qty_1 < 1: buy_qty_1 = 1
 
@@ -192,8 +193,8 @@ def calculate_orders(
                 reason=f"Phase2: Avg Buy"
             ))
 
-            # Order 2: 50% of daily budget at avg*(1+profit-1%)
-            buy_price_2 = round(avg_price * (1 + sell_profit - 0.01), 2)
+            # Order 2: 50% of daily budget at base_price*(1+profit-1%)
+            buy_price_2 = round(base_price * (1 + sell_profit - 0.01), 2)
             buy_price_2 = _cap_buy_price(buy_price_2, cur_price)
             buy_qty_2 = max(0, total_buy_qty - buy_qty_1)
 
