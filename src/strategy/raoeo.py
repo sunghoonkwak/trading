@@ -83,15 +83,31 @@ def calculate_orders(
         # 3. Calculate Daily Budget
         daily_budget = seed / duration
         spent_amount = avg_price * qty
+        ten_pct_seed = seed * 0.1
+        twenty_pct_seed = seed * 0.2
         half_seed = seed / 2
+
+        if spent_amount < ten_pct_seed:
+            phase = "Phase0"
+        elif spent_amount < twenty_pct_seed:
+            phase = "Phase1"
+        elif spent_amount < half_seed:
+            phase = "Phase2"
+        else:
+            phase = "Phase3"
 
         # ---------------------------------------------------------
         # Logic A: Sell Logic (Sell all if profit target reached)
         # ---------------------------------------------------------
         ticker_orders = []
         if qty > 0 and avg_price > 0:
+            if phase in ["Phase0", "Phase1"]:
+                profit_margin = sell_profit * 2
+            else:
+                profit_margin = sell_profit
+
             sellable_qty = qty
-            target_sell_price = round(avg_price * (1 + sell_profit), 2)
+            target_sell_price = round(avg_price * (1 + profit_margin), 2)
 
             # Split into Limit (50%) and LOC (50%)
             qty_limit = (sellable_qty // 2) + (sellable_qty % 2)
@@ -104,7 +120,7 @@ def calculate_orders(
                     quantity=qty_limit,
                     price=target_sell_price,
                     order_type=ORDER_TYPE_US_LIMIT,
-                    reason=f"Sell Limit {int(sell_profit*100)}% profit"
+                    reason=f"Sell Limit {int(profit_margin*100)}% profit"
                 ))
 
             if qty_loc > 0:
@@ -114,22 +130,22 @@ def calculate_orders(
                     quantity=qty_loc,
                     price=target_sell_price,
                     order_type=ORDER_TYPE_US_LOC,
-                    reason=f"Sell LOC {int(sell_profit*100)}% profit"
+                    reason=f"Sell LOC {int(profit_margin*100)}% profit"
                 ))
 
         # ---------------------------------------------------------
         # Logic B: Buy Logic (Phases)
         # ---------------------------------------------------------
-        ten_pct_seed = seed * 0.1
         buy_price_main = 0.0
         buy_qty_main = 0
-        
+
         # Use cur_price as fallback for avg_price (e.g., after full sell)
         base_price = avg_price if avg_price > 0 else cur_price
 
         # Phase 0: Initial Phase (Holdings < 10% of seed)
-        if spent_amount < ten_pct_seed:
-            buy_price_main = round(base_price * (1 + sell_profit - 0.01), 2)
+        if phase == "Phase0":
+            target_sell_price = round(base_price * (1 + sell_profit * 2), 2)
+            buy_price_main = target_sell_price - 0.01
             buy_price_main = _cap_buy_price(buy_price_main, cur_price)
             buy_qty_main = int(daily_budget / buy_price_main)
             if buy_qty_main < 1: buy_qty_main = 1
@@ -159,9 +175,10 @@ def calculate_orders(
                     reason=f"Phase0: Fill 10%"
                 ))
 
-        # Phase 1: Normal Phase (10% <= Holdings < 50%)
-        elif spent_amount < half_seed:
-            buy_price_main = round(base_price * (1 + sell_profit - 0.01), 2)
+        # Phase 1: Normal Phase (10% <= Holdings < 20%)
+        elif phase == "Phase1":
+            target_sell_price = round(base_price * (1 + sell_profit * 2), 2)
+            buy_price_main = target_sell_price - 0.01
             buy_price_main = _cap_buy_price(buy_price_main, cur_price)
             buy_qty_main = int(daily_budget / buy_price_main)
             if buy_qty_main < 1: buy_qty_main = 1
@@ -172,11 +189,28 @@ def calculate_orders(
                 quantity=buy_qty_main,
                 price=buy_price_main,
                 order_type=ORDER_TYPE_US_LOC,
-                reason=f"Phase1: Normal Buy"
+                reason="Phase1: Normal Buy"
             ))
 
-        # Phase 2: Aggressive Phase (Holdings >= 50%)
-        else:
+        # Phase 2: Normal Phase (20% <= Holdings < 50%)
+        elif phase == "Phase2":
+            target_sell_price = round(base_price * (1 + sell_profit), 2)
+            buy_price_main = target_sell_price - 0.01
+            buy_price_main = _cap_buy_price(buy_price_main, cur_price)
+            buy_qty_main = int(daily_budget / buy_price_main)
+            if buy_qty_main < 1: buy_qty_main = 1
+
+            ticker_orders.append(StrategyOrder(
+                symbol=ticker,
+                side=OrderSide.BUY,
+                quantity=buy_qty_main,
+                price=buy_price_main,
+                order_type=ORDER_TYPE_US_LOC,
+                reason="Phase2: Normal Buy"
+            ))
+
+        # Phase 3: Aggressive Phase (Holdings >= 50%)
+        else: # Phase3
             # Order 1: 50% of daily budget at base price (avg or cur)
             buy_price_1 = round(base_price, 2)
             buy_price_1 = _cap_buy_price(buy_price_1, cur_price)
@@ -190,11 +224,12 @@ def calculate_orders(
                 quantity=buy_qty_1,
                 price=buy_price_1,
                 order_type=ORDER_TYPE_US_LOC,
-                reason=f"Phase2: Avg Buy"
+                reason=f"Phase3: Avg Buy"
             ))
 
-            # Order 2: 50% of daily budget at base_price*(1+profit-1%)
-            buy_price_2 = round(base_price * (1 + sell_profit - 0.01), 2)
+            # Order 2: 50% of daily budget at target_sell_price - 0.01
+            target_sell_price = round(base_price * (1 + sell_profit), 2)
+            buy_price_2 = target_sell_price - 0.01
             buy_price_2 = _cap_buy_price(buy_price_2, cur_price)
             buy_qty_2 = max(0, total_buy_qty - buy_qty_1)
 
@@ -205,7 +240,7 @@ def calculate_orders(
                     quantity=buy_qty_2,
                     price=buy_price_2,
                     order_type=ORDER_TYPE_US_LOC,
-                    reason=f"Phase2: Upper Buy"
+                    reason=f"Phase3: Upper Buy"
                 ))
 
         orders.extend(ticker_orders)
@@ -213,7 +248,6 @@ def calculate_orders(
         # ---------------------------------------------------------
         # Logic C: Logging Summary
         # ---------------------------------------------------------
-        phase = "Phase0" if spent_amount < ten_pct_seed else "Phase1" if spent_amount < half_seed else "Phase2"
         buy_orders = [o for o in ticker_orders if o.side == OrderSide.BUY]
         sell_orders = [o for o in ticker_orders if o.side == OrderSide.SELL]
 
