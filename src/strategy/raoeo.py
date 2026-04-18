@@ -3,7 +3,8 @@
 RAOEO Infinite Buying Method Module (Refactored)
 
 This module implements the "Raoeo Infinite Buying Method" logic.
-It is now a pure calculation module without direct API dependencies.
+It dynamically parses the "phase" array rules provided in the configuration.
+It is a pure calculation module without direct API dependencies.
 """
 import logging
 from typing import Dict, List, Optional, Tuple
@@ -12,8 +13,6 @@ import math
 
 from strategy.base import StrategyOrder, OrderSide
 from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
-
-# Constants removed (moved to constants.py)
 
 # KIS rejects buy orders exceeding 30% above current price.
 # Use 25% cap as a safety margin.
@@ -35,7 +34,7 @@ def calculate_orders(
     exchange_rates: Optional[Dict[str, float]] = None
 ) -> Tuple[List[StrategyOrder], Dict]:
     """
-    Calculate buy/sell orders based on the RAOEO strategy.
+    Calculate buy/sell orders based on the dynamic RAOEO phase configuration.
     Pure calculation — no market status checks.
 
     Args:
@@ -64,7 +63,6 @@ def calculate_orders(
 
         seed = float(config['seed'])
         duration = int(config['duration'])
-        sell_profit = float(config.get('sell_profit', 0.10))
 
         # 2. Get Current Status
         holding = portfolio.get(ticker, {})
@@ -80,188 +78,144 @@ def calculate_orders(
             logging.warning(f"RAOEO: No price for {ticker}. Skipping.")
             continue
 
-        # 3. Calculate Daily Budget
+        # 3. Calculate Core Metrics
         daily_budget = seed / duration
         spent_amount = avg_price * qty
-        ten_pct_seed = seed * 0.1
-        twenty_pct_seed = seed * 0.2
-        half_seed = seed / 2
+        progress_ratio = spent_amount / seed if seed > 0 else 0.0
 
-        if spent_amount < ten_pct_seed:
-            phase = "Phase0"
-        elif spent_amount < twenty_pct_seed:
-            phase = "Phase1"
-        elif spent_amount < half_seed:
-            phase = "Phase2"
-        else:
-            phase = "Phase3"
-
-        # ---------------------------------------------------------
-        # Logic A: Sell Logic (Sell all if profit target reached)
-        # ---------------------------------------------------------
-        ticker_orders = []
-        if qty > 0 and avg_price > 0:
-            if phase in ["Phase0", "Phase1"]:
-                profit_margin = sell_profit * 2
-            else:
-                profit_margin = sell_profit
-
-            sellable_qty = qty
-            target_sell_price = round(avg_price * (1 + profit_margin), 2)
-
-            # Split into Limit (50%) and LOC (50%)
-            qty_limit = (sellable_qty // 2) + (sellable_qty % 2)
-            qty_loc = sellable_qty // 2
-
-            if qty_limit > 0:
-                ticker_orders.append(StrategyOrder(
-                    symbol=ticker,
-                    side=OrderSide.SELL,
-                    quantity=qty_limit,
-                    price=target_sell_price,
-                    order_type=ORDER_TYPE_US_LIMIT,
-                    reason=f"Sell Limit {int(profit_margin*100)}% profit"
-                ))
-
-            if qty_loc > 0:
-                ticker_orders.append(StrategyOrder(
-                    symbol=ticker,
-                    side=OrderSide.SELL,
-                    quantity=qty_loc,
-                    price=target_sell_price,
-                    order_type=ORDER_TYPE_US_LOC,
-                    reason=f"Sell LOC {int(profit_margin*100)}% profit"
-                ))
-
-        # ---------------------------------------------------------
-        # Logic B: Buy Logic (Phases)
-        # ---------------------------------------------------------
-        buy_price_main = 0.0
-        buy_qty_main = 0
-
-        # Use cur_price as fallback for avg_price (e.g., after full sell)
+        # Base price falls back to cur_price if avg_price is 0
         base_price = avg_price if avg_price > 0 else cur_price
 
-        # Phase 0: Initial Phase (Holdings < 10% of seed)
-        if phase == "Phase0":
-            target_sell_price = round(base_price * (1 + sell_profit * 2), 2)
-            buy_price_main = target_sell_price - 0.01
-            buy_price_main = _cap_buy_price(buy_price_main, cur_price)
-            buy_qty_main = int(daily_budget / buy_price_main)
-            if buy_qty_main < 1: buy_qty_main = 1
+        # 4. Resolve Dynamic Phase from Config
+        phases = config.get("phase", [])
+        if not phases:
+            logging.warning(f"RAOEO: No phase configuration found for {ticker}. Skipping.")
+            continue
 
-            ticker_orders.append(StrategyOrder(
-                symbol=ticker,
-                side=OrderSide.BUY,
-                quantity=buy_qty_main,
-                price=buy_price_main,
-                order_type=ORDER_TYPE_US_LOC,
-                reason=f"Phase0: Main Buy"
-            ))
+        matched_phase = phases[-1]  # Fallback to the last phase
+        for p in phases:
+            if "threshold" in p and progress_ratio < p["threshold"]:
+                matched_phase = p
+                break
 
-            # Fill Order: Fill up to 10% of seed
-            seed_10pct_qty = int(ten_pct_seed / base_price)
-            remaining_fill_qty = seed_10pct_qty - qty - buy_qty_main
+        phase_name = matched_phase.get("name", "Unknown Phase")
+        ticker_orders = []
 
-            if remaining_fill_qty > 0:
-                buy_price_fill = round(base_price * 0.95, 2)
-                buy_price_fill = _cap_buy_price(buy_price_fill, cur_price)
+        # 5. Sell Logic
+        sell_rules = matched_phase.get("sell", [])
+        buy_target_sell_prices = []  # To be used later for buy limit calculation
+
+        if qty > 0 and avg_price > 0:
+            remaining_ratio = sum(r.get("ratio", 0.0) for r in sell_rules)
+            total_sell_qty = int(qty * remaining_ratio)
+            remaining_sell_qty = total_sell_qty
+
+            for i, sell_rule in enumerate(sell_rules):
+                profit = float(sell_rule.get("profit", 0.0))
+                ratio = float(sell_rule.get("ratio", 0.0))
+
+                target_sell_price = round(avg_price * (1 + profit), 2)
+                buy_target_sell_prices.append(target_sell_price)
+
+                # Apportion quantity
+                rule_qty = int(qty * ratio)
+                if i == len(sell_rules) - 1:
+                    # Last rule handles remaining rounding fragments
+                    rule_qty = remaining_sell_qty
+
+                if rule_qty > 0:
+                    o_type_str = sell_rule.get("type", "Limit")
+                    o_type = ORDER_TYPE_US_LOC if o_type_str == "LOC" else ORDER_TYPE_US_LIMIT
+
+                    ticker_orders.append(StrategyOrder(
+                        symbol=ticker,
+                        side=OrderSide.SELL,
+                        quantity=rule_qty,
+                        price=target_sell_price,
+                        order_type=o_type,
+                        reason=f"Sell {o_type_str} {int(profit*100)}% profit"
+                    ))
+                remaining_sell_qty -= rule_qty
+        else:
+            # Even if we don't sell (0 holdings), we need projected sell prices for 'normal' buy
+            for sell_rule in sell_rules:
+                profit = float(sell_rule.get("profit", 0.0))
+                target_sell_price = round(base_price * (1 + profit), 2)
+                buy_target_sell_prices.append(target_sell_price)
+
+        # 6. Buy Logic
+        buy_rules = matched_phase.get("buy", [])
+        minimum_target_sell = min(buy_target_sell_prices) if buy_target_sell_prices else base_price * 1.1
+        buy_qty_main = 0
+
+        for buy_rule in buy_rules:
+            b_type = buy_rule.get("type", "normal")
+            b_ratio = float(buy_rule.get("ratio", 1.0))
+
+            if b_type == "normal":
+                # 'normal' buy gets lowest sell price - 0.01 margin
+                allocated_budget = daily_budget * b_ratio
+                buy_price = minimum_target_sell - 0.01
+                buy_price = _cap_buy_price(buy_price, cur_price)
+
+                rule_qty = int(allocated_budget / buy_price)
+                if rule_qty < 1: rule_qty = 1
+
+                buy_qty_main += rule_qty
                 ticker_orders.append(StrategyOrder(
-                    symbol=ticker,
-                    side=OrderSide.BUY,
-                    quantity=remaining_fill_qty,
-                    price=buy_price_fill,
-                    order_type=ORDER_TYPE_US_LOC,
-                    reason=f"Phase0: Fill 10%"
+                    symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
+                    price=buy_price, order_type=ORDER_TYPE_US_LOC, reason="Buy Normal"
                 ))
 
-        # Phase 1: Normal Phase (10% <= Holdings < 20%)
-        elif phase == "Phase1":
-            target_sell_price = round(base_price * (1 + sell_profit * 2), 2)
-            buy_price_main = target_sell_price - 0.01
-            buy_price_main = _cap_buy_price(buy_price_main, cur_price)
-            buy_qty_main = int(daily_budget / buy_price_main)
-            if buy_qty_main < 1: buy_qty_main = 1
+            elif b_type == "average":
+                allocated_budget = daily_budget * b_ratio
+                buy_price = avg_price if avg_price > 0 else cur_price
+                buy_price = _cap_buy_price(buy_price, cur_price)
 
-            ticker_orders.append(StrategyOrder(
-                symbol=ticker,
-                side=OrderSide.BUY,
-                quantity=buy_qty_main,
-                price=buy_price_main,
-                order_type=ORDER_TYPE_US_LOC,
-                reason="Phase1: Normal Buy"
-            ))
+                rule_qty = int(allocated_budget / buy_price)
+                if rule_qty < 1: rule_qty = 1
 
-        # Phase 2: Normal Phase (20% <= Holdings < 50%)
-        elif phase == "Phase2":
-            target_sell_price = round(base_price * (1 + sell_profit), 2)
-            buy_price_main = target_sell_price - 0.01
-            buy_price_main = _cap_buy_price(buy_price_main, cur_price)
-            buy_qty_main = int(daily_budget / buy_price_main)
-            if buy_qty_main < 1: buy_qty_main = 1
-
-            ticker_orders.append(StrategyOrder(
-                symbol=ticker,
-                side=OrderSide.BUY,
-                quantity=buy_qty_main,
-                price=buy_price_main,
-                order_type=ORDER_TYPE_US_LOC,
-                reason="Phase2: Normal Buy"
-            ))
-
-        # Phase 3: Aggressive Phase (Holdings >= 50%)
-        else: # Phase3
-            # Order 1: 50% of daily budget at base price (avg or cur)
-            buy_price_1 = round(base_price, 2)
-            buy_price_1 = _cap_buy_price(buy_price_1, cur_price)
-            total_buy_qty = int(daily_budget / base_price)
-            buy_qty_1 = total_buy_qty // 2
-            if buy_qty_1 < 1: buy_qty_1 = 1
-
-            ticker_orders.append(StrategyOrder(
-                symbol=ticker,
-                side=OrderSide.BUY,
-                quantity=buy_qty_1,
-                price=buy_price_1,
-                order_type=ORDER_TYPE_US_LOC,
-                reason=f"Phase3: Avg Buy"
-            ))
-
-            # Order 2: 50% of daily budget at target_sell_price - 0.01
-            target_sell_price = round(base_price * (1 + sell_profit), 2)
-            buy_price_2 = target_sell_price - 0.01
-            buy_price_2 = _cap_buy_price(buy_price_2, cur_price)
-            buy_qty_2 = max(0, total_buy_qty - buy_qty_1)
-
-            if buy_qty_2 > 0:
+                buy_qty_main += rule_qty
                 ticker_orders.append(StrategyOrder(
-                    symbol=ticker,
-                    side=OrderSide.BUY,
-                    quantity=buy_qty_2,
-                    price=buy_price_2,
-                    order_type=ORDER_TYPE_US_LOC,
-                    reason=f"Phase3: Upper Buy"
+                    symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
+                    price=buy_price, order_type=ORDER_TYPE_US_LOC, reason="Buy Average"
                 ))
+
+            elif b_type == "filling":
+                # Filling is for bringing seed % up to `target_ratio` using `price_ratio_2_avg` based price
+                target_ratio = float(buy_rule.get("target_ratio", 0.1))
+                p_ratio = float(buy_rule.get("price_ratio_2_avg", 0.95))
+
+                # base_price is already handling the case of `avg_price` if > 0 else `cur_price`
+                buy_price = round(base_price * p_ratio, 2)
+                buy_price = _cap_buy_price(buy_price, cur_price)
+
+                target_seed_qty = int((seed * target_ratio) / base_price)
+                remaining_fill_qty = target_seed_qty - qty - buy_qty_main
+
+                if remaining_fill_qty > 0:
+                    ticker_orders.append(StrategyOrder(
+                        symbol=ticker, side=OrderSide.BUY, quantity=remaining_fill_qty,
+                        price=buy_price, order_type=ORDER_TYPE_US_LOC, reason="Buy Filling"
+                    ))
 
         orders.extend(ticker_orders)
 
-        # ---------------------------------------------------------
-        # Logic C: Logging Summary
-        # ---------------------------------------------------------
+        # 7. Logging Summary
         buy_orders = [o for o in ticker_orders if o.side == OrderSide.BUY]
         sell_orders = [o for o in ticker_orders if o.side == OrderSide.SELL]
 
         logging.info(
-            f"[RAOEO] {ticker:<5} | {phase} | "
-            f"Hold: {spent_amount:8.2f} / {seed:8.2f} ({spent_amount/seed*100:5.1f}%) | "
+            f"[RAOEO] {ticker:<5} | {phase_name:<20} | "
+            f"Hold: {spent_amount:8.2f} / {seed:8.2f} ({progress_ratio*100:5.1f}%) | "
             f"Orders: Buyx{len(buy_orders)}, Sellx{len(sell_orders)}"
         )
 
         info["ticker_info"][ticker] = {
-            "phase": phase,
+            "phase": phase_name,
             "spent": spent_amount,
             "seed": seed,
-            "progress_pct": (spent_amount/seed*100) if seed > 0 else 0,
+            "progress_pct": progress_ratio * 100,
             "cur_price": cur_price,
             "avg_price": avg_price
         }

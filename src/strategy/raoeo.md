@@ -1,6 +1,7 @@
 # RAOEO Strategy (`src/strategy/raoeo.py`)
 
 이 모듈은 RAOEO (Reverse Accumulating Order Execution) 전략의 순수 계산 로직을 담당합니다. 마켓 상태나 실행 여부와 관계없이 설정과 현재가에 기반한 주문을 생성합니다.
+기존의 하드코딩되었던 Phase 체계에서 벗어나, `strategy_config.json`의 `phase` 배열 설정에 따라 유동적으로 작동하도록 개편되었습니다.
 
 # Core Logic (핵심 로직)
 
@@ -8,13 +9,14 @@
    - 외부 API 호출이나 상태 변경 없이, 입력값(`config`, `portfolio`, `price`)만으로 주문을 계산합니다.
 
 2. **Order Calculation (주문 계산)**:
-   - **4단계 Phase (매수/매도 정책)**:
-     - **Phase 0 (10% 미만)**: 매수(10% 채우기 포함) 진행, 목표 수익률의 2배를 기준으로 도출된 목표 매도가로 **매도 주문 실행**. 매수가는 `목표 매도가 - 0.01불`
-     - **Phase 1 (10%~20% 미만)**: 일반 매수 진행, 목표 수익률의 2배를 기준으로 도출된 목표 매도가로 **매도 주문 실행**. 매수가는 `목표 매도가 - 0.01불`
-     - **Phase 2 (20%~50% 미만)**: 일반 매수 진행, 목표 수익 달성 시 **전량 매도**. 매수가는 `목표 매도가(1배수익) - 0.01불`
-     - **Phase 3 (50% 이상)**: 공격적 매수(평단/상단) 진행, 목표 수익 달성 시 **전량 매도**. 상단 매수가는 `목표 매도가(1배수익) - 0.01불`
-   - **평단가 부재 시 대응**: 전량 매도 후 등 평단가(`avg_price`)를 알 수 없는 경우, **현재가(`cur_price`)**를 기준으로 매수 가격과 수량을 계산합니다.
-   - **Phase 0 채우기**: 보유 금액이 Seed의 10% 미만일 때, 현재가(또는 평단가)의 95% 가격으로 10% 수준까지 한꺼번에 채우는 주문을 생성합니다.
+   - `strategy_config.json`에 정의된 `targets.[TICKER].phase` 배열을 위에서부터 차례대로 판독합니다.
+   - 보유 자본금 대비 사용된 금액(`spent_amount / seed`)의 비율이 `threshold` 미만일 때 해당 Phase의 룰(`buy` 및 `sell`)을 채택하여 주문을 계산합니다. 마지막 원소인 경우 기본(fallback) 설정으로 `threshold` 없이 동작할 수 있습니다.
+   - **매도 로직 (Sell)**:
+     - `sell` 배열 내 각 항목(type, ratio, profit)에 따라 보유 수량을 분할하여 한도와 목표가를 정합니다. (`LOC` 혹은 `Limit` 주문)
+   - **매수 로직 (Buy)**:
+     - `type: "normal"`: 산출된 매도 시나리오들 중 가장 "낮은 가격"의 예상 목표매도가에서 -0.01불 오프셋을 적용한 가격으로 매수합니다.
+     - `type: "average"`: 현재 포트폴리오 상의 평단가(없으면 현재가)를 기준으로 매수합니다.
+     - `type: "filling"`: `price_ratio_2_avg`가 곱해진 가격으로, `target_ratio`에 다다를 때까지의 부족분 수량을 보충(Fill) 매수합니다.
 
 3. **Buy Price Cap (매수 가격 상한)**:
    - KIS는 현재가의 30% 초과 매수 주문을 거절하므로, 안전 마진을 두고 **25%** 캡을 적용합니다.
@@ -24,10 +26,10 @@
 # Key Functions (주요 함수)
 
 ## `calculate_orders`
-설정과 시장 데이터를 기반으로 매수/매도 주문을 계산합니다.
+설정과 시장 데이터를 기반으로 설정된 Phase에 맞추어 매수/매도 주문을 동적 계산합니다.
 
 - **입력 (Input)**:
-  - `targets_config` (Dict): 종목별 설정 (seed, duration 등)
+  - `targets_config` (Dict): 종목별 설정 (seed, duration, **phase** 등)
   - `portfolio` (Dict): 현재 보유 잔고 (qty, avg_price 등)
   - `current_prices` (Dict): 현재 시장가
 - **출력 (Output)**: `Tuple[List[StrategyOrder], Dict]` (주문 목록, 메타 정보)
@@ -42,24 +44,24 @@
       "SOXL": {
         "enabled": true,
         "seed": 20000,
-        "exchange": "AMS",
         "duration": 40,
-        "sell_profit": 0.1
+        "phase": [
+          {
+             "name": "Phase 0, quick filling",
+             "_description": "Phase별 고유의 매수/매도 로직 설정",
+             "threshold": 0.1,
+             "buy": [
+               { "type": "normal", "ratio": 1 }
+             ],
+             "sell": [
+               { "type": "LOC", "ratio": 0.5, "profit": 0.2 },
+               { "type": "Limit", "ratio": 0.5, "profit": 0.2 }
+             ]
+          }
+          // 더 많은 Phase들 추가 정의 가능 (threshold는 오름차순으로)
+        ]
       }
     }
   }
 }
-```
-
-# Usage Example (사용 예시)
-
-```python
-from strategy import raoeo
-
-# 주문 계산 (실행 X)
-orders, info = raoeo.calculate_orders(
-    targets_config={...},
-    portfolio={...},
-    current_prices={"SOXL": 35.5}
-)
 ```
