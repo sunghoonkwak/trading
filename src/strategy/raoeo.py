@@ -18,6 +18,7 @@ from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 # Use 25% cap as a safety margin.
 MAX_BUY_PRICE_RATIO = 1.25
 
+
 def _cap_buy_price(price: float, cur_price: float) -> float:
     """Cap buy price to prevent KIS order rejection (30% limit)."""
     max_price = round(cur_price * MAX_BUY_PRICE_RATIO, 2)
@@ -26,6 +27,87 @@ def _cap_buy_price(price: float, cur_price: float) -> float:
         return max_price
     return price
 
+
+def _validate_phase_config(ticker: str, phases: List[Dict]) -> None:
+    """
+    Validate JSON phases to prevent absurd, destructive inputs.
+    Raises ValueError to be intercepted by global Telegram alert dispatchers.
+    """
+    for p in phases:
+        buy_rules = p.get("buy", [])
+        sell_rules = p.get("sell", [])
+
+        if not isinstance(buy_rules, list) or not isinstance(sell_rules, list):
+            raise ValueError(f"[{ticker}] Invalid Phase: 'buy' and 'sell' must be lists in phase '{p.get('name', 'Unknown')}'.")
+
+        for r in buy_rules:
+            ratio = float(r.get("ratio", 1.0))
+            b_type = r.get("type", "normal")
+            if ratio < 0.0 or ratio > 2.0:
+                raise ValueError(f"[{ticker}] Absurd buy ratio: {ratio} in type '{b_type}'. Allowed: 0.0 ~ 2.0.")
+            if b_type not in ("normal", "average", "filling"):
+                raise ValueError(f"[{ticker}] Unknown buy type '{b_type}'.")
+
+        for r in sell_rules:
+            ratio = float(r.get("ratio", 0.0))
+            profit = float(r.get("profit", 0.0))
+            if ratio < 0.0 or ratio > 2.0:
+                raise ValueError(f"[{ticker}] Absurd sell ratio: {ratio}. Allowed: 0.0 ~ 2.0")
+            if profit < 0.0 or profit > 0.5:
+                raise ValueError(f"[{ticker}] Absurd sell profit: {profit} ({profit*100}%). Allowed: 0.0 ~ 0.50 (50%).")
+
+
+# -------------------------------------------------------------
+# Buy Strategy Helper Factories
+# -------------------------------------------------------------
+
+def _calculate_normal_buy(ticker: str, buy_rule: Dict, daily_budget: float, cur_price: float, minimum_target_sell: float) -> Tuple[int, float]:
+    """Calculate 'normal' buy order rule: Minimum planned sell target - $0.01"""
+    b_ratio = float(buy_rule.get("ratio", 1.0))
+    allocated_budget = daily_budget * b_ratio
+
+    buy_price = minimum_target_sell - 0.01
+    buy_price = _cap_buy_price(buy_price, cur_price)
+
+    rule_qty = int(allocated_budget / buy_price)
+    if rule_qty < 1:
+        rule_qty = 1
+
+    return rule_qty, buy_price
+
+
+def _calculate_average_buy(ticker: str, buy_rule: Dict, daily_budget: float, cur_price: float, base_price: float) -> Tuple[int, float]:
+    """Calculate 'average' buy order rule: Buy at current base price."""
+    b_ratio = float(buy_rule.get("ratio", 1.0))
+    allocated_budget = daily_budget * b_ratio
+
+    buy_price = base_price
+    buy_price = _cap_buy_price(buy_price, cur_price)
+
+    rule_qty = int(allocated_budget / buy_price)
+    if rule_qty < 1:
+        rule_qty = 1
+
+    return rule_qty, buy_price
+
+
+def _calculate_filling_buy(ticker: str, buy_rule: Dict, seed: float, cur_price: float, base_price: float, qty: int, currently_bought_qty: int) -> Tuple[int, float]:
+    """Calculate 'filling' buy order rule: Bulk buy to fill threshold at ratio pricing."""
+    target_ratio = float(buy_rule.get("target_ratio", 0.1))
+    p_ratio = float(buy_rule.get("price_ratio_2_avg", 0.95))
+
+    buy_price = round(base_price * p_ratio, 2)
+    buy_price = _cap_buy_price(buy_price, cur_price)
+
+    target_seed_qty = int((seed * target_ratio) / base_price)
+    remaining_fill_qty = target_seed_qty - qty - currently_bought_qty
+
+    return remaining_fill_qty, buy_price
+
+
+# -------------------------------------------------------------
+# Main Phase Engine Loop
+# -------------------------------------------------------------
 
 def calculate_orders(
     targets_config: Dict,
@@ -61,6 +143,14 @@ def calculate_orders(
             logging.error(f"RAOEO: Missing config for {ticker}")
             continue
 
+        phases = config.get("phase", [])
+        if not phases:
+            logging.warning(f"RAOEO: No phase configuration found for {ticker}. Skipping.")
+            continue
+
+        # Security: Halt if invalid configurations are supplied
+        _validate_phase_config(ticker, phases)
+
         seed = float(config['seed'])
         duration = int(config['duration'])
 
@@ -87,11 +177,6 @@ def calculate_orders(
         base_price = avg_price if avg_price > 0 else cur_price
 
         # 4. Resolve Dynamic Phase from Config
-        phases = config.get("phase", [])
-        if not phases:
-            logging.warning(f"RAOEO: No phase configuration found for {ticker}. Skipping.")
-            continue
-
         matched_phase = phases[-1]  # Fallback to the last phase
         for p in phases:
             if "threshold" in p and progress_ratio < p["threshold"]:
@@ -101,9 +186,9 @@ def calculate_orders(
         phase_name = matched_phase.get("name", "Unknown Phase")
         ticker_orders = []
 
-        # 5. Sell Logic
+        # 5. Build Sell Logic Paths
         sell_rules = matched_phase.get("sell", [])
-        buy_target_sell_prices = []  # To be used later for buy limit calculation
+        buy_target_sell_prices = []  # Collector for evaluating minimum target limits
 
         if qty > 0 and avg_price > 0:
             remaining_ratio = sum(r.get("ratio", 0.0) for r in sell_rules)
@@ -117,7 +202,7 @@ def calculate_orders(
                 target_sell_price = round(avg_price * (1 + profit), 2)
                 buy_target_sell_prices.append(target_sell_price)
 
-                # Apportion quantity
+                # Rule apportionment
                 rule_qty = int(qty * ratio)
                 if i == len(sell_rules) - 1:
                     # Last rule handles remaining rounding fragments
@@ -137,30 +222,22 @@ def calculate_orders(
                     ))
                 remaining_sell_qty -= rule_qty
         else:
-            # Even if we don't sell (0 holdings), we need projected sell prices for 'normal' buy
+            # Ghost sell price calculations for normal buy targeting
             for sell_rule in sell_rules:
                 profit = float(sell_rule.get("profit", 0.0))
                 target_sell_price = round(base_price * (1 + profit), 2)
                 buy_target_sell_prices.append(target_sell_price)
 
-        # 6. Buy Logic
+        # 6. Branch into Buy Logic Factories
         buy_rules = matched_phase.get("buy", [])
         minimum_target_sell = min(buy_target_sell_prices) if buy_target_sell_prices else base_price * 1.1
         buy_qty_main = 0
 
         for buy_rule in buy_rules:
             b_type = buy_rule.get("type", "normal")
-            b_ratio = float(buy_rule.get("ratio", 1.0))
 
             if b_type == "normal":
-                # 'normal' buy gets lowest sell price - 0.01 margin
-                allocated_budget = daily_budget * b_ratio
-                buy_price = minimum_target_sell - 0.01
-                buy_price = _cap_buy_price(buy_price, cur_price)
-
-                rule_qty = int(allocated_budget / buy_price)
-                if rule_qty < 1: rule_qty = 1
-
+                rule_qty, buy_price = _calculate_normal_buy(ticker, buy_rule, daily_budget, cur_price, minimum_target_sell)
                 buy_qty_main += rule_qty
                 ticker_orders.append(StrategyOrder(
                     symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
@@ -168,13 +245,7 @@ def calculate_orders(
                 ))
 
             elif b_type == "average":
-                allocated_budget = daily_budget * b_ratio
-                buy_price = avg_price if avg_price > 0 else cur_price
-                buy_price = _cap_buy_price(buy_price, cur_price)
-
-                rule_qty = int(allocated_budget / buy_price)
-                if rule_qty < 1: rule_qty = 1
-
+                rule_qty, buy_price = _calculate_average_buy(ticker, buy_rule, daily_budget, cur_price, base_price)
                 buy_qty_main += rule_qty
                 ticker_orders.append(StrategyOrder(
                     symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
@@ -182,17 +253,7 @@ def calculate_orders(
                 ))
 
             elif b_type == "filling":
-                # Filling is for bringing seed % up to `target_ratio` using `price_ratio_2_avg` based price
-                target_ratio = float(buy_rule.get("target_ratio", 0.1))
-                p_ratio = float(buy_rule.get("price_ratio_2_avg", 0.95))
-
-                # base_price is already handling the case of `avg_price` if > 0 else `cur_price`
-                buy_price = round(base_price * p_ratio, 2)
-                buy_price = _cap_buy_price(buy_price, cur_price)
-
-                target_seed_qty = int((seed * target_ratio) / base_price)
-                remaining_fill_qty = target_seed_qty - qty - buy_qty_main
-
+                remaining_fill_qty, buy_price = _calculate_filling_buy(ticker, buy_rule, seed, cur_price, base_price, qty, buy_qty_main)
                 if remaining_fill_qty > 0:
                     ticker_orders.append(StrategyOrder(
                         symbol=ticker, side=OrderSide.BUY, quantity=remaining_fill_qty,
