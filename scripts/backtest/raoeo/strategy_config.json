@@ -1,0 +1,257 @@
+{
+    "raoeo": {
+        "enabled": true,
+        "targets": {
+            "SOXL": {
+                "enabled": true,
+                "seed": 31400,
+                "exchange": "AMS",
+                "duration": 40,
+                "phase": [
+                    {
+                        "name": "Phase 0, quick filling",
+                        "_description": "초기(잔고 10% 미만): 매일 일반 매수(기본 예산)를 하되, 10%에 미달하는 잔여분은 평단/현재가의 95% 가격으로 한 번에 Filling 매수. 매도는 지정 대상 수익률(20%)로 LOC/지정가 분할 매도.",
+                        "threshold": 0.1,
+                        "buy": [
+                            {
+                                "type": "normal",
+                                "ratio": 1
+                            },
+                            {
+                                "type": "filling",
+                                "price_ratio_2_avg": 0.95,
+                                "target_ratio": 0.1
+                            }
+                        ],
+                        "sell": [
+                            {
+                                "type": "LOC",
+                                "ratio": 0.5,
+                                "profit": 0.2
+                            },
+                            {
+                                "type": "Limit",
+                                "ratio": 0.5,
+                                "profit": 0.2
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Phase 1",
+                        "_description": "Phase 1(잔고 20% 미만): 매일 설정된 예산 100%를 일반 매수(최저 매도가-0.01불). 매도는 지정(20%) 수익률로 LOC/지정가 분할 매도.",
+                        "threshold": 0.2,
+                        "buy": [
+                            {
+                                "type": "normal",
+                                "ratio": 1
+                            }
+                        ],
+                        "sell": [
+                            {
+                                "type": "LOC",
+                                "ratio": 0.5,
+                                "profit": 0.2
+                            },
+                            {
+                                "type": "Limit",
+                                "ratio": 0.5,
+                                "profit": 0.2
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Phase 2",
+                        "_description": "Phase 2(잔고 50% 미만): 매일 설정된 예산 100%를 일반 매수(최저 매도가-0.01불). 단, 매도 목표 수익률은 10%로 낮춤.",
+                        "threshold": 0.5,
+                        "buy": [
+                            {
+                                "type": "normal",
+                                "ratio": 1
+                            }
+                        ],
+                        "sell": [
+                            {
+                                "type": "LOC",
+                                "ratio": 0.5,
+                                "profit": 0.1
+                            },
+                            {
+                                "type": "Limit",
+                                "ratio": 0.5,
+                                "profit": 0.1
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Phase 3, Defensive",
+                        "_description": "마지막 Phase(잔고 50% 초과): 보수적으로 예산을 50%씩 분할, 절반은 평단가 매수, 절반은 일반(최저 매도가-0.01불)로 분할 매수. 매도는 수익률 10% 기준 LOC/지정가 분할 매도.",
+                        "buy": [
+                            {
+                                "type": "average",
+                                "ratio": 0.5
+                            },
+                            {
+                                "type": "normal",
+                                "ratio": 0.5
+                            }
+                        ],
+                        "sell": [
+                            {
+                                "type": "LOC",
+                                "ratio": 0.5,
+                                "profit": 0.1
+                            },
+                            {
+                                "type": "Limit",
+                                "ratio": 0.5,
+                                "profit": 0.1
+                            }
+                        ]
+                    }
+                ]
+            },
+            "FAS": {
+                "enabled": true,
+                "seed": 10000,
+                "exchange": "AMS",
+                "duration": 60,
+                "phase": [
+                    {
+                        "name": "Phase 0, quick filling",
+                        "_description": "초기(잔고 10% 미만): 매일 일반 매수를 하되, 10% 미달분은 5% 할인 가격으로 Filling 매수. 매도는 12% 목표수익률로 LOC/지정가 분할 매도.",
+                        "threshold": 0.1,
+                        "buy": [
+                            {
+                                "type": "normal",
+                                "ratio": 1
+                            },
+                            {
+                                "type": "filling",
+                                "price_ratio_2_avg": 0.95,
+                                "target_ratio": 0.1
+                            }
+                        ],
+                        "sell": [
+                            {
+                                "type": "LOC",
+                                "ratio": 0.5,
+                                "profit": 0.12
+                            },
+                            {
+                                "type": "Limit",
+                                "ratio": 0.5,
+                                "profit": 0.12
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Phase 1",
+                        "_description": "Phase 1(잔고 20% 미만): 매일 일반 매수 (예산 100%). 매도는 12% 목표수익률로 LOC/지정가 분할 매도.",
+                        "threshold": 0.2,
+                        "buy": [
+                            {
+                                "type": "normal",
+                                "ratio": 1
+                            }
+                        ],
+                        "sell": [
+                            {
+                                "type": "LOC",
+                                "ratio": 0.5,
+                                "profit": 0.12
+                            },
+                            {
+                                "type": "Limit",
+                                "ratio": 0.5,
+                                "profit": 0.12
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Phase 2",
+                        "_description": "Phase 2(잔고 50% 미만): 매일 일반 매수. 매도 목표 수익률은 6%로 지정 (LOC/지정가 분할).",
+                        "threshold": 0.5,
+                        "buy": [
+                            {
+                                "type": "normal",
+                                "ratio": 1
+                            }
+                        ],
+                        "sell": [
+                            {
+                                "type": "LOC",
+                                "ratio": 0.5,
+                                "profit": 0.06
+                            },
+                            {
+                                "type": "Limit",
+                                "ratio": 0.5,
+                                "profit": 0.06
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Phase 3, Defensive",
+                        "_description": "마지막 Phase(잔고 50% 초과): 보수적으로 평단가/일반 매수를 예산 50%씩 분할 진입. 매도는 목표 수익률 6%로 LOC/지정가 분할 매도.",
+                        "buy": [
+                            {
+                                "type": "average",
+                                "ratio": 0.5
+                            },
+                            {
+                                "type": "normal",
+                                "ratio": 0.5
+                            }
+                        ],
+                        "sell": [
+                            {
+                                "type": "LOC",
+                                "ratio": 0.5,
+                                "profit": 0.06
+                            },
+                            {
+                                "type": "Limit",
+                                "ratio": 0.5,
+                                "profit": 0.06
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    },
+    "value_averaging": {
+        "enabled": true,
+        "targets": {
+            "QLD": {
+                "enabled": false,
+                "exchange": "AMS",
+                "target": 5000,
+                "daily_budget": 100,
+                "threshold_rate": 0.15
+            },
+            "TQQQ": {
+                "enabled": false,
+                "exchange": "NAS",
+                "target": 5000,
+                "daily_budget": 50,
+                "threshold_rate": 0.15
+            }
+        }
+    },
+    "rebalancing": {
+        "enabled": false,
+        "seed": 10000,
+        "assets": [
+            {
+                "ticker": "TQQQ",
+                "target_weight": 0.5
+            },
+            {
+                "ticker": "SCHD",
+                "target_weight": 0.5
+            }
+        ],
+        "rebalance_threshold": 0.1
+    }
+}
