@@ -353,11 +353,13 @@ def main():
     parser = argparse.ArgumentParser(description="RAOEO Backtest Script")
     parser.add_argument("--ticker", type=str, required=True, help="Ticker symbol (e.g., SOXL)")
     parser.add_argument("--start", type=str, required=True, help="Start date (YYYY-MM-DD)")
+    parser.add_argument("--end", type=str, default=None, help="End date (YYYY-MM-DD), default: today")
     parser.add_argument("--compound", action="store_true", help="Enable compounding (reinvest profits into initial seed)")
     args = parser.parse_args()
 
     ticker = args.ticker
     start_date = args.start
+    end_date = args.end
     compound_flag = args.compound
 
     print(f"=== {ticker} 설정 로딩 중... ===")
@@ -367,9 +369,10 @@ def main():
         print(e)
         return
 
-    print(f"=== {ticker} 야후 파이낸스 데이터 로딩 중 ({start_date} ~ 현재) ===")
+    end_label = end_date if end_date else "현재"
+    print(f"=== {ticker} 야후 파이낸스 데이터 로딩 중 ({start_date} ~ {end_label}) ===")
     ticker_obj = yf.Ticker(ticker)
-    df = ticker_obj.history(start=start_date)
+    df = ticker_obj.history(start=start_date, end=end_date)
 
     if df.empty:
         print("데이터를 찾을 수 없습니다. 티커와 시작일을 다시 확인해주세요.")
@@ -465,6 +468,7 @@ def main():
     ref_start = df.index[0].strftime('%Y-%m-%d')
     ref_end = (df.index[-1] + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
     soxx_roi = get_buy_and_hold_roi("SOXX", ref_start, ref_end)
+    soxl_roi = get_buy_and_hold_roi(ticker, ref_start, ref_end)
     voo_roi = get_buy_and_hold_roi("VOO", ref_start, ref_end)
     qqq_roi = get_buy_and_hold_roi("QQQ", ref_start, ref_end)
 
@@ -474,9 +478,10 @@ def main():
         b_cagr = f"{b_cagr_val * 100:.2f}%"
         print(f"| **{name}** | {b_roi:.2f}% | **{b_cagr}** | - | - | - | - | - | - |")
 
-    print_benchmark("Ref0 (SOXX 단순 보유)", soxx_roi)
-    print_benchmark("Ref1 (VOO 단순 보유)", voo_roi)
-    print_benchmark("Ref2 (QQQ 단순 보유)", qqq_roi)
+    print_benchmark(f"Ref0 ({ticker} 단순 보유)", soxl_roi)
+    print_benchmark("Ref1 (SOXX 단순 보유)", soxx_roi)
+    print_benchmark("Ref2 (VOO 단순 보유)", voo_roi)
+    print_benchmark("Ref3 (QQQ 단순 보유)", qqq_roi)
 
     # Close logger to flush file
     if hasattr(sys.stdout, 'log'):
