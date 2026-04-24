@@ -33,4 +33,5 @@
 - **F&G Index**: `utils.get_fear_and_greed()`를 통해 10분 캐싱된 F&G 지수 표시
 - **Group Handling**: Constituents의 보유비중은 main ticker에 합산
 - **Caching**: `get_portfolio_data()`를 통해 포트폴리오 정보를 가져옵니다.
+- **Exception Resilience**: 모든 ConversationHandler 핸들러는 try-except로 감싸져 있어, Telegram API Timeout 시에도 올바른 상태값(`ConversationHandler.END` 또는 `SELECT_TICKER`)을 반환합니다. 이를 통해 대화 상태 꼬임을 방지합니다.
 

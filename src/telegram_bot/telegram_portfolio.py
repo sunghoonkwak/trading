@@ -325,117 +325,132 @@ async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio - Entry point for ConversationHandler."""
 
     logging.info(f"[TG] /portfolio from user")
-    # Get portfolio data and cache in user_data
-    loop = asyncio.get_running_loop()
-    data = await loop.run_in_executor(None, get_portfolio_data)
-    context.user_data['portfolio_data'] = data
+    try:
+        # Get portfolio data and cache in user_data
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(None, get_portfolio_data)
+        context.user_data['portfolio_data'] = data
 
-    # Format summary message
-    msg = format_portfolio_summary(data)
+        # Format summary message
+        msg = format_portfolio_summary(data)
 
-    # Build keyboard
-    keyboard = build_ticker_keyboard(data)
+        # Build keyboard
+        keyboard = build_ticker_keyboard(data)
 
-    sent_msg = await wrap_reply(update, msg, parse_mode='HTML', reply_markup=keyboard)
-    if sent_msg:
-        context.user_data['last_port_msg_id'] = sent_msg.message_id
+        sent_msg = await wrap_reply(update, msg, parse_mode='HTML', reply_markup=keyboard)
+        if sent_msg:
+            context.user_data['last_port_msg_id'] = sent_msg.message_id
 
-    return SELECT_TICKER
+        return SELECT_TICKER
+    except Exception as e:
+        logging.error(f"[TG] cmd_portfolio failed: {e}")
+        context.user_data.pop('portfolio_data', None)
+        return ConversationHandler.END
 
 
 async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle InlineKeyboard button clicks for ticker selection."""
-    query = update.callback_query
-    await query.answer()
+    try:
+        query = update.callback_query
+        await query.answer()
 
-    callback_data = query.data
-    logging.info(f"[TG] Callback: {callback_data}")
+        callback_data = query.data
+        logging.info(f"[TG] Callback: {callback_data}")
 
-    # Handle cancel
-    if callback_data == "port_cancel":
-        await wrap_edit(update, "👋 Portfolio session closed.", parse_mode='HTML')
-        context.user_data.pop('portfolio_data', None)
-        return ConversationHandler.END
+        # Handle cancel
+        if callback_data == "port_cancel":
+            await wrap_edit(update, "👋 Portfolio session closed.", parse_mode='HTML')
+            context.user_data.pop('portfolio_data', None)
+            return ConversationHandler.END
 
-    # Extract ticker from callback_data (format: port_TICKER)
-    if not callback_data.startswith("port_"):
-        return SELECT_TICKER
+        # Extract ticker from callback_data (format: port_TICKER)
+        if not callback_data.startswith("port_"):
+            return SELECT_TICKER
 
-    ticker = callback_data[5:]  # Remove "port_" prefix
+        ticker = callback_data[5:]  # Remove "port_" prefix
 
-    # Get cached portfolio data
-    portfolio_data = context.user_data.get('portfolio_data', {})
-    merged_data = portfolio_data.get("merged_data", {})
+        # Get cached portfolio data
+        portfolio_data = context.user_data.get('portfolio_data', {})
+        merged_data = portfolio_data.get("merged_data", {})
 
-    # Find ticker (case-insensitive)
-    ticker_upper = ticker.upper()
-    found_ticker = None
-    for t in merged_data.keys():
-        if t.upper() == ticker_upper:
-            found_ticker = t
-            break
+        # Find ticker (case-insensitive)
+        ticker_upper = ticker.upper()
+        found_ticker = None
+        for t in merged_data.keys():
+            if t.upper() == ticker_upper:
+                found_ticker = t
+                break
 
-    if not found_ticker:
-        detail_msg = format_ticker_not_in_portfolio(ticker, portfolio_data)
+        if not found_ticker:
+            detail_msg = format_ticker_not_in_portfolio(ticker, portfolio_data)
+            keyboard = build_ticker_keyboard(portfolio_data)
+            await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
+            return SELECT_TICKER
+
+        # Format and send ticker detail
+        ticker_data = merged_data[found_ticker]
+        detail_msg = format_ticker_detail(found_ticker, ticker_data, portfolio_data)
+
+        # Edit message to show detail
         keyboard = build_ticker_keyboard(portfolio_data)
-        await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
+        sent_msg = await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
+        if sent_msg:
+            context.user_data['last_port_msg_id'] = sent_msg.message_id
+
         return SELECT_TICKER
-
-    # Format and send ticker detail
-    ticker_data = merged_data[found_ticker]
-    detail_msg = format_ticker_detail(found_ticker, ticker_data, portfolio_data)
-
-    # Edit message to show detail
-    keyboard = build_ticker_keyboard(portfolio_data)
-    sent_msg = await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
-    if sent_msg:
-        context.user_data['last_port_msg_id'] = sent_msg.message_id
-
-    return SELECT_TICKER
+    except Exception as e:
+        logging.error(f"[TG] handle_ticker_callback failed: {e}")
+        return SELECT_TICKER
 
 
 async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input for ticker selection."""
+    try:
+        ticker_input = update.message.text.strip().upper()
 
-    ticker_input = update.message.text.strip().upper()
+        # Get cached portfolio data
+        portfolio_data = context.user_data.get('portfolio_data', {})
+        merged_data = portfolio_data.get("merged_data", {})
 
-    # Get cached portfolio data
-    portfolio_data = context.user_data.get('portfolio_data', {})
-    merged_data = portfolio_data.get("merged_data", {})
+        # Find ticker (case-insensitive)
+        found_ticker = None
+        for t in merged_data.keys():
+            if t.upper() == ticker_input:
+                found_ticker = t
+                break
 
-    # Find ticker (case-insensitive)
-    found_ticker = None
-    for t in merged_data.keys():
-        if t.upper() == ticker_input:
-            found_ticker = t
-            break
+        if not found_ticker:
+            # Ticker not in portfolio - show target weight info
+            detail_msg = format_ticker_not_in_portfolio(ticker_input, portfolio_data)
+            keyboard = build_ticker_keyboard(portfolio_data)
+            sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
+            if sent_msg:
+                context.user_data['last_port_msg_id'] = sent_msg.message_id
+            return SELECT_TICKER
 
-    if not found_ticker:
-        # Ticker not in portfolio - show target weight info
-        detail_msg = format_ticker_not_in_portfolio(ticker_input, portfolio_data)
+        # Format and send ticker detail
+        ticker_data = merged_data[found_ticker]
+        detail_msg = format_ticker_detail(found_ticker, ticker_data, portfolio_data)
+
         keyboard = build_ticker_keyboard(portfolio_data)
         sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
         if sent_msg:
             context.user_data['last_port_msg_id'] = sent_msg.message_id
+
         return SELECT_TICKER
-
-    # Format and send ticker detail
-    ticker_data = merged_data[found_ticker]
-    detail_msg = format_ticker_detail(found_ticker, ticker_data, portfolio_data)
-
-    keyboard = build_ticker_keyboard(portfolio_data)
-    sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
-    if sent_msg:
-        context.user_data['last_port_msg_id'] = sent_msg.message_id
-
-    return SELECT_TICKER
+    except Exception as e:
+        logging.error(f"[TG] handle_ticker_text failed: {e}")
+        return SELECT_TICKER
 
 
 async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /cancel command to exit conversation."""
     logging.info(f"[TG] /cancel from user")
     context.user_data.pop('portfolio_data', None)
-    await wrap_reply(update, "👋 Portfolio session closed.", parse_mode='HTML')
+    try:
+        await wrap_reply(update, "👋 Portfolio session closed.", parse_mode='HTML')
+    except Exception as e:
+        logging.error(f"[TG] cancel_handler reply failed: {e}")
     return ConversationHandler.END
 
 
