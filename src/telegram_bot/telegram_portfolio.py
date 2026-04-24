@@ -527,21 +527,26 @@ def format_placed_orders(df, num_us: int, num_kr: int) -> str:
 async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /placed_orders - Show open orders."""
     logging.info(f"[TG] /placed_orders from user")
-
-    loop = asyncio.get_running_loop()
-    df, num_us, num_kr = await loop.run_in_executor(None, fetch_open_orders)
-    msg = format_placed_orders(df, num_us, num_kr)
-    await wrap_reply(update, msg, parse_mode='HTML')
+    try:
+        loop = asyncio.get_running_loop()
+        df, num_us, num_kr = await loop.run_in_executor(None, fetch_open_orders)
+        msg = format_placed_orders(df, num_us, num_kr)
+        await wrap_reply(update, msg, parse_mode='HTML')
+    except Exception as e:
+        logging.error(f"[TG] cmd_placed_orders failed: {e}")
 
 
 async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio_weight."""
     logging.info(f"[TG] /portfolio_weight from user")
-    loop = asyncio.get_running_loop()
-    # /portfolio_weight is restricted to passive/long-term accounts
-    diffs, total_usd, cash_info = await loop.run_in_executor(None, get_weight_diffs, "passive")
-    msg = format_weight_diffs(diffs, total_usd, cash_info)
-    await wrap_reply(update, msg, parse_mode='HTML')
+    try:
+        loop = asyncio.get_running_loop()
+        # /portfolio_weight is restricted to passive/long-term accounts
+        diffs, total_usd, cash_info = await loop.run_in_executor(None, get_weight_diffs, "passive")
+        msg = format_weight_diffs(diffs, total_usd, cash_info)
+        await wrap_reply(update, msg, parse_mode='HTML')
+    except Exception as e:
+        logging.error(f"[TG] cmd_portfolio_weight failed: {e}")
 
 
 def register_portfolio_handlers(app: Application):

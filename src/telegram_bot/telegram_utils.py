@@ -5,39 +5,63 @@ Telegram Utilities
 import logging
 import asyncio
 from telegram import Update
+from telegram.error import TimedOut, NetworkError
 from core import display
+
+MAX_RETRIES = 2
+RETRY_DELAY = 1.0  # seconds
 
 async def wrap_reply(update: Update, text: str, **kwargs):
     """
     Wrapper for update.message.reply_text that alerts the first line.
     Supports all reply_text arguments like parse_mode, reply_markup, etc.
+    Retries up to MAX_RETRIES times on network timeout.
     """
     if not text: return
     first_line = text.split('\n')[0][:80]  # First line, max 80 chars
     display.add_alert(f"[TG] {first_line}", "INFO")
 
-    # Check if update.message exists (it might be a callback query)
-    if update.message:
-        return await update.message.reply_text(text, **kwargs)
-    elif update.callback_query:
-        # Fallback for callback queries if someone calls wrap_reply by mistake
-        return await update.callback_query.message.reply_text(text, **kwargs)
-    return None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            # Check if update.message exists (it might be a callback query)
+            if update.message:
+                return await update.message.reply_text(text, **kwargs)
+            elif update.callback_query:
+                # Fallback for callback queries if someone calls wrap_reply by mistake
+                return await update.callback_query.message.reply_text(text, **kwargs)
+            return None
+        except (TimedOut, NetworkError) as e:
+            if attempt < MAX_RETRIES:
+                logging.warning(f"[TG] wrap_reply retry {attempt + 1}/{MAX_RETRIES}: {e}")
+                await asyncio.sleep(RETRY_DELAY)
+            else:
+                display.add_alert(f"[TG] ERR: {e}", "ERROR")
+                raise
 
 async def wrap_edit(update: Update, text: str, **kwargs):
     """
     Wrapper for query.edit_message_text that alerts the first line.
     Used for InlineKeyboard interactions.
+    Retries up to MAX_RETRIES times on network timeout.
     """
     if not text: return
     first_line = text.split('\n')[0][:80]
     display.add_alert(f"[TG] {first_line}", "INFO")
 
-    if update and update.callback_query:
-        return await update.callback_query.edit_message_text(text, **kwargs)
-    else:
-        logging.warning(f"[TG] wrap_edit failed: update={update}")
-        return None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            if update and update.callback_query:
+                return await update.callback_query.edit_message_text(text, **kwargs)
+            else:
+                logging.warning(f"[TG] wrap_edit failed: update={update}")
+                return None
+        except (TimedOut, NetworkError) as e:
+            if attempt < MAX_RETRIES:
+                logging.warning(f"[TG] wrap_edit retry {attempt + 1}/{MAX_RETRIES}: {e}")
+                await asyncio.sleep(RETRY_DELAY)
+            else:
+                display.add_alert(f"[TG] ERR: {e}", "ERROR")
+                raise
 
 # Global reference for wrap_send
 from telegram import Bot

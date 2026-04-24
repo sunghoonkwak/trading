@@ -68,3 +68,4 @@ send_notification("📈 Order Filled: SOXL 5 @ $25.00", parse_mode='HTML')
 
 - 모든 래퍼 함수는 메시지의 첫 줄(최대 80자)을 `display.add_alert()`로 UI 알림 영역에 표시합니다.
 - **HTML Parse Mode** 사용을 권장합니다 (Markdown 특수문자 충돌 방지).
+- **Retry on Timeout**: `wrap_reply`/`wrap_edit`는 `TimedOut`/`NetworkError` 발생 시 최대 2회 재시도합니다 (1초 간격). 재시도 실패 시 예외를 상위로 전파합니다.
