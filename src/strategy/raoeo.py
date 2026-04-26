@@ -61,48 +61,7 @@ def _validate_phase_config(ticker: str, phases: List[Dict]) -> None:
 # Buy Strategy Helper Factories
 # -------------------------------------------------------------
 
-def _calculate_normal_buy(ticker: str, buy_rule: Dict, daily_budget: float, cur_price: float, minimum_target_sell: float) -> Tuple[int, float]:
-    """Calculate 'normal' buy order rule: Minimum planned sell target - $0.01"""
-    b_ratio = float(buy_rule.get("ratio", 1.0))
-    allocated_budget = daily_budget * b_ratio
 
-    buy_price = minimum_target_sell - 0.01
-    buy_price = _cap_buy_price(buy_price, cur_price)
-
-    rule_qty = int(allocated_budget / buy_price)
-    if rule_qty < 1:
-        rule_qty = 1
-
-    return rule_qty, buy_price
-
-
-def _calculate_average_buy(ticker: str, buy_rule: Dict, daily_budget: float, cur_price: float, base_price: float) -> Tuple[int, float]:
-    """Calculate 'average' buy order rule: Buy at current base price."""
-    b_ratio = float(buy_rule.get("ratio", 1.0))
-    allocated_budget = daily_budget * b_ratio
-
-    buy_price = base_price
-    buy_price = _cap_buy_price(buy_price, cur_price)
-
-    rule_qty = int(allocated_budget / buy_price)
-    if rule_qty < 1:
-        rule_qty = 1
-
-    return rule_qty, buy_price
-
-
-def _calculate_filling_buy(ticker: str, buy_rule: Dict, seed: float, cur_price: float, base_price: float, qty: int, currently_bought_qty: int) -> Tuple[int, float]:
-    """Calculate 'filling' buy order rule: Bulk buy to fill threshold at ratio pricing."""
-    target_ratio = float(buy_rule.get("target_ratio", 0.1))
-    p_ratio = float(buy_rule.get("price_ratio_2_avg", 0.95))
-
-    buy_price = round(base_price * p_ratio, 2)
-    buy_price = _cap_buy_price(buy_price, cur_price)
-
-    target_seed_qty = int((seed * target_ratio) / base_price)
-    remaining_fill_qty = target_seed_qty - qty - currently_bought_qty
-
-    return remaining_fill_qty, buy_price
 
 
 # -------------------------------------------------------------
@@ -230,14 +189,20 @@ def calculate_orders(
 
         # 6. Branch into Buy Logic Factories
         buy_rules = matched_phase.get("buy", [])
-        minimum_target_sell = min(buy_target_sell_prices) if buy_target_sell_prices else base_price * 1.1
+        min_profit = min([float(r.get("profit", 0.0)) for r in sell_rules]) if sell_rules else 0.1
         buy_qty_main = 0
 
         for buy_rule in buy_rules:
             b_type = buy_rule.get("type", "normal")
 
+            price_percent_cap = float(buy_rule.get("price_percent_cap", float("inf")))
+            target_buy_px = round((min(price_percent_cap, min_profit) + 1) * base_price - 0.01, 2)
+            buy_price = _cap_buy_price(target_buy_px, cur_price)
+
             if b_type == "normal":
-                rule_qty, buy_price = _calculate_normal_buy(ticker, buy_rule, daily_budget, cur_price, minimum_target_sell)
+                b_ratio = float(buy_rule.get("ratio", 1.0))
+                alloc_budget = daily_budget * b_ratio
+                rule_qty = max(1, int(alloc_budget / buy_price))
                 buy_qty_main += rule_qty
                 ticker_orders.append(StrategyOrder(
                     symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
@@ -245,7 +210,9 @@ def calculate_orders(
                 ))
 
             elif b_type == "average":
-                rule_qty, buy_price = _calculate_average_buy(ticker, buy_rule, daily_budget, cur_price, base_price)
+                b_ratio = float(buy_rule.get("ratio", 1.0))
+                alloc_budget = daily_budget * b_ratio
+                rule_qty = max(1, int(alloc_budget / buy_price))
                 buy_qty_main += rule_qty
                 ticker_orders.append(StrategyOrder(
                     symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
@@ -253,10 +220,12 @@ def calculate_orders(
                 ))
 
             elif b_type == "filling":
-                remaining_fill_qty, buy_price = _calculate_filling_buy(ticker, buy_rule, seed, cur_price, base_price, qty, buy_qty_main)
-                if remaining_fill_qty > 0:
+                target_ratio = float(buy_rule.get("target_ratio", 0.1))
+                target_seed_qty = int((seed * target_ratio) / base_price)
+                rem_qty = target_seed_qty - qty - buy_qty_main
+                if rem_qty > 0:
                     ticker_orders.append(StrategyOrder(
-                        symbol=ticker, side=OrderSide.BUY, quantity=remaining_fill_qty,
+                        symbol=ticker, side=OrderSide.BUY, quantity=rem_qty,
                         price=buy_price, order_type=ORDER_TYPE_US_LOC, reason="Buy Filling"
                     ))
 

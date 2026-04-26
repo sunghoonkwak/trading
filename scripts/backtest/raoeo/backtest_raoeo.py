@@ -226,7 +226,7 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
 
         # Simulate Buys
         if can_buy:
-            min_target_sell = min(buy_target_sell_prices) if buy_target_sell_prices else base_price * 1.1
+            min_profit = min([float(r.get("profit", 0.0)) for r in sell_rules]) if sell_rules else 0.1
             bought_today_qty = 0
             spent_today = 0.0
 
@@ -255,11 +255,13 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
 
             for rule in buy_rules:
                 b_type = rule.get("type", "normal")
-                ratio = float(rule.get("ratio", 1.0))
-                alloc_budget = state.daily_budget * ratio
+                price_percent_cap = float(rule.get("price_percent_cap", float("inf")))
+                target_buy_px = round((min(price_percent_cap, min_profit) + 1) * base_price - 0.01, 2)
+                buy_px = _cap_buy_price(target_buy_px, cur_price)
 
                 if b_type == "normal":
-                    buy_px = _cap_buy_price(min_target_sell - 0.01, cur_price)
+                    ratio = float(rule.get("ratio", 1.0))
+                    alloc_budget = state.daily_budget * ratio
                     order_qty = max(1, int(alloc_budget / buy_px))
                     # Evaluated as LOC
                     if close_p <= buy_px:
@@ -267,7 +269,8 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
                         spent_today += (order_qty * close_p)
 
                 elif b_type == "average":
-                    buy_px = _cap_buy_price(base_price, cur_price)
+                    ratio = float(rule.get("ratio", 1.0))
+                    alloc_budget = state.daily_budget * ratio
                     order_qty = max(1, int(alloc_budget / buy_px))
                     if close_p <= buy_px:
                         bought_today_qty += order_qty
@@ -275,9 +278,6 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
 
                 elif b_type == "filling":
                     target_ratio = float(rule.get("target_ratio", 0.1))
-                    p_ratio = float(rule.get("price_ratio_2_avg", 0.95))
-                    buy_px = _cap_buy_price(round(base_price * p_ratio, 2), cur_price)
-
                     target_seed_qty = int((state.seed * target_ratio) / base_price)
                     rem_qty = target_seed_qty - state.qty - bought_today_qty
 

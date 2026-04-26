@@ -14,9 +14,10 @@
    - **매도 로직 (Sell)**:
      - `sell` 배열 내 각 항목(type, ratio, profit)에 따라 보유 수량을 분할하여 한도와 목표가를 정합니다. (`LOC` 혹은 `Limit` 주문)
    - **매수 로직 (Buy)**:
-     - `type: "normal"`: 산출된 매도 시나리오들 중 가장 "낮은 가격"의 예상 목표매도가에서 -0.01불 오프셋을 적용한 가격으로 매수합니다.
-     - `type: "average"`: 현재 포트폴리오 상의 평단가(없으면 현재가)를 기준으로 매수합니다.
-     - `type: "filling"`: `price_ratio_2_avg`가 곱해진 가격으로, `target_ratio`에 다다를 때까지의 부족분 수량을 보충(Fill) 매수합니다.
+     - 공통 로직: `buy_price = (min(price_percent_cap, 최저목표수익률) + 1) * 평단가 - 0.01` 기반으로 산출됩니다.
+     - `type: "normal"`: `price_percent_cap: 0.1`로 설정하여 목표 수익률에 연동시킵니다.
+     - `type: "average"`: `price_percent_cap: 0.0`으로 설정하여 평단가 근처에서 매수되게 유도합니다.
+     - `type: "filling"`: `price_percent_cap: -0.05` 등으로 설정하여 평단가 대비 할인된 가격에 매수하며, `target_ratio`에 다다를 때까지의 부족분 수량을 보충(Fill) 매수합니다.
 
 3. **Buy Price Cap (매수 가격 상한)**:
    - KIS는 현재가의 30% 초과 매수 주문을 거절하므로, 안전 마진을 두고 **25%** 캡을 적용합니다.
@@ -51,7 +52,8 @@
              "_description": "Phase별 고유의 매수/매도 로직 설정",
              "threshold": 0.1,
              "buy": [
-               { "type": "normal", "ratio": 1 }
+               { "type": "normal", "ratio": 1, "price_percent_cap": 0.1 },
+               { "type": "filling", "price_percent_cap": -0.05, "target_ratio": 0.1 }
              ],
              "sell": [
                { "type": "LOC", "ratio": 0.5, "profit": 0.2 },
