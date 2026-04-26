@@ -152,17 +152,20 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
         buy_rules = matched_phase.get("buy", [])
 
         # Prepare Sells
-        buy_target_sell_prices = []
         sells_to_execute = []
 
         if state.qty > 0:
             # Prepare rule allocations
-            remaining_sell_qty = state.qty
+            remaining_ratio = sum(r.get("ratio", 0.0) for r in sell_rules if str(r.get("disable", "false")).lower() != "true")
+            total_sell_qty = int(state.qty * remaining_ratio)
+            remaining_sell_qty = total_sell_qty
+
             for i, rule in enumerate(sell_rules):
+                if str(rule.get("disable", "false")).lower() == "true":
+                    continue
                 profit = float(rule.get("profit", 0.0))
                 ratio = float(rule.get("ratio", 0.0))
                 target_px = round(base_price * (1 + profit), 2)
-                buy_target_sell_prices.append(target_px)
 
                 rule_qty = int(state.qty * ratio)
                 if i == len(sell_rules) - 1:
@@ -175,9 +178,6 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
                         "target_px": target_px
                     })
                 remaining_sell_qty -= rule_qty
-        else:
-            for rule in sell_rules:
-                buy_target_sell_prices.append(round(base_price * (1 + float(rule.get("profit", 0.0))), 2))
 
         # Simulate End of Day Sells
         sold_qty = 0
@@ -226,7 +226,8 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
 
         # Simulate Buys
         if can_buy:
-            min_profit = min([float(r.get("profit", 0.0)) for r in sell_rules]) if sell_rules else 0.1
+            active_sell_rules = [r for r in sell_rules if str(r.get("disable", "false")).lower() != "true"]
+            min_profit = min([float(r.get("profit", 0.0)) for r in active_sell_rules]) if active_sell_rules else 0.1
             bought_today_qty = 0
             spent_today = 0.0
 
@@ -254,6 +255,9 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
                         print(f"  [🚨 방어 매도] {d_str} 원금 1.5배 돌파! 1/3 매도 (수익: ${t_profit:.2f}, 확보현금: ${rev:.2f})")
 
             for rule in buy_rules:
+                if str(rule.get("disable", "false")).lower() == "true":
+                    continue
+
                 b_type = rule.get("type", "normal")
                 price_percent_cap = float(rule.get("price_percent_cap", float("inf")))
                 target_buy_px = round((min(price_percent_cap, min_profit) + 1) * base_price - 0.01, 2)

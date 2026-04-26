@@ -147,19 +147,19 @@ def calculate_orders(
 
         # 5. Build Sell Logic Paths
         sell_rules = matched_phase.get("sell", [])
-        buy_target_sell_prices = []  # Collector for evaluating minimum target limits
 
         if qty > 0 and avg_price > 0:
-            remaining_ratio = sum(r.get("ratio", 0.0) for r in sell_rules)
+            remaining_ratio = sum(r.get("ratio", 0.0) for r in sell_rules if str(r.get("disable", "false")).lower() != "true")
             total_sell_qty = int(qty * remaining_ratio)
             remaining_sell_qty = total_sell_qty
 
             for i, sell_rule in enumerate(sell_rules):
+                if str(sell_rule.get("disable", "false")).lower() == "true":
+                    continue
                 profit = float(sell_rule.get("profit", 0.0))
                 ratio = float(sell_rule.get("ratio", 0.0))
 
                 target_sell_price = round(avg_price * (1 + profit), 2)
-                buy_target_sell_prices.append(target_sell_price)
 
                 # Rule apportionment
                 rule_qty = int(qty * ratio)
@@ -180,19 +180,16 @@ def calculate_orders(
                         reason=f"Sell {o_type_str} {int(profit*100)}% profit"
                     ))
                 remaining_sell_qty -= rule_qty
-        else:
-            # Ghost sell price calculations for normal buy targeting
-            for sell_rule in sell_rules:
-                profit = float(sell_rule.get("profit", 0.0))
-                target_sell_price = round(base_price * (1 + profit), 2)
-                buy_target_sell_prices.append(target_sell_price)
-
         # 6. Branch into Buy Logic Factories
         buy_rules = matched_phase.get("buy", [])
-        min_profit = min([float(r.get("profit", 0.0)) for r in sell_rules]) if sell_rules else 0.1
+        active_sell_rules = [r for r in sell_rules if str(r.get("disable", "false")).lower() != "true"]
+        min_profit = min([float(r.get("profit", 0.0)) for r in active_sell_rules]) if active_sell_rules else 0.1
         buy_qty_main = 0
 
         for buy_rule in buy_rules:
+            if str(buy_rule.get("disable", "false")).lower() == "true":
+                continue
+
             b_type = buy_rule.get("type", "normal")
 
             price_percent_cap = float(buy_rule.get("price_percent_cap", float("inf")))

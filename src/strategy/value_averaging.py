@@ -9,7 +9,7 @@ import logging
 from typing import Dict, List, Tuple
 from strategy.base import StrategyOrder, OrderSide
 
-from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_KR_MARKET
+from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
 def calculate_orders(
     targets_config: Dict,
@@ -166,8 +166,8 @@ def calculate_orders(
                             symbol=ticker,
                             side=OrderSide.SELL,
                             quantity=sell_qty,
-                            price=0.0,  # Market Price
-                            order_type=ORDER_TYPE_KR_MARKET,
+                            price=0.0,  # Market Price fallback
+                            order_type=ORDER_TYPE_US_LIMIT,
                             reason=f"VA Sell Day {day_count} (Target: {daily_target_amount:.2f})"
                         ))
 
