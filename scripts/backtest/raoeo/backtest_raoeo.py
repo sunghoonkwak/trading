@@ -7,16 +7,20 @@ from datetime import datetime
 import pandas as pd
 import yfinance as yf
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(message)s")
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, "../../../"))
+src_path = os.path.join(project_root, "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+from strategy.raoeo import calculate_orders
+from strategy.base import OrderSide
+from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
+
+# Configure logging to WARNING so calculate_orders logs don't spam output
+logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
 CONFIG_PATH = os.path.expanduser("~/KIS_config/strategy_config.json")
-MAX_BUY_PRICE_RATIO = 1.25
-
-def _cap_buy_price(price: float, cur_price: float) -> float:
-    max_price = round(cur_price * MAX_BUY_PRICE_RATIO, 2)
-    return min(price, max_price)
-
 def load_config(ticker: str):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(script_dir, "strategy_config.json")
@@ -31,14 +35,6 @@ def load_config(ticker: str):
     if not cfg:
         raise ValueError(f"RAOEO configuration for {ticker} not found in strategy_config.json")
     return cfg
-
-def get_matched_phase(progress_ratio: float, phases: list) -> dict:
-    matched = phases[-1]
-    for p in phases:
-        if "threshold" in p and progress_ratio < p["threshold"]:
-            matched = p
-            break
-    return matched
 
 class SimulationState:
     def __init__(self, seed: float, duration: int, case: int):
@@ -145,48 +141,26 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
              # We have cash to spend, so we are not 'suspended' in the sense of 'can't buy'
              state.did_notify_suspension = False
 
-        matched_phase = get_matched_phase(state.progress_ratio, phases)
+        # Call real strategy logic
+        target_cfg = config.copy()
+        target_cfg['seed'] = state.seed
+        targets_config = {ticker: target_cfg}
+        portfolio = {ticker: {'qty': state.qty, 'avg_price': state.avg_price, 'cur_price': prev_close}}
+        current_prices = {ticker: prev_close}
 
-        # Buy & Sell Orders Preparation
-        sell_rules = matched_phase.get("sell", [])
-        buy_rules = matched_phase.get("buy", [])
+        orders, info = calculate_orders(targets_config, portfolio, current_prices)
 
-        # Prepare Sells
-        sells_to_execute = []
-
-        if state.qty > 0:
-            # Prepare rule allocations
-            remaining_ratio = sum(r.get("ratio", 0.0) for r in sell_rules if str(r.get("disable", "false")).lower() != "true")
-            total_sell_qty = int(state.qty * remaining_ratio)
-            remaining_sell_qty = total_sell_qty
-
-            for i, rule in enumerate(sell_rules):
-                if str(rule.get("disable", "false")).lower() == "true":
-                    continue
-                profit = float(rule.get("profit", 0.0))
-                ratio = float(rule.get("ratio", 0.0))
-                target_px = round(base_price * (1 + profit), 2)
-
-                rule_qty = int(state.qty * ratio)
-                if i == len(sell_rules) - 1:
-                    rule_qty = remaining_sell_qty
-
-                if rule_qty > 0:
-                    sells_to_execute.append({
-                        "type": rule.get("type", "Limit"),
-                        "qty": rule_qty,
-                        "target_px": target_px
-                    })
-                remaining_sell_qty -= rule_qty
+        sell_orders = [o for o in orders if o.side == OrderSide.SELL]
+        buy_orders = [o for o in orders if o.side == OrderSide.BUY]
 
         # Simulate End of Day Sells
         sold_qty = 0
         revenue = 0.0
 
-        for sell in sells_to_execute:
-            target_px = sell["target_px"]
-            sell_qty = sell["qty"]
-            stype = sell["type"]
+        for sell in sell_orders:
+            target_px = sell.price
+            sell_qty = sell.quantity
+            stype = "LOC" if sell.order_type == ORDER_TYPE_US_LOC else "Limit"
 
             executed = False
             exec_price = 0.0
@@ -222,12 +196,10 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
                     print(f"[{d_str}] 사이클 익절 완료: 총 매도액 ${revenue:.2f}, 수익금 ${trade_profit:.2f}. (누적 총수익: ${state.realized_profit:.2f})")
                 state.reset_cycle(d_str)
                 prev_close = close_p
-                continue # Skip buys if we sold everything today to avoid wash rule collisions or instant rebuys
+                continue # Skip buys if we sold everything today
 
         # Simulate Buys
         if can_buy:
-            active_sell_rules = [r for r in sell_rules if str(r.get("disable", "false")).lower() != "true"]
-            min_profit = min([float(r.get("profit", 0.0)) for r in active_sell_rules]) if active_sell_rules else 0.1
             bought_today_qty = 0
             spent_today = 0.0
 
@@ -254,40 +226,14 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
                     else:
                         print(f"  [🚨 방어 매도] {d_str} 원금 1.5배 돌파! 1/3 매도 (수익: ${t_profit:.2f}, 확보현금: ${rev:.2f})")
 
-            for rule in buy_rules:
-                if str(rule.get("disable", "false")).lower() == "true":
-                    continue
+            for buy in buy_orders:
+                target_buy_px = buy.price
+                order_qty = buy.quantity
 
-                b_type = rule.get("type", "normal")
-                price_percent_cap = float(rule.get("price_percent_cap", float("inf")))
-                target_buy_px = round((min(price_percent_cap, min_profit) + 1) * base_price - 0.01, 2)
-                buy_px = _cap_buy_price(target_buy_px, cur_price)
-
-                if b_type == "normal":
-                    ratio = float(rule.get("ratio", 1.0))
-                    alloc_budget = state.daily_budget * ratio
-                    order_qty = max(1, int(alloc_budget / buy_px))
-                    # Evaluated as LOC
-                    if close_p <= buy_px:
-                        bought_today_qty += order_qty
-                        spent_today += (order_qty * close_p)
-
-                elif b_type == "average":
-                    ratio = float(rule.get("ratio", 1.0))
-                    alloc_budget = state.daily_budget * ratio
-                    order_qty = max(1, int(alloc_budget / buy_px))
-                    if close_p <= buy_px:
-                        bought_today_qty += order_qty
-                        spent_today += (order_qty * close_p)
-
-                elif b_type == "filling":
-                    target_ratio = float(rule.get("target_ratio", 0.1))
-                    target_seed_qty = int((state.seed * target_ratio) / base_price)
-                    rem_qty = target_seed_qty - state.qty - bought_today_qty
-
-                    if rem_qty > 0 and close_p <= buy_px:
-                        bought_today_qty += rem_qty
-                        spent_today += (rem_qty * close_p)
+                # RAOEO assumes all normal/average/filling are evaluated as LOC against close
+                if close_p <= target_buy_px:
+                    bought_today_qty += order_qty
+                    spent_today += (order_qty * close_p)
 
             if bought_today_qty > 0:
                 state.qty += bought_today_qty
