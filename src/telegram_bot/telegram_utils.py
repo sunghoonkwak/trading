@@ -93,7 +93,17 @@ async def wrap_send(text: str, **kwargs):
     if not text: return
     first_line = text.split('\n')[0][:80]
     display.add_alert(f"[TG] {first_line}", "INFO")
-    return await _bot.send_message(chat_id=_chat_id, text=text, **kwargs)
+
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            return await _bot.send_message(chat_id=_chat_id, text=text, **kwargs)
+        except (TimedOut, NetworkError) as e:
+            if attempt < MAX_RETRIES:
+                logging.warning(f"[TG] wrap_send retry {attempt + 1}/{MAX_RETRIES}: {e}")
+                await asyncio.sleep(RETRY_DELAY)
+            else:
+                display.add_alert(f"[TG] ERR: {e}", "ERROR")
+                raise
 
 
 async def wrap_edit_message(chat_id: str, message_id: int, text: str, **kwargs):
@@ -110,7 +120,17 @@ async def wrap_edit_message(chat_id: str, message_id: int, text: str, **kwargs):
     if not text: return
     first_line = text.split('\n')[0][:80]
     display.add_alert(f"[TG] {first_line}", "INFO")
-    return await _bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, **kwargs)
+
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            return await _bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text, **kwargs)
+        except (TimedOut, NetworkError) as e:
+            if attempt < MAX_RETRIES:
+                logging.warning(f"[TG] wrap_edit_message retry {attempt + 1}/{MAX_RETRIES}: {e}")
+                await asyncio.sleep(RETRY_DELAY)
+            else:
+                display.add_alert(f"[TG] ERR: {e}", "ERROR")
+                raise
 
 
 def send_notification(text: str, parse_mode: str = 'HTML'):
@@ -132,16 +152,25 @@ def send_notification(text: str, parse_mode: str = 'HTML'):
         return
 
     async def _send():
-        try:
-            await _bot.send_message(
-                chat_id=_chat_id,
-                text=text,
-                parse_mode=parse_mode
-            )
-            first_line = text.split('\n')[0][:80]
-            display.add_alert(f"[TG] {first_line}", "INFO")
-        except Exception as e:
-            logging.error(f"[TG] Notification failed: {e}")
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                await _bot.send_message(
+                    chat_id=_chat_id,
+                    text=text,
+                    parse_mode=parse_mode
+                )
+                first_line = text.split('\n')[0][:80]
+                display.add_alert(f"[TG] {first_line}", "INFO")
+                return
+            except (TimedOut, NetworkError) as e:
+                if attempt < MAX_RETRIES:
+                    logging.warning(f"[TG] Notification retry {attempt + 1}/{MAX_RETRIES}: {e}")
+                    await asyncio.sleep(RETRY_DELAY)
+                else:
+                    logging.error(f"[TG] Notification failed: {e}")
+            except Exception as e:
+                logging.error(f"[TG] Notification failed: {e}")
+                break
 
     # Verify if we are in the main loop or need to schedule
     try:
