@@ -4,7 +4,7 @@
         "targets": {
             "SOXL": {
                 "enabled": true,
-                "seed": 31400,
+                "seed": 37000,
                 "exchange": "AMS",
                 "duration": 40,
                 "phase": [
@@ -16,7 +16,7 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
+                                "price_percent_cap": 0.19,
                                 "disable": "false"
                             },
                             {
@@ -49,7 +49,7 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
+                                "price_percent_cap": 0.19,
                                 "disable": "false"
                             }
                         ],
@@ -143,7 +143,7 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
+                                "price_percent_cap": 0.11,
                                 "disable": "false"
                             },
                             {
@@ -176,7 +176,7 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
+                                "price_percent_cap": 0.11,
                                 "disable": "false"
                             }
                         ],
@@ -203,7 +203,7 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
+                                "price_percent_cap": 0.05,
                                 "disable": "false"
                             }
                         ],
@@ -235,7 +235,7 @@
                             {
                                 "type": "normal",
                                 "ratio": 0.5,
-                                "price_percent_cap": 0.1,
+                                "price_percent_cap": 0.05,
                                 "disable": "false"
                             }
                         ],
