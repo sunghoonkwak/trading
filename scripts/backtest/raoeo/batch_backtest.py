@@ -185,12 +185,43 @@ def main():
         min_val = cagrs[min_idx] * 100
         min_range = f"{data_list[min_idx][1].strftime('%Y-%m-%d')} ~ {data_list[min_idx][2].strftime('%Y-%m-%d')}"
         
+        iqr = p75 - p25
+        lower_bound = p25 - 1.5 * iqr
+        upper_bound = p75 + 1.5 * iqr
+        
+        outliers = []
+        for x in data_list:
+            cagr = x[0] * 100
+            if cagr < lower_bound or cagr > upper_bound:
+                outliers.append({
+                    "cagr": cagr,
+                    "range": f"{x[1].strftime('%Y-%m-%d')} ~ {x[2].strftime('%Y-%m-%d')}",
+                    "type": "상방 예외" if cagr > upper_bound else "하방 예외"
+                })
+        
+        outliers = sorted(outliers, key=lambda k: k['cagr'], reverse=True)
+        
         return {
             "mean": mean_val, "std": std_val, "win_rate": win_rate,
             "max": max_val, "max_range": max_range,
             "min": min_val, "min_range": min_range,
-            "p10": p10, "p25": p25, "p50": p50, "p75": p75, "p90": p90
+            "p10": p10, "p25": p25, "p50": p50, "p75": p75, "p90": p90,
+            "outliers": outliers
         }
+
+    plot_data = []
+    plot_names = {
+        "Case 1 (단리 100% 투입중단)": "C1 (Simple 100%)",
+        "Case 2 (단리 200% 물타기)": "C2 (Simple 200%)",
+        "Case 3 (단리 150% 방어매도)": "C3 (Simple 150%)",
+        "Case 4 (복리 100% 투입중단)": "C4 (Comp 100%)",
+        "Case 5 (복리 200% 물타기)": "C5 (Comp 200%)",
+        "Case 6 (복리 150% 방어매도)": "C6 (Comp 150%)",
+        f"Ref0 ({ticker} 단순 보유)": f"Ref0 ({ticker})",
+        "Ref1 (SOXX 단순 보유)": "Ref1 (SOXX)",
+        "Ref2 (VOO 단순 보유)": "Ref2 (VOO)",
+        "Ref3 (QQQ 단순 보유)": "Ref3 (QQQ)"
+    }
 
     report_path = os.path.join(script_dir, "batch_analysis_report.md")
     with open(report_path, "w", encoding="utf-8") as f:
@@ -212,6 +243,8 @@ def main():
             if not stats: continue
             all_stats[case_names[i]] = stats
             f.write(f"| {case_names[i]} | **{stats['mean']:.2f}%** | {stats['max']:.2f}% <br>({stats['max_range']}) | {stats['min']:.2f}% <br>({stats['min_range']}) | {stats['std']:.2f}% | {stats['win_rate']:.1f}% |\n")
+            for x in results[i]:
+                plot_data.append({"Strategy": plot_names[case_names[i]], "CAGR": x[0] * 100})
         
         f.write("| --- | --- | --- | --- | --- | --- |\n")
         
@@ -227,6 +260,8 @@ def main():
             if not stats: continue
             all_stats[bench_names[b_ticker]] = stats
             f.write(f"| **{bench_names[b_ticker]}** | **{stats['mean']:.2f}%** | {stats['max']:.2f}% <br>({stats['max_range']}) | {stats['min']:.2f}% <br>({stats['min_range']}) | {stats['std']:.2f}% | {stats['win_rate']:.1f}% |\n")
+            for x in benchmark_results[b_ticker]:
+                plot_data.append({"Strategy": plot_names[bench_names[b_ticker]], "CAGR": x[0] * 100})
 
         f.write("\n## 📈 2. CAGR 분포 분석 (Percentiles)\n\n")
         f.write("| 전략/벤치마크 | 10% (하위) | 25% | 50% (Median) | 75% | 90% (상위) |\n")
@@ -247,11 +282,59 @@ def main():
                 f.write(f"| **{bench_names[b_ticker]}** | {stats['p10']:.2f}% | {stats['p25']:.2f}% | **{stats['p50']:.2f}%** | {stats['p75']:.2f}% | {stats['p90']:.2f}% |\n")
         
         f.write("\n---\n")
+        f.write("## 🚨 3. 이상치(Outlier) 상세 분석\n\n")
+        f.write("Tukey의 IQR(Interquartile Range) 기준을 벗어난 예외적인 대박/쪽박 시뮬레이션 구간입니다.\n\n")
+        
+        for i in range(1, 7):
+            stats = all_stats.get(case_names[i])
+            if stats and stats['outliers']:
+                f.write(f"### {case_names[i]}\n")
+                f.write("| 유형 | 수익률(CAGR) | 발생 기간 |\n")
+                f.write("| :--- | :--- | :--- |\n")
+                for out in stats['outliers']:
+                    type_icon = "🔴 대박" if out['type'] == "상방 예외" else "🔵 쪽박"
+                    f.write(f"| {type_icon} | **{out['cagr']:.2f}%** | {out['range']} |\n")
+                f.write("\n")
+
+        f.write("---\n")
         f.write("## 💡 분석 의견\n")
         f.write("- 다양한 시작점과 종료점에서의 성과를 분석함으로써 특정 기간에 편향되지 않은 전략의 견고성을 확인할 수 있습니다.\n")
         f.write("- 표준편차가 낮을수록 수익의 변동성이 적어 안정적인 전략임을 의미합니다.\n")
 
     print(f"\n✅ 분석 완료! 보고서가 저장되었습니다: {report_path}")
+
+    # 5. Generate Boxplot
+    try:
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        
+        if plot_data:
+            print("분포 그래프(Box Plot)를 생성하는 중...")
+            df_plot = pd.DataFrame(plot_data)
+            
+            plt.figure(figsize=(14, 8))
+            sns.set_theme(style="whitegrid")
+            
+            ax = sns.boxplot(x="CAGR", y="Strategy", hue="Strategy", data=df_plot, orient="h", palette="Set2", legend=False)
+            plt.title(f"{ticker} RAOEO Batch Backtest CAGR Distribution", fontsize=16, pad=20)
+            plt.xlabel("CAGR (%)", fontsize=12)
+            plt.ylabel("Strategy & Benchmark", fontsize=12)
+            
+            # Add a vertical line at 0%
+            plt.axvline(x=0, color='red', linestyle='--', linewidth=1.5)
+            
+            plt.tight_layout()
+            
+            plot_path = os.path.join(script_dir, "batch_cagr_distribution.png")
+            plt.savefig(plot_path, dpi=300)
+            plt.close()
+            print(f"✅ 분포 그래프가 저장되었습니다: {plot_path}")
+            
+    except ImportError:
+        print("\n[알림] matplotlib 또는 seaborn 라이브러리가 설치되어 있지 않아 그래프를 생성하지 못했습니다.")
+        print("그래프를 생성하려면 환경에 맞게 설치해주세요: pip install matplotlib seaborn")
+    except Exception as e:
+        print(f"\n그래프 생성 중 오류가 발생했습니다: {e}")
 
 if __name__ == "__main__":
     main()
