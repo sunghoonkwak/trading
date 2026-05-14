@@ -366,6 +366,17 @@
             "disabled": false
         },
         {
+            "ticker": "TLTW",
+            "name": "ISHARES 20+Y TREASURY BOND BUYWRITE STRATEGY",
+            "market": "AMS",
+            "color": [
+                160,
+                160,
+                160
+            ],
+            "disabled": false
+        },
+        {
             "ticker": "VIXY",
             "name": "PROSHARES VIX SHORT TERM FUTURES",
             "market": "AMS",

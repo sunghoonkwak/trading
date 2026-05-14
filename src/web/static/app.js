@@ -23,7 +23,7 @@ const tickerOrder = [
     // Leverage ETFs
     'SOXL', 'FAS', 'TQQQ', 'QLD',
     // ETFs
-    'QQQM', 'VOO', 'SCHD', 'TLT',
+    'QQQM', 'VOO', 'SCHD', 'TLT', 'TLTW',
     // Individual Stocks
     'GOOGL', 'TSM', 'NVDA', 'AVGO', 'QCOM', 'BLK'
 ]; // Tickers will layout in this order. Others will follow alphabetically
@@ -37,6 +37,7 @@ const tickerNames = {
     'VOO': 'SPDR S&P 500 ETF Trust',
     'SCHD': 'SCHWAB US DIVIDEND EQUITY',
     'TLT': 'iShares 20+ Year Treasury Bond ETF',
+    'TLTW': 'iShares 20+ Year Treasury Bond BuyWrite Strategy ETF',
     'GOOGL': 'Google LLC',
     'TSM': 'Taiwan Semi Manufacturing',
     'NVDA': 'NVIDIA Corporation',
