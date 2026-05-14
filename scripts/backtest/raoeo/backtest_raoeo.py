@@ -34,6 +34,11 @@ def load_config(ticker: str):
     cfg = config_data.get("raoeo", {}).get("targets", {}).get(ticker)
     if not cfg:
         raise ValueError(f"RAOEO configuration for {ticker} not found in strategy_config.json")
+    
+    cash_ticker = config_data.get("cash_ticker")
+    if cash_ticker:
+        cfg["cash_ticker"] = cash_ticker
+        
     return cfg
 
 class SimulationState:
@@ -55,6 +60,12 @@ class SimulationState:
         self._current_over_200_start = None
         self.did_notify_suspension = False
         self.available_extra_cash = 0.0 # From defensive sales
+        
+        self.cash = 0.0
+        self.tltw_qty = 0.0
+        self.tltw_spent = 0.0
+        self.tltw_realized_profit = 0.0
+        self.tltw_dividends = 0.0
 
     @property
     def avg_price(self):
@@ -88,10 +99,12 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
     seed = float(config['seed'])
     duration = int(config['duration'])
     phases = config['phase']
+    cash_ticker = config.get('cash_ticker')
 
     state = SimulationState(seed, duration, case)
 
     prev_close = None
+    prev_cash_close = None
 
     for date, row in df.iterrows():
         d_str = date.strftime("%Y-%m-%d")
@@ -99,8 +112,21 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
         close_p = row['Close']
         open_p = row['Open']
 
+        cash_close_p = row.get('Cash_Close', None)
+        cash_dividends = row.get('Cash_Dividends', 0.0)
+        
+        if pd.isna(cash_close_p):
+            cash_close_p = prev_cash_close
+            cash_dividends = 0.0
+
         if prev_close is None:
             prev_close = close_p
+            prev_cash_close = cash_close_p
+            if cash_ticker and cash_close_p:
+                state.tltw_qty = state.initial_seed / cash_close_p
+                state.tltw_spent = state.initial_seed
+            else:
+                state.cash = state.initial_seed
             continue
 
         cur_price = prev_close # Assuming we calculate orders before market open based on yesterday's close
@@ -140,6 +166,23 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
         elif state.available_extra_cash > 0.01 and state.did_notify_suspension:
              # We have cash to spend, so we are not 'suspended' in the sense of 'can't buy'
              state.did_notify_suspension = False
+
+        # Dividends
+        if cash_ticker and cash_dividends > 0 and state.tltw_qty > 0:
+            div_cash = state.tltw_qty * cash_dividends
+            state.cash += div_cash
+            state.tltw_dividends += div_cash
+
+        # Cash Sweep: Sell TLTW for daily budget
+        if cash_ticker and can_buy and cash_close_p and state.tltw_qty > 0:
+            sell_amt = min(state.daily_budget, state.tltw_qty * cash_close_p)
+            if sell_amt > 0:
+                sell_qty = sell_amt / cash_close_p
+                avg_tltw_price = state.tltw_spent / state.tltw_qty
+                state.tltw_qty -= sell_qty
+                state.tltw_spent -= sell_qty * avg_tltw_price
+                state.tltw_realized_profit += sell_amt - (sell_qty * avg_tltw_price)
+                state.cash += sell_amt
 
         # Call real strategy logic
         target_cfg = config.copy()
@@ -185,6 +228,13 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
             state.qty -= sold_qty
             state.spent -= revenue # Revenue reduces Net Cash Outflow
             state.cost_basis -= sold_cost_basis
+            state.cash += revenue
+
+            if cash_ticker and cash_close_p:
+                buy_qty = revenue / cash_close_p
+                state.tltw_qty += buy_qty
+                state.tltw_spent += revenue
+                state.cash -= revenue
 
             if state.qty == 0:
                 if compound:
@@ -217,6 +267,13 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
                     state.cost_basis -= basis
                     state.realized_profit += t_profit
                     state.available_extra_cash += rev
+                    state.cash += rev
+
+                    if cash_ticker and cash_close_p:
+                        buy_qty = rev / cash_close_p
+                        state.tltw_qty += buy_qty
+                        state.tltw_spent += rev
+                        state.cash -= rev
 
                     if compound:
                         print(f"  [🚨 방어 매도] {d_str} 원금 1.5배 돌파! 1/3 매도 (수익: ${t_profit:.2f}, 확보현금: ${rev:.2f}, 📈 시드축소: ${state.seed+t_profit:.2f})")
@@ -239,6 +296,7 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
                 state.qty += bought_today_qty
                 state.spent += spent_today
                 state.cost_basis += spent_today
+                state.cash -= spent_today
                 if state.available_extra_cash > 0:
                     deduct = min(state.available_extra_cash, spent_today)
                     state.available_extra_cash -= deduct
@@ -247,6 +305,7 @@ def run_simulation(df: pd.DataFrame, ticker: str, config: dict, case: int, compo
                     state.max_spent = state.spent
 
         prev_close = close_p
+        prev_cash_close = cash_close_p
 
     if state._current_over_100_start:
         state.over_100_periods.append((state._current_over_100_start, "진행중"))
@@ -323,6 +382,15 @@ def main():
     print(f"=== {ticker} 야후 파이낸스 데이터 로딩 중 ({start_date} ~ {end_label}) ===")
     ticker_obj = yf.Ticker(ticker)
     df = ticker_obj.history(start=start_date, end=end_date)
+    
+    cash_ticker = config.get("cash_ticker")
+    if cash_ticker:
+        print(f"=== {cash_ticker} (Cash Sweep) 야후 파이낸스 데이터 로딩 중 ===")
+        cash_obj = yf.Ticker(cash_ticker)
+        cash_df = cash_obj.history(start=start_date, end=end_date, auto_adjust=False)
+        if not cash_df.empty:
+            cash_df = cash_df[['Close', 'Dividends']].rename(columns={'Close': 'Cash_Close', 'Dividends': 'Cash_Dividends'})
+            df = df.join(cash_df, how='left')
 
     if df.empty:
         print("데이터를 찾을 수 없습니다. 티커와 시작일을 다시 확인해주세요.")
@@ -396,16 +464,19 @@ def main():
     print("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
 
     def print_row(name, state):
-        roi_ratio = state.realized_profit / state.initial_seed if state.initial_seed > 0 else 0
+        total_realized = state.realized_profit + state.tltw_realized_profit + state.tltw_dividends
+        roi_ratio = total_realized / state.initial_seed if state.initial_seed > 0 else 0
         roi_perc = roi_ratio * 100
         roi = f"{roi_perc:.2f}%" if state.initial_seed > 0 else "-"
 
         cagr_val = ((1 + roi_ratio) ** (1 / years) - 1) if years > 0 and (1 + roi_ratio) > 0 else 0
         cagr = f"{cagr_val * 100:.2f}%" if state.initial_seed > 0 else "-"
 
+        tltw_info = f"<br>(TLTW 차익: ${state.tltw_realized_profit:.2f}, 배당: ${state.tltw_dividends:.2f}, 잔여현금: ${state.cash:.2f})" if config.get("cash_ticker") else ""
+
         stuck_100 = f"{get_max_stuck_days(state.over_100_periods)}일"
         stuck_200 = f"{get_max_stuck_days(state.over_200_periods)}일"
-        print(f"| **{name}** | {roi} | **{cagr}** | ${state.realized_profit:.2f} | ${state.seed:.2f} | **${state.max_spent:.2f}** | {stuck_100} | {stuck_200} | {state.cycles}회 |")
+        print(f"| **{name}** | {roi} | **{cagr}** | ${total_realized:.2f}{tltw_info} | ${state.seed:.2f} | **${state.max_spent:.2f}** | {stuck_100} | {stuck_200} | {state.cycles}회 |")
 
     print_row("CASE 1 (단리 100% 투입중단)", state1)
     print_row("CASE 2 (단리 200% 물타기)", state2)

@@ -83,6 +83,16 @@ def main():
     if full_df.index.tz is not None:
         full_df.index = full_df.index.tz_localize(None)
 
+    cash_ticker = config.get("cash_ticker")
+    if cash_ticker:
+        print(f"캐시 티커({cash_ticker}) 데이터 다운로드 중...")
+        cash_df = yf.Ticker(cash_ticker).history(start=fetch_start, end=fetch_end, auto_adjust=False)
+        if cash_df.index.tz is not None:
+            cash_df.index = cash_df.index.tz_localize(None)
+        if not cash_df.empty:
+            cash_df = cash_df[['Close', 'Dividends']].rename(columns={'Close': 'Cash_Close', 'Dividends': 'Cash_Dividends'})
+            full_df = full_df.join(cash_df, how='left')
+
     # 3. Simulation Loop
     results = {i: [] for i in range(1, 7)} # Case 1 to 6
     benchmark_results = {ticker: [], "SOXX": [], "VOO": [], "QQQ": []}
@@ -140,13 +150,15 @@ def main():
                 for case_idx in range(1, 4):
                     # Simple
                     state_simple = run_simulation(df_slice, ticker, config, case=case_idx, compound=False)
-                    cagr_simple = calculate_cagr(state_simple.realized_profit, state_simple.initial_seed, actual_start, actual_end)
-                    results[case_idx].append((cagr_simple, actual_start, actual_end))
+                    tot_profit_simple = state_simple.realized_profit + state_simple.tltw_realized_profit + state_simple.tltw_dividends
+                    cagr_simple = calculate_cagr(tot_profit_simple, state_simple.initial_seed, actual_start, actual_end)
+                    results[case_idx].append((cagr_simple, actual_start, actual_end, state_simple.tltw_realized_profit, state_simple.tltw_dividends, state_simple.realized_profit))
                     
                     # Compound
                     state_compound = run_simulation(df_slice, ticker, config, case=case_idx, compound=True)
-                    cagr_compound = calculate_cagr(state_compound.realized_profit, state_compound.initial_seed, actual_start, actual_end)
-                    results[case_idx + 3].append((cagr_compound, actual_start, actual_end))
+                    tot_profit_compound = state_compound.realized_profit + state_compound.tltw_realized_profit + state_compound.tltw_dividends
+                    cagr_compound = calculate_cagr(tot_profit_compound, state_compound.initial_seed, actual_start, actual_end)
+                    results[case_idx + 3].append((cagr_compound, actual_start, actual_end, state_compound.tltw_realized_profit, state_compound.tltw_dividends, state_compound.realized_profit))
             
             pbar.update(1)
     
@@ -168,6 +180,14 @@ def main():
         mean_val = np.mean(cagrs) * 100
         std_val = np.std(cagrs) * 100
         win_rate = (sum(1 for x in cagrs if x > 0) / len(cagrs)) * 100
+        
+        avg_tltw_loss = 0.0
+        avg_tltw_div = 0.0
+        avg_soxl_profit = 0.0
+        if len(data_list[0]) > 3:
+            avg_tltw_loss = np.mean([x[3] for x in data_list])
+            avg_tltw_div = np.mean([x[4] for x in data_list])
+            avg_soxl_profit = np.mean([x[5] for x in data_list])
         
         # Percentiles
         p10 = np.percentile(cagrs, 10) * 100
@@ -206,7 +226,10 @@ def main():
             "max": max_val, "max_range": max_range,
             "min": min_val, "min_range": min_range,
             "p10": p10, "p25": p25, "p50": p50, "p75": p75, "p90": p90,
-            "outliers": outliers
+            "outliers": outliers,
+            "avg_tltw_loss": avg_tltw_loss,
+            "avg_tltw_div": avg_tltw_div,
+            "avg_soxl_profit": avg_soxl_profit
         }
 
     plot_data = []
@@ -223,9 +246,10 @@ def main():
         "Ref3 (QQQ 단순 보유)": "Ref3 (QQQ)"
     }
 
-    report_path = os.path.join(script_dir, "batch_analysis_report.md")
+    cash_ticker_suffix = f"_{config.get('cash_ticker')}" if config.get("cash_ticker") else ""
+    report_path = os.path.join(script_dir, f"batch_analysis_report{cash_ticker_suffix}.md")
     with open(report_path, "w", encoding="utf-8") as f:
-        f.write(f"# RAOEO Batch Backtest Analysis Report: {ticker}\n\n")
+        f.write(f"# RAOEO Batch Backtest Analysis Report: {ticker} (Cash: {config.get('cash_ticker', 'USD')})\n\n")
         f.write(f"- **분석 기간**: 2022-01 ~ 2026-05\n")
         f.write(f"- **시작일 조합**: {len(start_dates)}개 (매월 1일)\n")
         f.write(f"- **종료일 조합**: {len(end_dates)}개 (매월 1일)\n")
@@ -233,8 +257,12 @@ def main():
         f.write(f"- **실행일시**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         
         f.write("## 📊 1. CAGR 성과 및 극값(Max/Min) 요약\n\n")
-        f.write("| 전략/벤치마크 | 평균(Mean) | 최대(Max) [기간] | 최소(Min) [기간] | 표준편차(Std) | 승률 |\n")
-        f.write("| :--- | :--- | :--- | :--- | :--- | :--- |\n")
+        if config.get("cash_ticker"):
+            f.write("| 전략/벤치마크 | 평균(Mean) | 최대(Max) [기간] | 최소(Min) [기간] | 평균 매매손실 | 평균 배당금 | 본장(SOXL)수익 | Std | 승률 |\n")
+            f.write("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n")
+        else:
+            f.write("| 전략/벤치마크 | 평균(Mean) | 최대(Max) [기간] | 최소(Min) [기간] | 표준편차(Std) | 승률 |\n")
+            f.write("| :--- | :--- | :--- | :--- | :--- | :--- |\n")
         
         all_stats = {}
         # Strategy cases
@@ -242,7 +270,10 @@ def main():
             stats = get_stats(results[i])
             if not stats: continue
             all_stats[case_names[i]] = stats
-            f.write(f"| {case_names[i]} | **{stats['mean']:.2f}%** | {stats['max']:.2f}% <br>({stats['max_range']}) | {stats['min']:.2f}% <br>({stats['min_range']}) | {stats['std']:.2f}% | {stats['win_rate']:.1f}% |\n")
+            if config.get("cash_ticker"):
+                f.write(f"| {case_names[i]} | **{stats['mean']:.2f}%** | {stats['max']:.2f}% <br>({stats['max_range']}) | {stats['min']:.2f}% <br>({stats['min_range']}) | **${stats['avg_tltw_loss']:,.0f}** | **${stats['avg_tltw_div']:,.0f}** | **${stats['avg_soxl_profit']:,.0f}** | {stats['std']:.2f}% | {stats['win_rate']:.1f}% |\n")
+            else:
+                f.write(f"| {case_names[i]} | **{stats['mean']:.2f}%** | {stats['max']:.2f}% <br>({stats['max_range']}) | {stats['min']:.2f}% <br>({stats['min_range']}) | {stats['std']:.2f}% | {stats['win_rate']:.1f}% |\n")
             for x in results[i]:
                 plot_data.append({"Strategy": plot_names[case_names[i]], "CAGR": x[0] * 100})
         
@@ -259,7 +290,10 @@ def main():
             stats = get_stats(benchmark_results[b_ticker])
             if not stats: continue
             all_stats[bench_names[b_ticker]] = stats
-            f.write(f"| **{bench_names[b_ticker]}** | **{stats['mean']:.2f}%** | {stats['max']:.2f}% <br>({stats['max_range']}) | {stats['min']:.2f}% <br>({stats['min_range']}) | {stats['std']:.2f}% | {stats['win_rate']:.1f}% |\n")
+            if config.get("cash_ticker"):
+                f.write(f"| **{bench_names[b_ticker]}** | **{stats['mean']:.2f}%** | {stats['max']:.2f}% <br>({stats['max_range']}) | {stats['min']:.2f}% <br>({stats['min_range']}) | - | - | - | {stats['std']:.2f}% | {stats['win_rate']:.1f}% |\n")
+            else:
+                f.write(f"| **{bench_names[b_ticker]}** | **{stats['mean']:.2f}%** | {stats['max']:.2f}% <br>({stats['max_range']}) | {stats['min']:.2f}% <br>({stats['min_range']}) | {stats['std']:.2f}% | {stats['win_rate']:.1f}% |\n")
             for x in benchmark_results[b_ticker]:
                 plot_data.append({"Strategy": plot_names[bench_names[b_ticker]], "CAGR": x[0] * 100})
 
@@ -325,7 +359,7 @@ def main():
             
             plt.tight_layout()
             
-            plot_path = os.path.join(script_dir, "batch_cagr_distribution.png")
+            plot_path = os.path.join(script_dir, f"batch_cagr_distribution{cash_ticker_suffix}.png")
             plt.savefig(plot_path, dpi=300)
             plt.close()
             print(f"✅ 분포 그래프가 저장되었습니다: {plot_path}")
