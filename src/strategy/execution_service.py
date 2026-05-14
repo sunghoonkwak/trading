@@ -353,7 +353,7 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
                     return report
 
                 logging.info(f"RAOEO: Re-executing {len(failed)} failed orders.")
-                results = _execute_orders(failed)
+                results = _execute_orders(failed, sell_first=True, sell_wait_seconds=5)
                 report["execution_results"] = results
 
                 success_count = sum(1 for r in results if r['success'])
@@ -394,7 +394,8 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
         orders, calc_info = raoeo.calculate_orders(
             targets_config=active_targets,
             portfolio=holdings,
-            current_prices=prices
+            current_prices=prices,
+            cash_ticker=strategy_config.get("cash_ticker", "")
         )
         report["orders"] = orders
         report["pending_orders"] = orders
@@ -416,7 +417,7 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
             report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
-        results = _execute_orders(orders)
+        results = _execute_orders(orders, sell_first=True, sell_wait_seconds=5)
         report["execution_results"] = results
 
         success_count = sum(1 for r in results if r['success'])

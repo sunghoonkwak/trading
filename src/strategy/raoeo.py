@@ -72,7 +72,8 @@ def calculate_orders(
     targets_config: Dict,
     portfolio: Dict,
     current_prices: Dict[str, float],
-    exchange_rates: Optional[Dict[str, float]] = None
+    exchange_rates: Optional[Dict[str, float]] = None,
+    cash_ticker: str = ""
 ) -> Tuple[List[StrategyOrder], Dict]:
     """
     Calculate buy/sell orders based on the dynamic RAOEO phase configuration.
@@ -91,6 +92,7 @@ def calculate_orders(
     """
     orders: List[StrategyOrder] = []
     info = {"ticker_info": {}}
+    total_buy_budget = 0.0
 
     if not targets_config:
         logging.warning("RAOEO: No targets configured.")
@@ -231,6 +233,9 @@ def calculate_orders(
         # 7. Logging Summary
         buy_orders = [o for o in ticker_orders if o.side == OrderSide.BUY]
         sell_orders = [o for o in ticker_orders if o.side == OrderSide.SELL]
+        
+        for bo in buy_orders:
+            total_buy_budget += bo.price * bo.quantity
 
         logging.info(
             f"[RAOEO] {ticker:<5} | {phase_name:<20} | "
@@ -246,5 +251,34 @@ def calculate_orders(
             "cur_price": cur_price,
             "avg_price": avg_price
         }
+
+    if cash_ticker and total_buy_budget > 0:
+        cash_cur_price = current_prices.get(cash_ticker, 0.0)
+        if cash_cur_price <= 0:
+            holding = portfolio.get(cash_ticker, {})
+            cash_cur_price = float(holding.get('cur_price', 0.0))
+            
+        if cash_cur_price > 0:
+            sell_qty = math.ceil(total_buy_budget / cash_cur_price)
+            holding_qty = int(portfolio.get(cash_ticker, {}).get('qty', 0))
+            if holding_qty > 0:
+                # Cap the sell quantity to the holding quantity to avoid invalid short sell rejection,
+                # though KIS will reject it anyway. Safe is better.
+                sell_qty = min(sell_qty, holding_qty)
+                
+            if sell_qty > 0:
+                sell_price = round(cash_cur_price * 0.99, 2)
+                cash_sell_order = StrategyOrder(
+                    symbol=cash_ticker,
+                    side=OrderSide.SELL,
+                    quantity=sell_qty,
+                    price=sell_price,
+                    order_type=ORDER_TYPE_US_LIMIT,
+                    reason=f"Fund RAOEO Buys (${total_buy_budget:.2f})"
+                )
+                orders.insert(0, cash_sell_order)
+                logging.info(f"[RAOEO] Cash Funding Order: Sell {sell_qty} {cash_ticker} @ {sell_price} (Target: ${total_buy_budget:.2f})")
+        else:
+            logging.warning(f"[RAOEO] Could not find price for cash_ticker {cash_ticker}, skip selling.")
 
     return orders, info
