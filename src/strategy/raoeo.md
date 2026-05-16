@@ -24,6 +24,11 @@
    - `_cap_buy_price()`: 계산된 매수 가격이 `cur_price * 1.25`를 초과하면 캡으로 제한합니다.
    - 상수 `MAX_BUY_PRICE_RATIO = 1.25`로 관리됩니다.
 
+4. **Configuration Validation (설정 검증)**:
+   - `seed > 0`, `duration > 0` 여부를 검증합니다.
+   - Phase 내 `buy`/`sell` 비율(0.0~2.0) 및 `profit`(0.0~0.5), 그리고 허용된 매수 타입(`normal`, `average`, `filling`)인지 검증합니다.
+   - 잘못된 설정 발견 시 `ValueError` 예외를 발생시켜 시스템 오작동을 선제적으로 차단합니다.
+
 # Key Functions (주요 함수)
 
 ## `calculate_orders`
@@ -33,7 +38,13 @@
   - `targets_config` (Dict): 종목별 설정 (seed, duration, **phase** 등)
   - `portfolio` (Dict): 현재 보유 잔고 (qty, avg_price 등)
   - `current_prices` (Dict): 현재 시장가
+  - `exchange_rates` (Optional[Dict]): 환율 정보
+  - `cash_ticker` (str): 매수 대금 부족 시 매도할 현금성 ETF 티커 (예: "TLTW")
 - **출력 (Output)**: `Tuple[List[StrategyOrder], Dict]` (주문 목록, 메타 정보)
+- **현금 조달 로직 (Cash Funding)**:
+  - 매수 주문 총액을 계산한 후, 보유 중인 `USD cash`를 우선적으로 차감합니다.
+  - 부족분(Shortfall)이 존재할 경우에만 `cash_ticker`를 매도하여 현금을 조달합니다.
+  - 무보유 공매도를 방지하기 위해 `cash_ticker`의 매도 수량은 항상 실제 보유 수량으로 캡(Cap)이 적용됩니다. 이 매도 주문은 다른 주문보다 우선적으로 실행되도록 주문 목록 맨 앞(index 0)에 추가됩니다.
 
 # Configuration (`strategy_config.json`)
 

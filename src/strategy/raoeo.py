@@ -115,6 +115,10 @@ def calculate_orders(
         seed = float(config['seed'])
         duration = int(config['duration'])
 
+        if seed <= 0 or duration <= 0:
+            raise ValueError(f"[{ticker}] Invalid config: seed and duration must be positive (seed={seed}, duration={duration}).")
+
+
         # 2. Get Current Status
         holding = portfolio.get(ticker, {})
         qty = int(holding.get('qty', 0))
@@ -264,10 +268,7 @@ def calculate_orders(
             sell_price = round(cash_cur_price * 0.99, 2)
             sell_qty = math.ceil(required_funding / sell_price) if required_funding > 0 else 0
             holding_qty = int(portfolio.get(cash_ticker, {}).get('qty', 0))
-            if holding_qty > 0:
-                # Cap the sell quantity to the holding quantity to avoid invalid short sell rejection,
-                # though KIS will reject it anyway. Safe is better.
-                sell_qty = min(sell_qty, holding_qty)
+            sell_qty = min(sell_qty, holding_qty)
                 
             if sell_qty > 0:
                 cash_sell_order = StrategyOrder(

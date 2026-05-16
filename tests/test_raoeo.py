@@ -94,3 +94,31 @@ def test_cash_ticker_sell_is_capped_by_holding_quantity():
     cash_sell = _cash_sell_order(orders)
 
     assert cash_sell.quantity == 3
+
+
+def test_cash_ticker_sell_is_skipped_without_cash_ticker_holding():
+    orders = _calculate(cash_ticker_qty=0)
+
+    cash_sell_orders = [
+        order
+        for order in orders
+        if order.symbol == "BIL" and order.side == OrderSide.SELL
+    ]
+
+    assert cash_sell_orders == []
+
+
+def test_rejects_non_positive_duration():
+    targets_config = _targets_config()
+    targets_config["TQQQ"]["duration"] = 0
+
+    try:
+        raoeo.calculate_orders(
+            targets_config=targets_config,
+            portfolio=_portfolio(),
+            current_prices={"TQQQ": 100.0, "BIL": 100.0},
+        )
+    except ValueError as exc:
+        assert "duration" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for non-positive duration")
