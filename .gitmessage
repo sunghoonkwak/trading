@@ -1,0 +1,8 @@
+# 50 chars max:
+type(scope): concise subject
+
+# Body: wrap at 72 chars.
+# Keep bullets focused on why the change matters.
+# Example:
+# - Explain the first concrete behavior change.
+# - Mention config, tests, docs, or migration effects.

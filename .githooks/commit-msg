@@ -1,0 +1,24 @@
+#!/bin/sh
+
+commit_msg_file="$1"
+max_subject_length=50
+max_body_length=72
+
+subject="$(awk 'NF && $0 !~ /^#/ { print; exit }' "$commit_msg_file")"
+subject_length=${#subject}
+
+if [ "$subject_length" -gt "$max_subject_length" ]; then
+  echo "Commit subject is ${subject_length} chars; max is ${max_subject_length}." >&2
+  echo "Subject: $subject" >&2
+  exit 1
+fi
+
+awk -v max="$max_body_length" '
+  NR == 1 { next }
+  /^#/ { next }
+  length($0) > max {
+    printf "Commit body line %d is %d chars; max is %d.\n", NR, length($0), max > "/dev/stderr"
+    failed = 1
+  }
+  END { exit failed }
+' "$commit_msg_file"

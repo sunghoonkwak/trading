@@ -23,7 +23,7 @@ The repository has a `tests/` directory but no committed test suite or pytest co
 
 ## Commit & Pull Request Guidelines
 
-Recent history uses Conventional Commits with scopes, for example `feat(raoeo): ...`, `fix(telegram): ...`, `docs(backtest): ...`, and `refactor(backtest): ...`. Follow the 50/72 rule: keep the subject line at 50 characters or less when practical, and wrap body text at 72 characters. Prefer bullet-point bodies for multi-part changes:
+Recent history uses Conventional Commits with scopes, for example `feat(raoeo): ...`, `fix(telegram): ...`, `docs(backtest): ...`, and `refactor(backtest): ...`. Follow the 50/72 rule: the subject line MUST be 50 characters or less, and body lines MUST wrap at 72 characters or less. Before suggesting or creating a commit, count the subject length and confirm it is within the limit. Prefer bullet-point bodies for multi-part changes:
 
 ```text
 type(scope): concise subject
@@ -34,6 +34,8 @@ type(scope): concise subject
 ```
 
 Keep each bullet focused on why the change matters, not just which files changed. Pull requests should describe behavior changes, list verification, link related issues, and include screenshots or logs for dashboard, Telegram, or scheduler-visible changes.
+
+This repository provides `.gitmessage` and `.githooks/commit-msg` to help enforce these rules locally. Enable them with `git config commit.template .gitmessage` and `git config core.hooksPath .githooks`.
 
 ## Security & Configuration Tips
 
