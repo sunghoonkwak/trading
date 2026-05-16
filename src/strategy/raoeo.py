@@ -259,7 +259,10 @@ def calculate_orders(
             cash_cur_price = float(holding.get('cur_price', 0.0))
             
         if cash_cur_price > 0:
-            sell_qty = math.ceil(total_buy_budget / cash_cur_price)
+            usd_cash = float(portfolio.get("USD cash", {}).get("qty", 0.0))
+            required_funding = max(0.0, total_buy_budget - usd_cash)
+            sell_price = round(cash_cur_price * 0.99, 2)
+            sell_qty = math.ceil(required_funding / sell_price) if required_funding > 0 else 0
             holding_qty = int(portfolio.get(cash_ticker, {}).get('qty', 0))
             if holding_qty > 0:
                 # Cap the sell quantity to the holding quantity to avoid invalid short sell rejection,
@@ -267,17 +270,24 @@ def calculate_orders(
                 sell_qty = min(sell_qty, holding_qty)
                 
             if sell_qty > 0:
-                sell_price = round(cash_cur_price * 0.99, 2)
                 cash_sell_order = StrategyOrder(
                     symbol=cash_ticker,
                     side=OrderSide.SELL,
                     quantity=sell_qty,
                     price=sell_price,
                     order_type=ORDER_TYPE_US_LIMIT,
-                    reason=f"Fund RAOEO Buys (${total_buy_budget:.2f})"
+                    reason=(
+                        f"Fund RAOEO Buys "
+                        f"(Buy: ${total_buy_budget:.2f}, USD Cash: ${usd_cash:.2f}, "
+                        f"Shortfall: ${required_funding:.2f})"
+                    )
                 )
                 orders.insert(0, cash_sell_order)
-                logging.info(f"[RAOEO] Cash Funding Order: Sell {sell_qty} {cash_ticker} @ {sell_price} (Target: ${total_buy_budget:.2f})")
+                logging.info(
+                    f"[RAOEO] Cash Funding Order: Sell {sell_qty} {cash_ticker} @ {sell_price} "
+                    f"(Buy: ${total_buy_budget:.2f}, USD Cash: ${usd_cash:.2f}, "
+                    f"Shortfall: ${required_funding:.2f})"
+                )
         else:
             logging.warning(f"[RAOEO] Could not find price for cash_ticker {cash_ticker}, skip selling.")
 
