@@ -33,8 +33,6 @@ env/
 ENV/
 # Flask stuff:
 #   For a library or package, you might want to ignore these files since the Python version is
-.gemini
-.gemini/
 #   However, if you feel strongly about it, feel free to uncomment the following line:
 htmlcov/
 #  https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
