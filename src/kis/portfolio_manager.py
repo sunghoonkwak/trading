@@ -65,7 +65,7 @@ class PortfolioManager:
         """Fetches both domestic and overseas balances from KIS."""
         cano = ka.getTREnv().my_acct
         prod = ka.getTREnv().my_prod
-        env_dv = "demo" if ka.isPaperTrading() else "real"
+        env_dv = "real"
 
         # Domestic
         kr_res = {'stocks': [], 'asset': {}, 'krw_orderable': 0, 'error': None}

@@ -22,7 +22,7 @@ class PriceFetcher:
         if not exchange:
             exchange = trading_config.get_kis_exchange_code(ticker)
         try:
-            env_dv = "demo" if ka.isPaperTrading() else "real"
+            env_dv = "real"
             df = price_module.price("", exchange, ticker.upper(), env_dv)
             if df is not None and not df.empty:
                 row = df.iloc[0]
