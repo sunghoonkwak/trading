@@ -11,6 +11,8 @@ services:
       - ENV_MODE=docker
       - HOME=/app
       - TZ=Asia/Seoul
+      - WEB_ENABLE_ORDER_CANCEL=false
+      - WEB_ENABLE_MANUAL_REPORT_TRIGGERS=false
     # env_file:
     #  - .env
     volumes:

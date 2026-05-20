@@ -65,6 +65,14 @@ _event_loop: Optional[asyncio.AbstractEventLoop] = None
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Read a boolean feature flag from the environment."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _broadcast_callback(msg_type: str, message: str, time_str: str = None):
     """Callback for event_pipe to broadcast messages to web clients."""
     global _event_loop
@@ -273,6 +281,9 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.post("/api/orders/{order_id}/cancel")
 async def cancel_order(order_id: str):
     """Cancel an open order by its order ID."""
+    if not _env_flag("WEB_ENABLE_ORDER_CANCEL"):
+        return {"success": False, "error": "Order cancel endpoint is disabled"}
+
     try:
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, _cancel_order_sync, order_id)
@@ -285,6 +296,9 @@ async def cancel_order(order_id: str):
 @app.post("/api/trigger/portfolio")
 async def trigger_portfolio_report(background_tasks: BackgroundTasks):
     """Trigger daily portfolio report manually."""
+    if not _env_flag("WEB_ENABLE_MANUAL_REPORT_TRIGGERS"):
+        return {"success": False, "error": "Manual report trigger endpoint is disabled"}
+
     try:
         from scheduler.scheduler_portfolio import run_daily_portfolio_report
         # Run in background to not block response
@@ -298,6 +312,9 @@ async def trigger_portfolio_report(background_tasks: BackgroundTasks):
 @app.post("/api/trigger/order")
 async def trigger_order_report(background_tasks: BackgroundTasks):
     """Trigger daily order report manually."""
+    if not _env_flag("WEB_ENABLE_MANUAL_REPORT_TRIGGERS"):
+        return {"success": False, "error": "Manual report trigger endpoint is disabled"}
+
     try:
         from scheduler.scheduler_order import run_daily_order_report
         # Run in background to not block response
