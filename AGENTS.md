@@ -6,12 +6,14 @@ This is a Python 3.9+ KIS real-time trading system. The runtime entry point is `
 
 ## Build, Test, and Development Commands
 
-- `python -m venv venv && source venv/bin/activate`: create and activate a local environment.
-- `pip install -r requirements.txt`: install runtime dependencies.
-- `python src/main.py`: run the trading system locally; requires valid KIS and Telegram configuration.
 - `docker compose up -d --build`: build and start the bot container on port `8080`.
 - `docker logs -f my-trading-bot`: follow container logs during startup and live trading.
+- `docker compose exec trading-bot python -m pytest tests`: run tests inside the running container.
 - `python scripts/backtest/raoeo/backtest_raoeo.py`: run the RAOEO backtest script.
+
+The trading runtime is Docker-only. Do not run `python src/main.py` directly
+from the host; `src/main.py` blocks non-Docker startup so local processes do
+not conflict with the managed container.
 
 ## Coding Style & Naming Conventions
 
@@ -19,7 +21,7 @@ Use standard Python style with 4-space indentation, `snake_case` for functions, 
 
 ## Testing Guidelines
 
-The repository has a `tests/` directory but no committed test suite or pytest config yet. Add tests under `tests/` using `test_*.py` files and descriptive test function names. For strategy, formatter, and state logic, prefer deterministic unit tests that avoid live KIS, Telegram, or market calls. When introducing pytest tests, run `python -m pytest tests`; also run relevant backtest scripts for strategy changes.
+The repository has a `tests/` directory but no committed pytest config yet. Add tests under `tests/` using `test_*.py` files and descriptive test function names. For strategy, formatter, and state logic, prefer deterministic unit tests that avoid live KIS, Telegram, or market calls. When introducing pytest tests, run `docker compose exec trading-bot python -m pytest tests`; also run relevant backtest scripts for strategy changes.
 
 ## Commit & Pull Request Guidelines
 
