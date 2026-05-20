@@ -8,12 +8,11 @@
 ## Configuration (설정)
 
 ### Config Directory
-인증 파일(`password.txt`, `credentials.enc`)은 다음 경로에서 읽습니다:
+인증 파일(`password.txt`, `credentials.enc`)은 Linux 홈 디렉터리 기준 다음 경로에서 읽습니다:
 ```
 ~/steven/KIS_config/
 ```
-- Windows: `C:\Users\{username}\steven\KIS_config\`
-- Linux: `/home/{username}/steven/KIS_config/`
+예: `/home/{username}/steven/KIS_config/`
 
 ### Required Files
 | 파일명 | 설명 |

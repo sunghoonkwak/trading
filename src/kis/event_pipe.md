@@ -1,6 +1,6 @@
 # KIS Event Pipe (`kis/event_pipe.py`)
 
-이 모듈은 IPC 기반의 로깅 시스템을 처리하며, 메인 트레이딩 프로세스(서버)와 외부 Event Viewer(클라이언트) 간의 실시간 통신을 가능하게 합니다.
+이 모듈은 Linux Unix Domain Socket 기반의 로깅 시스템을 처리하며, 메인 트레이딩 프로세스(서버)와 외부 Event Viewer(클라이언트) 간의 실시간 통신을 가능하게 합니다.
 
 ## Overview (개요)
 
@@ -8,11 +8,10 @@
 
 ## Platform Support (플랫폼 지원)
 
-**Windows와 Linux 모두 지원합니다:**
+이 저장소의 런타임은 Docker/Linux 전용입니다. Event Pipe는 Unix Domain Socket만 사용합니다.
 
 | Platform | IPC 방식 | 경로 |
 |----------|----------|------|
-| **Windows** | Named Pipe | `\\.\pipe\kis_websocket_log` |
 | **Linux** | Unix Domain Socket | `/tmp/kis_websocket_log.sock` |
 
 ## Message Protocol (메시지 프로토콜)
@@ -57,14 +56,9 @@
 *   `WRITE_QUEUE_SIZE = 1000`: 최대 대기 메시지 수
 *   Queue가 가득 차면 최대 100개의 오래된 메시지를 버립니다.
 
-#### Platform-specific I/O
-| Platform | 방식 |
-|----------|------|
-| **Windows** | Overlapped I/O (`FILE_FLAG_OVERLAPPED`) |
-| **Linux** | Socket `sendall()` |
-
-*   `WRITE_TIMEOUT_MS = 500`: 쓰기 타임아웃 (ms, Windows)
-*   타임아웃 시 메시지를 버리고 writer thread가 blocking되지 않도록 합니다.
+#### Socket I/O
+*   Unix Domain Socket `sendall()`로 연결된 Event Viewer에 메시지를 전달합니다.
+*   연결이 끊기면 메시지를 버리고 writer thread가 blocking되지 않도록 합니다.
 
 #### Writer Thread
 *   **`start_writer_thread()`**: 백그라운드 writer thread를 시작합니다.
@@ -75,14 +69,14 @@
 *   `MAX_CONSECUTIVE_FAILURES = 10`: 연속 쓰기 실패 임계치
 *   연속 10회 쓰기 실패 시:
     1.  `_clear_queue()`: Queue의 모든 메시지를 비웁니다.
-    2.  `_schedule_pipe_reset()`: 파이프/소켓을 리셋하고 재연결을 대기합니다.
+    2.  `_schedule_pipe_reset()`: 소켓을 리셋하고 재연결을 대기합니다.
 *   Event Viewer가 응답하지 않아도 무한 루프에 빠지지 않고 자동 복구됩니다.
 
 ### IPC Lifecycle Management (Server-Side)
-*   **`create_pipe_server()`**: Named Pipe (Windows) 또는 Unix Socket (Linux)을 초기화합니다.
+*   **`create_pipe_server()`**: Unix Domain Socket을 초기화합니다.
 *   **`wait_for_client()`**: 클라이언트가 연결될 때까지 대기합니다.
 *   **`reset_pipe_server()`**: 연결 끊김 및 재연결 주기를 관리합니다.
-*   **`set_web_broadcast_callback(callback)`**: `web_server.py`로부터 콜백 함수를 등록받아, Pipe 연결 여부와 상관없이 웹 클라이언트로 메시지를 브로드캐스트합니다.
+*   **`set_web_broadcast_callback(callback)`**: `web_server.py`로부터 콜백 함수를 등록받아, IPC 연결 여부와 상관없이 웹 클라이언트로 메시지를 브로드캐스트합니다.
 
 ### Client-Side Functions (Event Viewer)
 *   **`connect_pipe_client()`**: 서버의 IPC에 연결합니다.

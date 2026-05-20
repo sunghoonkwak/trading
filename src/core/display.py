@@ -1,7 +1,7 @@
 """
 Simplified display module - scroll-based terminal output.
 All ANSI cursor control removed for reliable log visibility.
-Orders are sent to Event Viewer via Named Pipe.
+Orders are sent to Event Viewer via Unix domain socket IPC.
 """
 import sys
 import logging
@@ -64,7 +64,7 @@ def add_alert(message: str, level: str = "INFO", time_str: str = None):
 
 def update_order_state(order_id: str, ticker: str, name: str, side: str,
                        price: str, qty: str, state: str, notify: bool = True, time_str: str = None):
-    """Send order update to Event Viewer via pipe.
+    """Send order update to Event Viewer via IPC.
 
     Format: ODR|ticker|name|side|qty|price|state|order_id
     """

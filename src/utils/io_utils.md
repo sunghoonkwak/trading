@@ -1,11 +1,11 @@
 # I/O Utilities (`src/utils/io_utils.py`)
 
-플랫폼(Windows/Linux)에 독립적인 키보드 입력을 처리하는 모듈입니다.
+Linux 터미널에서 엔터키 입력 없이 즉시 키 입력을 읽는 모듈입니다.
 
 # Core Logic (핵심 로직)
 
-1. **플랫폼 감지**: `sys.platform`을 통해 실행 환경이 Windows인지 POSIX(Linux/Mac)인지 확인합니다.
-2. **저수준 입력**: 엔터키 입력 없이 즉시 키 입력을 가로채기 위해 Windows는 `msvcrt`, Linux는 `termios`를 사용합니다.
+1. **저수준 입력**: `tty`와 `termios`로 터미널을 raw mode로 전환합니다.
+2. **상태 복구**: 입력을 읽은 뒤 기존 터미널 속성을 복구합니다.
 
 # Key Functions (주요 함수)
 
