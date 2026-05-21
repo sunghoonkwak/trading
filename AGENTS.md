@@ -15,6 +15,19 @@ The trading runtime is Docker-only. Do not run `python src/main.py` directly
 from the host; `src/main.py` blocks non-Docker startup so local processes do
 not conflict with the managed container.
 
+## Python Environment
+
+For host-side tests, linting, and utility scripts, use the repository
+virtualenv first:
+
+- `venv/bin/python`
+- `venv/bin/pytest`
+
+Do not probe bare `python`, `python3`, or system pytest first unless the
+virtualenv is missing or the user explicitly asks for the system Python. The
+trading runtime remains Docker-only; the virtualenv is only for development
+commands that are safe to run on the host.
+
 ## Coding Style & Naming Conventions
 
 Use standard Python style with 4-space indentation, `snake_case` for functions, variables, and modules, and `PascalCase` for classes. Keep service modules focused and prefer existing helpers from `src/utils`, `src/state`, and `src/core`. Many modules have matching `.md` notes beside `.py` files; update these when behavior or operational expectations change. Do not hand-edit generated or vendor-like KIS endpoint wrappers unless intentionally scoped.
