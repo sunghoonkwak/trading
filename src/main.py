@@ -88,12 +88,22 @@ class TradingSystem:
 
             # REST & WS Auth
             auth_id = request_kis_auth()
-            if wait_for_response(auth_id, timeout=30.0).success:
-                print("[Startup] ✓ REST API authenticated")
+            auth_response = wait_for_response(auth_id, timeout=30.0)
+            if not auth_response or not auth_response.success:
+                error = auth_response.error if auth_response else "timeout"
+                logging.error(f"[Startup] REST API authentication failed: {error}")
+                print("[Startup] ✗ REST API authentication failed")
+                return False
+            print("[Startup] ✓ REST API authenticated")
 
             ws_auth_id = request_kis_ws_auth()
-            if wait_for_response(ws_auth_id, timeout=30.0).success:
-                print("[Startup] ✓ WebSocket authenticated")
+            ws_auth_response = wait_for_response(ws_auth_id, timeout=30.0)
+            if not ws_auth_response or not ws_auth_response.success:
+                error = ws_auth_response.error if ws_auth_response else "timeout"
+                logging.error(f"[Startup] WebSocket authentication failed: {error}")
+                print("[Startup] ✗ WebSocket authentication failed")
+                return False
+            print("[Startup] ✓ WebSocket authenticated")
 
             # Pipe Server & WS Init
             if event_pipe.create_pipe_server():
@@ -101,8 +111,11 @@ class TradingSystem:
                     if event_pipe.wait_for_client(): event_pipe.start_writer_thread()
                 threading.Thread(target=wait_client, daemon=True).start()
 
-            if initialize_websocket_and_pipe():
-                print("[Startup] ✓ KIS fully initialized")
+            if not initialize_websocket_and_pipe():
+                logging.error("[Startup] WebSocket and event pipe initialization failed")
+                print("[Startup] ✗ KIS WebSocket initialization failed")
+                return False
+            print("[Startup] ✓ KIS fully initialized")
 
             from kis.wrapper import sync_open_orders
             sync_open_orders()
@@ -165,7 +178,11 @@ class TradingSystem:
 
         self.initialize_telegram()
         time.sleep(0.5)
-        self.initialize_kis()
+        if not self.initialize_kis():
+            logging.critical("[Startup] KIS initialization failed; refusing to start scheduler/web services")
+            print("\n[ERROR] KIS initialization failed. Scheduler and web services will not start.")
+            self.shutdown()
+            sys.exit(1)
         time.sleep(0.5)
         self.start_scheduler()
         self.start_web_server()
