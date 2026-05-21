@@ -31,41 +31,39 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
         )
         return True  # Skip corrupted data
 
-    if code not in trading_state.stock_data_state:
-        trading_state.stock_data_state[code] = {
-            'price': 0, 'ask': 0, 'bid': 0,
-            'change': 0, 'rate': 0.0, 'vol': 0,
-            'time': '000000'
-        }
-
-    state = trading_state.stock_data_state[code]
+    state = trading_state.get_ticker_data(code) or {}
     level = "DEBUG"
 
     if tr_id == "H0UNASP0":
-        state['time'] = row['BSOP_HOUR']
         try:
             new_ask = int(float(row['ASKP1']))
             new_bid = int(float(row['BID_PRC1'] if 'BID_PRC1' in row else row['BIDP1']))
-            if state['ask'] == new_ask and state['bid'] == new_bid:
+            if state.get('ask') == new_ask and state.get('bid') == new_bid:
                 return True  # Skip unchanged
-            state['ask'] = new_ask
-            state['bid'] = new_bid
+            trading_state.update_ticker(code, {
+                'time': row['BSOP_HOUR'],
+                'ask': new_ask,
+                'bid': new_bid,
+            })
         except:
             return True
 
     elif tr_id == "H0UNCNT0":
-        state['time'] = row['STCK_CNTG_HOUR']
         try:
-            state['price'] = int(float(row['STCK_PRPR']))
-            state['vol'] = int(float(row['CNTG_VOL']))
-            state['change'] = int(float(row['PRDY_VRSS']))
-            state['rate'] = float(row['PRDY_CTRT'])
             sign = row['PRDY_VRSS_SIGN']
-            state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
+            trading_state.update_ticker(code, {
+                'time': row['STCK_CNTG_HOUR'],
+                'price': int(float(row['STCK_PRPR'])),
+                'vol': int(float(row['CNTG_VOL'])),
+                'change': int(float(row['PRDY_VRSS'])),
+                'rate': float(row['PRDY_CTRT']),
+                'sign_str': "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " ",
+            })
             level = "INFO"
-            trading_state.notify_data_received()
         except:
             return True
+
+    state = trading_state.get_ticker_data(code) or {}
 
     time_v = str(state.get('time', '000000')).strip()
     time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}" if len(time_v) == 6 else time_v.zfill(6)
@@ -107,41 +105,40 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
         )
         return True
 
-    if code not in trading_state.stock_data_state:
-        trading_state.stock_data_state[code] = {
-            'price': 0, 'ask': 0, 'bid': 0,
-            'change': 0, 'rate': 0.0, 'vol': 0,
-            'time': '000000'
-        }
-
-    state = trading_state.stock_data_state[code]
+    state = trading_state.get_ticker_data(code) or {}
     level = "DEBUG"
 
     if tr_id == "HDFSASP0":
-        state['time'] = row.get('xhms', '000000')
         try:
-            state['ask'] = float(row['pask1'])
-            state['bid'] = float(row['pbid1'])
+            trading_state.update_ticker(code, {
+                'time': row.get('xhms', '000000'),
+                'ask': float(row['pask1']),
+                'bid': float(row['pbid1']),
+            })
         except:
             return True
 
     elif tr_id == "HDFSCNT0":
-        state['time'] = row.get('XHMS', '000000')
         try:
-            state['price'] = float(row['LAST'])
-            state['change'] = float(row['DIFF'])
-            state['rate'] = float(row['RATE'])
-            state['vol'] = float(row['EVOL'])
+            update = {
+                'time': row.get('XHMS', '000000'),
+                'price': float(row['LAST']),
+                'change': float(row['DIFF']),
+                'rate': float(row['RATE']),
+                'vol': float(row['EVOL']),
+            }
             if 'PBID' in row:
-                state['bid'] = float(row['PBID'])
+                update['bid'] = float(row['PBID'])
             if 'PASK' in row:
-                state['ask'] = float(row['PASK'])
+                update['ask'] = float(row['PASK'])
             sign = row.get('SIGN', '3')
-            state['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
+            update['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
+            trading_state.update_ticker(code, update)
             level = "INFO"
-            trading_state.notify_data_received()
         except:
             return True
+
+    state = trading_state.get_ticker_data(code) or {}
 
     time_v = str(state.get('time', '000000')).strip()
     time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}" if len(time_v) >= 6 else time_v.zfill(6)

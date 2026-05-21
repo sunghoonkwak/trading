@@ -16,6 +16,17 @@ from typing import Dict, Any, Optional, List
 MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 STOCK_DATA_FILE = os.path.join(os.path.dirname(MODULE_DIR), "stock_data.json")
 
+DEFAULT_TICKER_STATE = {
+    'price': 0.0,
+    'ask': 0.0,
+    'bid': 0.0,
+    'change': 0.0,
+    'rate': 0.0,
+    'vol': 0,
+    'time': '000000',
+    'sign_str': ' ',
+}
+
 class MarketStateManager:
     """Singleton manager for high-integrity market data."""
     _instance = None
@@ -44,10 +55,10 @@ class MarketStateManager:
         with self._lock:
             # 1. Initialize if new
             if ticker not in self._data:
-                self._data[ticker] = {
-                    'price': 0.0, 'ask': 0.0, 'bid': 0.0, 'change': 0.0,
-                    'rate': 0.0, 'vol': 0, 'time': '000000'
-                }
+                self._data[ticker] = DEFAULT_TICKER_STATE.copy()
+            else:
+                for key, value in DEFAULT_TICKER_STATE.items():
+                    self._data[ticker].setdefault(key, value)
 
             # 2. Validate and Update
             target = self._data[ticker]
