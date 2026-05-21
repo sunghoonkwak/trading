@@ -96,16 +96,8 @@ def parse_worksheet_data(worksheet, currency: str) -> dict:
         except ValueError:
             continue
 
-        # Handle cash holdings (예수금)
-        if '예수금' in ticker or '예수금' in stock_name:
-            cash_holdings.append({
-                "account_name": account_name,
-                "amount": qty,
-                "currency": currency
-            })
-            continue
-
-        # Create or get account
+        # Create or get account before cash handling, so cash-only accounts
+        # such as CMA accounts are included in the account map.
         owner_id = _get_owner_id(account_name)
         account_key = f"{account_name}_{owner_id}"
 
@@ -114,6 +106,16 @@ def parse_worksheet_data(worksheet, currency: str) -> dict:
                 "name": account_name,
                 "owner_id": owner_id
             }
+
+        # Handle cash holdings (예수금)
+        if '예수금' in ticker or '예수금' in stock_name:
+            cash_holdings.append({
+                "account_name": account_name,
+                "account_key": account_key,
+                "amount": qty,
+                "currency": currency
+            })
+            continue
 
         # Skip zero quantity holdings
         if qty <= 0:
