@@ -72,6 +72,8 @@ TQQQ(공격)와 SCHD(방어) 등의 자산을 조합하여 변동성을 수확(V
 
 ### 2. 실행 (Docker)
 ```bash
+# 기본값은 ~/KIS_config/strategy_config.json을 검증합니다.
+venv/bin/python scripts/validate_config.py
 docker compose up -d --build
 docker logs -f my-trading-bot
 ```
