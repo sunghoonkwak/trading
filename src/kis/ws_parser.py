@@ -22,6 +22,14 @@ def mask_record_for_log(record: list[str], columns: list[str]) -> list[str]:
     return masked
 
 
+def mask_dict_for_log(data: dict) -> dict:
+    """Mask sensitive fields in a named WebSocket record dump."""
+    return {
+        key: "********" if key in SENSITIVE_COLUMNS else value
+        for key, value in data.items()
+    }
+
+
 def should_log_normalization(note: str | None, expected_truncation: bool) -> bool:
     """Return whether a normalization event should be logged as diagnostic drift."""
     if note is None:

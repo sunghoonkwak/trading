@@ -6,6 +6,7 @@ sys.path.insert(0, str(SRC_DIR))
 
 from kis.ws_parser import (
     build_schema_drift_alert,
+    mask_dict_for_log,
     mask_record_for_log,
     normalize_record,
     should_send_schema_drift_alert,
@@ -35,6 +36,26 @@ def test_mask_record_for_log_preserves_positions_and_masks_sensitive_fields():
     masked = mask_record_for_log(record, columns)
 
     assert masked == ["********", "********", "********", "ticker", "10"]
+
+
+def test_mask_dict_for_log_masks_sensitive_fields():
+    data = {
+        "CUST_ID": "customer",
+        "ACNT_NO": "account",
+        "ODER_NO": "order",
+        "ACNT_NAME": "name",
+        "STCK_SHRN_ISCD": "SOXL",
+    }
+
+    masked = mask_dict_for_log(data)
+
+    assert masked == {
+        "CUST_ID": "********",
+        "ACNT_NO": "********",
+        "ODER_NO": "********",
+        "ACNT_NAME": "********",
+        "STCK_SHRN_ISCD": "SOXL",
+    }
 
 
 def test_should_not_log_expected_compatibility_truncation():

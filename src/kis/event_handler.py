@@ -12,6 +12,7 @@ from core import trading_config
 from core.trading_config import strip_market_prefix
 from kis import event_pipe
 from kis.event_pipe import print_viewer
+from kis.ws_parser import mask_dict_for_log
 from core.display import add_alert, remove_order_state
 from utils.format_utils import get_fixed_width, format_number
 from kis.wrapper import sync_open_orders
@@ -174,7 +175,7 @@ def _handle_domestic_order(row) -> bool:
         time_v = row['STCK_CNTG_HOUR']
         time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}"
 
-        logging.info(f"--- H0STCNI0 FULL DUMP ---\n{row.to_dict()}")
+        logging.info(f"--- H0STCNI0 FULL DUMP ---\n{mask_dict_for_log(row.to_dict())}")
 
         cntg_yn = row['CNTG_YN']
         rctf_cls = row['RCTF_CLS']
@@ -243,7 +244,7 @@ def _handle_overseas_order(tr_id: str, row) -> bool:
     """Handle overseas order notifications (H0GSCNI0, H0GSCNI9)."""
     try:
         raw_dict = row.to_dict() if hasattr(row, 'to_dict') else dict(row)
-        logging.info(f"--- {tr_id} FULL DUMP ---\n{raw_dict}")
+        logging.info(f"--- {tr_id} FULL DUMP ---\n{mask_dict_for_log(raw_dict)}")
 
         code = str(row.get('STCK_SHRN_ISCD', 'Unknown')).strip()
         if code.startswith('000') and len(code) > 8:

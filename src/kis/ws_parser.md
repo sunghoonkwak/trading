@@ -47,6 +47,11 @@ KIS 실시간 API는 샘플 컬럼 정의와 실제 WebSocket payload의 필드 
 - `OODER_NO`
 - `ACNT_NAME`
 
+### `mask_dict_for_log(data)`
+
+`event_handler.py`의 주문 통보 `FULL DUMP`처럼 이름이 붙은 dict 형태의 record에서
+동일한 민감 필드를 `********`로 치환합니다.
+
 ### `should_log_normalization(note, expected_truncation)`
 
 레코드 보정이 운영자가 확인해야 하는 스키마 drift인지 판단합니다.
