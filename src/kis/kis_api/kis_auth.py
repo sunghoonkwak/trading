@@ -29,6 +29,14 @@ from Crypto.Cipher import AES
 # pip install pycryptodome
 from Crypto.Util.Padding import unpad
 
+from kis.ws_parser import (
+    build_schema_drift_alert,
+    mask_record_for_log,
+    normalize_record,
+    should_log_normalization,
+    should_send_schema_drift_alert,
+)
+
 clearConsole = lambda: os.system("cls" if os.name in ("nt", "dos") else "clear")
 
 key_bytes = 32
@@ -675,6 +683,7 @@ def add_open_map(
     elif type(data) is str:
         open_map[name]["items"].append(data)
 data_map: dict = {}
+_schema_drift_alert_sent_at: dict[str, float] = {}
 
 
 # Overseas TR Compatibility Mapping
@@ -789,15 +798,41 @@ class KISWebSocket:
                 # Process records based on actual stream size
                 for i in range(0, len(raw_values), real_size):
                     record = raw_values[i:i + real_size]
-                    if len(record) < real_size: continue
+                    if len(record) < real_size:
+                        if not (count == 1 and i == 0):
+                            continue
 
                     # Apply alignment skip if needed (skipping index 2 to align with official files)
                     if fix and "skip_idx" in fix:
                         s = fix["skip_idx"]
                         record = record[:s] + record[s+1:]
 
-                    # Truncate to match official column definition
-                    records.append(record[:num_cols])
+                    raw_record_for_log = mask_record_for_log(record, dm["columns"])
+                    record, normalization_note = normalize_record(record, dm["columns"])
+                    expected_truncation = bool(fix and real_size > num_cols)
+                    if should_log_normalization(normalization_note, expected_truncation):
+                        logging.warning(
+                            "Normalized WebSocket record for %s: %s (raw=%s, columns=%s, record=%s)",
+                            tr_id,
+                            normalization_note,
+                            len(raw_values),
+                            num_cols,
+                            raw_record_for_log,
+                        )
+                        if should_send_schema_drift_alert(
+                            _schema_drift_alert_sent_at,
+                            tr_id,
+                            time.time(),
+                        ):
+                            self._send_telegram_notification(
+                                build_schema_drift_alert(
+                                    tr_id,
+                                    normalization_note,
+                                    len(raw_values),
+                                    num_cols,
+                                )
+                            )
+                    records.append(record)
 
                 # Failsafe: if count is 1 but we produced multiple records due to size mismatch,
                 # only keep the first one to avoid treating trailing fields as new records.
