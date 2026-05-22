@@ -35,6 +35,7 @@ from kis.ws_parser import (
     normalize_record,
     should_log_normalization,
     should_send_schema_drift_alert,
+    split_records,
 )
 
 clearConsole = lambda: os.system("cls" if os.name in ("nt", "dos") else "clear")
@@ -689,7 +690,7 @@ _schema_drift_alert_sent_at: dict[str, float] = {}
 # Overseas TR Compatibility Mapping
 # Real field counts per record in the WebSocket stream vs what's defined in official samples.
 _OVERSEAS_TR_FIX = {
-    "HDFSASP0": {"real_size": 71, "skip_idx": 2}, # Asking Price
+    "HDFSASP0": {"real_size": 71, "skip_idx": 2, "expected_truncation": True}, # Asking Price
     "HDFSCNT0": {"real_size": 26, "skip_idx": 2}, # Execution
     'H0GSCNI0': {'real_size': 25, 'skip_idx': 0},  # Market type MTYP at index 0 (Real)
     'H0GSCNI9': {'real_size': 25, 'skip_idx': 0},  # Market type MTYP at index 0 (Demo)
@@ -796,12 +797,7 @@ class KISWebSocket:
 
                 records = []
                 # Process records based on actual stream size
-                for i in range(0, len(raw_values), real_size):
-                    record = raw_values[i:i + real_size]
-                    if len(record) < real_size:
-                        if not (count == 1 and i == 0):
-                            continue
-
+                for record in split_records(raw_values, count, real_size):
                     # Apply alignment skip if needed (skipping index 2 to align with official files)
                     if fix and "skip_idx" in fix:
                         s = fix["skip_idx"]
@@ -809,7 +805,7 @@ class KISWebSocket:
 
                     raw_record_for_log = mask_record_for_log(record, dm["columns"])
                     record, normalization_note = normalize_record(record, dm["columns"])
-                    expected_truncation = bool(fix and real_size > num_cols)
+                    expected_truncation = bool(fix and fix.get("expected_truncation"))
                     if should_log_normalization(normalization_note, expected_truncation):
                         logging.warning(
                             "Normalized WebSocket record for %s: %s (raw=%s, columns=%s, record=%s)",

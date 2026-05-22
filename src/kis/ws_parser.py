@@ -87,3 +87,17 @@ def normalize_record(record: list[str], columns: list[str]) -> tuple[list[str], 
 
     extra_count = actual - expected
     return record[:expected], f"truncated {extra_count} extra field(s)"
+
+
+def split_records(raw_values: list[str], count: int, real_size: int) -> list[list[str]]:
+    """Split raw values into records while preserving single-record drift."""
+    if count == 1:
+        return [raw_values]
+
+    records = []
+    for i in range(0, len(raw_values), real_size):
+        record = raw_values[i:i + real_size]
+        if len(record) < real_size:
+            continue
+        records.append(record)
+    return records

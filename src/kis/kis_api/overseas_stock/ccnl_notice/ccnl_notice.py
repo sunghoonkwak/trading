@@ -86,7 +86,10 @@ def ccnl_notice(
         "START_TM",
         "END_TM",
         "TM_DIV_TP",
-        "CNTG_UNPR12"
+        # Upstream samples added CNTG_UNPR12, but live H0GSCNI0 currently
+        # omits it. Keep this disabled until schema drift alerts show
+        # fields=25 columns=24 for this TR.
+        # "CNTG_UNPR12"
     ]
 
     return msg, columns

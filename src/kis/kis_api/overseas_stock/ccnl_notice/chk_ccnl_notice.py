@@ -44,7 +44,9 @@ COLUMN_MAPPING = {
     "START_TM": "분할매수/매도 시작시간",
     "END_TM": "분할매수/매도 종료시간",
     "TM_DIV_TP": "시간분할타입유형",
-    "CNTG_UNPR12": "체결단가12"
+    # Live H0GSCNI0 currently omits this upstream sample field.
+    # Re-enable when schema drift alerts show fields=25 columns=24.
+    # "CNTG_UNPR12": "체결단가12"
 }
 
 # 숫자형 컬럼 정의

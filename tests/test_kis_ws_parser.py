@@ -11,6 +11,7 @@ from kis.ws_parser import (
     normalize_record,
     should_send_schema_drift_alert,
     should_log_normalization,
+    split_records,
 )
 
 
@@ -27,6 +28,18 @@ def test_normalize_record_truncates_extra_fields():
 
     assert record == ["a", "b"]
     assert note == "truncated 1 extra field(s)"
+
+
+def test_split_records_keeps_single_record_extra_fields_together():
+    records = split_records(["a", "b", "c"], count=1, real_size=2)
+
+    assert records == [["a", "b", "c"]]
+
+
+def test_split_records_chunks_multiple_records_and_skips_incomplete_tail():
+    records = split_records(["a", "b", "c", "d", "tail"], count=2, real_size=2)
+
+    assert records == [["a", "b"], ["c", "d"]]
 
 
 def test_mask_record_for_log_preserves_positions_and_masks_sensitive_fields():

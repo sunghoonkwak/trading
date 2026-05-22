@@ -34,6 +34,12 @@ KIS 실시간 API는 샘플 컬럼 정의와 실제 WebSocket payload의 필드 
 - 필드 수가 많으면 컬럼 정의 길이까지만 사용합니다.
 - 보정이 발생한 경우 로그에 사용할 설명 문자열을 함께 반환합니다.
 
+### `split_records(raw_values, count, real_size)`
+
+WebSocket payload를 record 단위로 나눕니다. `count == 1`인 단일 record는 예상 크기보다
+길어져도 한 덩어리로 유지하여, 향후 KIS가 trailing field를 추가했을 때 truncation
+drift로 감지할 수 있게 합니다.
+
 ### `mask_record_for_log(record, columns)`
 
 운영 로그에 남길 record 배열에서 민감 필드를 `********`로 치환합니다.
