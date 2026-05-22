@@ -57,11 +57,11 @@ def test_build_schema_drift_alert_has_summary_without_raw_record():
     alert = build_schema_drift_alert(
         "H0GSCNI0",
         "padded 1 missing field(s): ['CNTG_UNPR12']",
-        raw_count=24,
+        field_count=24,
         column_count=25,
     )
 
     assert "KIS WebSocket schema drift" in alert
     assert "TR: H0GSCNI0" in alert
-    assert "raw=24 columns=25" in alert
+    assert "fields=24 columns=25" in alert
     assert "record=" not in alert

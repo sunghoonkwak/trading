@@ -59,7 +59,7 @@ KIS 실시간 API는 샘플 컬럼 정의와 실제 WebSocket payload의 필드 
 동일 `tr_id`에 대한 schema drift Telegram 알림을 제한합니다. 기본적으로 첫 발생 후
 1시간 동안 같은 `tr_id`의 반복 알림은 보내지 않습니다.
 
-### `build_schema_drift_alert(tr_id, note, raw_count, column_count)`
+### `build_schema_drift_alert(tr_id, note, field_count, column_count)`
 
 Telegram에 보낼 요약 알림 문구를 만듭니다. 원문 record 값은 포함하지 않고, 상세
 마스킹 record는 파일 로그에서만 확인합니다.
@@ -77,4 +77,4 @@ Normalized WebSocket record for H0GSCNI0: padded 1 missing field(s): ['CNTG_UNPR
 사용합니다.
 
 예상 밖 drift는 Telegram으로도 요약 알림을 보냅니다. 알림에는 `tr_id`, 보정 내용,
-`raw`/`columns` 개수만 포함되며 record 값은 포함하지 않습니다.
+정렬 후 `fields`/`columns` 개수만 포함되며 record 값은 포함하지 않습니다.

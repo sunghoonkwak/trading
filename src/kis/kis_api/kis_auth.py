@@ -828,7 +828,7 @@ class KISWebSocket:
                                 build_schema_drift_alert(
                                     tr_id,
                                     normalization_note,
-                                    len(raw_values),
+                                    len(raw_record_for_log),
                                     num_cols,
                                 )
                             )

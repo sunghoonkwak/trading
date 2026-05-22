@@ -51,7 +51,7 @@ def should_send_schema_drift_alert(
 def build_schema_drift_alert(
     tr_id: str,
     note: str,
-    raw_count: int,
+    field_count: int,
     column_count: int,
 ) -> str:
     """Build a Telegram-safe schema drift alert without raw record values."""
@@ -59,7 +59,7 @@ def build_schema_drift_alert(
         "⚠️ <b>KIS WebSocket schema drift</b>\n"
         f"TR: {escape(tr_id)}\n"
         f"Action: {escape(note)}\n"
-        f"raw={raw_count} columns={column_count}"
+        f"fields={field_count} columns={column_count}"
     )
 
 
