@@ -130,7 +130,7 @@ class MarketStateManager:
             }
             with open(STOCK_DATA_FILE, 'w', encoding='utf-8') as f:
                 json.dump(payload, f, indent=2, ensure_ascii=False)
-            logging.info(f"[MarketState] Successfully saved {len(data_copy)} stocks to disk")
+            logging.debug(f"[MarketState] Successfully saved {len(data_copy)} stocks to disk")
             return True
         except Exception as e:
             logging.error(f"[MarketState] Disk save failed: {e}")
