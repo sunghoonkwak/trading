@@ -155,6 +155,10 @@ class PortfolioProcessor:
                 data["current_value_usd"] = val_native
                 data["current_value_krw"] = val_native * ex_rate
             else:
+                if ex_rate <= 0:
+                    raise ValueError(
+                        "Cannot convert KRW portfolio values without a positive exchange rate"
+                    )
                 data["current_value_krw"] = val_native
                 data["current_value_usd"] = val_native / ex_rate
 

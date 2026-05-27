@@ -170,3 +170,57 @@ def test_run_rebalancing_passes_api_orderable_usd_to_calculation(monkeypatch):
     execution_service.run_rebalancing_strategy(execute=False)
 
     assert received["orderable_usd"] == 3023.49
+
+
+def test_automatic_rebalancing_reuses_orderable_usd_for_market_date(monkeypatch):
+    config = {
+        "raoeo": {"targets": {}},
+        "rebalancing": {
+            "enabled": True,
+            "seed": 1000,
+            "assets": [{"ticker": "TQQQ", "target_weight": 1.0}],
+        },
+    }
+    query_count = {"value": 0}
+    monkeypatch.setattr(
+        execution_service,
+        "_get_market_status",
+        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
+    )
+    monkeypatch.setattr(execution_service, "_load_history", lambda: [])
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: config,
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "get_market_data",
+        lambda force_refresh=False: ({}, {"TQQQ": 100.0}),
+    )
+
+    def fake_get_orderable_usd(symbol, price):
+        query_count["value"] += 1
+        return 3023.49
+
+    monkeypatch.setattr(
+        execution_service,
+        "get_orderable_usd",
+        fake_get_orderable_usd,
+    )
+    monkeypatch.setattr(
+        execution_service.rebalancing,
+        "calculate_orders",
+        lambda **kwargs: ([], {}),
+    )
+
+    execution_service.run_rebalancing_strategy(
+        execute=True,
+        orderable_cache_key="2026-05-27",
+    )
+    execution_service.run_rebalancing_strategy(
+        execute=True,
+        orderable_cache_key="2026-05-27",
+    )
+
+    assert query_count["value"] == 1

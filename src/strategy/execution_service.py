@@ -28,6 +28,7 @@ from data.data_service import get_portfolio_data
 
 # Timezone constant
 TZ_ET = pytz.timezone('US/Eastern')
+_orderable_usd_cache: Dict[str, float] = {}
 
 
 # -------------------------------------------------------------------------
@@ -87,6 +88,20 @@ def get_orderable_usd(symbol: str, order_price: float) -> float:
     if result is None or result.empty or "ovrs_ord_psbl_amt" not in result:
         raise RuntimeError("KIS did not return overseas orderable USD.")
     return float(result.iloc[0]["ovrs_ord_psbl_amt"])
+
+
+def _get_rebalancing_orderable_usd(
+    symbol: str,
+    order_price: float,
+    cache_key: str = "",
+) -> float:
+    """Reuse buying power during one automatic trading-day check cycle."""
+    if not cache_key:
+        return get_orderable_usd(symbol, order_price)
+    if cache_key not in _orderable_usd_cache:
+        _orderable_usd_cache.clear()
+        _orderable_usd_cache[cache_key] = get_orderable_usd(symbol, order_price)
+    return _orderable_usd_cache[cache_key]
 
 
 def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
@@ -705,7 +720,10 @@ def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
 # Rebalancing Execution
 # -------------------------------------------------------------------------
 
-def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
+def run_rebalancing_strategy(
+    execute: bool = False,
+    orderable_cache_key: str = "",
+) -> Dict[str, Any]:
     """
     Run Rebalancing strategy with unified 6-step flow.
     """
@@ -777,7 +795,11 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
                 holdings.get(reference_asset, {}).get("cur_price", 0.0)
             )
         orderable_usd = (
-            get_orderable_usd(reference_asset, reference_price)
+            _get_rebalancing_orderable_usd(
+                reference_asset,
+                reference_price,
+                cache_key=orderable_cache_key,
+            )
             if reference_asset and reference_price > 0
             else 0.0
         )

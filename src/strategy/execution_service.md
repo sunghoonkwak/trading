@@ -32,6 +32,9 @@
 
 - **입력 (Input)**:
   - `execute` (bool): `True`이면 실제 주문을 전송합니다. `False`이면 계산 결과만 반환합니다.
+  - `run_rebalancing_strategy`의 `orderable_cache_key`는 자동 장중 점검에서만
+    사용하며, 같은 미국 거래일에는 최초 `inquire_psamount` 결과를
+    재사용해 반복 계좌 API 조회를 줄입니다.
 - **출력 (Output)**: `Dict` (표준화된 리포트 객체)
   - `status`: 실행 결과 (`executed`, `partial`, `skipped`, `holiday`, `disabled`, `already_done` 등)
   - `orders`: 생성된 전체 주문 목록
@@ -52,6 +55,8 @@
 - **출력**: `ovrs_ord_psbl_amt` 기반의 해외주문가능 USD
 - RAOEO의 `cash_ticker` 조달 부족분과 리밸런싱의 매수 여력 판단에
   사용합니다.
+- Telegram 명령에 의한 확인은 항상 새로 조회하며, 자동 주기
+  리밸런싱만 거래일 단위 조회 결과를 재사용합니다.
 
 ## `_execute_orders`
 주문 목록을 받아 순차적으로 KIS API를 통해 실행합니다.
