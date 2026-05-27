@@ -11,8 +11,10 @@
    - `utils.market_utils`를 통해 휴장일 및 장 운영 시간을 확인하고, 이를 모든 전략 실행에 반영합니다.
 
 3. **Unified Data Fetching (데이터 조회 통합)**:
-   - `get_market_data` 함수를 통해 모든 전략이 동일한 기준(KIS API 실시간 잔고 및 현재가)으로 데이터를 조회합니다.
-   - 미체결 주문에 대한 별도의 현금 차감 로직 없이, KIS API가 제공하는 주문가능 금액을 신뢰하여 사용합니다.
+   - `get_market_data`는 전략 대상의 보유 수량과 현재가를 조회합니다.
+   - 매수 가능 USD는 포트폴리오의 `USD cash`에서 가져오지 않고,
+     `get_orderable_usd`가 KIS `inquire_psamount`의
+     `ovrs_ord_psbl_amt`를 읽어 제공합니다.
 
 4. **Unified History Management (통합 히스토리 관리)**:
    - `strategy_history.json` 파일 하나에 모든 전략의 실행 결과를 날짜별로 통합 저장합니다.
@@ -40,6 +42,15 @@
 현재 포트폴리오 잔고와 전략 대상 종목들의 현재가를 조회합니다.
 - **입력**: `force_refresh` (bool)
 - **출력**: `holdings` (잔고 딕셔너리), `current_prices` (현재가 딕셔너리)
+
+## `get_orderable_usd`
+대표 매수 주문의 종목, 거래소, 주문 가격으로 해외주식
+매수가능금액조회를 수행합니다.
+
+- **입력**: `symbol` (str), `order_price` (float)
+- **출력**: `ovrs_ord_psbl_amt` 기반의 해외주문가능 USD
+- RAOEO의 `cash_ticker` 조달 부족분과 리밸런싱의 매수 여력 판단에
+  사용합니다.
 
 ## `_execute_orders`
 주문 목록을 받아 순차적으로 KIS API를 통해 실행합니다.

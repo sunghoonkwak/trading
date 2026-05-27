@@ -68,12 +68,69 @@ def _validate_phase_config(ticker: str, phases: List[Dict]) -> None:
 # Main Phase Engine Loop
 # -------------------------------------------------------------
 
+def calculate_cash_funding_order(
+    orders: List[StrategyOrder],
+    portfolio: Dict,
+    current_prices: Dict[str, float],
+    cash_ticker: str,
+    orderable_usd: float,
+) -> Tuple[Optional[StrategyOrder], Dict]:
+    """Build a cash-ticker sale using KIS orderable USD as buying power."""
+    total_buy_budget = sum(
+        order.price * order.quantity
+        for order in orders
+        if order.side == OrderSide.BUY
+    )
+    shortfall = round(max(0.0, total_buy_budget - orderable_usd), 2)
+    info = {
+        "buy_budget": total_buy_budget,
+        "orderable_usd": orderable_usd,
+        "shortfall": shortfall,
+        "required": shortfall > 0,
+        "error": None,
+    }
+
+    if shortfall <= 0:
+        return None, info
+    if not cash_ticker:
+        info["error"] = "cash_ticker is not configured."
+        return None, info
+
+    cash_cur_price = current_prices.get(cash_ticker, 0.0)
+    if cash_cur_price <= 0:
+        cash_cur_price = float(portfolio.get(cash_ticker, {}).get("cur_price", 0.0))
+    if cash_cur_price <= 0:
+        info["error"] = f"Could not find price for cash_ticker {cash_ticker}."
+        return None, info
+
+    sell_price = round(cash_cur_price * 0.99, 2)
+    required_qty = math.ceil(shortfall / sell_price)
+    holding_qty = int(portfolio.get(cash_ticker, {}).get("qty", 0))
+    sell_qty = min(required_qty, holding_qty)
+    if sell_qty <= 0:
+        info["error"] = f"No available holding for cash_ticker {cash_ticker}."
+        return None, info
+
+    order = StrategyOrder(
+        symbol=cash_ticker,
+        side=OrderSide.SELL,
+        quantity=sell_qty,
+        price=sell_price,
+        order_type=ORDER_TYPE_US_LIMIT,
+        reason=(
+            f"Fund RAOEO Buys "
+            f"(Buy: ${total_buy_budget:.2f}, Orderable USD: ${orderable_usd:.2f}, "
+            f"Shortfall: ${shortfall:.2f})"
+        ),
+    )
+    return order, info
+
+
 def calculate_orders(
     targets_config: Dict,
     portfolio: Dict,
     current_prices: Dict[str, float],
     exchange_rates: Optional[Dict[str, float]] = None,
-    cash_ticker: str = ""
 ) -> Tuple[List[StrategyOrder], Dict]:
     """
     Calculate buy/sell orders based on the dynamic RAOEO phase configuration.
@@ -92,7 +149,6 @@ def calculate_orders(
     """
     orders: List[StrategyOrder] = []
     info = {"ticker_info": {}}
-    total_buy_budget = 0.0
 
     if not targets_config:
         logging.warning("RAOEO: No targets configured.")
@@ -238,9 +294,6 @@ def calculate_orders(
         buy_orders = [o for o in ticker_orders if o.side == OrderSide.BUY]
         sell_orders = [o for o in ticker_orders if o.side == OrderSide.SELL]
         
-        for bo in buy_orders:
-            total_buy_budget += bo.price * bo.quantity
-
         logging.info(
             f"[RAOEO] {ticker:<5} | {phase_name:<20} | "
             f"Hold: {spent_amount:8.2f} / {seed:8.2f} ({progress_ratio*100:5.1f}%) | "
@@ -255,41 +308,5 @@ def calculate_orders(
             "cur_price": cur_price,
             "avg_price": avg_price
         }
-
-    if cash_ticker and total_buy_budget > 0:
-        cash_cur_price = current_prices.get(cash_ticker, 0.0)
-        if cash_cur_price <= 0:
-            holding = portfolio.get(cash_ticker, {})
-            cash_cur_price = float(holding.get('cur_price', 0.0))
-            
-        if cash_cur_price > 0:
-            usd_cash = float(portfolio.get("USD cash", {}).get("qty", 0.0))
-            required_funding = max(0.0, total_buy_budget - usd_cash)
-            sell_price = round(cash_cur_price * 0.99, 2)
-            sell_qty = math.ceil(required_funding / sell_price) if required_funding > 0 else 0
-            holding_qty = int(portfolio.get(cash_ticker, {}).get('qty', 0))
-            sell_qty = min(sell_qty, holding_qty)
-                
-            if sell_qty > 0:
-                cash_sell_order = StrategyOrder(
-                    symbol=cash_ticker,
-                    side=OrderSide.SELL,
-                    quantity=sell_qty,
-                    price=sell_price,
-                    order_type=ORDER_TYPE_US_LIMIT,
-                    reason=(
-                        f"Fund RAOEO Buys "
-                        f"(Buy: ${total_buy_budget:.2f}, USD Cash: ${usd_cash:.2f}, "
-                        f"Shortfall: ${required_funding:.2f})"
-                    )
-                )
-                orders.insert(0, cash_sell_order)
-                logging.info(
-                    f"[RAOEO] Cash Funding Order: Sell {sell_qty} {cash_ticker} @ {sell_price} "
-                    f"(Buy: ${total_buy_budget:.2f}, USD Cash: ${usd_cash:.2f}, "
-                    f"Shortfall: ${required_funding:.2f})"
-                )
-        else:
-            logging.warning(f"[RAOEO] Could not find price for cash_ticker {cash_ticker}, skip selling.")
 
     return orders, info

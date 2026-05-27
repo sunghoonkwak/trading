@@ -197,12 +197,15 @@ def format_rebalancing_report(reb_report: Dict) -> str:
     info = reb_report.get('info', {})
     if info:
         seed = info.get('seed', 0)
-        cash = info.get('usd_cash', 0)
+        orderable = info.get('orderable_usd', 0)
         avail = info.get('total_available', 0)
         if seed:
             lines.append(f"  🎯 <b>Target Seed: ${seed:,.0f}</b>")
-        if avail or cash:
-            lines.append(f"  💰 <b>Available Cash: ${avail:,.2f}</b> (Pure: ${cash:,.2f})")
+        if avail or orderable:
+            lines.append(
+                f"  💰 <b>Available USD: ${avail:,.2f}</b> "
+                f"(Orderable: ${orderable:,.2f})"
+            )
 
         if info.get('scale_factor', 1.0) < 1.0:
             lines.append(f"  ⚠️ Scaled by {info['scale_factor']*100:.1f}% due to cash limit")

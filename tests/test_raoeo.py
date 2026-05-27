@@ -38,74 +38,71 @@ def _portfolio(usd_cash=0.0, cash_ticker_qty=100):
     return portfolio
 
 
-def _calculate(usd_cash=0.0, cash_ticker_qty=100):
+def _calculate(cash_ticker_qty=100):
     orders, _ = raoeo.calculate_orders(
         targets_config=_targets_config(),
-        portfolio=_portfolio(usd_cash=usd_cash, cash_ticker_qty=cash_ticker_qty),
+        portfolio=_portfolio(cash_ticker_qty=cash_ticker_qty),
         current_prices={"TQQQ": 100.0, "BIL": 100.0},
-        cash_ticker="BIL",
     )
     return orders
 
 
-def _cash_sell_order(orders):
-    return next(
-        order
-        for order in orders
-        if order.symbol == "BIL" and order.side == OrderSide.SELL
+def _cash_funding(orderable_usd=0.0, cash_ticker_qty=100):
+    return raoeo.calculate_cash_funding_order(
+        orders=_calculate(cash_ticker_qty=cash_ticker_qty),
+        portfolio=_portfolio(cash_ticker_qty=cash_ticker_qty),
+        current_prices={"TQQQ": 100.0, "BIL": 100.0},
+        cash_ticker="BIL",
+        orderable_usd=orderable_usd,
     )
 
 
-def test_cash_ticker_sell_uses_full_buy_budget_when_usd_cash_is_absent():
+def test_standard_orders_do_not_include_cash_funding_sale():
     orders = _calculate()
 
-    cash_sell = _cash_sell_order(orders)
+    cash_sales = [
+        order for order in orders
+        if order.symbol == "BIL" and order.side == OrderSide.SELL
+    ]
+
+    assert cash_sales == []
+
+
+def test_cash_ticker_sell_uses_full_buy_budget_without_orderable_usd():
+    cash_sell, info = _cash_funding()
 
     assert cash_sell.quantity == 10
     assert cash_sell.price == 99.0
+    assert info["required"] is True
 
 
-def test_cash_ticker_sell_only_funds_shortfall_after_kis_usd_cash():
-    orders = _calculate(usd_cash=500.0)
-
-    cash_sell = _cash_sell_order(orders)
+def test_cash_ticker_sell_only_funds_shortfall_after_orderable_usd():
+    cash_sell, info = _cash_funding(orderable_usd=500.0)
 
     assert cash_sell.quantity == 5
     assert "$989.91" in cash_sell.reason
     assert "$500.00" in cash_sell.reason
     assert "$489.91" in cash_sell.reason
+    assert info["shortfall"] == 489.91
 
 
-def test_cash_ticker_sell_is_skipped_when_kis_usd_cash_covers_buys():
-    orders = _calculate(usd_cash=1000.0)
+def test_cash_ticker_sell_is_skipped_when_orderable_usd_covers_buys():
+    cash_sell, info = _cash_funding(orderable_usd=1000.0)
 
-    cash_sell_orders = [
-        order
-        for order in orders
-        if order.symbol == "BIL" and order.side == OrderSide.SELL
-    ]
-
-    assert cash_sell_orders == []
+    assert cash_sell is None
+    assert info["required"] is False
 
 
 def test_cash_ticker_sell_is_capped_by_holding_quantity():
-    orders = _calculate(cash_ticker_qty=3)
-
-    cash_sell = _cash_sell_order(orders)
+    cash_sell, _ = _cash_funding(cash_ticker_qty=3)
 
     assert cash_sell.quantity == 3
 
 
 def test_cash_ticker_sell_is_skipped_without_cash_ticker_holding():
-    orders = _calculate(cash_ticker_qty=0)
+    cash_sell, _ = _cash_funding(cash_ticker_qty=0)
 
-    cash_sell_orders = [
-        order
-        for order in orders
-        if order.symbol == "BIL" and order.side == OrderSide.SELL
-    ]
-
-    assert cash_sell_orders == []
+    assert cash_sell is None
 
 
 def test_rejects_non_positive_duration():

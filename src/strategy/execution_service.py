@@ -22,6 +22,7 @@ from utils.market_utils import get_us_market_status, is_market_holiday
 from kis import wrapper
 from kis.kis_api import kis_auth as ka
 from core import trading_config
+from kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import inquire_psamount
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
 from data.data_service import get_portfolio_data
 
@@ -59,6 +60,27 @@ def get_market_data(force_refresh: bool = False) -> Tuple[Dict, Dict]:
                 current_prices[t] = float(holdings[t].get('cur_price', 0))
 
     return holdings, current_prices
+
+
+def get_orderable_usd(symbol: str, order_price: float) -> float:
+    """Return KIS overseas buying power for a representative USD buy."""
+    stock_info = trading_config.get_stock_info(symbol)
+    market = stock_info.get("market", "NASD")
+    exchange_map = {"NAS": "NASD", "NYS": "NYSE", "AMS": "AMEX"}
+    ovrs_excg_cd = exchange_map.get(market, market)
+    trenv = ka.getTREnv()
+
+    result = inquire_psamount(
+        cano=trenv.my_acct,
+        acnt_prdt_cd=trenv.my_prod,
+        ovrs_excg_cd=ovrs_excg_cd,
+        ovrs_ord_unpr=str(order_price),
+        item_cd=symbol,
+        env_dv="real",
+    )
+    if result is None or result.empty or "ovrs_ord_psbl_amt" not in result:
+        raise RuntimeError("KIS did not return overseas orderable USD.")
+    return float(result.iloc[0]["ovrs_ord_psbl_amt"])
 
 
 def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
@@ -395,8 +417,26 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
             targets_config=active_targets,
             portfolio=holdings,
             current_prices=prices,
-            cash_ticker=strategy_config.get("cash_ticker", "")
         )
+        reference_buy = next(
+            (order for order in orders if order.side == OrderSide.BUY),
+            None,
+        )
+        if reference_buy and strategy_config.get("cash_ticker"):
+            orderable_usd = get_orderable_usd(
+                reference_buy.symbol,
+                reference_buy.price,
+            )
+            funding_order, funding_info = raoeo.calculate_cash_funding_order(
+                orders=orders,
+                portfolio=holdings,
+                current_prices=prices,
+                cash_ticker=strategy_config["cash_ticker"],
+                orderable_usd=orderable_usd,
+            )
+            calc_info["cash_funding"] = funding_info
+            if funding_order:
+                orders.insert(0, funding_order)
         report["orders"] = orders
         report["pending_orders"] = orders
         report["info"].update(calc_info)
@@ -664,11 +704,24 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
             if r_duration > 0 and r_seed > 0:
                 raoeo_daily_total += r_seed / r_duration
 
+        reference_asset = reb_conf.get("assets", [{}])[0].get("ticker")
+        reference_price = prices.get(reference_asset, 0.0) if reference_asset else 0.0
+        if reference_price <= 0 and reference_asset:
+            reference_price = float(
+                holdings.get(reference_asset, {}).get("cur_price", 0.0)
+            )
+        orderable_usd = (
+            get_orderable_usd(reference_asset, reference_price)
+            if reference_asset and reference_price > 0
+            else 0.0
+        )
+
         # Calculate
         orders, calc_info = rebalancing.calculate_orders(
             config=reb_conf,
             portfolio=holdings,
             current_prices=prices,
+            orderable_usd=orderable_usd,
             reserved_cash=raoeo_daily_total
         )
 
@@ -700,7 +753,7 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
         # Save history
         context = {
             "seed": calc_info.get("seed"),
-            "usd_cash": calc_info.get("usd_cash"),
+            "orderable_usd": calc_info.get("orderable_usd"),
             "total_available": calc_info.get("total_available"),
             "scale_factor": calc_info.get("scale_factor"),
             "asset_status": calc_info.get("asset_status", {}),

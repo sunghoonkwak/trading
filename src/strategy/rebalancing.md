@@ -9,7 +9,8 @@
 
 2. **Order Generation (주문 생성)**:
    - 현재 가치와 목표 가치의 차이를 계산하여 매수/매도 주문을 생성합니다.
-   - `reserved_cash`를 고려하여 RAOEO 등 타 전략에 필요한 예산을 제외하고 리밸런싱 자원을 할당합니다.
+   - KIS `inquire_psamount`로 조회한 `orderable_usd`에서
+     `reserved_cash`를 제외하여 리밸런싱 자원을 할당합니다.
 
 # Key Functions (주요 함수)
 
@@ -21,6 +22,7 @@
   - `portfolio` (Dict): 자산별 현재 잔고
   - `current_prices` (Dict): 자산별 현재 가격
   - `reserved_cash` (float): 타 전략을 위해 예약된 현금 (사용 불가)
+  - `orderable_usd` (float): KIS가 반환한 해외주문가능 USD
 - **출력 (Output)**: `Tuple[List[StrategyOrder], Dict]`
   - `orders`: 실행할 매수/매도 주문 리스트
   - `info`: 자산 현황, 스케일링 팩터, 비중 차이 등의 메타 정보
@@ -50,6 +52,7 @@ orders, info = rebalancing.calculate_orders(
     config={...},
     portfolio={...},
     current_prices={"TQQQ": 50.0, "SCHD": 30.0},
-    reserved_cash=500.0
+    reserved_cash=500.0,
+    orderable_usd=3000.0
 )
 ```

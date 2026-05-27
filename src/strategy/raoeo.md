@@ -39,12 +39,17 @@
   - `portfolio` (Dict): 현재 보유 잔고 (qty, avg_price 등)
   - `current_prices` (Dict): 현재 시장가
   - `exchange_rates` (Optional[Dict]): 환율 정보
-  - `cash_ticker` (str): 매수 대금 부족 시 매도할 현금성 ETF 티커 (예: "TLTW")
 - **출력 (Output)**: `Tuple[List[StrategyOrder], Dict]` (주문 목록, 메타 정보)
-- **현금 조달 로직 (Cash Funding)**:
-  - 매수 주문 총액을 계산한 후, 보유 중인 `USD cash`를 우선적으로 차감합니다.
-  - 부족분(Shortfall)이 존재할 경우에만 `cash_ticker`를 매도하여 현금을 조달합니다.
-  - 무보유 공매도를 방지하기 위해 `cash_ticker`의 매도 수량은 항상 실제 보유 수량으로 캡(Cap)이 적용됩니다. 이 매도 주문은 다른 주문보다 우선적으로 실행되도록 주문 목록 맨 앞(index 0)에 추가됩니다.
+
+## `calculate_cash_funding_order`
+매수 주문 목록에 대해 `cash_ticker` 조달 주문을 별도로 계산합니다.
+
+- 부족분은 포트폴리오의 `USD cash`가 아니라 KIS
+  `inquire_psamount`에서 조회된 `orderable_usd`를 기준으로 계산합니다.
+- 부족분이 존재할 때만 `cash_ticker` 매도를 반환하며, 매도 수량은 실제
+  보유 수량으로 제한합니다.
+- API 호출은 실행 서비스가 담당하고, 이 모듈은 전달받은 주문가능 금액과
+  보유 종목 정보만으로 계산합니다.
 
 # Configuration (`strategy_config.json`)
 

@@ -13,7 +13,8 @@ def calculate_orders(
     config: Dict,
     portfolio: Dict,
     current_prices: Dict[str, float],
-    reserved_cash: float = 0.0
+    reserved_cash: float = 0.0,
+    orderable_usd: float = 0.0
 ) -> Tuple[List[StrategyOrder], Dict]:
     """
     Calculate buy/sell orders based on fixed weight rebalancing with a Seed cap.
@@ -26,7 +27,7 @@ def calculate_orders(
     assets = config.get("assets", [])
 
     info = {
-        "usd_cash": 0.0,
+        "orderable_usd": 0.0,
         "total_available": 0.0,
         "total_buy_required": 0.0,
         "scale_factor": 1.0,
@@ -77,15 +78,16 @@ def calculate_orders(
         }
 
     # 2. Determine Real Target Base
-    # Total potential value = current stock + current cash
-    usd_cash_data = portfolio.get("USD cash", {})
-    usd_cash_raw = float(usd_cash_data.get("qty", 0))
-    usd_cash = max(0, usd_cash_raw - reserved_cash)
-    info["usd_cash"] = usd_cash
+    # Buying power comes from inquire_psamount, not portfolio cash holdings.
+    available_usd = max(0, float(orderable_usd) - reserved_cash)
+    info["orderable_usd"] = float(orderable_usd)
     if reserved_cash > 0:
-        logging.info(f"Rebalancing: USD cash ${usd_cash_raw:.2f} - reserved ${reserved_cash:.2f} = ${usd_cash:.2f}")
+        logging.info(
+            f"Rebalancing: Orderable USD ${orderable_usd:.2f} "
+            f"- reserved ${reserved_cash:.2f} = ${available_usd:.2f}"
+        )
 
-    total_potential_val = total_current_val_in_group + usd_cash
+    total_potential_val = total_current_val_in_group + available_usd
     # We aim for Seed, but if we have less money, we balance what we have.
     target_base = min(seed, total_potential_val)
 
@@ -171,7 +173,7 @@ def calculate_orders(
                     reason=f"➔ Est.Total: ${expected_total:,.1f} ({pct:.1f}%)"
                 ))
 
-    info["total_available"] = usd_cash
+    info["total_available"] = available_usd
     info["total_buy_required"] = total_buy_required
 
     # We return the orders even if not allowed, so they can be shown in reports.
