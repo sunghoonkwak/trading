@@ -1,112 +1,105 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## Project Layout
 
-This is a Python 3.9+ KIS real-time trading system. The runtime entry point is
+This is a Python 3.9+ KIS real-time trading system. Runtime entry point:
 `src/main.py`.
 
-Core application modules live under `src/`:
+- `src/core/`: configuration and web support
+- `src/kis/`: Korea Investment Securities API integration
+- `src/strategy/`: RAOEO, value averaging, rebalancing, and execution
+- `src/scheduler/`, `src/telegram_bot/`, `src/data/`, `src/state/`,
+  `src/utils/`: supporting services
+- `src/web/static/`: web assets
+- `templates/`: sample configuration only
+- `scripts/backtest/raoeo/`: backtest tooling
 
-- `core/`: configuration and web support
-- `kis/`: Korea Investment Securities API integration
-- `strategy/`: RAOEO, value averaging, rebalancing, and execution services
-- `scheduler/`, `telegram_bot/`, `data/`, `state/`, and `utils/`: supporting
-  services
+Private runtime configuration belongs in `KIS_config/` or an external mount.
 
-Web assets are under `src/web/static`, sample configuration lives in
-`templates/`, and backtest tooling is under `scripts/backtest/raoeo/`. Private
-runtime configuration belongs in `KIS_config/` or an external mount.
+## Runtime And Commands
 
-## Build, Test, and Development Commands
+The trading runtime is Docker-only. Do not run `python src/main.py` on the
+host; it is guarded to prevent conflicts with the managed container.
 
-- `docker compose up -d --build`: build and start the bot container on port `8080`.
-- `docker logs -f my-trading-bot`: follow container logs during startup and
-  live trading.
-- `docker compose exec trading-bot python -m pytest tests`: run tests inside
-  the running container.
-- `python scripts/backtest/raoeo/backtest_raoeo.py`: run the RAOEO backtest script.
+- `docker compose up -d --build`: build and start the bot on port `8080`.
+- `docker compose restart trading-bot`: restart after source changes.
+- `docker logs -f my-trading-bot`: follow startup and live logs.
+- `docker compose exec trading-bot python -m pytest tests`: run tests in Docker.
+- `venv/bin/pytest tests`: run safe host-side tests first when appropriate.
+- `venv/bin/python scripts/validate_config.py`: validate configuration.
+- `venv/bin/python scripts/backtest/raoeo/backtest_raoeo.py`: run backtests.
 
-The trading runtime is Docker-only. Do not run `python src/main.py` directly
-from the host; `src/main.py` blocks non-Docker startup so local processes do not
-conflict with the managed container.
+For host-side development use `venv/bin/python` and `venv/bin/pytest`; do not
+probe system Python first unless the virtualenv is missing or explicitly
+requested.
 
-## Python Environment
+## Live KIS Diagnostics
 
-For host-side tests, linting, and utility scripts, use the repository
-virtualenv first:
+For live KIS REST diagnosis, prefer a read-only one-off query in the running
+container over temporary runtime logging or a service restart.
 
-- `venv/bin/python`
-- `venv/bin/pytest`
+- Use KIS Coding Assistant MCP first to identify the intended API and response
+  field.
+- Run application imports from the package root:
+  `docker compose exec -T -w /app/src trading-bot python ...`.
+  `/app` is the mounted repository root; `/app/src` is the Python import root.
+- A one-off `docker compose exec` Python process does not share in-memory
+  authentication with the running daemon. In that process call `ka.auth()`
+  before `ka.getTREnv()` or account REST calls.
+- For overseas buying power, use `inquire_psamount` field
+  `ovrs_ord_psbl_amt`; do not infer orderable USD from portfolio cash or
+  withdrawal-available balance fields.
+- Keep diagnostics read-only and never print or persist credentials, account
+  numbers, tokens, or unmasked sensitive payloads.
 
-Do not probe bare `python`, `python3`, or system pytest first unless the
-virtualenv is missing or the user explicitly asks for the system Python. The
-trading runtime remains Docker-only; the virtualenv is only for development
-commands that are safe to run on the host.
+## Coding And Documentation
 
-## Coding Style & Naming Conventions
+Use standard Python style: 4-space indentation, `snake_case` functions and
+variables, and `PascalCase` classes. Keep services focused and prefer existing
+helpers in `src/utils`, `src/state`, and `src/core`.
 
-Use standard Python style with 4-space indentation, `snake_case` for functions,
-variables, and modules, and `PascalCase` for classes.
+Many modules have matching `.md` notes beside `.py` files. Update them when
+behavior or operational expectations change. Do not hand-edit generated or
+vendor-like KIS endpoint wrappers unless intentionally scoped.
 
-Keep service modules focused and prefer existing helpers from `src/utils`,
-`src/state`, and `src/core`. Many modules have matching `.md` notes beside
-`.py` files; update these when behavior or operational expectations change.
+## Testing
 
-Do not hand-edit generated or vendor-like KIS endpoint wrappers unless that is
-intentionally scoped.
+Add deterministic `tests/test_*.py` tests with descriptive names. Strategy,
+formatter, and state tests should avoid live KIS, Telegram, or market calls.
+For strategy changes, run the relevant tests and backtest scripts; before
+shipping, run `docker compose exec trading-bot python -m pytest tests`.
 
-## Testing Guidelines
-
-The repository has a `tests/` directory but no committed pytest config yet. Add
-tests under `tests/` using `test_*.py` files and descriptive test function
-names.
-
-For strategy, formatter, and state logic, prefer deterministic unit tests that
-avoid live KIS, Telegram, or market calls. When introducing pytest tests, run
-`docker compose exec trading-bot python -m pytest tests`; also run relevant
-backtest scripts for strategy changes.
-
-When running tests from Codex or another sandboxed agent environment, tests
-using `asyncio` + `run_in_executor()` can hang in the restricted sandbox even
-though they pass on the host or in Docker. If a pytest run stalls on an async
-executor path such as `core.web_server.cancel_order()`, rerun that test with
+In sandboxed agent environments, tests using `asyncio` with
+`run_in_executor()` can stall although they pass on the host or in Docker. If
+a test hangs on a path such as `core.web_server.cancel_order()`, rerun with
 sandbox escalation or inside Docker before treating it as an application
 failure.
 
-## Commit & Pull Request Guidelines
+## Commits And Pull Requests
 
-Recent history uses Conventional Commits with scopes, for example
-`feat(raoeo): ...`, `fix(telegram): ...`, `docs(backtest): ...`, and
-`refactor(backtest): ...`.
+Use Conventional Commits with scopes, such as `feat(raoeo): ...` or
+`fix(telegram): ...`. The subject line MUST be 50 characters or less and body
+lines MUST wrap at 72 characters or less. Confirm the subject length before
+suggesting or creating a commit.
 
-Follow the 50/72 rule: the subject line MUST be 50 characters or less, and body
-lines MUST wrap at 72 characters or less. Before suggesting or creating a
-commit, count the subject length and confirm it is within the limit. Prefer
-bullet-point bodies for multi-part changes:
+For non-trivial commits, use focused bullets explaining behavior and impact:
 
 ```text
 type(scope): concise subject
 
-- Explain the first concrete behavior change.
-- Explain the second change or operational impact.
-- Mention config, tests, docs, or migration effects.
+- Explain the behavior change and why it matters.
+- Mention verification, configuration, or operational impact.
 ```
 
-Keep each bullet focused on why the change matters, not just which files
-changed. Pull requests should describe behavior changes, list verification,
-link related issues, and include screenshots or logs for dashboard, Telegram,
-or scheduler-visible changes.
-
-This repository provides `.gitmessage` and `.githooks/commit-msg` to help
-enforce these rules locally. Enable them with
+Pull requests should describe behavior changes and verification, link related
+issues, and include screenshots or logs for dashboard, Telegram, or
+scheduler-visible changes. Optional local enforcement:
 `git config commit.template .gitmessage` and
 `git config core.hooksPath .githooks`.
 
-## Security & Configuration Tips
+## Security
 
-Never commit API keys, account numbers, Telegram tokens, generated credentials,
-logs, or local `.env` files. Use `templates/` for examples and mount private
-files into `KIS_config/`, as shown in `docker-compose.yml`.
-
-Test changes against mock or paper-trading accounts before enabling live
-automation.
+Never commit API keys, account numbers, Telegram tokens, generated
+credentials, logs, `.env` files, or private `KIS_config/` contents. Use
+`templates/` for examples and mounts for private configuration. Test changes
+with mock or paper-trading accounts before enabling live automation.
