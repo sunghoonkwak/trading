@@ -160,6 +160,8 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
 
     # Execution Summary
     all_exec_results = []
+    if raoeo_report.get('cash_funding_results'):
+        all_exec_results.extend(raoeo_report['cash_funding_results'])
     if raoeo_report.get('execution_results'):
         all_exec_results.extend(raoeo_report['execution_results'])
     if va_report.get('execution_results'):

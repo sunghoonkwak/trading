@@ -12,20 +12,45 @@ from telegram.ext import (
     ConversationHandler, CallbackQueryHandler, TypeHandler
 )
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
-from strategy.execution_service import run_raoeo_strategy, run_va_strategy
+from strategy.execution_service import (
+    TZ_ET,
+    execute_raoeo_cash_funding,
+    prepare_raoeo_cash_funding,
+    run_raoeo_strategy,
+    run_va_strategy,
+    save_raoeo_cash_funding_result,
+)
 from strategy.report_formatter import format_strategy_report
 from strategy.base import StrategyOrder, StrategyStatus, OrderSide
+from datetime import datetime
 
 STRATEGY_CONFIRM = 0
 
-def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
-    if has_orders:
-        keyboard = [[
-            InlineKeyboardButton("✅ Execute All", callback_data="strategy_yes"),
-            InlineKeyboardButton("❌ Cancel", callback_data="strategy_no")
-        ]]
-        return InlineKeyboardMarkup(keyboard)
-    return None
+def build_confirm_keyboard(
+    has_orders: bool,
+    cash_funding_required: bool = False,
+) -> Optional[InlineKeyboardMarkup]:
+    if not has_orders:
+        return None
+
+    keyboard = []
+    if cash_funding_required:
+        keyboard.append([
+            InlineKeyboardButton(
+                "💵 Sell cash_ticker & Execute",
+                callback_data="strategy_with_cash_sale",
+            )
+        ])
+    keyboard.append([
+        InlineKeyboardButton(
+            "✅ Execute Without Cash Sale",
+            callback_data="strategy_without_cash_sale",
+        )
+    ])
+    keyboard.append([
+        InlineKeyboardButton("❌ Cancel", callback_data="strategy_no")
+    ])
+    return InlineKeyboardMarkup(keyboard)
 
 async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /strategy command."""
@@ -53,8 +78,17 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     va_has_orders = bool(va_rep.get('pending_orders')) and not is_blocked(va_rep)
 
     has_orders = raoeo_has_orders or va_has_orders
+    cash_funding_required = False
+    if raoeo_has_orders:
+        try:
+            _, funding_info = prepare_raoeo_cash_funding(raoeo_rep)
+            cash_funding_required = bool(funding_info.get("required"))
+        except Exception as e:
+            logging.error(f"Cash Funding Calculation Error: {e}", exc_info=True)
+            await wrap_reply(update, f"⚠️ Error calculating cash funding: {e}")
+            return ConversationHandler.END
 
-    keyboard = build_confirm_keyboard(has_orders)
+    keyboard = build_confirm_keyboard(has_orders, cash_funding_required)
 
     sent_msg = await wrap_reply(update, report_text, parse_mode='HTML', reply_markup=keyboard)
     if sent_msg:
@@ -73,12 +107,39 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
         context.user_data.pop('strategy_va', None)
         return ConversationHandler.END
 
-    if data == "strategy_yes":
+    if data in ("strategy_with_cash_sale", "strategy_without_cash_sale"):
         await wrap_edit(update, "⏳ <b>Executing orders...</b>", parse_mode='HTML')
 
         try:
+            funding_result = None
+            if data == "strategy_with_cash_sale":
+                funding_result, funding_info = execute_raoeo_cash_funding()
+                funding_failed = (
+                    funding_info.get("required")
+                    and (funding_result is None or not funding_result["success"])
+                )
+                if funding_result is not None:
+                    report_date = context.user_data.get(
+                        'strategy_raoeo', {}
+                    ).get('date', datetime.now(TZ_ET).strftime("%Y-%m-%d"))
+                    save_raoeo_cash_funding_result(report_date, funding_result)
+                if funding_failed:
+                    reason = funding_info.get("error")
+                    if funding_result is not None:
+                        reason = funding_result.get("message")
+                    await wrap_edit(
+                        update,
+                        f"❌ <b>Cash funding failed.</b>\n{reason or 'Funding sale unavailable.'}",
+                        parse_mode='HTML',
+                    )
+                    context.user_data.pop('strategy_raoeo', None)
+                    context.user_data.pop('strategy_va', None)
+                    return ConversationHandler.END
+
             raoeo_res = run_raoeo_strategy(execute=True)
             va_res = run_va_strategy(execute=True)
+            if funding_result is not None:
+                raoeo_res["cash_funding_results"] = [funding_result]
 
             final_report = format_strategy_report(raoeo_res, va_res)
             await wrap_edit(update, final_report, parse_mode='HTML')

@@ -19,6 +19,7 @@
 4. **Unified History Management (통합 히스토리 관리)**:
    - `strategy_history.json` 파일 하나에 모든 전략의 실행 결과를 날짜별로 통합 저장합니다.
    - 실행 이력이 있는 경우, 성공한 주문(`succeeded`)은 건너뛰고 실패한 주문(`pending`)만 선별하여 재실행을 시도합니다.
+   - 사용자가 승인한 `cash_ticker` 조달 결과는 RAOEO의 `cash_funding_results`에 별도로 저장하여, 실패한 조달 주문이 일반 전략 재시도 주문으로 자동 실행되지 않게 합니다.
 
 5. **Timeout Handling (타임아웃 방어 메커니즘)**:
    - 외부 API 응답 지연을 방지하기 위하여 `requests.exceptions.Timeout` 에러를 독립적으로 포착합니다.
@@ -59,6 +60,17 @@
   - `orders` (List[StrategyOrder]): 실행할 주문 객체 리스트
   - `sell_first` (bool): 매도 주문 먼저 실행 여부 (리밸런싱용)
 - **출력 (Output)**: `List[Dict]` (실행 결과 리스트: `success`, `message` 포함)
+
+## `prepare_raoeo_cash_funding`, `execute_raoeo_cash_funding`
+`/strategy` 수동 실행에서만 사용하는 현금 조달 단계입니다.
+
+- 현재 대기 중인 RAOEO 매수 주문에 대해 `get_orderable_usd`로 조회한
+  해외주문가능금액만으로 부족분을 판단하며, 이 단계에서만
+  `cash_ticker` 시세를 추가 조회합니다. Value Averaging 주문은 조달
+  계산에 포함하지 않습니다.
+- 자동 스케줄의 `run_raoeo_strategy(execute=True)`는 `cash_ticker` 매도 주문을 만들지 않습니다.
+- 사용자가 조달 매도를 선택한 경우에만 매도 주문을 접수하며, 접수 성공 후 5초 대기하고 후속 전략 실행으로 진행합니다.
+- 조달 주문을 만들 수 없거나 주문 접수가 실패하면 호출자는 RAOEO와 Value Averaging 실행 모두를 중단합니다.
 
 # Configuration (`strategy_config.json`)
 
