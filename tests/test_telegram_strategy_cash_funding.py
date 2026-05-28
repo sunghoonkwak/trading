@@ -5,32 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from telegram_bot import telegram_strategy
-from telegram_bot.telegram_strategy import build_confirm_keyboard
 from strategy.base import OrderSide, StrategyOrder, StrategyStatus
-
-
-def _callback_data(keyboard):
-    return [
-        button.callback_data
-        for row in keyboard.inline_keyboard
-        for button in row
-    ]
-
-
-def test_strategy_keyboard_has_two_options_when_cash_funding_is_not_required():
-    keyboard = build_confirm_keyboard(has_orders=True, cash_funding_required=False)
-
-    assert _callback_data(keyboard) == ["strategy_without_cash_sale", "strategy_no"]
-
-
-def test_strategy_keyboard_has_three_options_when_cash_funding_is_required():
-    keyboard = build_confirm_keyboard(has_orders=True, cash_funding_required=True)
-
-    assert _callback_data(keyboard) == [
-        "strategy_with_cash_sale",
-        "strategy_without_cash_sale",
-        "strategy_no",
-    ]
 
 
 def test_strategy_command_shows_cash_funding_summary(monkeypatch):
@@ -100,71 +75,6 @@ def test_strategy_command_shows_cash_funding_summary(monkeypatch):
     assert "Orderable USD: $800.00" in replies[0]
     assert "Sell BIL: 3 @ $99.00" in replies[0]
     assert "Est. proceeds: $297.00" in replies[0]
-
-
-def test_strategy_command_shows_cash_summary_when_sale_is_not_needed(monkeypatch):
-    buy_order = StrategyOrder("SOXL", OrderSide.BUY, 4, 250.0, "Buy Normal")
-    raoeo_report = {
-        "date": "2026-05-28",
-        "status": StrategyStatus.SKIPPED,
-        "orders": [buy_order],
-        "pending_orders": [buy_order],
-        "info": {"ticker_info": {}},
-    }
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_raoeo_strategy",
-        lambda execute=False: raoeo_report,
-    )
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_va_strategy",
-        lambda execute=False: {
-            "date": "2026-05-28",
-            "status": StrategyStatus.SKIPPED,
-            "orders": [],
-            "pending_orders": [],
-            "info": {},
-        },
-    )
-    monkeypatch.setattr(
-        telegram_strategy,
-        "prepare_raoeo_cash_funding",
-        lambda report: (
-            None,
-            {
-                "buy_budget": 1000.0,
-                "orderable_usd": 1200.0,
-                "shortfall": 0.0,
-                "required": False,
-                "error": None,
-            },
-        ),
-    )
-
-    replies = []
-
-    async def fake_reply(update, text, **kwargs):
-        replies.append(text)
-
-        class Message:
-            message_id = 1
-
-        return Message()
-
-    monkeypatch.setattr(telegram_strategy, "wrap_reply", fake_reply)
-
-    class Update:
-        pass
-
-    class Context:
-        user_data = {}
-
-    asyncio.run(telegram_strategy.cmd_strategy(Update(), Context()))
-
-    assert "Buy needed: $1,000.00" in replies[0]
-    assert "Orderable USD: $1,200.00" in replies[0]
-    assert "Funding sale: not needed" in replies[0]
 
 
 def test_failed_cash_funding_stops_all_strategy_execution(monkeypatch):

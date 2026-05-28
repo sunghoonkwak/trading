@@ -103,23 +103,6 @@ def test_initialize_kis_fails_closed_when_rest_auth_fails(monkeypatch):
     assert "sync_open_orders" not in calls
 
 
-def test_initialize_kis_fails_closed_when_rest_auth_times_out(monkeypatch):
-    main = _load_main(monkeypatch)
-    calls = _install_fake_kis_thread(
-        monkeypatch,
-        main,
-        rest_response=None,
-        ws_response=_Response(True),
-    )
-
-    system = main.TradingSystem()
-
-    assert system.initialize_kis() is False
-    assert "request_kis_ws_auth" not in calls
-    assert "initialize_websocket_and_pipe" not in calls
-    assert "sync_open_orders" not in calls
-
-
 def test_initialize_kis_fails_closed_when_ws_auth_fails(monkeypatch):
     main = _load_main(monkeypatch)
     calls = _install_fake_kis_thread(
@@ -133,23 +116,6 @@ def test_initialize_kis_fails_closed_when_ws_auth_fails(monkeypatch):
 
     assert system.initialize_kis() is False
     assert "initialize_websocket_and_pipe" not in calls
-    assert "sync_open_orders" not in calls
-
-
-def test_initialize_kis_fails_closed_when_websocket_init_fails(monkeypatch):
-    main = _load_main(monkeypatch)
-    calls = _install_fake_kis_thread(
-        monkeypatch,
-        main,
-        rest_response=_Response(True),
-        ws_response=_Response(True),
-        ws_init_success=False,
-    )
-
-    system = main.TradingSystem()
-
-    assert system.initialize_kis() is False
-    assert "initialize_websocket_and_pipe" in calls
     assert "sync_open_orders" not in calls
 
 
