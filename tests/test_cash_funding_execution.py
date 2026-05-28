@@ -103,6 +103,31 @@ def test_execute_cash_funding_waits_five_seconds_after_success(monkeypatch):
     assert slept == [5]
 
 
+def test_execute_orders_runs_strategy_sells_before_buys(monkeypatch):
+    buy_one = StrategyOrder("TQQQ", OrderSide.BUY, 1, 100.0, "buy one")
+    sell_one = StrategyOrder("SOXL", OrderSide.SELL, 2, 50.0, "sell one")
+    buy_two = StrategyOrder("SCHD", OrderSide.BUY, 3, 30.0, "buy two")
+    sell_two = StrategyOrder("UPRO", OrderSide.SELL, 4, 40.0, "sell two")
+    submitted = []
+    slept = []
+
+    monkeypatch.setattr(
+        execution_service,
+        "execute_single_order",
+        lambda order: submitted.append(order.symbol) or (True, "Success"),
+    )
+    monkeypatch.setattr(execution_service.time, "sleep", lambda seconds: slept.append(seconds))
+
+    execution_service._execute_orders(
+        [buy_one, sell_one, buy_two, sell_two],
+        sell_first=True,
+        sell_wait_seconds=5,
+    )
+
+    assert submitted == ["SOXL", "UPRO", "TQQQ", "SCHD"]
+    assert slept == [5]
+
+
 def test_cash_funding_results_are_stored_separately_from_retry_orders(monkeypatch):
     saved = {}
     monkeypatch.setattr(

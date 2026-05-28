@@ -187,3 +187,52 @@ def test_successful_cash_funding_runs_strategies_and_reports_sale(monkeypatch):
     assert calls == [("raoeo", True), ("va", True)]
     assert saved == [("2026-05-27", funding_result)]
     assert formatted[0]["cash_funding_results"] == [funding_result]
+
+
+def test_execute_without_cash_sale_skips_funding_and_runs_strategies(monkeypatch):
+    monkeypatch.setattr(
+        telegram_strategy,
+        "execute_raoeo_cash_funding",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("cash funding must be skipped")
+        ),
+    )
+    calls = []
+    monkeypatch.setattr(
+        telegram_strategy,
+        "run_raoeo_strategy",
+        lambda execute=False: calls.append(("raoeo", execute)) or {"date": "2026-05-27"},
+    )
+    monkeypatch.setattr(
+        telegram_strategy,
+        "run_va_strategy",
+        lambda execute=False: calls.append(("va", execute)) or {},
+    )
+    formatted = []
+    monkeypatch.setattr(
+        telegram_strategy,
+        "format_strategy_report",
+        lambda raoeo, va: formatted.append((raoeo, va)) or "final report",
+    )
+
+    async def fake_edit(update, text, **kwargs):
+        return None
+
+    monkeypatch.setattr(telegram_strategy, "wrap_edit", fake_edit)
+
+    class Query:
+        data = "strategy_without_cash_sale"
+
+        async def answer(self):
+            return None
+
+    class Update:
+        callback_query = Query()
+
+    class Context:
+        user_data = {"strategy_raoeo": {"date": "2026-05-27"}}
+
+    asyncio.run(telegram_strategy.handle_strategy_callback(Update(), Context()))
+
+    assert calls == [("raoeo", True), ("va", True)]
+    assert len(formatted) == 1
