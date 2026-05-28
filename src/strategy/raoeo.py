@@ -75,7 +75,7 @@ def calculate_cash_funding_order(
     cash_ticker: str,
     orderable_usd: float,
 ) -> Tuple[Optional[StrategyOrder], Dict]:
-    """Build a cash-ticker sale using KIS orderable USD as buying power."""
+    """Build an approved cash-ticker sale using KIS orderable USD."""
     total_buy_budget = sum(
         order.price * order.quantity
         for order in orders
@@ -106,15 +106,17 @@ def calculate_cash_funding_order(
     sell_price = round(cash_cur_price * 0.99, 2)
     required_qty = math.ceil(shortfall / sell_price)
     holding_qty = int(portfolio.get(cash_ticker, {}).get("qty", 0))
-    sell_qty = min(required_qty, holding_qty)
-    if sell_qty <= 0:
-        info["error"] = f"No available holding for cash_ticker {cash_ticker}."
+    if holding_qty < required_qty:
+        info["error"] = (
+            f"Insufficient {cash_ticker} holding for cash funding "
+            f"(required: {required_qty}, holding: {holding_qty})."
+        )
         return None, info
 
     order = StrategyOrder(
         symbol=cash_ticker,
         side=OrderSide.SELL,
-        quantity=sell_qty,
+        quantity=required_qty,
         price=sell_price,
         order_type=ORDER_TYPE_US_LIMIT,
         reason=(

@@ -76,7 +76,10 @@ def run_periodic_rebalancing():
     is_first_call = (us_date != _last_first_notify_date)
 
     try:
-        reb_res = run_rebalancing_strategy(execute=True)
+        reb_res = run_rebalancing_strategy(
+            execute=True,
+            orderable_cache_key=us_date,
+        )
 
         from strategy.base import StrategyStatus
 

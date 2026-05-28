@@ -39,17 +39,17 @@
   - `portfolio` (Dict): 현재 보유 잔고 (qty, avg_price 등)
   - `current_prices` (Dict): 현재 시장가
   - `exchange_rates` (Optional[Dict]): 환율 정보
+  - `cash_ticker`는 `calculate_orders`가 자동 매도에 사용하는 입력이 아닙니다. 수동 조달 승인 경로에서 `calculate_cash_funding_order`에 전달됩니다.
 - **출력 (Output)**: `Tuple[List[StrategyOrder], Dict]` (주문 목록, 메타 정보)
 
 ## `calculate_cash_funding_order`
-매수 주문 목록에 대해 `cash_ticker` 조달 주문을 별도로 계산합니다.
+텔레그램 수동 승인 시에만 RAOEO 대기 매수 주문의 현금 조달 주문을 계산합니다.
 
 - 부족분은 포트폴리오의 `USD cash`가 아니라 KIS
-  `inquire_psamount`에서 조회된 `orderable_usd`를 기준으로 계산합니다.
-- 부족분이 존재할 때만 `cash_ticker` 매도를 반환하며, 매도 수량은 실제
-  보유 수량으로 제한합니다.
-- API 호출은 실행 서비스가 담당하고, 이 모듈은 전달받은 주문가능 금액과
-  보유 종목 정보만으로 계산합니다.
+  `inquire_psamount`가 반환한 `orderable_usd`를 기준으로 계산합니다.
+- 부족분이 없으면 조달 주문을 만들지 않습니다.
+- 부족분이 있지만 `cash_ticker` 가격 또는 충분한 보유 수량이 없으면 오류 정보를 반환하며, 부분 매도는 만들지 않습니다.
+- 조달 주문은 자동 스케줄 실행의 RAOEO 주문 목록에 포함되지 않습니다.
 
 # Configuration (`strategy_config.json`)
 

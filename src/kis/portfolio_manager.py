@@ -61,6 +61,22 @@ class PortfolioManager:
         return default
 
     @classmethod
+    def _get_positive_float_from_frames(cls, frames, keys) -> float:
+        """Return the first positive numeric value found in API output frames."""
+        for frame in frames:
+            if frame is None or frame.empty:
+                continue
+            for item in frame.to_dict('records'):
+                raw_value = cls._get_val(item, keys)
+                try:
+                    value = float(str(raw_value).replace(',', ''))
+                except (TypeError, ValueError):
+                    continue
+                if value > 0:
+                    return value
+        return 0.0
+
+    @classmethod
     def _fetch_kis_account_data(cls) -> Dict[str, Any]:
         """Fetches both domestic and overseas balances from KIS."""
         cano = ka.getTREnv().my_acct
@@ -111,7 +127,10 @@ class PortfolioManager:
                     seen.add(symbol)
             if not df2.empty:
                 us_res['asset'].update(df2.iloc[0].to_dict())
-                us_res['exchange_rate'] = float(cls._get_val(us_res['asset'], ['bass_exrt', 'BASS_EXRT', 'frst_bltn_exrt'], 0))
+            us_res['exchange_rate'] = cls._get_positive_float_from_frames(
+                (df1, df2),
+                ['bass_exrt', 'BASS_EXRT', 'frst_bltn_exrt', 'FRST_BLTN_EXRT']
+            )
         except Exception as e: us_res['error'] = str(e)
 
         return {

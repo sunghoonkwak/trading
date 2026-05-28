@@ -24,18 +24,10 @@ def _targets_config():
     }
 
 
-def _portfolio(usd_cash=0.0, cash_ticker_qty=100):
-    portfolio = {
+def _portfolio(cash_ticker_qty=100):
+    return {
         "BIL": {"qty": cash_ticker_qty, "avg_price": 100.0, "cur_price": 100.0},
     }
-    if usd_cash > 0:
-        portfolio["USD cash"] = {
-            "qty": usd_cash,
-            "avg_price": 1.0,
-            "cur_price": 1.0,
-            "type": "CASH",
-        }
-    return portfolio
 
 
 def _calculate(cash_ticker_qty=100):
@@ -57,7 +49,7 @@ def _cash_funding(orderable_usd=0.0, cash_ticker_qty=100):
     )
 
 
-def test_standard_orders_do_not_include_cash_funding_sale():
+def test_standard_orders_do_not_automatically_sell_cash_ticker():
     orders = _calculate()
 
     cash_sales = [
@@ -68,7 +60,7 @@ def test_standard_orders_do_not_include_cash_funding_sale():
     assert cash_sales == []
 
 
-def test_cash_ticker_sell_uses_full_buy_budget_without_orderable_usd():
+def test_cash_funding_sell_uses_full_buy_budget_without_orderable_usd():
     cash_sell, info = _cash_funding()
 
     assert cash_sell.quantity == 10
@@ -76,7 +68,7 @@ def test_cash_ticker_sell_uses_full_buy_budget_without_orderable_usd():
     assert info["required"] is True
 
 
-def test_cash_ticker_sell_only_funds_shortfall_after_orderable_usd():
+def test_cash_funding_sell_only_funds_shortfall_after_orderable_usd():
     cash_sell, info = _cash_funding(orderable_usd=500.0)
 
     assert cash_sell.quantity == 5
@@ -86,23 +78,27 @@ def test_cash_ticker_sell_only_funds_shortfall_after_orderable_usd():
     assert info["shortfall"] == 489.91
 
 
-def test_cash_ticker_sell_is_skipped_when_orderable_usd_covers_buys():
+def test_cash_funding_sell_is_skipped_when_orderable_usd_covers_buys():
     cash_sell, info = _cash_funding(orderable_usd=1000.0)
 
     assert cash_sell is None
     assert info["required"] is False
 
 
-def test_cash_ticker_sell_is_capped_by_holding_quantity():
-    cash_sell, _ = _cash_funding(cash_ticker_qty=3)
-
-    assert cash_sell.quantity == 3
-
-
-def test_cash_ticker_sell_is_skipped_without_cash_ticker_holding():
-    cash_sell, _ = _cash_funding(cash_ticker_qty=0)
+def test_cash_funding_fails_when_holding_cannot_cover_shortfall():
+    cash_sell, info = _cash_funding(cash_ticker_qty=3)
 
     assert cash_sell is None
+    assert info["required"] is True
+    assert "Insufficient" in info["error"]
+
+
+def test_cash_funding_fails_without_cash_ticker_holding():
+    cash_sell, info = _cash_funding(cash_ticker_qty=0)
+
+    assert cash_sell is None
+    assert info["required"] is True
+    assert "Insufficient" in info["error"]
 
 
 def test_rejects_non_positive_duration():

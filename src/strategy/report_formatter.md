@@ -6,6 +6,7 @@
 
 1. **Structured Formatting (구조화된 포맷팅)**:
    - 각 전략 리포트(`Dict`)를 받아 `Status`, `Market Status`, `Orders`, `Execution Results` 섹션으로 나누어 출력합니다.
+   - RAOEO 수동 실행 리포트에 `cash_funding` 컨텍스트가 있으면 매수 필요액, 주문가능 USD, 조달 매도 예정 주문을 함께 표시합니다.
 
 2. **Status Mapping (상태 매핑)**:
    - `StrategyStatus` Enum 값(`EXECUTED`, `PARTIAL`, `ALREADY_DONE` 등)을 사용자 친화적인 메시지와 이모지로 변환합니다.

@@ -70,7 +70,7 @@ def test_rebalancing_uses_orderable_usd_instead_of_portfolio_cash():
     assert info["orderable_usd"] == 1000.0
 
 
-def test_run_raoeo_uses_api_orderable_usd_for_funding_decision(monkeypatch):
+def test_run_raoeo_does_not_automatically_query_or_sell_cash_ticker(monkeypatch):
     config = {
         "cash_ticker": "BIL",
         "raoeo": {
@@ -90,7 +90,6 @@ def test_run_raoeo_uses_api_orderable_usd_for_funding_decision(monkeypatch):
             },
         },
     }
-    seen = []
     monkeypatch.setattr(
         execution_service,
         "_get_market_status",
@@ -106,19 +105,20 @@ def test_run_raoeo_uses_api_orderable_usd_for_funding_decision(monkeypatch):
         execution_service,
         "get_market_data",
         lambda force_refresh=False: (
-            {"USD cash": {"qty": 0.0}, "BIL": {"qty": 100, "cur_price": 100.0}},
+            {"BIL": {"qty": 100, "cur_price": 100.0}},
             {"TQQQ": 100.0, "BIL": 100.0},
         ),
     )
     monkeypatch.setattr(
         execution_service,
         "get_orderable_usd",
-        lambda symbol, price: seen.append((symbol, price)) or 1000.0,
+        lambda symbol, price: (_ for _ in ()).throw(
+            AssertionError("automatic RAOEO execution must not fund cash")
+        ),
     )
 
     report = execution_service.run_raoeo_strategy(execute=False)
 
-    assert seen == [("TQQQ", 109.99)]
     assert not any(
         order.symbol == "BIL" and order.side == OrderSide.SELL
         for order in report["orders"]
@@ -170,3 +170,57 @@ def test_run_rebalancing_passes_api_orderable_usd_to_calculation(monkeypatch):
     execution_service.run_rebalancing_strategy(execute=False)
 
     assert received["orderable_usd"] == 3023.49
+
+
+def test_automatic_rebalancing_reuses_orderable_usd_for_market_date(monkeypatch):
+    config = {
+        "raoeo": {"targets": {}},
+        "rebalancing": {
+            "enabled": True,
+            "seed": 1000,
+            "assets": [{"ticker": "TQQQ", "target_weight": 1.0}],
+        },
+    }
+    query_count = {"value": 0}
+    monkeypatch.setattr(
+        execution_service,
+        "_get_market_status",
+        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
+    )
+    monkeypatch.setattr(execution_service, "_load_history", lambda: [])
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: config,
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "get_market_data",
+        lambda force_refresh=False: ({}, {"TQQQ": 100.0}),
+    )
+
+    def fake_get_orderable_usd(symbol, price):
+        query_count["value"] += 1
+        return 3023.49
+
+    monkeypatch.setattr(
+        execution_service,
+        "get_orderable_usd",
+        fake_get_orderable_usd,
+    )
+    monkeypatch.setattr(
+        execution_service.rebalancing,
+        "calculate_orders",
+        lambda **kwargs: ([], {}),
+    )
+
+    execution_service.run_rebalancing_strategy(
+        execute=True,
+        orderable_cache_key="2026-05-27",
+    )
+    execution_service.run_rebalancing_strategy(
+        execute=True,
+        orderable_cache_key="2026-05-27",
+    )
+
+    assert query_count["value"] == 1

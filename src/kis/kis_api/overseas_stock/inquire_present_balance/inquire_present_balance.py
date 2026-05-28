@@ -198,9 +198,7 @@ def inquire_present_balance(
     else:
         logger.error("API call failed: %s - %s", res.getErrorCode(), res.getErrorMessage())
         res.printError(API_URL)
-        # 이미 수집된 데이터가 있으면 그것을 반환, 없으면 빈 DataFrame 반환
-        if dataframe1 is not None and not dataframe1.empty:
-            logger.info("Returning already collected data due to API error.")
-            return dataframe1, dataframe2 if dataframe2 is not None else pd.DataFrame(), dataframe3 if dataframe3 is not None else pd.DataFrame()
-        else:
-            return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        raise RuntimeError(
+            f"KIS inquire_present_balance failed: "
+            f"{res.getErrorCode()} - {res.getErrorMessage()}"
+        )

@@ -37,6 +37,37 @@ def _format_execution_results(results: List[Dict]) -> List[str]:
     return lines
 
 
+def _format_cash_funding_summary(raoeo_report: Dict) -> List[str]:
+    """Format manual cash funding context for strategy approval."""
+    funding = raoeo_report.get("cash_funding")
+    if not funding:
+        return []
+
+    lines = ["", "  💵 <b>Cash Funding Check</b>"]
+    buy_budget = float(funding.get("buy_budget", 0.0))
+    orderable_usd = float(funding.get("orderable_usd", 0.0))
+    shortfall = float(funding.get("shortfall", 0.0))
+
+    lines.append(f"    Buy needed: ${buy_budget:,.2f}")
+    lines.append(f"    Orderable USD: ${orderable_usd:,.2f}")
+
+    if shortfall > 0:
+        lines.append(f"    Shortfall: ${shortfall:,.2f}")
+        order = funding.get("order")
+        if order:
+            proceeds = order.quantity * order.price
+            lines.append(
+                f"    Sell {order.symbol}: {order.quantity} @ ${order.price:,.2f} "
+                f"(Est. proceeds: ${proceeds:,.2f})"
+            )
+        elif funding.get("error"):
+            lines.append(f"    Funding sale unavailable: {funding['error']}")
+    else:
+        lines.append("    Funding sale: not needed")
+
+    return lines
+
+
 def _get_status_display(report: Dict) -> str:
     """Get display emoji and text for a strategy status."""
     status = report.get("status")
@@ -77,6 +108,8 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
         pending = raoeo_report.get('pending_orders', [])
         info = raoeo_report.get('info', {})
         ticker_info = info.get('ticker_info', {})
+
+        lines.extend(_format_cash_funding_summary(raoeo_report))
 
         # Group orders by ticker
         orders_by_ticker = {}
@@ -160,6 +193,8 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
 
     # Execution Summary
     all_exec_results = []
+    if raoeo_report.get('cash_funding_results'):
+        all_exec_results.extend(raoeo_report['cash_funding_results'])
     if raoeo_report.get('execution_results'):
         all_exec_results.extend(raoeo_report['execution_results'])
     if va_report.get('execution_results'):

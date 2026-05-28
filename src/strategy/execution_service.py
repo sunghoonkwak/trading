@@ -28,13 +28,17 @@ from data.data_service import get_portfolio_data
 
 # Timezone constant
 TZ_ET = pytz.timezone('US/Eastern')
+_orderable_usd_cache: Dict[str, float] = {}
 
 
 # -------------------------------------------------------------------------
 # Common Helpers
 # -------------------------------------------------------------------------
 
-def get_market_data(force_refresh: bool = False) -> Tuple[Dict, Dict]:
+def get_market_data(
+    force_refresh: bool = False,
+    include_cash_ticker: bool = False,
+) -> Tuple[Dict, Dict]:
     """
     Fetch current portfolio and prices for all configured strategy targets.
     Returns: (portfolio_holdings, current_prices_map)
@@ -46,9 +50,12 @@ def get_market_data(force_refresh: bool = False) -> Tuple[Dict, Dict]:
     raoeo_conf = strategy_config.get('raoeo', {}).get('targets', {})
     va_conf = strategy_config.get('value_averaging', {}).get('targets', {})
     reb_conf = strategy_config.get('rebalancing', {}).get('assets', [])
+    cash_ticker = strategy_config.get("cash_ticker", "")
 
     reb_tickers = {a['ticker'] for a in reb_conf}
     all_tickers = set(raoeo_conf.keys()) | set(va_conf.keys()) | reb_tickers
+    if include_cash_ticker and cash_ticker:
+        all_tickers.add(cash_ticker)
     current_prices = {}
 
     for t in all_tickers:
@@ -81,6 +88,20 @@ def get_orderable_usd(symbol: str, order_price: float) -> float:
     if result is None or result.empty or "ovrs_ord_psbl_amt" not in result:
         raise RuntimeError("KIS did not return overseas orderable USD.")
     return float(result.iloc[0]["ovrs_ord_psbl_amt"])
+
+
+def _get_rebalancing_orderable_usd(
+    symbol: str,
+    order_price: float,
+    cache_key: str = "",
+) -> float:
+    """Reuse buying power during one automatic trading-day check cycle."""
+    if not cache_key:
+        return get_orderable_usd(symbol, order_price)
+    if cache_key not in _orderable_usd_cache:
+        _orderable_usd_cache.clear()
+        _orderable_usd_cache[cache_key] = get_orderable_usd(symbol, order_price)
+    return _orderable_usd_cache[cache_key]
 
 
 def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
@@ -217,6 +238,12 @@ def _save_strategy_to_history(
         hist_data.insert(0, today_entry)
 
     # Update strategy section
+    previous_data = today_entry.get(strategy_key, {})
+    if strategy_key == "raoeo" and previous_data.get("cash_funding_results"):
+        strategy_data.setdefault(
+            "cash_funding_results",
+            previous_data["cash_funding_results"],
+        )
     today_entry[strategy_key] = strategy_data
 
     # Keep last 200 entries
@@ -268,6 +295,79 @@ def _build_strategy_history_data(
             })
 
     return data
+
+
+def prepare_raoeo_cash_funding(raoeo_report: Dict = None) -> Tuple[Any, Dict]:
+    """Calculate a manual cash-ticker funding order for pending RAOEO buys."""
+    if raoeo_report is None:
+        raoeo_report = run_raoeo_strategy(execute=False)
+
+    pending_orders = raoeo_report.get("pending_orders", [])
+    reference_buy = next(
+        (order for order in pending_orders if order.side == OrderSide.BUY),
+        None,
+    )
+    orderable_usd = (
+        get_orderable_usd(reference_buy.symbol, reference_buy.price)
+        if reference_buy
+        else 0.0
+    )
+    strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
+    holdings, prices = get_market_data(
+        force_refresh=True,
+        include_cash_ticker=True,
+    )
+    return raoeo.calculate_cash_funding_order(
+        orders=pending_orders,
+        portfolio=holdings,
+        current_prices=prices,
+        cash_ticker=strategy_config.get("cash_ticker", ""),
+        orderable_usd=orderable_usd,
+    )
+
+
+def execute_raoeo_cash_funding(raoeo_report: Dict = None) -> Tuple[Any, Dict]:
+    """Execute approved funding first; callers must stop if it fails."""
+    order, info = prepare_raoeo_cash_funding(raoeo_report)
+    if not info.get("required"):
+        return None, info
+    if order is None:
+        return None, info
+
+    success, message = execute_single_order(order)
+    result = {"order": order, "success": success, "message": message}
+    if success:
+        logging.info("Cash funding sale accepted. Waiting 5s before strategy execution...")
+        time.sleep(5)
+    return result, info
+
+
+def save_raoeo_cash_funding_result(today_str: str, result: Dict) -> List[Dict]:
+    """Store a manual funding result without turning it into a retry order."""
+    order = result.get("order") if result else None
+    if order is None:
+        return []
+
+    hist_data = _load_history()
+    today_entry = _get_today_entry(hist_data, today_str)
+    if not today_entry:
+        today_entry = {"date": today_str}
+        hist_data.insert(0, today_entry)
+
+    raoeo_data = today_entry.setdefault("raoeo", {"orders": []})
+    results = raoeo_data.setdefault("cash_funding_results", [])
+    results.append({
+        "ticker": order.symbol,
+        "side": order.side.name,
+        "qty": order.quantity,
+        "price": order.price,
+        "order_type": order.order_type,
+        "reason": order.reason,
+        "success": result["success"],
+        "message": result["message"],
+    })
+    save_json(ConfigFile.STRATEGY_HISTORY, hist_data[:200])
+    return results
 
 
 def _execute_orders(
@@ -418,25 +518,6 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
             portfolio=holdings,
             current_prices=prices,
         )
-        reference_buy = next(
-            (order for order in orders if order.side == OrderSide.BUY),
-            None,
-        )
-        if reference_buy and strategy_config.get("cash_ticker"):
-            orderable_usd = get_orderable_usd(
-                reference_buy.symbol,
-                reference_buy.price,
-            )
-            funding_order, funding_info = raoeo.calculate_cash_funding_order(
-                orders=orders,
-                portfolio=holdings,
-                current_prices=prices,
-                cash_ticker=strategy_config["cash_ticker"],
-                orderable_usd=orderable_usd,
-            )
-            calc_info["cash_funding"] = funding_info
-            if funding_order:
-                orders.insert(0, funding_order)
         report["orders"] = orders
         report["pending_orders"] = orders
         report["info"].update(calc_info)
@@ -639,7 +720,10 @@ def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
 # Rebalancing Execution
 # -------------------------------------------------------------------------
 
-def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
+def run_rebalancing_strategy(
+    execute: bool = False,
+    orderable_cache_key: str = "",
+) -> Dict[str, Any]:
     """
     Run Rebalancing strategy with unified 6-step flow.
     """
@@ -711,7 +795,11 @@ def run_rebalancing_strategy(execute: bool = False) -> Dict[str, Any]:
                 holdings.get(reference_asset, {}).get("cur_price", 0.0)
             )
         orderable_usd = (
-            get_orderable_usd(reference_asset, reference_price)
+            _get_rebalancing_orderable_usd(
+                reference_asset,
+                reference_price,
+                cache_key=orderable_cache_key,
+            )
             if reference_asset and reference_price > 0
             else 0.0
         )
