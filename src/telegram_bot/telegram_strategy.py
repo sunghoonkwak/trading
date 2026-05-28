@@ -64,11 +64,6 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await wrap_reply(update, f"⚠️ Error calculating strategies: {e}")
         return ConversationHandler.END
 
-    context.user_data['strategy_raoeo'] = raoeo_rep
-    context.user_data['strategy_va'] = va_rep
-
-    report_text = format_strategy_report(raoeo_rep, va_rep)
-
     # Check if executable
     is_blocked = lambda r: r.get('status') in (
         StrategyStatus.HOLIDAY, StrategyStatus.DISABLED, StrategyStatus.NON_MARKET_TIME
@@ -81,13 +76,21 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cash_funding_required = False
     if raoeo_has_orders:
         try:
-            _, funding_info = prepare_raoeo_cash_funding(raoeo_rep)
+            funding_order, funding_info = prepare_raoeo_cash_funding(raoeo_rep)
+            raoeo_rep["cash_funding"] = {
+                **funding_info,
+                "order": funding_order,
+            }
             cash_funding_required = bool(funding_info.get("required"))
         except Exception as e:
             logging.error(f"Cash Funding Calculation Error: {e}", exc_info=True)
             await wrap_reply(update, f"⚠️ Error calculating cash funding: {e}")
             return ConversationHandler.END
 
+    context.user_data['strategy_raoeo'] = raoeo_rep
+    context.user_data['strategy_va'] = va_rep
+
+    report_text = format_strategy_report(raoeo_rep, va_rep)
     keyboard = build_confirm_keyboard(has_orders, cash_funding_required)
 
     sent_msg = await wrap_reply(update, report_text, parse_mode='HTML', reply_markup=keyboard)
