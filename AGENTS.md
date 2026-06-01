@@ -58,6 +58,11 @@ Use standard Python style: 4-space indentation, `snake_case` functions and
 variables, and `PascalCase` classes. Keep services focused and prefer existing
 helpers in `src/utils`, `src/state`, and `src/core`.
 
+Keep changes surgical and goal-driven. Every changed line should trace directly
+to the requested trading-system behavior, its tests, or matching operational
+documentation. Prefer the simplest working change over speculative flexibility
+or one-off abstractions.
+
 Many modules have matching `.md` notes beside `.py` files. Update them when
 behavior or operational expectations change. Do not hand-edit generated or
 vendor-like KIS endpoint wrappers unless intentionally scoped.
