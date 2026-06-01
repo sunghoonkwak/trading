@@ -12,6 +12,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from kis.kis_api import kis_auth as ka
 from kis.kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_balance
 from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import inquire_present_balance
+from kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import inquire_psamount
 
 class PortfolioManager:
     """Orchestrates portfolio data fetching, conversion, and merging."""
@@ -105,7 +106,13 @@ class PortfolioManager:
         except Exception as e: kr_res['error'] = str(e)
 
         # Overseas
-        us_res = {'stocks': [], 'asset': {}, 'exchange_rate': 0.0, 'error': None}
+        us_res = {
+            'stocks': [],
+            'asset': {},
+            'exchange_rate': 0.0,
+            'usd_orderable': None,
+            'error': None
+        }
         try:
             df1, df2, df3 = inquire_present_balance(
                 cano=cano, acnt_prdt_cd=prod, wcrc_frcr_dvsn_cd="02", env_dv=env_dv,
@@ -131,12 +138,31 @@ class PortfolioManager:
                 (df1, df2),
                 ['bass_exrt', 'BASS_EXRT', 'frst_bltn_exrt', 'FRST_BLTN_EXRT']
             )
+            try:
+                psamount_df = inquire_psamount(
+                    cano=cano,
+                    acnt_prdt_cd=prod,
+                    ovrs_excg_cd="NASD",
+                    ovrs_ord_unpr="1",
+                    item_cd="QQQM",
+                    env_dv=env_dv,
+                )
+                us_res['usd_orderable'] = cls._get_positive_float_from_frames(
+                    (psamount_df,),
+                    ['ovrs_ord_psbl_amt', 'OVRS_ORD_PSBL_AMT']
+                )
+            except Exception as e:
+                logging.warning(
+                    "[KIS] Failed to fetch orderable USD from inquire_psamount: %s",
+                    e
+                )
         except Exception as e: us_res['error'] = str(e)
 
         return {
             'domestic_stocks': kr_res['stocks'], 'overseas_stocks': us_res['stocks'],
             'domestic_asset': kr_res['asset'], 'overseas_asset': us_res['asset'],
             'exchange_rate': us_res['exchange_rate'], 'krw_orderable': kr_res['krw_orderable'],
+            'usd_orderable': us_res['usd_orderable'],
             'error': f"KR:{kr_res['error']} | US:{us_res['error']}" if (kr_res['error'] or us_res['error']) else None
         }
 
@@ -164,7 +190,15 @@ class PortfolioManager:
         # Cash
         if kis_data['krw_orderable'] > 0:
             cash.append({"account_name": "한국투자증권", "account_key": kis_acc_key, "amount": float(kis_data['krw_orderable']), "currency": "KRW"})
-        usd_cash = float(cls._get_val(kis_data['overseas_asset'], ['frcr_drwg_psbl_amt_1', 'ovrs_relt_proc_amt'], 0))
+        fallback_usd_cash = cls._get_val(
+            kis_data['overseas_asset'],
+            ['frcr_drwg_psbl_amt_1', 'ovrs_relt_proc_amt'],
+            0
+        )
+        usd_orderable = kis_data.get('usd_orderable')
+        usd_cash = float(
+            fallback_usd_cash if usd_orderable is None else usd_orderable
+        )
         if usd_cash > 0:
             cash.append({"account_name": "한국투자증권", "account_key": kis_acc_key, "amount": usd_cash, "currency": "USD"})
 

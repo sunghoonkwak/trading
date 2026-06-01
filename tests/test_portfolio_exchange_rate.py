@@ -74,6 +74,118 @@ def test_fetch_portfolio_reads_exchange_rate_from_overseas_holdings(monkeypatch)
     assert result["exchange_rate"] == 1375.50
 
 
+def test_kis_portfolio_uses_orderable_usd_as_cash(monkeypatch):
+    calls = {}
+
+    monkeypatch.setattr(
+        "kis.portfolio_manager.ka.getTREnv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_balance",
+        lambda **kwargs: (pd.DataFrame(), pd.DataFrame()),
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_present_balance",
+        lambda **kwargs: (
+            pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
+            pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
+            pd.DataFrame(),
+        ),
+    )
+
+    def fake_inquire_psamount(**kwargs):
+        calls.update(kwargs)
+        return pd.DataFrame([{"ovrs_ord_psbl_amt": "3023.49"}])
+
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_psamount",
+        fake_inquire_psamount,
+        raising=False,
+    )
+
+    raw = PortfolioManager._fetch_kis_account_data()
+    portfolio = PortfolioManager._convert_kis_to_standard(raw)
+
+    usd_cash = [
+        cash for cash in portfolio["cash_holdings"]
+        if cash["currency"] == "USD"
+    ]
+    assert usd_cash[0]["amount"] == 3023.49
+    assert calls["item_cd"] == "QQQM"
+    assert calls["ovrs_excg_cd"] == "NASD"
+    assert calls["ovrs_ord_unpr"] == "1"
+    assert calls["env_dv"] == "real"
+
+
+def test_kis_portfolio_falls_back_to_balance_cash_when_orderable_usd_fails(monkeypatch):
+    monkeypatch.setattr(
+        "kis.portfolio_manager.ka.getTREnv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_balance",
+        lambda **kwargs: (pd.DataFrame(), pd.DataFrame()),
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_present_balance",
+        lambda **kwargs: (
+            pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
+            pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
+            pd.DataFrame(),
+        ),
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_psamount",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("orderable failed")),
+        raising=False,
+    )
+
+    raw = PortfolioManager._fetch_kis_account_data()
+    portfolio = PortfolioManager._convert_kis_to_standard(raw)
+
+    usd_cash = [
+        cash for cash in portfolio["cash_holdings"]
+        if cash["currency"] == "USD"
+    ]
+    assert raw["error"] is None
+    assert usd_cash[0]["amount"] == 999.0
+
+
+def test_kis_portfolio_keeps_zero_orderable_usd(monkeypatch):
+    monkeypatch.setattr(
+        "kis.portfolio_manager.ka.getTREnv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_balance",
+        lambda **kwargs: (pd.DataFrame(), pd.DataFrame()),
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_present_balance",
+        lambda **kwargs: (
+            pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
+            pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
+            pd.DataFrame(),
+        ),
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_psamount",
+        lambda **kwargs: pd.DataFrame([{"ovrs_ord_psbl_amt": "0"}]),
+        raising=False,
+    )
+
+    raw = PortfolioManager._fetch_kis_account_data()
+    portfolio = PortfolioManager._convert_kis_to_standard(raw)
+
+    usd_cash = [
+        cash for cash in portfolio["cash_holdings"]
+        if cash["currency"] == "USD"
+    ]
+    assert raw["usd_orderable"] == 0.0
+    assert usd_cash == []
+
+
 def test_merge_holdings_rejects_krw_assets_without_exchange_rate():
     raw_data = {
         "metadata": {"exchange_rate": 0.0},
