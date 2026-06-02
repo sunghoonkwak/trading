@@ -28,6 +28,7 @@ class StrategyOrder:
     price: float = 0.0  # 0 for market price
     reason: str = ""
     order_type: str = "00"  # "00": market, "01": limit
+    target_budget: Optional[float] = None
 
     def __str__(self):
         side_str = "BUY" if self.side == OrderSide.BUY else "SELL"

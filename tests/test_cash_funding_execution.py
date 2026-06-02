@@ -184,3 +184,44 @@ def test_strategy_history_update_preserves_manual_cash_funding_results(monkeypat
         saved["history"][0]["raoeo"]["cash_funding_results"]
         == existing_funding
     )
+
+
+def test_run_raoeo_passes_history_to_order_calculation(monkeypatch):
+    history = [{"date": "2026-06-01", "raoeo": {"orders": []}}]
+    received = {}
+    config = {
+        "raoeo": {
+            "enabled": True,
+            "targets": {
+                "SOXL": {
+                    "enabled": True,
+                    "seed": 1000,
+                    "duration": 1,
+                    "phase": [{"name": "initial", "buy": [], "sell": []}],
+                }
+            },
+        }
+    }
+    monkeypatch.setattr(
+        execution_service,
+        "_get_market_status",
+        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
+    )
+    monkeypatch.setattr(execution_service, "_load_history", lambda: history)
+    monkeypatch.setattr(execution_service, "load_json", lambda file_type, default=None: config)
+    monkeypatch.setattr(
+        execution_service,
+        "get_market_data",
+        lambda force_refresh=False: ({}, {"SOXL": 100.0}),
+    )
+
+    def fake_calculate_orders(**kwargs):
+        received.update(kwargs)
+        return [], {"ticker_info": {}}
+
+    monkeypatch.setattr(execution_service.raoeo, "calculate_orders", fake_calculate_orders)
+
+    report = execution_service.run_raoeo_strategy(execute=False)
+
+    assert received["history_data"] is history
+    assert received["today_date"] == report["date"]

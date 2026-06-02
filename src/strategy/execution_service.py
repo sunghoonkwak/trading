@@ -212,7 +212,8 @@ def _restore_orders_from_strategy_history(
                 quantity=order_data["qty"],
                 price=order_data["price"],
                 order_type=order_data.get("order_type", "00"),
-                reason=order_data.get("reason", "")
+                reason=order_data.get("reason", ""),
+                target_budget=order_data.get("target_budget"),
             )
             success = order_data.get("success", False)
             restored.append((order, success))
@@ -221,6 +222,23 @@ def _restore_orders_from_strategy_history(
             continue
 
     return restored
+
+
+def _build_order_history_entry(order: StrategyOrder, success: bool, message: str) -> Dict:
+    """Serialize a strategy order for strategy_history.json."""
+    entry = {
+        "ticker": order.symbol,
+        "side": order.side.name,
+        "qty": order.quantity,
+        "price": order.price,
+        "order_type": order.order_type,
+        "reason": order.reason,
+        "success": success,
+        "message": message,
+    }
+    if order.target_budget is not None:
+        entry["target_budget"] = order.target_budget
+    return entry
 
 
 def _save_strategy_to_history(
@@ -271,28 +289,18 @@ def _build_strategy_history_data(
     if report.get("execution_results"):
         for res in report["execution_results"]:
             order = res["order"]
-            data["orders"].append({
-                "ticker": order.symbol,
-                "side": order.side.name,
-                "qty": order.quantity,
-                "price": order.price,
-                "order_type": order.order_type,
-                "reason": order.reason,
-                "success": res["success"],
-                "message": res["message"],
-            })
+            data["orders"].append(_build_order_history_entry(
+                order,
+                res["success"],
+                res["message"],
+            ))
     elif report.get("orders"):
         for order in report["orders"]:
-            data["orders"].append({
-                "ticker": order.symbol,
-                "side": order.side.name,
-                "qty": order.quantity,
-                "price": order.price,
-                "order_type": order.order_type,
-                "reason": order.reason,
-                "success": False,
-                "message": "Calculated Only",
-            })
+            data["orders"].append(_build_order_history_entry(
+                order,
+                False,
+                "Calculated Only",
+            ))
 
     return data
 
@@ -486,20 +494,14 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
                 # Merge: keep succeeded, update failed
                 merged_orders = []
                 for o in succeeded:
-                    merged_orders.append({
-                        "ticker": o.symbol, "side": o.side.name,
-                        "qty": o.quantity, "price": o.price,
-                        "order_type": o.order_type, "reason": o.reason,
-                        "success": True, "message": "Success",
-                    })
+                    merged_orders.append(_build_order_history_entry(o, True, "Success"))
                 for res in results:
                     o = res["order"]
-                    merged_orders.append({
-                        "ticker": o.symbol, "side": o.side.name,
-                        "qty": o.quantity, "price": o.price,
-                        "order_type": o.order_type, "reason": o.reason,
-                        "success": res["success"], "message": res["message"],
-                    })
+                    merged_orders.append(_build_order_history_entry(
+                        o,
+                        res["success"],
+                        res["message"],
+                    ))
                 hist_entry_data["orders"] = merged_orders
                 _save_strategy_to_history(today_str, "raoeo", hist_entry_data)
 
@@ -517,6 +519,8 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
             targets_config=active_targets,
             portfolio=holdings,
             current_prices=prices,
+            history_data=hist_data,
+            today_date=today_str,
         )
         report["orders"] = orders
         report["pending_orders"] = orders

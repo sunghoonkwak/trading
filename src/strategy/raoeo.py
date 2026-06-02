@@ -17,6 +17,7 @@ from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 # KIS rejects buy orders exceeding 30% above current price.
 # Use 25% cap as a safety margin.
 MAX_BUY_PRICE_RATIO = 1.25
+_BUDGETED_BUY_REASONS = {"Buy Normal", "Buy Average"}
 
 
 def _cap_buy_price(price: float, cur_price: float) -> float:
@@ -55,6 +56,47 @@ def _validate_phase_config(ticker: str, phases: List[Dict]) -> None:
                 raise ValueError(f"[{ticker}] Absurd sell ratio: {ratio}. Allowed: 0.0 ~ 2.0")
             if profit < 0.0 or profit > 0.5:
                 raise ValueError(f"[{ticker}] Absurd sell profit: {profit} ({profit*100}%). Allowed: 0.0 ~ 0.50 (50%).")
+
+
+def _budget_carryover_by_reason(
+    ticker: str,
+    history_data: Optional[List[Dict]],
+    today_date: Optional[str],
+) -> Dict[str, float]:
+    """Return unused previous RAOEO buy budget by buy reason."""
+    if not history_data:
+        return {}
+
+    for entry in history_data:
+        if today_date and entry.get("date") == today_date:
+            continue
+
+        orders = entry.get("raoeo", {}).get("orders", [])
+        carryovers: Dict[str, float] = {}
+        for order in orders:
+            if order.get("ticker") != ticker:
+                continue
+            if order.get("side") != OrderSide.BUY.name:
+                continue
+            if not order.get("success", False):
+                continue
+
+            reason = order.get("reason", "")
+            if reason not in _BUDGETED_BUY_REASONS:
+                continue
+
+            target_budget = order.get("target_budget")
+            if target_budget is None:
+                continue
+
+            ordered_notional = float(order.get("qty", 0)) * float(order.get("price", 0.0))
+            unused_budget = max(0.0, float(target_budget) - ordered_notional)
+            carryovers[reason] = round(carryovers.get(reason, 0.0) + unused_budget, 2)
+
+        if carryovers:
+            return carryovers
+
+    return {}
 
 
 # -------------------------------------------------------------
@@ -133,6 +175,8 @@ def calculate_orders(
     portfolio: Dict,
     current_prices: Dict[str, float],
     exchange_rates: Optional[Dict[str, float]] = None,
+    history_data: Optional[List[Dict]] = None,
+    today_date: Optional[str] = None,
 ) -> Tuple[List[StrategyOrder], Dict]:
     """
     Calculate buy/sell orders based on the dynamic RAOEO phase configuration.
@@ -249,6 +293,7 @@ def calculate_orders(
         active_sell_rules = [r for r in sell_rules if str(r.get("disable", "false")).lower() != "true"]
         min_profit = min([float(r.get("profit", 0.0)) for r in active_sell_rules]) if active_sell_rules else 0.1
         buy_qty_main = 0
+        budget_carryovers = _budget_carryover_by_reason(ticker, history_data, today_date)
 
         for buy_rule in buy_rules:
             if str(buy_rule.get("disable", "false")).lower() == "true":
@@ -262,22 +307,24 @@ def calculate_orders(
 
             if b_type == "normal":
                 b_ratio = float(buy_rule.get("ratio", 1.0))
-                alloc_budget = daily_budget * b_ratio
+                alloc_budget = round(daily_budget * b_ratio + budget_carryovers.get("Buy Normal", 0.0), 2)
                 rule_qty = max(1, int(alloc_budget / buy_price))
                 buy_qty_main += rule_qty
                 ticker_orders.append(StrategyOrder(
                     symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
-                    price=buy_price, order_type=ORDER_TYPE_US_LOC, reason="Buy Normal"
+                    price=buy_price, order_type=ORDER_TYPE_US_LOC, reason="Buy Normal",
+                    target_budget=alloc_budget,
                 ))
 
             elif b_type == "average":
                 b_ratio = float(buy_rule.get("ratio", 1.0))
-                alloc_budget = daily_budget * b_ratio
+                alloc_budget = round(daily_budget * b_ratio + budget_carryovers.get("Buy Average", 0.0), 2)
                 rule_qty = max(1, int(alloc_budget / buy_price))
                 buy_qty_main += rule_qty
                 ticker_orders.append(StrategyOrder(
                     symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
-                    price=buy_price, order_type=ORDER_TYPE_US_LOC, reason="Buy Average"
+                    price=buy_price, order_type=ORDER_TYPE_US_LOC, reason="Buy Average",
+                    target_budget=alloc_budget,
                 ))
 
             elif b_type == "filling":
@@ -308,7 +355,8 @@ def calculate_orders(
             "seed": seed,
             "progress_pct": progress_ratio * 100,
             "cur_price": cur_price,
-            "avg_price": avg_price
+            "avg_price": avg_price,
+            "budget_carryover": round(sum(budget_carryovers.values()), 2),
         }
 
     return orders, info

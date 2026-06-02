@@ -24,7 +24,14 @@
    - `_cap_buy_price()`: 계산된 매수 가격이 `cur_price * 1.25`를 초과하면 캡으로 제한합니다.
    - 상수 `MAX_BUY_PRICE_RATIO = 1.25`로 관리됩니다.
 
-4. **Configuration Validation (설정 검증)**:
+4. **Buy Budget Carryover (매수 예산 이월)**:
+   - `normal` 및 `average` 매수는 주문가 기준으로 목표 예산(`target_budget`)을 history에 저장합니다.
+   - 다음 RAOEO 계산 시 가장 최근 이전 history에서 성공한 `Buy Normal`/`Buy Average` 주문의
+     `target_budget - (qty * price)` 차액을 같은 매수 타입의 당일 예산에 더합니다.
+   - `filling` 매수는 금액이 아니라 목표 수량을 보충하는 규칙이므로 예산 이월 대상에서 제외합니다.
+   - 실제 체결가가 아니라 주문가 기준 보정입니다. 체결가 기준 보정은 별도의 체결내역 조회가 필요합니다.
+
+5. **Configuration Validation (설정 검증)**:
    - `seed > 0`, `duration > 0` 여부를 검증합니다.
    - Phase 내 `buy`/`sell` 비율(0.0~2.0) 및 `profit`(0.0~0.5), 그리고 허용된 매수 타입(`normal`, `average`, `filling`)인지 검증합니다.
    - 잘못된 설정 발견 시 `ValueError` 예외를 발생시켜 시스템 오작동을 선제적으로 차단합니다.
@@ -39,6 +46,8 @@
   - `portfolio` (Dict): 현재 보유 잔고 (qty, avg_price 등)
   - `current_prices` (Dict): 현재 시장가
   - `exchange_rates` (Optional[Dict]): 환율 정보
+  - `history_data` (Optional[List[Dict]]): 주문가 기준 매수 예산 이월 계산에 사용할 strategy history
+  - `today_date` (Optional[str]): 당일 history를 이월 대상으로 오인하지 않도록 제외할 날짜
   - `cash_ticker`는 `calculate_orders`가 자동 매도에 사용하는 입력이 아닙니다. 수동 조달 승인 경로에서 `calculate_cash_funding_order`에 전달됩니다.
 - **출력 (Output)**: `Tuple[List[StrategyOrder], Dict]` (주문 목록, 메타 정보)
 

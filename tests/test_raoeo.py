@@ -115,3 +115,51 @@ def test_rejects_non_positive_duration():
         assert "duration" in str(exc)
     else:
         raise AssertionError("Expected ValueError for non-positive duration")
+
+
+def test_normal_buy_carries_forward_unused_order_budget():
+    targets_config = {
+        "SOXL": {
+            "seed": 1000,
+            "duration": 1,
+            "phase": [
+                {
+                    "name": "initial",
+                    "threshold": 1.0,
+                    "buy": [{"type": "normal", "ratio": 1.0}],
+                    "sell": [{"type": "Limit", "ratio": 0.0, "profit": 0.1}],
+                }
+            ],
+        }
+    }
+    history_data = [
+        {
+            "date": "2026-06-01",
+            "raoeo": {
+                "orders": [
+                    {
+                        "ticker": "SOXL",
+                        "side": "BUY",
+                        "qty": 3,
+                        "price": 266.63,
+                        "reason": "Buy Normal",
+                        "success": True,
+                        "target_budget": 1000.0,
+                    }
+                ]
+            },
+        }
+    ]
+
+    orders, info = raoeo.calculate_orders(
+        targets_config=targets_config,
+        portfolio={"SOXL": {"qty": 1, "avg_price": 242.4, "cur_price": 240.0}},
+        current_prices={"SOXL": 240.0},
+        history_data=history_data,
+        today_date="2026-06-02",
+    )
+
+    buy_order = next(order for order in orders if order.side == OrderSide.BUY)
+    assert buy_order.quantity == 4
+    assert buy_order.target_budget == 1200.11
+    assert info["ticker_info"]["SOXL"]["budget_carryover"] == 200.11
