@@ -74,12 +74,6 @@ formatter, and state tests should avoid live KIS, Telegram, or market calls.
 For strategy changes, run the relevant tests and backtest scripts; before
 shipping, run `docker compose exec trading-bot python -m pytest tests`.
 
-In sandboxed agent environments, tests using `asyncio` with
-`run_in_executor()` can stall although they pass on the host or in Docker. If
-a test hangs on a path such as `core.web_server.cancel_order()`, rerun with
-sandbox escalation or inside Docker before treating it as an application
-failure.
-
 ## Commits And Pull Requests
 
 Use Conventional Commits with scopes, such as `feat(raoeo): ...` or

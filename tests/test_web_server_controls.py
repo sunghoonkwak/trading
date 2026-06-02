@@ -47,7 +47,18 @@ def test_cancel_order_calls_sync_path_when_enabled(monkeypatch):
 
     monkeypatch.setattr(web_server, "_cancel_order_sync", fake_cancel)
 
-    result = asyncio.run(web_server.cancel_order("12345"))
+    async def run_cancel_inline():
+        loop = asyncio.get_running_loop()
+
+        def run_sync(executor, func, *args):
+            future = loop.create_future()
+            future.set_result(func(*args))
+            return future
+
+        monkeypatch.setattr(loop, "run_in_executor", run_sync)
+        return await web_server.cancel_order("12345")
+
+    result = asyncio.run(run_cancel_inline())
 
     assert called == {"order_id": "12345"}
     assert result == {"success": True, "message": "cancelled"}

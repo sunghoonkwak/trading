@@ -271,10 +271,6 @@ RAOEO 배치 백테스트:
 venv/bin/python scripts/backtest/raoeo/batch_backtest.py
 ```
 
-샌드박스 환경에서 `asyncio`와 `run_in_executor()`를 함께 쓰는 테스트가 멈춘
-것처럼 보이면, Docker 내부 또는 권한이 충분한 환경에서 재실행한 뒤 실제
-애플리케이션 실패인지 판단하세요.
-
 ## 보안 주의
 
 - API key, app secret, HTS ID, 계좌번호, Telegram token, Google service
