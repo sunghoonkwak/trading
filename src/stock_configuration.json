@@ -236,7 +236,7 @@
                 255
             ],
             "disabled": false,
-            "telegram_button": true
+            "telegram_button": false
         },
         {
             "ticker": "SPYM",
@@ -374,7 +374,8 @@
                 160,
                 160
             ],
-            "disabled": false
+            "disabled": false,
+            "telegram_button": true
         },
         {
             "ticker": "VIXY",
