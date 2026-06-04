@@ -386,7 +386,7 @@
                 50,
                 50
             ],
-            "disabled": true
+            "disabled": false
         },
         {
             "ticker": "USD cash",
