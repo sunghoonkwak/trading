@@ -308,7 +308,7 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
             tgt = targets.get(ticker, 0)
             ticker_weights.append((ticker, tgt))
         ticker_weights.sort(key=lambda x: x[1], reverse=True)
-        button_tickers = [t[0] for t_w in ticker_weights[:8]]
+        button_tickers = [t_w[0] for t_w in ticker_weights[:8]]
 
     # Build keyboard (2 columns)
     keyboard = []
@@ -580,5 +580,4 @@ def get_portfolio_commands_desc() -> str:
         "/portfolio_weight - Rebalancing suggestions\n"
         "/placed_orders - Show open orders"
     )
-
 

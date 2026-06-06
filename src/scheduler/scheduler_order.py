@@ -88,10 +88,10 @@ def run_periodic_rebalancing():
 
         status = reb_res.get('status')
 
-        if status == StrategyStatus.ALREADY_DONE:
-            should_notify = False
-        elif is_first_call:
+        if is_first_call:
             should_notify = True
+        elif status == StrategyStatus.ALREADY_DONE:
+            should_notify = False
         else:
             # For subsequent calls, only notify if action was taken
             should_notify = status in [StrategyStatus.EXECUTED, StrategyStatus.PARTIAL, StrategyStatus.ERROR]
