@@ -25,6 +25,7 @@ from core import trading_config
 from kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import inquire_psamount
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
 from data.data_service import get_portfolio_data
+from utils.price_utils import resolve_current_price
 
 # Timezone constant
 TZ_ET = pytz.timezone('US/Eastern')
@@ -59,12 +60,13 @@ def get_market_data(
     current_prices = {}
 
     for t in all_tickers:
-        price = wrapper.fetch_price(t)
+        price = resolve_current_price(
+            t,
+            holdings.get(t, {}),
+            {t: wrapper.fetch_price(t)},
+        )
         if price > 0:
             current_prices[t] = price
-        else:
-            if t in holdings:
-                current_prices[t] = float(holdings[t].get('cur_price', 0))
 
     return holdings, current_prices
 

@@ -6,6 +6,8 @@
 
 1. **Asset Allocation (자산 배분)**:
    - 총 자산(현금 + 주식)을 계산하고, 설정된 `target_weight`에 따라 각 자산의 목표 금액을 산출합니다.
+   - 현재가는 `utils.price_utils.resolve_current_price`를 통해
+     `current_prices` 우선, 보유 잔고의 `cur_price` fallback 순서로 해석합니다.
 
 2. **Order Generation (주문 생성)**:
    - 현재 가치와 목표 가치의 차이를 계산하여 매수/매도 주문을 생성합니다.
@@ -20,7 +22,8 @@
 - **입력 (Input)**:
   - `config` (Dict): 리밸런싱 설정 (`assets`, `seed`, `rebalance_threshold`)
   - `portfolio` (Dict): 자산별 현재 잔고
-  - `current_prices` (Dict): 자산별 현재 가격
+  - `current_prices` (Dict): 자산별 현재 가격. 값이 없거나 0 이하이면 해당
+    보유 잔고의 `cur_price`를 fallback으로 사용합니다.
   - `reserved_cash` (float): 타 전략을 위해 예약된 현금 (사용 불가)
   - `orderable_usd` (float): KIS가 반환한 해외주문가능 USD
 - **출력 (Output)**: `Tuple[List[StrategyOrder], Dict]`

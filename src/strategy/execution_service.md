@@ -12,6 +12,9 @@
 
 3. **Unified Data Fetching (데이터 조회 통합)**:
    - `get_market_data`는 전략 대상의 보유 수량과 현재가를 조회합니다.
+   - 현재가는 `utils.price_utils.resolve_current_price`의 공통 규칙을 따릅니다.
+     직접 조회한 현재가를 우선 사용하고, 유효하지 않으면 보유 잔고의
+     `cur_price`로 fallback합니다.
    - 매수 가능 USD는 포트폴리오의 `USD cash`에서 가져오지 않고,
      `get_orderable_usd`가 KIS `inquire_psamount`의
      `ovrs_ord_psbl_amt`를 읽어 제공합니다.
@@ -46,6 +49,8 @@
 현재 포트폴리오 잔고와 전략 대상 종목들의 현재가를 조회합니다.
 - **입력**: `force_refresh` (bool)
 - **출력**: `holdings` (잔고 딕셔너리), `current_prices` (현재가 딕셔너리)
+- 현재가 조회 실패 시 보유 잔고의 `cur_price`를 사용하며, 두 값 모두
+  유효하지 않으면 해당 종목은 `current_prices`에 포함하지 않습니다.
 
 ## `get_orderable_usd`
 대표 매수 주문의 종목, 거래소, 주문 가격으로 해외주식

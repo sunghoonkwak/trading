@@ -7,6 +7,8 @@
 
 1. **Pure Function (순수 함수)**:
    - 외부 API 호출이나 상태 변경 없이, 입력값(`config`, `portfolio`, `price`)만으로 주문을 계산합니다.
+   - 현재가는 `utils.price_utils.resolve_current_price`를 통해
+     `current_prices` 우선, 보유 잔고의 `cur_price` fallback 순서로 해석합니다.
 
 2. **Order Calculation (주문 계산)**:
    - `strategy_config.json`에 정의된 `targets.[TICKER].phase` 배열을 위에서부터 차례대로 판독합니다.
@@ -44,7 +46,8 @@
 - **입력 (Input)**:
   - `targets_config` (Dict): 종목별 설정 (seed, duration, **phase** 등)
   - `portfolio` (Dict): 현재 보유 잔고 (qty, avg_price 등)
-  - `current_prices` (Dict): 현재 시장가
+  - `current_prices` (Dict): 현재 시장가. 값이 없거나 0 이하이면 해당
+    보유 잔고의 `cur_price`를 fallback으로 사용합니다.
   - `exchange_rates` (Optional[Dict]): 환율 정보
   - `history_data` (Optional[List[Dict]]): 주문가 기준 매수 예산 이월 계산에 사용할 strategy history
   - `today_date` (Optional[str]): 당일 history를 이월 대상으로 오인하지 않도록 제외할 날짜
@@ -58,6 +61,8 @@
   `inquire_psamount`가 반환한 `orderable_usd`를 기준으로 계산합니다.
 - 부족분이 없으면 조달 주문을 만들지 않습니다.
 - 부족분이 있지만 `cash_ticker` 가격 또는 충분한 보유 수량이 없으면 오류 정보를 반환하며, 부분 매도는 만들지 않습니다.
+  `cash_ticker` 가격도 `current_prices` 우선, 보유 잔고의 `cur_price`
+  fallback 순서로 해석합니다.
 - 조달 주문은 자동 스케줄 실행의 RAOEO 주문 목록에 포함되지 않습니다.
 
 # Configuration (`strategy_config.json`)
