@@ -19,7 +19,7 @@ class LogManager:
     @classmethod
     def setup(cls, base_dir: str, log_name: str = "trading_system.log"):
         """Configures the root logger with rotation and custom namers."""
-        # 1. Resolve Paths
+        # 1. Resolve the active log file and archive directory.
         logs_dir = os.path.join(base_dir, "logs") if os.path.basename(base_dir) != "src" else os.path.join(os.path.dirname(base_dir), "logs")
         log_file = os.path.join(os.path.dirname(logs_dir), log_name)
 
@@ -28,15 +28,15 @@ class LogManager:
 
         base_name = os.path.splitext(log_name)[0]
 
-        # 2. Archive existing log if fresh session
+        # 2. Archive any existing active log for this fresh session.
         rotation_msgs = cls._archive_existing_log(log_file, logs_dir, base_name)
 
-        # 3. Reset Root Logger
+        # 3. Reset root handlers before installing this configuration.
         root_logger = logging.getLogger()
         for handler in list(root_logger.handlers):
             root_logger.removeHandler(handler)
 
-        # 4. Configure Timed Handler (Daily rotation at midnight)
+        # 4. Configure daily file rotation at midnight.
         file_handler = TimedRotatingFileHandler(log_file, when='midnight', interval=1, encoding='utf-8')
         file_handler.suffix = "%y_%m_%d_%H_%M_%S"
         file_handler.namer = lambda name: cls._log_namer(name, logs_dir, base_name)
@@ -56,11 +56,11 @@ class LogManager:
         # Remove stream handler so future logs primarily go to file
         root_logger.removeHandler(stream_handler)
 
-        # 5. Suppress noisy third-party logs
+        # 5. Suppress noisy third-party loggers.
         for lib in ["httpx", "httpcore", "telegram", "apscheduler", "websockets", "asyncio"]:
             logging.getLogger(lib).setLevel(logging.WARNING)
 
-        # 6. Log Initial Messages
+        # 6. Emit archive and startup messages after handlers are ready.
         for msg in rotation_msgs:
             logging.info(msg)
         logging.info(f"[LogManager] Logging initialized. Active log: {os.path.basename(log_file)}")

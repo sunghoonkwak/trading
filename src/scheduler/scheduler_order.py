@@ -83,10 +83,8 @@ def run_periodic_rebalancing():
 
         from strategy.base import StrategyStatus
 
-        # Notify if:
-        # 1. First call of the day -> ALWAYS (regardless of holiday)
-        # 2. Actual rebalancing orders exist or error occurred
-        # 3. NOT if it's "already_done" (unless it's the first call)
+        # Notify on the first market-window check, or later only when the
+        # strategy actually acted or surfaced an error.
 
         status = reb_res.get('status')
 

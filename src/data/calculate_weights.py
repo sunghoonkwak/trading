@@ -64,25 +64,25 @@ def calculate_target_weights(
     Returns:
         Tuple of (target_weights, total_score, cash_weight)
     """
-    # 1. Calculate cash weight based on F&G
+    # 1. Reserve cash according to the Fear & Greed regime.
     cash_strategy = config.get('cash_strategy', {'min': 0.10, 'mid': 0.20, 'max': 0.30})
     cash_weight = get_cash_weight(fear_greed_index, cash_strategy)
 
-    # 2. Leverage allocation in Extreme Fear (SOXL 5%, TQQQ 5%)
+    # 2. Add fixed leverage sleeves only during Extreme Fear.
     leverage_allocation = {}
     leverage_total = 0.0
     if fear_greed_index <= 20:
         leverage_allocation = {'SOXL': 0.05, 'TQQQ': 0.05}
         leverage_total = sum(leverage_allocation.values())
 
-    # 3. Stock total = 1.0 - cash - leverage
+    # 3. Allocate the remaining portfolio weight to stocks.
     stock_total = 1.0 - cash_weight - leverage_total
 
-    # 3. Calculate total score (for relative allocation)
-    # Groups: sum of target_scores
+    # 4. Calculate the score base for relative allocation.
+    # Groups contribute their configured target scores.
     total_group_score = sum(group['target_score'] for group in config.get('groups', []))
 
-    # Individual stocks: ratio * base (where base = total_group_score for consistency)
+    # Individual stocks scale from the group score base.
     individual_stocks = config.get('individual_stocks', [])
     total_individual_score = sum(
         item['ratio'] * total_group_score
@@ -96,13 +96,13 @@ def calculate_target_weights(
 
     target_weights = {}
 
-    # 4. Assign weights for individual stocks
+    # 5. Assign weights for individual stocks.
     for item in individual_stocks:
         ticker = item['ticker']
         score = item['ratio'] * total_group_score
         target_weights[ticker] = (score / total_score) * stock_total
 
-    # 5. Distribute KR Dividend Strategy (Sub-allocation)
+    # 6. Split the KR dividend sleeve into its constituents.
     if "kr_dividend_strategy" in config:
         kr_strat = config["kr_dividend_strategy"]
         source_key = kr_strat.get("source_ticker")
@@ -119,19 +119,18 @@ def calculate_target_weights(
                     internal_w = c["weight"]
                     target_weights[sub_ticker] = total_kr_weight * (internal_w / total_internal_weight)
 
-    # 6. Assign weights for groups
-    # Target: main_ticker gets full group target (no reduction for constituents)
+    # 7. Assign group targets to their main tickers.
+    # Constituents are merged into the main ticker only for current holdings.
     for group in config.get('groups', []):
         group_target_percent = (group['target_score'] / total_score) * stock_total
         main_ticker = group['main_ticker']
 
-        # Main ticker gets the full group target
+        # Main ticker gets the full group target.
         target_weights[main_ticker] = group_target_percent
 
-        # Constituents are NOT added to target_weights
-        # They only contribute to current holding calculation
+        # Constituents are not target rows; they only affect current weights.
 
-    # 7. Add leverage allocation (Extreme Fear only)
+    # 8. Add the Extreme Fear leverage allocation.
     for ticker, weight in leverage_allocation.items():
         target_weights[ticker] = target_weights.get(ticker, 0.0) + weight
 

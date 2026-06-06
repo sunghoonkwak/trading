@@ -185,7 +185,7 @@ def calculate_orders(
 
     threshold = config.get("rebalance_threshold", 0.05)
 
-    # 1. Calculate Current State
+    # 1. Collect current holdings and prices for the rebalancing group.
     asset_data, total_current_val_in_group = _collect_asset_data(
         assets,
         portfolio,
@@ -195,25 +195,25 @@ def calculate_orders(
     if asset_data is None:
         return [], info
 
-    # 2. Determine Real Target Base
+    # 2. Determine the investable target base.
     # Buying power comes from inquire_psamount, not portfolio cash holdings.
     available_usd = _available_usd(orderable_usd, reserved_cash)
     info["orderable_usd"] = float(orderable_usd)
 
     total_potential_val = total_current_val_in_group + available_usd
-    # We aim for Seed, but if we have less money, we balance what we have.
+    # Aim for the configured seed, capped by holdings plus buying power.
     target_base = min(seed, total_potential_val)
 
     logging.info(f"Rebalancing: Total Group Value: ${total_potential_val:.2f}, Target Base: ${target_base:.2f}")
 
-    # [NEW] Populate Weight Info for Reporting
+    # Populate current/target weight details for reporting.
     _add_weight_info(info, asset_data, total_current_val_in_group)
 
-    # 3. Check Trigger
+    # 3. Skip trading when drift is still within the threshold.
     if not _needs_rebalance(asset_data, target_base, total_current_val_in_group, threshold):
         return [], info
 
-    # 4. Calculate Balanced Orders
+    # 4. Build buy orders needed to move back toward target weights.
     orders, total_buy_required = _build_rebalance_orders(asset_data, target_base)
 
     info["total_available"] = available_usd

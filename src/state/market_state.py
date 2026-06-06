@@ -53,23 +53,23 @@ class MarketStateManager:
             return
 
         with self._lock:
-            # 1. Initialize if new
+            # 1. Ensure the ticker has the full default state shape.
             if ticker not in self._data:
                 self._data[ticker] = DEFAULT_TICKER_STATE.copy()
             else:
                 for key, value in DEFAULT_TICKER_STATE.items():
                     self._data[ticker].setdefault(key, value)
 
-            # 2. Validate and Update
+            # 2. Apply only known fields with basic numeric validation.
             target = self._data[ticker]
             for key, val in update_dict.items():
                 if key in target:
-                    # Basic numeric validation
+                    # Price-like values should stay non-negative numbers.
                     if key in ['price', 'ask', 'bid', 'vol'] and (not isinstance(val, (int, float)) or val < 0):
                         continue
                     target[key] = val
 
-            # 3. Handle Persistence Trigger
+            # 3. Start persistence after the first valid update.
             if not self._first_data_received:
                 self._first_data_received = True
                 self._start_periodic_save()

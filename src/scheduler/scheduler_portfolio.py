@@ -75,35 +75,31 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
 
     comparison_lines = ["", "📊 <b>Performance Insight</b>"]
 
-    # Define comparison points: 1 day ago (last), 1 week ago (-5), 1 month ago (-20)
-    # Indices in past_files: -1 is yesterday, -5 is 5 days ago, etc.
+    # Compare against the most recent daily, weekly, and monthly history points.
     targets = [
         ("1 Day", -1),
         ("1 Week", -5),
         ("1 Month", -20)
     ]
 
-    # Calculate current totals
+    # Read the current raw holdings and cash snapshots.
     curr_holdings = current_data.get('holdings', [])
     curr_cash = current_data.get('cash_holdings', [])
 
-    # We need to sum up values.
-    # Note: get_portfolio data structure is complex. calculating total equity here.
-    # Simplified total equity calculation based on holdings + cash
-    # (Reusing logic similar to telegram_portfolio.get_portfolio_data would be ideal,
-    # but here we work with the raw saved json)
+    # Saved history files can be raw or processed, so calculate totals from the
+    # richest available fields and fall back to holdings plus cash.
 
     def get_total_equity(data: dict) -> float:
         """Calculate Total Equity in KRW"""
-        # 1. Try to use pre-calculated stats (Most reliable)
+        # 1. Prefer pre-calculated KRW stats when present.
         stats = data.get('stats', {})
-        # Check if keys exist (they might be 0 but exist)
+        # Keys may exist with a valid zero value.
         if 'total_stock_krw' in stats and 'total_cash_krw' in stats:
             return stats.get('total_stock_krw', 0) + stats.get('total_cash_krw', 0)
 
-        # 2. Fallback: Calculate manually
+        # 2. Otherwise derive KRW equity from holdings and cash.
         total_krw = 0.0
-        # Try metadata then top-level exchange_rate
+        # Prefer metadata exchange rate, then the legacy top-level field.
         exchange_rate = data.get('metadata', {}).get('exchange_rate')
         if not exchange_rate:
             exchange_rate = data.get('exchange_rate', 1400)
@@ -113,15 +109,14 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
         for h in data.get('holdings', []):
              ticker = h.get('ticker')
 
-             # Determine currency
-             currency = 'USD' # Default
+             # Default to USD unless metadata identifies a KRW asset.
+             currency = 'USD'
              if ticker in merged_data:
                  currency = merged_data[ticker].get('currency', 'USD')
              else:
-                 # Helper logic if merged_data missing
+                 # Use asset metadata or ticker shape when merged data is absent.
                  asset_info = data.get('asset_info', {}).get(ticker, {})
                  market = asset_info.get('market', 'US')
-                 # If explicit KR market or 6-digit ticker starting with 0-9 (heuristic)
                  if market == 'KR' or (len(ticker) == 6 and ticker.isdigit()):
                      currency = 'KRW'
 
@@ -141,16 +136,16 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
 
     def get_total_equity_usd(data: dict) -> float:
         """Calculate Total Equity in USD"""
-        # 1. Try pre-calculated total_value_usd
+        # 1. Prefer processed total_value_usd when present.
         if data.get('total_value_usd'):
             return float(data['total_value_usd'])
 
-        # 2. Try stats
+        # 2. Fall back to pre-calculated USD stats.
         stats = data.get('stats', {})
         if 'total_stock_usd' in stats and 'total_cash_usd' in stats:
             return stats.get('total_stock_usd', 0) + stats.get('total_cash_usd', 0)
 
-        # 3. Fallback: Derived from KRW / Exchange Rate
+        # 3. Derive USD equity from KRW totals as the last resort.
         total_krw = get_total_equity(data)
         exchange_rate = data.get('metadata', {}).get('exchange_rate')
         if not exchange_rate:
@@ -334,8 +329,7 @@ def run_daily_portfolio_report():
             except Exception as e:
                 logging.error(f"[Scheduler] Failed to save file: {e}")
 
-    # 3. Notification Logic (Mon(0) ~ Sat(5))
-    # At this point, portfolio_data and current_file_path are both set
+    # Send the portfolio report once data and the history file path are ready.
     if portfolio_data:
         try:
             # Generate Message

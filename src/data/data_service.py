@@ -66,7 +66,7 @@ class PortfolioProcessor:
         holdings = raw_data.get("holdings", [])
         cash_holdings = raw_data.get("cash_holdings", [])
 
-        # 1. Stock Values
+        # 1. Split stock value by market currency.
         us_stock_usd = 0.0
         kr_stock_krw = 0.0
         for h in holdings:
@@ -77,17 +77,17 @@ class PortfolioProcessor:
             else:
                 us_stock_usd += val
 
-        # 2. Cash Values
+        # 2. Split cash value by currency.
         us_cash_usd = sum(c.get("amount", 0) for c in cash_holdings if c.get("currency") == "USD")
         kr_cash_krw = sum(c.get("amount", 0) for c in cash_holdings if c.get("currency") == "KRW")
 
-        # 3. Conversions
+        # 3. Convert each currency bucket into both USD and KRW.
         us_stock_krw = us_stock_usd * ex_rate
         us_cash_krw = us_cash_usd * ex_rate
         kr_stock_usd = kr_stock_krw / ex_rate if ex_rate > 0 else 0
         kr_cash_usd = kr_cash_krw / ex_rate if ex_rate > 0 else 0
 
-        # 4. Totals
+        # 4. Combine stock, cash, and portfolio totals.
         total_stock_usd = us_stock_usd + kr_stock_usd
         total_cash_usd = us_cash_usd + kr_cash_usd
         total_stock_krw = us_stock_krw + kr_stock_krw
@@ -96,7 +96,7 @@ class PortfolioProcessor:
         total_usd = total_stock_usd + total_cash_usd
         total_krw = total_stock_krw + total_cash_krw
 
-        # 5. Ratios
+        # 5. Calculate regional and cash allocation ratios.
         us_pct = ((us_stock_usd + us_cash_usd) / total_usd * 100) if total_usd > 0 else 0
         kr_pct = ((kr_stock_usd + kr_cash_usd) / total_usd * 100) if total_usd > 0 else 0
 
@@ -183,7 +183,7 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     """
     Orchestrates portfolio data fetching and processing.
     """
-    # 1. Try Cache
+    # 1. Return cached portfolio data when it is still valid.
     cached = PortfolioCacheManager.get(force_refresh)
     if cached:
         logging.info("[DataService] Using cached portfolio data")
@@ -192,7 +192,7 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
 
     logging.info("[DataService] Fetching fresh portfolio data (cache missed/force)")
 
-    # 2. Fetch from KIS
+    # 2. Fetch fresh portfolio data from the KIS worker.
     if not is_kis_ready():
         return {"error": "KIS Thread not ready"}
 
@@ -208,7 +208,7 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     raw_portfolio = response.result
     save_json(ConfigFile.PORTFOLIO, raw_portfolio)
 
-    # 3. Process Data
+    # 3. Merge holdings and calculate portfolio statistics.
     processor = PortfolioProcessor()
     merged_data, total_usd = processor.merge_holdings(raw_portfolio)
     stats = processor.calculate_stats(raw_portfolio)
@@ -225,7 +225,7 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
         "metadata": raw_portfolio.get("metadata", {})
     }
 
-    # 4. Calculate Weights
+    # 4. Calculate current and target weights.
     try:
         from data.calculate_weights import calculate_target_weights
         weights_cfg = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
@@ -236,7 +236,7 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
         logging.error(f"Weight calc error: {e}")
         result["targets"] = {}
 
-    # 5. Cache if no critical errors
+    # 5. Cache complete data only when upstream sources succeeded.
     if not (result["metadata"].get("gsheet_error") or result["metadata"].get("kis_error")):
         if scope == "all":
             PortfolioCacheManager.set(result)
@@ -256,7 +256,7 @@ def _apply_scope_filter(data: Dict, scope: str) -> Dict:
 
     target_ids = kis_ids if scope == "kis" else ({a["id"] for a in accounts} - kis_ids)
 
-    # DEBUG LOG
+    # Log the account scope applied to this filtered view.
     logging.info(f"[Filter] Scope: {scope}, TargetIDs: {target_ids}")
     all_cash = raw.get("cash_holdings", [])
 
@@ -293,7 +293,7 @@ def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
     targets = portfolio.get("targets", {})
     ex_rate = portfolio.get("exchange_rate", 1.0)
 
-    # 1. Aggregate Groups
+    # 1. Merge configured group constituents into their main tickers.
     try:
         cfg = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
         group_map = {g['main_ticker']: g.get('constituents', []) for g in cfg.get('groups', [])}
@@ -307,7 +307,7 @@ def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
             if s in cur_weights:
                 cur_weights[main] = cur_weights.get(main, 0.0) + cur_weights.pop(s, 0.0)
 
-    # 2. Calculate Diffs
+    # 2. Calculate target gaps and approximate order quantities.
     diffs = []
     all_tickers = (set(cur_weights.keys()) | set(targets.keys())) - constituents
 
@@ -336,7 +336,7 @@ def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
 
     diffs.sort(key=lambda x: x["abs_diff"], reverse=True)
 
-    # 3. Cash Info
+    # 3. Return current and target cash weights with the diffs.
     current_cash = sum(d["current_value_usd"] for d in merged.values() if d["type"] == "CASH")
     target_cash = 0.1
     try:
