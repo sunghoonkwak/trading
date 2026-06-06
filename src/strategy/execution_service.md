@@ -2,7 +2,7 @@
 
 이 모듈은 모든 전략(`RAOEO`, `Value Averaging`, `Rebalancing`)의 실행주기를 관리하고 조율하는 역할을 합니다.
 
-# Core Logic (핵심 로직)
+## Core Logic (핵심 로직)
 
 1. **Unified Execution Flow (통합 실행 흐름)**:
    - 모든 전략은 `Enabled Check` -> `Market Check` -> `History Check` -> `Determine Action` -> `Execute` -> `Report`의 동일한 6단계 과정을 거칩니다.
@@ -28,9 +28,9 @@
    - 외부 API 응답 지연을 방지하기 위하여 `requests.exceptions.Timeout` 에러를 독립적으로 포착합니다.
    - 타임아웃 발생 시, 스로틀이나 영구 정지 없이 `[API Timeout]` 메시지와 함께 사유를 로깅하고 `StrategyStatus.ERROR`로 무사히 보고를 마칩니다.
 
-# Key Functions (주요 함수)
+## Key Functions (주요 함수)
 
-## `run_raoeo_strategy`, `run_va_strategy`, `run_rebalancing_strategy`
+### `run_raoeo_strategy`, `run_va_strategy`, `run_rebalancing_strategy`
 각 전략을 실행하고 결과를 반환합니다.
 
 - **입력 (Input)**:
@@ -45,14 +45,14 @@
   - `pending_orders`: 체결 필요한(대기 중인) 주문 목록
   - `market_status`: 시장 상태 정보 (`is_market_open`, `message`)
 
-## `get_market_data`
+### `get_market_data`
 현재 포트폴리오 잔고와 전략 대상 종목들의 현재가를 조회합니다.
 - **입력**: `force_refresh` (bool)
 - **출력**: `holdings` (잔고 딕셔너리), `current_prices` (현재가 딕셔너리)
 - 현재가 조회 실패 시 보유 잔고의 `cur_price`를 사용하며, 두 값 모두
   유효하지 않으면 해당 종목은 `current_prices`에 포함하지 않습니다.
 
-## `get_orderable_usd`
+### `get_orderable_usd`
 대표 매수 주문의 종목, 거래소, 주문 가격으로 해외주식
 매수가능금액조회를 수행합니다.
 
@@ -63,7 +63,7 @@
 - Telegram 명령에 의한 확인은 항상 새로 조회하며, 자동 주기
   리밸런싱만 거래일 단위 조회 결과를 재사용합니다.
 
-## `_execute_orders`
+### `_execute_orders`
 주문 목록을 받아 순차적으로 KIS API를 통해 실행합니다.
 
 - **입력 (Input)**:
@@ -71,7 +71,7 @@
   - `sell_first` (bool): 매도 주문 먼저 실행 여부 (리밸런싱용)
 - **출력 (Output)**: `List[Dict]` (실행 결과 리스트: `success`, `message` 포함)
 
-## `prepare_raoeo_cash_funding`, `execute_raoeo_cash_funding`
+### `prepare_raoeo_cash_funding`, `execute_raoeo_cash_funding`
 `/strategy` 수동 실행에서만 사용하는 현금 조달 단계입니다.
 
 - 현재 대기 중인 RAOEO 매수 주문에 대해 `get_orderable_usd`로 조회한
@@ -82,7 +82,7 @@
 - 사용자가 조달 매도를 선택한 경우에만 매도 주문을 접수하며, 접수 성공 후 5초 대기하고 후속 전략 실행으로 진행합니다.
 - 조달 주문을 만들 수 없거나 주문 접수가 실패하면 호출자는 RAOEO와 Value Averaging 실행 모두를 중단합니다.
 
-# Configuration (`strategy_config.json`)
+## Configuration (`strategy_config.json`)
 
 각 전략 섹션(`raoeo`, `value_averaging`, `rebalancing`)의 `enabled` 필드를 확인하여 실행 여부를 결정합니다.
 
@@ -97,7 +97,7 @@
 }
 ```
 
-# Usage Example (사용 예시)
+## Usage Example (사용 예시)
 
 ```python
 from strategy.execution_service import run_raoeo_strategy

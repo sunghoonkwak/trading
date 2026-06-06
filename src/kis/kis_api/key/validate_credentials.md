@@ -1,13 +1,13 @@
-# validate_credentials.md
+# Validate Credentials (`src/kis/kis_api/key/validate_credentials.py`)
 
 이 유틸리티 스크립트는 암호화된 파일에 저장된 인증 정보가 사용자의 예상과 일치하는지 확인하는 데 사용됩니다.
 
 ## Purpose (목적)
 암호화 비밀번호가 올바른지, 그리고 `credentials.enc`에 저장된 데이터가 정확하고 손상되지 않았는지 테스트할 수 있는 방법을 제공합니다.
 
-## Function (기능)
+## Key Functions (주요 함수)
 
-### validate_credentials
+### `validate_credentials`
 대화형으로 `credentials.enc` 파일을 복호화하고, 그 결과를 사용자가 새로 입력한 값들과 비교합니다.
 - 암호화/복호화 프로세스의 무결성을 검증합니다.
 - 특정 키가 이전에 저장된 값과 일치하는지 확인합니다.

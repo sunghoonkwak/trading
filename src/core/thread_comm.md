@@ -30,7 +30,7 @@ Python의 `queue.Queue`를 사용하여 스레드 간 안전한 메시지 전달
 ## Usage Pattern (사용 패턴)
 1.  **요청 전송 (Sending a Request)**:
     ```python
-    req = ThreadRequest(type=RequestType.KIS_AUTH)
+    req = ThreadRequest(request_type=RequestType.KIS_AUTH)
     kis_request_queue.put(req)
     ```
 2.  **처리 (Processing in Thread)**:

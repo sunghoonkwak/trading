@@ -1,4 +1,4 @@
-# KIS Event Pipe (`kis/event_pipe.py`)
+# KIS Event Pipe (`src/kis/event_pipe.py`)
 
 이 모듈은 Linux Unix Domain Socket 기반의 로깅 시스템을 처리하며, 메인 트레이딩 프로세스(서버)와 외부 Event Viewer(클라이언트) 간의 실시간 통신을 가능하게 합니다.
 
@@ -19,6 +19,7 @@
 ### Message Types
 *   **MKT**: Market Data (Quotes, Prices - displayed in Quotes & Log panels)
 *   **ODR**: Order Notifications (Execution, Updates - displayed in Orders panel)
+*   **ALT**: Application alerts from `core.display.add_alert`
 *   **SYS**: System Messages (Errors, PINGPONG - displayed in Log panel in Red)
 *   **CLR**: Control Commands (e.g., clearing order list)
 

@@ -1,4 +1,4 @@
-# Calculate Weights (`data/calculate_weights.py`)
+# Calculate Weights (`src/data/calculate_weights.py`)
 
 이 모듈은 `~/KIS_config/portfolio_weights.json`에 정의된 설정에 따라 포트폴리오의 **목표 비중(Target Weights)**을 동적으로 계산합니다.
 
@@ -42,12 +42,12 @@ F&G(Fear & Greed) 지수 기반 자산 배분 로직 구현:
 }
 ```
 
-## Functions (기능)
+## Key Functions (주요 함수)
 
-### get_cash_weight
+### `get_cash_weight`
 F&G 지수에 따라 현금 비중 결정.
 
-### calculate_target_weights
+### `calculate_target_weights`
 현재 보유 비중과 설정을 기반으로 최종 목표 비중을 계산합니다.
 
 #### Logic Step
@@ -71,8 +71,8 @@ F&G 지수에 따라 현금 비중 결정.
 - `total_score` (float): 총점
 - `cash_weight` (float): 현금 비중
 
-### calculate_current_group_weights
+### `calculate_current_group_weights`
 그룹 내 Constituents 보유비중을 Main Ticker에 합산.
 
-### calculate_rebalancing
+### `calculate_rebalancing`
 목표 비중과 현재 비중의 차이 계산.

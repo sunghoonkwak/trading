@@ -2,7 +2,7 @@
 
 이 모듈은 Value Averaging (VA) 전략의 순수 계산 로직을 담당합니다. 목표 자산 가치에 도달하기 위한 매수/매도 주문량을 계산합니다.
 
-# Core Logic (핵심 로직)
+## Core Logic (핵심 로직)
 
 1. **Target Value Calculation (목표 가치 계산)**:
    - `day_count` (일차) x `daily_budget` (일 목표액)으로 누적 목표 가치를 산출합니다.
@@ -15,9 +15,9 @@
 3. **History Integration (히스토리 통합)**:
    - `day_count`는 `strategy_history.json`에서 로드된 이전 이력(`targets_context`)을 기반으로 계산됩니다.
 
-# Key Functions (주요 함수)
+## Key Functions (주요 함수)
 
-## `calculate_orders`
+### `calculate_orders`
 VA 공식에 따라 필요한 주문을 계산합니다.
 
 - **입력 (Input)**:
@@ -31,7 +31,7 @@ VA 공식에 따라 필요한 주문을 계산합니다.
   - `orders`: 생성된 주문 리스트 (LIMIT/LOC 등)
   - `context_map`: 히스토리에 저장할 컨텍스트 (day_count 업데이트용)
 
-# Configuration (`strategy_config.json`)
+## Configuration (`strategy_config.json`)
 
 ```json
 {
@@ -49,7 +49,7 @@ VA 공식에 따라 필요한 주문을 계산합니다.
 }
 ```
 
-# Usage Example (사용 예시)
+## Usage Example (사용 예시)
 
 ```python
 from strategy import value_averaging

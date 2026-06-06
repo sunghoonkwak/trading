@@ -1,4 +1,4 @@
-# key.md
+# Credential Key Utilities (`src/kis/kis_api/key/key.py`)
 
 이 모듈은 암호화 키 파생 및 저장된 인증 정보 검색을 위한 핵심 암호화 로직을 제공합니다.
 
@@ -10,9 +10,9 @@
 ### Config Directory
 인증 파일(`password.txt`, `credentials.enc`)은 Linux 홈 디렉터리 기준 다음 경로에서 읽습니다:
 ```
-~/steven/KIS_config/
+~/KIS_config/
 ```
-예: `/home/{username}/steven/KIS_config/`
+예: `/home/{username}/KIS_config/`
 
 ### Required Files
 | 파일명 | 설명 |
@@ -20,19 +20,19 @@
 | `password.txt` | 복호화 비밀번호 (한 줄) |
 | `credentials.enc` | 암호화된 API 인증 정보 |
 
-## Function (기능)
+## Key Functions (주요 함수)
 
-### generate_key_from_password
+### `generate_key_from_password`
 PBKDF2HMAC 알고리즘과 SHA256을 사용하여 평문 비밀번호로부터 URL-safe base64 인코딩된 키를 파생시킵니다.
 #### input
 - `password` (str): 사용자가 입력한 암호화 비밀번호.
 #### output
 - `bytes`: 파생된 암호화 키.
 
-### get_secrets_from_password
+### `get_secrets_from_password`
 `credentials.enc`로부터 암호화된 인증 정보를 로드하고, 비밀번호로 파생된 키를 사용하여 복호화한 후 개별 비밀 값들을 반환합니다.
 - 앱 키(App Key), 앱 시크릿(App Secret), HTS ID의 전체 복호화 및 파싱을 처리합니다.
-- **파일 경로**: `~/steven/KIS_config/password.txt`, `~/steven/KIS_config/credentials.enc`
+- **파일 경로**: `~/KIS_config/password.txt`, `~/KIS_config/credentials.enc`
 #### input
 - `None`
 #### output

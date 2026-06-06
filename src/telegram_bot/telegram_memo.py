@@ -2,7 +2,7 @@
 """
 Telegram Memo Module
 
-Saves arbitrary text messages to message.json for later review.
+Saves arbitrary text messages to memo.json for later review.
 """
 import html
 import logging
@@ -16,7 +16,7 @@ from .telegram_utils import wrap_reply
 from core import display
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle non-command text messages and save to message.json."""
+    """Handle non-command text messages and save to memo.json."""
     text = update.message.text.strip()
     if not text:
         return
