@@ -1,6 +1,8 @@
 import sys
 import os
 import json
+import argparse
+from pathlib import Path
 import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
@@ -19,6 +21,83 @@ if src_path not in sys.path:
 sys.path.insert(0, script_dir)
 from backtest_raoeo import run_simulation, load_config
 
+DEFAULT_BENCHMARKS = "SOXX,VOO,QQQ"
+
+
+def month_starts(start_month, end_month):
+    """Return inclusive first-of-month datetimes for YYYY-MM bounds."""
+    start = datetime.strptime(start_month, "%Y-%m")
+    end = datetime.strptime(end_month, "%Y-%m")
+    if start > end:
+        raise ValueError("start month must be before or equal to end month")
+
+    dates = []
+    current = start
+    while current <= end:
+        dates.append(current)
+        if current.month == 12:
+            current = datetime(current.year + 1, 1, 1)
+        else:
+            current = datetime(current.year, current.month + 1, 1)
+    return dates
+
+
+def parse_benchmark_list(value):
+    tickers = []
+    seen = set()
+    for raw in value.split(","):
+        ticker = raw.strip().upper()
+        if ticker and ticker not in seen:
+            tickers.append(ticker)
+            seen.add(ticker)
+    return tickers
+
+
+def apply_cash_ticker_option(config, cash_ticker=None, no_cash_ticker=False):
+    updated = config.copy()
+    if no_cash_ticker:
+        updated.pop("cash_ticker", None)
+    elif cash_ticker:
+        updated["cash_ticker"] = cash_ticker.upper()
+    return updated
+
+
+def build_output_paths(script_dir, ticker, cash_ticker=None, output_suffix=None):
+    ticker_suffix = f"_{ticker}" if ticker != "SOXL" else ""
+    cash_ticker_suffix = f"_{cash_ticker}" if cash_ticker else ""
+    manual_suffix = f"_{output_suffix}" if output_suffix else ""
+    base_dir = Path(script_dir)
+    report_path = base_dir / f"batch_analysis_report{ticker_suffix}{cash_ticker_suffix}{manual_suffix}.md"
+    plot_path = base_dir / f"batch_cagr_distribution{ticker_suffix}{cash_ticker_suffix}{manual_suffix}.png"
+    return report_path, plot_path
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="RAOEO batch backtest analysis")
+    parser.add_argument("--ticker", default="SOXL", help="RAOEO ticker to backtest")
+    parser.add_argument("--start-from", default="2022-01", help="first start month, YYYY-MM")
+    parser.add_argument("--start-to", default="2023-12", help="last start month, YYYY-MM")
+    parser.add_argument("--end-from", default="2025-01", help="first end month, YYYY-MM")
+    parser.add_argument("--end-to", default="2026-05", help="last end month, YYYY-MM")
+    parser.add_argument(
+        "--benchmarks",
+        default=DEFAULT_BENCHMARKS,
+        help="comma-separated benchmark tickers",
+    )
+    parser.add_argument(
+        "--output-suffix",
+        help="suffix added to report and plot filenames, useful for sample runs",
+    )
+    cash_group = parser.add_mutually_exclusive_group()
+    cash_group.add_argument("--cash-ticker", help="override config cash sweep ticker")
+    cash_group.add_argument(
+        "--no-cash-ticker",
+        action="store_true",
+        help="disable cash sweep even when config has cash_ticker",
+    )
+    return parser.parse_args(argv)
+
+
 def calculate_cagr(realized_profit, initial_seed, start_date, end_date):
     days = (end_date - start_date).days
     years = days / 365.25 if days > 0 else 1.0
@@ -33,41 +112,34 @@ def calculate_cagr(realized_profit, initial_seed, start_date, end_date):
     except:
         return 0.0
 
-def main():
-    ticker = "SOXL"
+def main(argv=None):
+    args = parse_args(argv)
+    ticker = args.ticker.upper()
+    benchmark_tickers = [
+        b for b in parse_benchmark_list(args.benchmarks)
+        if b != ticker
+    ]
+
     print(f"=== {ticker} 배치 백테스트 시작 ===")
     
     try:
-        config = load_config(ticker)
+        config = apply_cash_ticker_option(
+            load_config(ticker),
+            cash_ticker=args.cash_ticker,
+            no_cash_ticker=args.no_cash_ticker,
+        )
     except Exception as e:
         print(f"Error loading config: {e}")
         return
 
     # 1. Generate date ranges
-    # Start dates: 2022-01-01 ~ 2023-12-01 (1 month interval, 24 dates)
-    start_dates = []
-    curr = datetime(2022, 1, 1)
-    for _ in range(24):
-        start_dates.append(curr)
-        # Move to next month
-        if curr.month == 12:
-            curr = datetime(curr.year + 1, 1, 1)
-        else:
-            curr = datetime(curr.year, curr.month + 1, 1)
-
-    # End dates: 2025-01-01 ~ 2026-05-01 (1 month interval, 17 dates)
-    end_dates = []
-    curr = datetime(2025, 1, 1)
-    for _ in range(17):
-        end_dates.append(curr)
-        if curr.month == 12:
-            curr = datetime(curr.year + 1, 1, 1)
-        else:
-            curr = datetime(curr.year, curr.month + 1, 1)
+    start_dates = month_starts(args.start_from, args.start_to)
+    end_dates = month_starts(args.end_from, args.end_to)
 
     print(f"시작일 조합: {len(start_dates)}개")
     print(f"종료일 조합: {len(end_dates)}개")
     print(f"총 시뮬레이션 기간 조합: {len(start_dates) * len(end_dates)}개")
+    print(f"벤치마크: {', '.join(benchmark_tickers) if benchmark_tickers else '없음'}")
 
     # 2. Fetch full data once
     fetch_start = min(start_dates).strftime("%Y-%m-%d")
@@ -95,7 +167,9 @@ def main():
 
     # 3. Simulation Loop
     results = {i: [] for i in range(1, 7)} # Case 1 to 6
-    benchmark_results = {ticker: [], "SOXX": [], "VOO": [], "QQQ": []}
+    benchmark_results = {ticker: []}
+    for b_ticker in benchmark_tickers:
+        benchmark_results[b_ticker] = []
     
     total_combinations = len(start_dates) * len(end_dates)
     pbar = tqdm(total=total_combinations, desc="Simulating")
@@ -106,7 +180,7 @@ def main():
     # Fetch benchmark data
     print("벤치마크 데이터 다운로드 중...")
     bench_data = {}
-    for b_ticker in ["SOXX", "VOO", "QQQ"]:
+    for b_ticker in benchmark_tickers:
         b_df = yf.Ticker(b_ticker).history(start=fetch_start, end=fetch_end)
         if b_df.index.tz is not None:
             b_df.index = b_df.index.tz_localize(None)
@@ -133,7 +207,7 @@ def main():
             benchmark_results[ticker].append((cagr_bench, actual_start, actual_end))
 
             # Benchmarks buy and hold
-            for b_ticker in ["SOXX", "VOO", "QQQ"]:
+            for b_ticker in benchmark_tickers:
                 b_df = bench_data[b_ticker]
                 b_mask = (b_df.index >= actual_start) & (b_df.index <= actual_end)
                 b_slice = b_df.loc[b_mask]
@@ -241,28 +315,32 @@ def main():
         "Case 5 (복리 200% 물타기)": "C5 (Comp 200%)",
         "Case 6 (복리 150% 방어매도)": "C6 (Comp 150%)",
         f"Ref0 ({ticker} 단순 보유)": f"Ref0 ({ticker})",
-        "Ref1 (SOXX 단순 보유)": "Ref1 (SOXX)",
-        "Ref2 (VOO 단순 보유)": "Ref2 (VOO)",
-        "Ref3 (QQQ 단순 보유)": "Ref3 (QQQ)"
     }
 
-    cash_ticker_suffix = f"_{config.get('cash_ticker')}" if config.get("cash_ticker") else ""
-    report_path = os.path.join(script_dir, f"batch_analysis_report{cash_ticker_suffix}.md")
+    report_path, plot_path = build_output_paths(
+        script_dir=script_dir,
+        ticker=ticker,
+        cash_ticker=config.get("cash_ticker"),
+        output_suffix=args.output_suffix,
+    )
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(f"# RAOEO Batch Backtest Analysis Report: {ticker} (Cash: {config.get('cash_ticker', 'USD')})\n\n")
-        f.write(f"- **분석 기간**: 2022-01 ~ 2026-05\n")
+        f.write(f"- **분석 기간**: {args.start_from} ~ {args.end_to}\n")
         f.write(f"- **시작일 조합**: {len(start_dates)}개 (매월 1일)\n")
         f.write(f"- **종료일 조합**: {len(end_dates)}개 (매월 1일)\n")
         f.write(f"- **총 시뮬레이션 횟수**: {total_combinations * 6}회\n")
+        f.write(f"- **벤치마크**: {', '.join(benchmark_tickers) if benchmark_tickers else '없음'}\n")
         f.write(f"- **실행일시**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         
         f.write("## 📊 1. CAGR 성과 및 극값(Max/Min) 요약\n\n")
         if config.get("cash_ticker"):
             f.write("| 전략/벤치마크 | 평균(Mean) | 최대(Max) [기간] | 최소(Min) [기간] | 평균 매매손실 | 평균 배당금 | 본장(SOXL)수익 | Std | 승률 |\n")
             f.write("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n")
+            row_separator = "| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n"
         else:
             f.write("| 전략/벤치마크 | 평균(Mean) | 최대(Max) [기간] | 최소(Min) [기간] | 표준편차(Std) | 승률 |\n")
             f.write("| :--- | :--- | :--- | :--- | :--- | :--- |\n")
+            row_separator = "| --- | --- | --- | --- | --- | --- |\n"
         
         all_stats = {}
         # Strategy cases
@@ -277,16 +355,17 @@ def main():
             for x in results[i]:
                 plot_data.append({"Strategy": plot_names[case_names[i]], "CAGR": x[0] * 100})
         
-        f.write("| --- | --- | --- | --- | --- | --- |\n")
+        f.write(row_separator)
         
         # Benchmarks
         bench_names = {
             ticker: f"Ref0 ({ticker} 단순 보유)",
-            "SOXX": "Ref1 (SOXX 단순 보유)",
-            "VOO": "Ref2 (VOO 단순 보유)",
-            "QQQ": "Ref3 (QQQ 단순 보유)"
         }
-        for b_ticker in [ticker, "SOXX", "VOO", "QQQ"]:
+        for idx, b_ticker in enumerate(benchmark_tickers, start=1):
+            bench_names[b_ticker] = f"Ref{idx} ({b_ticker} 단순 보유)"
+            plot_names[bench_names[b_ticker]] = f"Ref{idx} ({b_ticker})"
+
+        for b_ticker in [ticker] + benchmark_tickers:
             stats = get_stats(benchmark_results[b_ticker])
             if not stats: continue
             all_stats[bench_names[b_ticker]] = stats
@@ -310,7 +389,7 @@ def main():
         f.write("| --- | --- | --- | --- | --- | --- |\n")
         
         # Benchmarks distribution
-        for b_ticker in [ticker, "SOXX", "VOO", "QQQ"]:
+        for b_ticker in [ticker] + benchmark_tickers:
             stats = all_stats.get(bench_names[b_ticker])
             if stats:
                 f.write(f"| **{bench_names[b_ticker]}** | {stats['p10']:.2f}% | {stats['p25']:.2f}% | **{stats['p50']:.2f}%** | {stats['p75']:.2f}% | {stats['p90']:.2f}% |\n")
@@ -359,7 +438,6 @@ def main():
             
             plt.tight_layout()
             
-            plot_path = os.path.join(script_dir, f"batch_cagr_distribution{cash_ticker_suffix}.png")
             plt.savefig(plot_path, dpi=300)
             plt.close()
             print(f"✅ 분포 그래프가 저장되었습니다: {plot_path}")
