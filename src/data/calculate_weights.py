@@ -9,20 +9,62 @@ Allocation logic:
 
 2. Stock total = 1.0 - cash - leverage_total
 
-3. Relative score-based allocation:
-   - Each stock's score is calculated based on its ratio or target_score
+3. Core/satellite score-based allocation:
+   - Core items use explicit scores
+   - Satellite items use ratio * core_score
    - Target weight = (score / total_score) * stock_total
 
-4. Group handling:
+4. Item handling:
+   - individual: ticker gets the target
+   - group: main_ticker gets the target
+   - weighted_split strategy: target is split by constituent weights
+
+5. Group handling:
    - Target: main_ticker gets full group target (constituents don't reduce it)
    - Current: main_ticker's holding + sum of constituents' holdings
 
-5. Leverage allocation (Extreme Fear only):
+6. Leverage allocation (Extreme Fear only):
    - SOXL: 5% fixed
    - TQQQ: 5% fixed
 """
 
 from data.config_manager import ConfigFile, load_json
+
+
+def _iter_allocation_items(config: dict) -> list:
+    return config.get('core', []) + config.get('satellites', [])
+
+
+def _item_target_ticker(item: dict) -> str:
+    if item.get('type') == 'group':
+        return item['main_ticker']
+    return item['ticker']
+
+
+def _add_weighted_split_target(target_weights: dict, item: dict, target_weight: float) -> None:
+    constituents = item.get('constituents', [])
+    total_internal_weight = sum(c.get('weight', 0) for c in constituents)
+
+    if total_internal_weight <= 0:
+        return
+
+    for constituent in constituents:
+        ticker = constituent['ticker']
+        weight = constituent.get('weight', 0)
+        target_weights[ticker] = target_weights.get(ticker, 0.0) + (
+            target_weight * weight / total_internal_weight
+        )
+
+
+def _add_item_target(target_weights: dict, item: dict, target_weight: float) -> None:
+    item_type = item.get('type')
+
+    if item_type == 'strategy' and item.get('strategy') == 'weighted_split':
+        _add_weighted_split_target(target_weights, item, target_weight)
+        return
+
+    ticker = _item_target_ticker(item)
+    target_weights[ticker] = target_weights.get(ticker, 0.0) + target_weight
 
 
 def get_cash_weight(fear_greed_index: float, cash_strategy: dict) -> float:
@@ -78,59 +120,31 @@ def calculate_target_weights(
     # 3. Allocate the remaining portfolio weight to stocks.
     stock_total = 1.0 - cash_weight - leverage_total
 
-    # 4. Calculate the score base for relative allocation.
-    # Groups contribute their configured target scores.
-    total_group_score = sum(group['target_score'] for group in config.get('groups', []))
-
-    # Individual stocks scale from the group score base.
-    individual_stocks = config.get('individual_stocks', [])
-    total_individual_score = sum(
-        item['ratio'] * total_group_score
-        for item in individual_stocks
-    )
-
-    total_score = total_group_score + total_individual_score
+    # 4. Calculate the explicit core score base.
+    core_items = config.get('core', [])
+    satellite_items = config.get('satellites', [])
+    core_score = sum(item['score'] for item in core_items)
+    satellite_scores = [
+        item.get('ratio', 0.0) * core_score
+        for item in satellite_items
+    ]
+    total_score = core_score + sum(satellite_scores)
 
     if total_score == 0:
         return {}, 0, cash_weight
 
     target_weights = {}
 
-    # 5. Assign weights for individual stocks.
-    for item in individual_stocks:
-        ticker = item['ticker']
-        score = item['ratio'] * total_group_score
-        target_weights[ticker] = (score / total_score) * stock_total
+    # 5. Assign target weights for core and satellite items.
+    for item in core_items:
+        item_target = (item['score'] / total_score) * stock_total
+        _add_item_target(target_weights, item, item_target)
 
-    # 6. Split the KR dividend sleeve into its constituents.
-    if "kr_dividend_strategy" in config:
-        kr_strat = config["kr_dividend_strategy"]
-        source_key = kr_strat.get("source_ticker")
+    for item, score in zip(satellite_items, satellite_scores):
+        item_target = (score / total_score) * stock_total
+        _add_item_target(target_weights, item, item_target)
 
-        if source_key and source_key in target_weights:
-            total_kr_weight = target_weights.pop(source_key)
-
-            constituents = kr_strat.get("constituents", [])
-            total_internal_weight = sum(c.get("weight", 0) for c in constituents)
-
-            if total_internal_weight > 0:
-                for c in constituents:
-                    sub_ticker = c["ticker"]
-                    internal_w = c["weight"]
-                    target_weights[sub_ticker] = total_kr_weight * (internal_w / total_internal_weight)
-
-    # 7. Assign group targets to their main tickers.
-    # Constituents are merged into the main ticker only for current holdings.
-    for group in config.get('groups', []):
-        group_target_percent = (group['target_score'] / total_score) * stock_total
-        main_ticker = group['main_ticker']
-
-        # Main ticker gets the full group target.
-        target_weights[main_ticker] = group_target_percent
-
-        # Constituents are not target rows; they only affect current weights.
-
-    # 8. Add the Extreme Fear leverage allocation.
+    # 6. Add the Extreme Fear leverage allocation.
     for ticker, weight in leverage_allocation.items():
         target_weights[ticker] = target_weights.get(ticker, 0.0) + weight
 
@@ -156,7 +170,10 @@ def calculate_current_group_weights(
     """
     merged_weights = dict(current_weights)
 
-    for group in config.get('groups', []):
+    for group in _iter_allocation_items(config):
+        if group.get('type') != 'group':
+            continue
+
         main_ticker = group['main_ticker']
         constituents = group.get('constituents', [])
 

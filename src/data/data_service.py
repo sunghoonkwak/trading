@@ -296,7 +296,12 @@ def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
     # 1. Merge configured group constituents into their main tickers.
     try:
         cfg = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
-        group_map = {g['main_ticker']: g.get('constituents', []) for g in cfg.get('groups', [])}
+        items = cfg.get('core', []) + cfg.get('satellites', [])
+        group_map = {
+            item['main_ticker']: item.get('constituents', [])
+            for item in items
+            if item.get('type') == 'group'
+        }
         constituents = {c for sublist in group_map.values() for c in sublist}
     except:
         group_map, constituents = {}, set()

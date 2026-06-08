@@ -1,113 +1,130 @@
 {
     "cash_strategy": {
-        "min": 0.05,
-        "mid": 0.10,
-        "max": 0.15
+        "min": 0.10,
+        "mid": 0.20,
+        "max": 0.30
     },
-    "groups": [
+    "core": [
         {
+            "type": "group",
             "name": "Nasdaq100",
-            "target_score": 100,
+            "score": 120,
             "main_ticker": "QQQM",
             "constituents": [
                 "QQQ",
+                "QLD",
                 "379810"
             ]
         },
         {
+            "type": "group",
             "name": "S&P500",
-            "target_score": 50,
+            "score": 40,
             "main_ticker": "VOO",
             "constituents": [
+                "SPYM",
                 "379800"
             ]
         },
         {
+            "type": "group",
             "name": "Dividend",
-            "target_score": 15,
+            "score": 20,
             "main_ticker": "SCHD",
             "constituents": [
                 "490490"
             ]
         }
     ],
-    "individual_stocks": [
+    "satellites": [
         {
+            "type": "group",
+            "name": "Bonds",
+            "ratio": 0.1,
+            "main_ticker": "TLTW",
+            "constituents": [
+                "TLT"
+            ]
+        },
+        {
+            "type": "individual",
             "ticker": "SOXL",
             "ratio": 0
         },
         {
+            "type": "individual",
             "ticker": "TQQQ",
             "ratio": 0
         },
         {
+            "type": "individual",
             "ticker": "TSM",
-            "ratio": 0.06
+            "ratio": 0.1
         },
         {
+            "type": "individual",
             "ticker": "GOOGL",
-            "ratio": 0.03
+            "ratio": 0.05
         },
         {
+            "type": "individual",
             "ticker": "NVDA",
-            "ratio": 0.03
+            "ratio": 0.05
         },
         {
+            "type": "individual",
             "ticker": "AVGO",
-            "ratio": 0.03
+            "ratio": 0
         },
         {
+            "type": "individual",
             "ticker": "QCOM",
-            "ratio": 0.1
+            "ratio": 0.15
         },
         {
-            "ticker": "KR_DIV",
-            "ratio": 0.2
+            "type": "strategy",
+            "name": "KR_DIV",
+            "strategy": "weighted_split",
+            "ratio": 0.2,
+            "constituents": [
+                {
+                    "ticker": "005385",
+                    "weight": 2
+                },
+                {
+                    "ticker": "016360",
+                    "weight": 2
+                },
+                {
+                    "ticker": "017670",
+                    "weight": 2
+                },
+                {
+                    "ticker": "030200",
+                    "weight": 2
+                },
+                {
+                    "ticker": "086790",
+                    "weight": 3
+                },
+                {
+                    "ticker": "088980",
+                    "weight": 1
+                },
+                {
+                    "ticker": "138040",
+                    "weight": 1
+                },
+                {
+                    "ticker": "105560",
+                    "weight": 3
+                }
+            ]
         },
         {
-            "ticker": "TLT",
-            "ratio": 0.1
-        },
-        {
+            "type": "individual",
             "ticker": "453850",
             "ratio": 0.0
         }
-    ],
-    "kr_dividend_strategy": {
-        "source_ticker": "KR_DIV",
-        "constituents": [
-            {
-                "ticker": "005385",
-                "weight": 2
-            },
-            {
-                "ticker": "016360",
-                "weight": 2
-            },
-            {
-                "ticker": "017670",
-                "weight": 2
-            },
-            {
-                "ticker": "030200",
-                "weight": 2
-            },
-            {
-                "ticker": "086790",
-                "weight": 3
-            },
-            {
-                "ticker": "088980",
-                "weight": 1
-            },
-            {
-                "ticker": "138040",
-                "weight": 1
-            },
-            {
-                "ticker": "105560",
-                "weight": 3
-            }
-        ]
-    }
+    ]
 }
