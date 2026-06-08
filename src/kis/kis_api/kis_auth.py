@@ -37,6 +37,12 @@ from kis.ws_parser import (
     should_send_schema_drift_alert,
     split_records,
 )
+from kis.ws_notifications import (
+    build_reconnection_failure_message,
+    build_reconnection_success_message,
+    should_notify_reconnection_failure,
+    should_notify_reconnection_success,
+)
 
 clearConsole = lambda: os.system("cls" if os.name in ("nt", "dos") else "clear")
 
@@ -926,11 +932,10 @@ class KISWebSocket:
                 else:
                     logging.info(f"Connecting to WebSocket: {url}")
                 async with websockets.connect(url, ping_interval=60, ping_timeout=120) as ws:
-                    # Send reconnection success notification if we were reconnecting
-                    if self.retry_count > 0:
+                    # Notify only after repeated failures were already reported.
+                    if should_notify_reconnection_success(self.retry_count):
                         self._send_telegram_notification(
-                            f"✅ <b>WebSocket Reconnected</b>\n"
-                            f"Successfully reconnected after {self.retry_count} attempt(s)."
+                            build_reconnection_success_message(self.retry_count)
                         )
                     self.retry_count = 0  # Reset on successful connection
                     was_connected = True
@@ -952,37 +957,19 @@ class KISWebSocket:
                 self._update_ws_status("reconnecting")
                 logging.warning(f"WebSocket Connection Closed: {e}")
                 self._add_alert(f"Connection Closed (#{self.retry_count + 1}): {e}")
-                # Send disconnect notification on first disconnect
-                if self.retry_count == 0:
+                attempt_number = self.retry_count + 1
+                if should_notify_reconnection_failure(attempt_number):
                     self._send_telegram_notification(
-                        f"⚠️ <b>WebSocket Disconnected</b>\n"
-                        f"Connection closed: {e}\n"
-                        f"Attempting to reconnect..."
-                    )
-                # Send status update every 5 failed attempts
-                elif (self.retry_count + 1) % 5 == 0:
-                    self._send_telegram_notification(
-                        f"❌ <b>WebSocket Reconnection Failed</b>\n"
-                        f"Attempt {self.retry_count + 1} failed.\n"
-                        f"Error: Connection closed"
+                        build_reconnection_failure_message(attempt_number, e)
                     )
             except Exception as e:
                 self._update_ws_status("reconnecting")
                 logging.error(f"WebSocket Connection Error: {e}")
                 self._add_alert(f"Connection Error (#{self.retry_count + 1}): {e}")
-                # Send disconnect notification on first disconnect
-                if self.retry_count == 0:
+                attempt_number = self.retry_count + 1
+                if should_notify_reconnection_failure(attempt_number):
                     self._send_telegram_notification(
-                        f"⚠️ <b>WebSocket Disconnected</b>\n"
-                        f"Error: {e}\n"
-                        f"Attempting to reconnect..."
-                    )
-                # Send status update every 5 failed attempts
-                elif (self.retry_count + 1) % 5 == 0:
-                    self._send_telegram_notification(
-                        f"❌ <b>WebSocket Reconnection Failed</b>\n"
-                        f"Attempt {self.retry_count + 1} failed.\n"
-                        f"Error: {e}"
+                        build_reconnection_failure_message(attempt_number, e)
                     )
 
             self.retry_count += 1
