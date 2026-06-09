@@ -210,7 +210,7 @@ class PortfolioManager:
     @staticmethod
     def _fetch_gsheet_all() -> Tuple[Dict, Optional[str]]:
         """Fetches GSheet data for all currencies."""
-        from kis.gsheet import connect_google_sheet, parse_worksheet_data
+        from data.gsheet import connect_google_sheet, parse_worksheet_data
         gs_data = {"accounts": {}, "holdings": [], "asset_info": {}, "cash_holdings": []}
         errors = []
         for curr in ['USD', 'KRW']:
