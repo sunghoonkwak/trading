@@ -15,17 +15,22 @@ def _load_event_handler(monkeypatch):
     fake_kis = types.ModuleType("kis")
     fake_event_pipe = types.ModuleType("kis.event_pipe")
     fake_event_pipe.print_viewer = lambda *args, **kwargs: None
-    fake_wrapper = types.ModuleType("kis.wrapper")
-    fake_wrapper.sync_open_orders = lambda: None
+    fake_ws_parser = types.ModuleType("kis.ws_parser")
+    fake_ws_parser.mask_dict_for_log = lambda value: value
     fake_kis.event_pipe = fake_event_pipe
-    fake_kis.wrapper = fake_wrapper
+    fake_kis.ws_parser = fake_ws_parser
+    fake_broker = types.ModuleType("broker")
+    fake_order_admin = types.ModuleType("broker.order_admin")
+    fake_order_admin.sync_open_orders = lambda: None
     fake_telegram_bot = types.ModuleType("telegram_bot")
     fake_telegram_utils = types.ModuleType("telegram_bot.telegram_utils")
     fake_telegram_utils.send_notification = lambda *args, **kwargs: None
 
     monkeypatch.setitem(sys.modules, "kis", fake_kis)
     monkeypatch.setitem(sys.modules, "kis.event_pipe", fake_event_pipe)
-    monkeypatch.setitem(sys.modules, "kis.wrapper", fake_wrapper)
+    monkeypatch.setitem(sys.modules, "kis.ws_parser", fake_ws_parser)
+    monkeypatch.setitem(sys.modules, "broker", fake_broker)
+    monkeypatch.setitem(sys.modules, "broker.order_admin", fake_order_admin)
     monkeypatch.setitem(sys.modules, "telegram_bot", fake_telegram_bot)
     monkeypatch.setitem(sys.modules, "telegram_bot.telegram_utils", fake_telegram_utils)
 

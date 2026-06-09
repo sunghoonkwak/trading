@@ -5,9 +5,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from kis import wrapper
+from broker import market_data
 from kis.portfolio_manager import PortfolioManager
 from kis.kis_api.overseas_stock.price import price as price_module
+from kis.kis_api import kis_auth as ka
 
 
 class _FakeTREnv:
@@ -18,8 +19,8 @@ class _FakeTREnv:
 def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch):
     calls = {}
 
-    monkeypatch.setattr(wrapper.ka, "getTREnv", lambda: _FakeTREnv())
-    monkeypatch.setattr(wrapper.ka, "isPaperTrading", lambda: True)
+    monkeypatch.setattr(ka, "getTREnv", lambda: _FakeTREnv())
+    monkeypatch.setattr(ka, "isPaperTrading", lambda: True)
 
     def fake_inquire_balance(**kwargs):
         calls["domestic_env"] = kwargs["env_dv"]
@@ -49,9 +50,9 @@ def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch)
 def test_price_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch):
     calls = {}
 
-    monkeypatch.setattr(wrapper.ka, "isPaperTrading", lambda: True)
+    monkeypatch.setattr(ka, "isPaperTrading", lambda: True)
     monkeypatch.setattr(
-        wrapper.trading_config,
+        market_data.trading_config,
         "get_kis_exchange_code",
         lambda ticker: "NAS",
     )
@@ -62,7 +63,7 @@ def test_price_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch):
 
     monkeypatch.setattr(price_module, "price", fake_price)
 
-    result = wrapper.PriceFetcher.fetch_price("qqq")
+    result = market_data.fetch_price("qqq")
 
     assert result == 123.45
     assert calls["price_args"] == ("", "NAS", "QQQ", "real")

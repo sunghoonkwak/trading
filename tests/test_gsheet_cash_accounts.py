@@ -1,22 +1,10 @@
 import sys
 from pathlib import Path
-import importlib.util
 
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-
-def _load_gsheet_module():
-    spec = importlib.util.spec_from_file_location(
-        "gsheet_under_test",
-        SRC_DIR / "kis" / "gsheet.py",
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-parse_worksheet_data = _load_gsheet_module().parse_worksheet_data
+from data.gsheet import parse_worksheet_data
 
 
 class FakeWorksheet:

@@ -117,7 +117,7 @@ class TradingSystem:
                 return False
             print("[Startup] ✓ KIS fully initialized")
 
-            from kis.wrapper import sync_open_orders
+            from broker.order_admin import sync_open_orders
             sync_open_orders()
             print("[Startup] ✓ Orders synced")
             return True

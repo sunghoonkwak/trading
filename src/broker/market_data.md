@@ -6,9 +6,10 @@
 
 - `fetch_price(ticker, exchange=None)`를 제공합니다.
 - `get_current_price(ticker)`를 제공합니다.
-- 현재 구현은 기존 `kis.wrapper.fetch_price`로 lazy 위임합니다.
-- 전략/데이터 서비스가 `kis.wrapper`에 직접 의존하지 않도록 하는
-  전환 seam입니다.
+- REST 가격 조회는 공식 KIS price endpoint wrapper를 호출합니다.
+- 현재가 캐시는 `state.market_state`의 WebSocket cache를 조회합니다.
+- 전략/데이터 서비스가 KIS 영역의 compat wrapper에 직접 의존하지 않도록
+  하는 전환 seam입니다.
 
 ## Import Boundary
 

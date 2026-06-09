@@ -74,13 +74,15 @@ def _install_fake_kis_thread(
 
     monkeypatch.setitem(sys.modules, "kis.kis_thread", fake_kis_thread)
 
-    fake_wrapper = types.ModuleType("kis.wrapper")
+    fake_broker = types.ModuleType("broker")
+    fake_order_admin = types.ModuleType("broker.order_admin")
 
     def sync_open_orders():
         calls.append("sync_open_orders")
 
-    fake_wrapper.sync_open_orders = sync_open_orders
-    monkeypatch.setitem(sys.modules, "kis.wrapper", fake_wrapper)
+    fake_order_admin.sync_open_orders = sync_open_orders
+    monkeypatch.setitem(sys.modules, "broker", fake_broker)
+    monkeypatch.setitem(sys.modules, "broker.order_admin", fake_order_admin)
 
     monkeypatch.setattr(main_module.event_pipe, "create_pipe_server", lambda: False)
     return calls

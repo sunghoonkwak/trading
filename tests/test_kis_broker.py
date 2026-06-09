@@ -51,34 +51,42 @@ def test_get_orderable_usd_reads_overseas_orderable_amount(monkeypatch):
     assert calls["env_dv"] == "real"
 
 
-def test_market_data_fetch_price_delegates_to_kis_wrapper(monkeypatch):
+def test_market_data_fetch_price_uses_kis_price_module(monkeypatch):
     from broker import market_data
 
     calls = {}
 
-    def fake_fetch_price(ticker, exchange=None):
-        calls["args"] = (ticker, exchange)
-        return 123.45
+    monkeypatch.setattr(
+        market_data.trading_config,
+        "get_kis_exchange_code",
+        lambda ticker: "NAS",
+    )
 
-    monkeypatch.setattr(market_data, "_wrapper_fetch_price", fake_fetch_price)
-
-    assert market_data.fetch_price("qqq", "NAS") == 123.45
-    assert calls["args"] == ("qqq", "NAS")
-
-
-def test_market_data_get_current_price_delegates_to_kis_wrapper(monkeypatch):
-    from broker import market_data
-
-    calls = {}
-
-    def fake_get_current_price(ticker):
-        calls["ticker"] = ticker
-        return 98.76
+    def fake_price(auth, exchange, ticker, env_dv):
+        calls["price_args"] = (auth, exchange, ticker, env_dv)
+        return pd.DataFrame([{"last": "123.45"}])
 
     monkeypatch.setattr(
         market_data,
-        "_wrapper_get_current_price",
-        fake_get_current_price,
+        "_get_price_module",
+        lambda: SimpleNamespace(price=fake_price),
+    )
+
+    assert market_data.fetch_price("qqq") == 123.45
+    assert calls["price_args"] == ("", "NAS", "QQQ", "real")
+
+
+def test_market_data_get_current_price_uses_market_state(monkeypatch):
+    from broker import market_data
+
+    calls = {}
+
+    monkeypatch.setattr(
+        market_data,
+        "_get_market_manager",
+        lambda: SimpleNamespace(
+            get_price=lambda ticker: calls.update({"ticker": ticker}) or 98.76
+        ),
     )
 
     assert market_data.get_current_price("SOXL") == 98.76
@@ -104,7 +112,7 @@ def test_order_admin_delegates_to_order_manager(monkeypatch):
     )
     monkeypatch.setattr(
         order_admin,
-        "_wrapper_sync_open_orders",
+        "_sync_display_open_orders",
         lambda: calls.append(("sync",)) or True,
     )
 
