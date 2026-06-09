@@ -101,3 +101,16 @@ assert "kis.kis_api.kis_auth" not in sys.modules
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_scheduler_portfolio_import_does_not_load_legacy_portfolio_wrapper(tmp_path):
+    result = _run_import_check(
+        tmp_path,
+        """
+import sys
+import scheduler.scheduler_portfolio
+assert "kis.get_portfolio" not in sys.modules
+""",
+    )
+
+    assert result.returncode == 0, result.stderr

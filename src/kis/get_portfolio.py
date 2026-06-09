@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-KIS Get Portfolio Module (Interface)
+KIS Get Portfolio Module (Deprecated Compatibility Interface)
 
-Main interface for the Portfolio sub-system.
-Delegates all fetching and merging logic to PortfolioManager.
+Compatibility wrapper for legacy callers.
+
+New code should call PortfolioManager.get_integrated_portfolio() directly or use
+an app-owned facade such as data.data_service.get_portfolio_data().
 """
 from kis.portfolio_manager import PortfolioManager
 
 def get_portfolio(kis_only: bool = False) -> dict:
     """
-    Fetch and merge KIS API and GSheet data.
+    Fetch and merge KIS API and GSheet data for legacy callers.
 
     Args:
         kis_only: If True, skip GSheet fetch and only get KIS data.
