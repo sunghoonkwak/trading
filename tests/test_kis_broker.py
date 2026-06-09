@@ -85,19 +85,19 @@ def test_market_data_get_current_price_delegates_to_kis_wrapper(monkeypatch):
     assert calls["ticker"] == "SOXL"
 
 
-def test_order_admin_delegates_to_kis_wrapper(monkeypatch):
+def test_order_admin_delegates_to_order_manager(monkeypatch):
     from broker import order_admin
 
     calls = []
 
     monkeypatch.setattr(
         order_admin,
-        "_wrapper_fetch_open_orders",
+        "_manager_fetch_open_orders",
         lambda: calls.append(("fetch",)) or ("df", 1, 2),
     )
     monkeypatch.setattr(
         order_admin,
-        "_wrapper_execute_manage_action",
+        "_manager_execute_action",
         lambda market, action_type, order_data, new_price=None: (
             calls.append((market, action_type, order_data, new_price)) or ("res", None)
         ),
