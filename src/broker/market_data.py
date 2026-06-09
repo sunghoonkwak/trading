@@ -13,3 +13,14 @@ def _wrapper_fetch_price(ticker: str, exchange: Optional[str] = None) -> float:
 def fetch_price(ticker: str, exchange: Optional[str] = None) -> float:
     """Fetch the latest REST price for a ticker through the KIS wrapper."""
     return _wrapper_fetch_price(ticker, exchange)
+
+
+def _wrapper_get_current_price(ticker: str) -> float:
+    from kis.wrapper import get_current_price as kis_get_current_price
+
+    return kis_get_current_price(ticker)
+
+
+def get_current_price(ticker: str) -> float:
+    """Return the current cached WebSocket price for a ticker."""
+    return _wrapper_get_current_price(ticker)

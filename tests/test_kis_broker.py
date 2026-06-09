@@ -66,6 +66,58 @@ def test_market_data_fetch_price_delegates_to_kis_wrapper(monkeypatch):
     assert calls["args"] == ("qqq", "NAS")
 
 
+def test_market_data_get_current_price_delegates_to_kis_wrapper(monkeypatch):
+    from broker import market_data
+
+    calls = {}
+
+    def fake_get_current_price(ticker):
+        calls["ticker"] = ticker
+        return 98.76
+
+    monkeypatch.setattr(
+        market_data,
+        "_wrapper_get_current_price",
+        fake_get_current_price,
+    )
+
+    assert market_data.get_current_price("SOXL") == 98.76
+    assert calls["ticker"] == "SOXL"
+
+
+def test_order_admin_delegates_to_kis_wrapper(monkeypatch):
+    from broker import order_admin
+
+    calls = []
+
+    monkeypatch.setattr(
+        order_admin,
+        "_wrapper_fetch_open_orders",
+        lambda: calls.append(("fetch",)) or ("df", 1, 2),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_wrapper_execute_manage_action",
+        lambda market, action_type, order_data, new_price=None: (
+            calls.append((market, action_type, order_data, new_price)) or ("res", None)
+        ),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_wrapper_sync_open_orders",
+        lambda: calls.append(("sync",)) or True,
+    )
+
+    assert order_admin.fetch_open_orders() == ("df", 1, 2)
+    assert order_admin.execute_manage_action("US", "2", {"odno": "1"}) == ("res", None)
+    assert order_admin.sync_open_orders() is True
+    assert calls == [
+        ("fetch",),
+        ("US", "2", {"odno": "1"}, None),
+        ("sync",),
+    ]
+
+
 def test_get_orderable_usd_rejects_missing_amount(monkeypatch):
     monkeypatch.setattr(
         kis_broker,

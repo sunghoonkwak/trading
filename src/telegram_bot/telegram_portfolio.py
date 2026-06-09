@@ -19,9 +19,9 @@ from core import display
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 from datetime import datetime
 
+from broker import market_data, order_admin
 from data.data_service import get_weight_diffs
 from data.data_service import get_portfolio_data
-from kis.wrapper import fetch_open_orders
 
 # Conversation states
 SELECT_TICKER = 0
@@ -155,15 +155,13 @@ def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
 
     # Only try WebSocket/API fallback if merged_data doesn't have valid price
     if cur_price <= 0 and currency == "USD":
-        from kis.wrapper import get_current_price, fetch_price
-
         # Try WebSocket
-        cur_price = get_current_price(ticker)
+        cur_price = market_data.get_current_price(ticker)
         if cur_price > 0:
             price_source = "WS"
         else:
             # Fallback to KIS API (fetch_price handles exchange internally)
-            cur_price = fetch_price(ticker)
+            cur_price = market_data.fetch_price(ticker)
             price_source = "API" if cur_price > 0 else ""
 
     # Final fallback to avg_price if still 0
@@ -232,18 +230,16 @@ def format_ticker_not_in_portfolio(ticker: str, portfolio_data: dict) -> str:
     Returns:
         Formatted string with ticker info
     """
-    from kis.wrapper import get_current_price, fetch_price
-
     targets = portfolio_data.get("targets", {})
     tgt_weight = targets.get(ticker, 0) * 100
 
     # Try WebSocket first
-    cur_price = get_current_price(ticker)
+    cur_price = market_data.get_current_price(ticker)
     price_source = "WebSocket"
 
     # Fallback to KIS API if WebSocket has no data
     if cur_price <= 0:
-        cur_price = fetch_price(ticker)
+        cur_price = market_data.fetch_price(ticker)
         price_source = "API" if cur_price > 0 else ""
 
     lines = [
@@ -552,7 +548,7 @@ async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"[TG] /placed_orders from user")
     try:
         loop = asyncio.get_running_loop()
-        df, num_us, num_kr = await loop.run_in_executor(None, fetch_open_orders)
+        df, num_us, num_kr = await loop.run_in_executor(None, order_admin.fetch_open_orders)
         msg = format_placed_orders(df, num_us, num_kr)
         await wrap_reply(update, msg, parse_mode='HTML')
     except Exception as e:

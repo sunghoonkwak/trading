@@ -5,6 +5,7 @@
 ## Responsibilities
 
 - `fetch_price(ticker, exchange=None)`를 제공합니다.
+- `get_current_price(ticker)`를 제공합니다.
 - 현재 구현은 기존 `kis.wrapper.fetch_price`로 lazy 위임합니다.
 - 전략/데이터 서비스가 `kis.wrapper`에 직접 의존하지 않도록 하는
   전환 seam입니다.

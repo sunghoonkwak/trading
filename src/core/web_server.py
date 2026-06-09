@@ -268,7 +268,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_text('{"type":"SYS","data":"pong"}')
             elif data == "sync_orders":
                 # Sync open orders on client request
-                from kis.wrapper import sync_open_orders
+                from broker.order_admin import sync_open_orders
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, sync_open_orders)
     except WebSocketDisconnect:
@@ -327,10 +327,10 @@ async def trigger_order_report(background_tasks: BackgroundTasks):
 
 def _cancel_order_sync(order_id: str):
     """Synchronously cancel an order by ID."""
-    from kis.wrapper import fetch_open_orders, execute_manage_action
+    from broker import order_admin
 
     try:
-        df, _, _ = fetch_open_orders()
+        df, _, _ = order_admin.fetch_open_orders()
         if df.empty:
             return {"success": False, "error": "No open orders found"}
 
@@ -349,7 +349,7 @@ def _cancel_order_sync(order_id: str):
             return {"success": False, "error": f"Order {order_id} not found"}
 
         # Execute cancellation (action_type='2' means cancel)
-        df_res, err_msg = execute_manage_action(market, '2', target_order, None)
+        df_res, err_msg = order_admin.execute_manage_action(market, '2', target_order, None)
 
         if err_msg:
             return {"success": False, "error": err_msg}
