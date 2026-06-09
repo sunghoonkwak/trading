@@ -135,7 +135,7 @@ def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
     Args:
         ticker: Stock ticker symbol
         data: Merged data for this ticker from merged_data
-        portfolio_data: Full portfolio data from get_portfolio()
+        portfolio_data: Full portfolio data from get_portfolio_data()
 
     Returns:
         Formatted string with ticker details
@@ -227,7 +227,7 @@ def format_ticker_not_in_portfolio(ticker: str, portfolio_data: dict) -> str:
 
     Args:
         ticker: Stock ticker symbol
-        portfolio_data: Full portfolio data from get_portfolio()
+        portfolio_data: Full portfolio data from get_portfolio_data()
 
     Returns:
         Formatted string with ticker info
@@ -274,7 +274,7 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
     where telegram_button is True.
 
     Args:
-        portfolio_data: Full portfolio data from get_portfolio()
+        portfolio_data: Full portfolio data from get_portfolio_data()
 
     Returns:
         InlineKeyboardMarkup with ticker buttons
