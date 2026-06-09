@@ -1,0 +1,24 @@
+# Strategy Constants (`src/strategy/constants.py`)
+
+전략 계산에서 공유하는 정책 기본값을 관리하는 모듈입니다.
+
+## Core Logic (핵심 로직)
+
+1. **전략 정책 소유권**: RAOEO, value averaging, rebalancing 기본 임계값은 `strategy` 패키지에서 관리합니다.
+2. **설정 fallback 명시**: 사용자 설정에 값이 없을 때 적용되는 기본값을 한곳에서 확인할 수 있습니다.
+3. **KIS 제약 반영**: RAOEO 매수 가격 상한처럼 전략 로직에 반영되는 운영 안전 마진을 명시합니다.
+
+## Key Constants (주요 상수)
+
+- **`DEFAULT_VA_THRESHOLD`**: value averaging 기본 괴리율 임계값.
+- **`DEFAULT_REBALANCE_THRESHOLD`**: rebalancing 기본 비중 차이 임계값.
+- **`DEFAULT_RAOEO_PROFIT`**: RAOEO 기본 수익률 fallback.
+- **`MAX_BUY_PRICE_RATIO`**: KIS 주문 거절을 피하기 위한 RAOEO 매수가 상한 배율.
+
+## Usage Example (사용 예시)
+
+```python
+from strategy.constants import DEFAULT_VA_THRESHOLD
+
+threshold_rate = config.get("threshold_rate", DEFAULT_VA_THRESHOLD)
+```

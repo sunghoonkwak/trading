@@ -11,13 +11,13 @@ import re
 from datetime import datetime, timedelta
 from typing import Optional
 
+from core.constants import CONFIG_ROOT
 from kis.get_portfolio import get_portfolio
 from telegram_bot.telegram_portfolio import format_portfolio_summary
 from telegram_bot.telegram_utils import send_notification
 from data.data_service import get_portfolio_data
 
 # Configuration
-CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
 HISTORY_DIR = os.path.join(CONFIG_ROOT, "portfolio_history")
 # User requested to keep reports in the same folder as history
 REPORTS_DIR = HISTORY_DIR

@@ -22,6 +22,7 @@ from .telegram_portfolio import register_portfolio_handlers, get_portfolio_comma
 from .telegram_memo import register_memo_handler, get_memo_commands_desc
 from .telegram_utils import wrap_send, set_telegram_bot, wrap_reply
 from core import display
+from core.constants import CONFIG_ROOT
 
 import uuid
 
@@ -37,8 +38,7 @@ _is_initialized = False
 def load_telegram_credentials() -> tuple[Optional[str], Optional[str]]:
     """Load Telegram bot token and chat ID."""
     try:
-        config_root = os.path.join(os.path.expanduser("~"), "KIS_config")
-        telegram_file_info = os.path.join(config_root, "telegram.txt")
+        telegram_file_info = os.path.join(CONFIG_ROOT, "telegram.txt")
         if not os.path.exists(telegram_file_info):
             logging.error(f"telegram.txt not found at {telegram_file_info}")
             return None, None

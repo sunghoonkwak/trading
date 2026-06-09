@@ -8,7 +8,9 @@ It calculates orders to bring assets back to their target weights.
 import logging
 from typing import Dict, List, Optional, Tuple
 from strategy.base import StrategyOrder, OrderSide
+from strategy.constants import DEFAULT_REBALANCE_THRESHOLD
 from utils.price_utils import resolve_current_price
+from kis.constants import ORDER_TYPE_US_LIMIT
 
 
 def _initial_info(seed: float) -> Dict:
@@ -139,7 +141,7 @@ def _build_rebalance_orders(
                     side=OrderSide.SELL,
                     quantity=sell_qty,
                     price=price,
-                    order_type="00",
+                    order_type=ORDER_TYPE_US_LIMIT,
                     reason=f"➔ Est.Total: ${expected_total:,.1f} ({pct:.1f}%)",
                 ))
         elif diff_val > 0:
@@ -154,7 +156,7 @@ def _build_rebalance_orders(
                     side=OrderSide.BUY,
                     quantity=buy_qty,
                     price=price,
-                    order_type="00",
+                    order_type=ORDER_TYPE_US_LIMIT,
                     reason=f"➔ Est.Total: ${expected_total:,.1f} ({pct:.1f}%)",
                 ))
 
@@ -183,7 +185,7 @@ def calculate_orders(
         logging.warning("Rebalancing: Invalid assets or seed.")
         return orders, info
 
-    threshold = config.get("rebalance_threshold", 0.05)
+    threshold = config.get("rebalance_threshold", DEFAULT_REBALANCE_THRESHOLD)
 
     # 1. Collect current holdings and prices for the rebalancing group.
     asset_data, total_current_val_in_group = _collect_asset_data(

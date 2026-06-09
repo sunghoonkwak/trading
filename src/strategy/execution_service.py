@@ -26,6 +26,7 @@ from kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import inquire
 from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
 from data.data_service import get_portfolio_data
 from utils.price_utils import resolve_current_price
+from kis.constants import EXCHANGE_CODE_MAP, ORDER_TYPE_US_LIMIT
 
 # Timezone constant
 TZ_ET = pytz.timezone('US/Eastern')
@@ -75,8 +76,7 @@ def get_orderable_usd(symbol: str, order_price: float) -> float:
     """Return KIS overseas buying power for a representative USD buy."""
     stock_info = trading_config.get_stock_info(symbol)
     market = stock_info.get("market", "NASD")
-    exchange_map = {"NAS": "NASD", "NYS": "NYSE", "AMS": "AMEX"}
-    ovrs_excg_cd = exchange_map.get(market, market)
+    ovrs_excg_cd = EXCHANGE_CODE_MAP.get(market, market)
     trenv = ka.getTREnv()
 
     result = inquire_psamount(
@@ -118,12 +118,11 @@ def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
         exec_type = order.order_type
         if order.side == OrderSide.SELL and order.price == 0:
             exec_price = 0.01
-            exec_type = "00"
+            exec_type = ORDER_TYPE_US_LIMIT
 
         stock_info = trading_config.get_stock_info(order.symbol)
         market = stock_info.get('market', 'NASD')
-        exchange_map = {"NAS": "NASD", "NYS": "NYSE", "AMS": "AMEX"}
-        ovrs_excg_cd = exchange_map.get(market, market)
+        ovrs_excg_cd = EXCHANGE_CODE_MAP.get(market, market)
 
         res, err = order_overseas_stock(
             cano=cano,

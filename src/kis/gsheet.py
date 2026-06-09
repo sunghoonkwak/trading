@@ -10,8 +10,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timezone
 
-# Config directory (same as kis_auth.py)
-CONFIG_ROOT = os.path.join(os.path.expanduser("~"), "KIS_config")
+from core.constants import CONFIG_ROOT
+
 SERVICE_ACCOUNT_FILE = os.path.join(CONFIG_ROOT, "service-account.json")
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',

@@ -8,9 +8,10 @@ It is now a pure calculation module without direct API dependencies.
 import logging
 from typing import Dict, List, Optional, Tuple
 from strategy.base import StrategyOrder, OrderSide
+from strategy.constants import DEFAULT_VA_THRESHOLD
 from utils.price_utils import resolve_current_price
 
-from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
+from kis.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
 
 def _current_value(holding: Dict) -> float:
@@ -156,7 +157,7 @@ def _calculate_ticker_orders(
 
     daily_budget = config.get('daily_budget', 0)
     target_cap = config.get('target', 0)
-    threshold_rate = config.get('threshold_rate', 0.15)
+    threshold_rate = config.get('threshold_rate', DEFAULT_VA_THRESHOLD)
 
     holding = portfolio.get(ticker, {})
     cur_price = resolve_current_price(ticker, holding, current_prices)

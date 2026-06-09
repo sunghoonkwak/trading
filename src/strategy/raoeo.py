@@ -12,12 +12,10 @@ from datetime import datetime
 import math
 
 from strategy.base import StrategyOrder, OrderSide
+from strategy.constants import MAX_BUY_PRICE_RATIO
 from utils.price_utils import resolve_current_price
-from core.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
+from kis.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
-# KIS rejects buy orders exceeding 30% above current price.
-# Use 25% cap as a safety margin.
-MAX_BUY_PRICE_RATIO = 1.25
 _BUDGETED_BUY_REASONS = {"Buy Normal", "Buy Average"}
 
 
