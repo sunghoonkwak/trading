@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple, Any
 
 import pytz
 
-from broker import kis_broker
+from broker import kis_broker, market_data
 from strategy import raoeo, value_averaging, rebalancing
 from strategy.base import StrategyOrder, StrategyStatus, OrderSide
 from data.config_manager import ConfigFile, load_json, save_json
@@ -55,13 +55,11 @@ def get_market_data(
         all_tickers.add(cash_ticker)
     current_prices = {}
 
-    from kis import wrapper
-
     for t in all_tickers:
         price = resolve_current_price(
             t,
             holdings.get(t, {}),
-            {t: wrapper.fetch_price(t)},
+            {t: market_data.fetch_price(t)},
         )
         if price > 0:
             current_prices[t] = price

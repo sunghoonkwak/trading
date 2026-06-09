@@ -18,6 +18,7 @@ from data.portfolio_processing import (
     PortfolioCacheManager,
     PortfolioProcessor,
 )
+from broker import market_data
 from utils.market_utils import get_fear_and_greed
 from core.trading_config import get_stock_info
 
@@ -172,8 +173,7 @@ def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
         # Quantity calculation
         price = data.get("cur_price", 0.0)
         if price <= 0:
-            from kis.wrapper import fetch_price
-            price = fetch_price(t)
+            price = market_data.fetch_price(t)
 
         qty_diff = 0
         if price > 0:

@@ -51,6 +51,21 @@ def test_get_orderable_usd_reads_overseas_orderable_amount(monkeypatch):
     assert calls["env_dv"] == "real"
 
 
+def test_market_data_fetch_price_delegates_to_kis_wrapper(monkeypatch):
+    from broker import market_data
+
+    calls = {}
+
+    def fake_fetch_price(ticker, exchange=None):
+        calls["args"] = (ticker, exchange)
+        return 123.45
+
+    monkeypatch.setattr(market_data, "_wrapper_fetch_price", fake_fetch_price)
+
+    assert market_data.fetch_price("qqq", "NAS") == 123.45
+    assert calls["args"] == ("qqq", "NAS")
+
+
 def test_get_orderable_usd_rejects_missing_amount(monkeypatch):
     monkeypatch.setattr(
         kis_broker,
