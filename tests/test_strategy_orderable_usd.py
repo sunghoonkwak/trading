@@ -1,47 +1,25 @@
 import sys
 from pathlib import Path
 
-import pandas as pd
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from strategy import execution_service, rebalancing
 from strategy.base import OrderSide
 
 
-class _FakeTREnv:
-    my_acct = "12345678"
-    my_prod = "01"
-
-
-def test_get_orderable_usd_reads_overseas_orderable_amount(monkeypatch):
+def test_get_orderable_usd_delegates_to_broker(monkeypatch):
     calls = {}
 
-    monkeypatch.setattr(execution_service.ka, "getTREnv", lambda: _FakeTREnv())
     monkeypatch.setattr(
-        execution_service.trading_config,
-        "get_stock_info",
-        lambda ticker: {"market": "AMS"},
-    )
-
-    def fake_inquire_psamount(**kwargs):
-        calls.update(kwargs)
-        return pd.DataFrame([{"ovrs_ord_psbl_amt": "3023.49"}])
-
-    monkeypatch.setattr(
-        execution_service,
-        "inquire_psamount",
-        fake_inquire_psamount,
-        raising=False,
+        execution_service.kis_broker,
+        "get_orderable_usd",
+        lambda symbol, price: calls.setdefault((symbol, price), 3023.49),
     )
 
     amount = execution_service.get_orderable_usd("SOXL", 25.40)
 
     assert amount == 3023.49
-    assert calls["ovrs_excg_cd"] == "AMEX"
-    assert calls["ovrs_ord_unpr"] == "25.4"
-    assert calls["item_cd"] == "SOXL"
-    assert calls["env_dv"] == "real"
+    assert calls == {("SOXL", 25.40): 3023.49}
 
 
 def test_rebalancing_uses_orderable_usd_instead_of_portfolio_cash():

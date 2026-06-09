@@ -8,6 +8,10 @@ __all__ = ["get_portfolio_data", "invalidate_cache", "PortfolioCache"]
 
 
 def __getattr__(name):
+    if name == "PortfolioCache":
+        from .portfolio_processing import PortfolioCache
+
+        return PortfolioCache
     if name in __all__:
         from . import data_service
 

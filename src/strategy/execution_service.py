@@ -13,20 +13,13 @@ from datetime import datetime
 from typing import Dict, List, Tuple, Any
 
 import pytz
-import requests
 
+from broker import kis_broker
 from strategy import raoeo, value_averaging, rebalancing
 from strategy.base import StrategyOrder, StrategyStatus, OrderSide
 from data.config_manager import ConfigFile, load_json, save_json
 from utils.market_utils import get_us_market_status, is_market_holiday
-from kis import wrapper
-from kis.kis_api import kis_auth as ka
-from core import trading_config
-from kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import inquire_psamount
-from kis.kis_api.overseas_stock.order.order import order as order_overseas_stock
-from data.data_service import get_portfolio_data
 from utils.price_utils import resolve_current_price
-from kis.constants import EXCHANGE_CODE_MAP, ORDER_TYPE_US_LIMIT
 
 # Timezone constant
 TZ_ET = pytz.timezone('US/Eastern')
@@ -45,6 +38,8 @@ def get_market_data(
     Fetch current portfolio and prices for all configured strategy targets.
     Returns: (portfolio_holdings, current_prices_map)
     """
+    from data.data_service import get_portfolio_data
+
     portfolio = get_portfolio_data(force_refresh=force_refresh, scope="kis")
     holdings = portfolio.get('merged_data', {})
 
@@ -60,6 +55,8 @@ def get_market_data(
         all_tickers.add(cash_ticker)
     current_prices = {}
 
+    from kis import wrapper
+
     for t in all_tickers:
         price = resolve_current_price(
             t,
@@ -74,22 +71,7 @@ def get_market_data(
 
 def get_orderable_usd(symbol: str, order_price: float) -> float:
     """Return KIS overseas buying power for a representative USD buy."""
-    stock_info = trading_config.get_stock_info(symbol)
-    market = stock_info.get("market", "NASD")
-    ovrs_excg_cd = EXCHANGE_CODE_MAP.get(market, market)
-    trenv = ka.getTREnv()
-
-    result = inquire_psamount(
-        cano=trenv.my_acct,
-        acnt_prdt_cd=trenv.my_prod,
-        ovrs_excg_cd=ovrs_excg_cd,
-        ovrs_ord_unpr=str(order_price),
-        item_cd=symbol,
-        env_dv="real",
-    )
-    if result is None or result.empty or "ovrs_ord_psbl_amt" not in result:
-        raise RuntimeError("KIS did not return overseas orderable USD.")
-    return float(result.iloc[0]["ovrs_ord_psbl_amt"])
+    return kis_broker.get_orderable_usd(symbol, order_price)
 
 
 def _get_rebalancing_orderable_usd(
@@ -108,46 +90,7 @@ def _get_rebalancing_orderable_usd(
 
 def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
     """Execute a single strategy order via KIS API."""
-    try:
-        cano = ka.getTREnv().my_acct
-        acnt_prdt_cd = ka.getTREnv().my_prod
-
-        ord_dv = "buy" if order.side == OrderSide.BUY else "sell"
-
-        exec_price = order.price
-        exec_type = order.order_type
-        if order.side == OrderSide.SELL and order.price == 0:
-            exec_price = 0.01
-            exec_type = ORDER_TYPE_US_LIMIT
-
-        stock_info = trading_config.get_stock_info(order.symbol)
-        market = stock_info.get('market', 'NASD')
-        ovrs_excg_cd = EXCHANGE_CODE_MAP.get(market, market)
-
-        res, err = order_overseas_stock(
-            cano=cano,
-            acnt_prdt_cd=acnt_prdt_cd,
-            ovrs_excg_cd=ovrs_excg_cd,
-            pdno=order.symbol,
-            ord_qty=str(order.quantity),
-            ovrs_ord_unpr=str(exec_price),
-            ord_dv=ord_dv,
-            ctac_tlno="",
-            mgco_aptm_odno="",
-            ord_svr_dvsn_cd="0",
-            ord_dvsn=exec_type,
-            env_dv="real"
-        )
-
-        if res is not None and not res.empty:
-            return True, "Success"
-        return False, str(err)
-    except requests.exceptions.Timeout:
-        error_msg = f"[API Timeout] execution timed out for {order.symbol}"
-        logging.error(error_msg)
-        return False, error_msg
-    except Exception as e:
-        return False, str(e)
+    return kis_broker.place_overseas_order(order)
 
 
 def _get_market_status(today_str: str) -> Dict:

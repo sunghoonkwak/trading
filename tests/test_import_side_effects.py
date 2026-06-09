@@ -34,6 +34,21 @@ assert "kis.kis_api.kis_auth" not in sys.modules
     assert result.returncode == 0, result.stderr
 
 
+def test_data_portfolio_cache_export_stays_lightweight(tmp_path):
+    result = _run_import_check(
+        tmp_path,
+        """
+import sys
+from data import PortfolioCache
+assert PortfolioCache.__name__ == "PortfolioCache"
+assert "data.data_service" not in sys.modules
+assert "kis.kis_api.kis_auth" not in sys.modules
+""",
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_telegram_package_import_does_not_initialize_bot_module(tmp_path):
     result = _run_import_check(
         tmp_path,
@@ -54,6 +69,34 @@ def test_strategy_execution_import_does_not_touch_kis_config(tmp_path):
 import pathlib
 import strategy.execution_service
 assert not (pathlib.Path.home() / "KIS_config").exists()
+""",
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_broker_package_import_does_not_touch_kis_config(tmp_path):
+    result = _run_import_check(
+        tmp_path,
+        """
+import pathlib
+import broker.kis_broker
+assert not (pathlib.Path.home() / "KIS_config").exists()
+""",
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_app_imports_do_not_load_runtime_kis_modules(tmp_path):
+    result = _run_import_check(
+        tmp_path,
+        """
+import sys
+import core.web_server
+import scheduler.scheduler_order
+import telegram_bot.telegram_strategy
+assert "kis.kis_api.kis_auth" not in sys.modules
 """,
     )
 

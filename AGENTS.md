@@ -6,10 +6,12 @@ This is a Python 3.9+ KIS real-time trading system. Runtime entry point:
 `src/main.py`.
 
 - `src/core/`: configuration and web support
-- `src/kis/`: Korea Investment Securities API integration
+- `src/kis/`: Korea Investment Securities API integration and official KIS
+  sample/vendor-like code
 - `src/strategy/`: RAOEO, value averaging, rebalancing, and execution
 - `src/scheduler/`, `src/telegram_bot/`, `src/data/`, `src/state/`,
   `src/utils/`: supporting services
+- `src/broker/`: application-owned broker facades around external trading APIs
 - `src/web/static/`: web assets
 - `templates/`: sample configuration only
 - `scripts/backtest/raoeo/`: backtest tooling
@@ -66,6 +68,13 @@ or one-off abstractions.
 Many modules have matching `.md` notes beside `.py` files. Update them when
 behavior or operational expectations change. Do not hand-edit generated or
 vendor-like KIS endpoint wrappers unless intentionally scoped.
+
+Treat `src/kis/kis_api/**` as the official Korea Investment Securities API
+distribution boundary. Keep application policy, orchestration, and testing
+seams outside that tree, preferably in `src/broker/`, `src/strategy/`,
+`src/data/`, or other app-owned modules. Changes inside the official KIS tree
+should be limited to deliberate compatibility/security patches that are worth
+reapplying during upstream updates.
 
 ## Testing
 

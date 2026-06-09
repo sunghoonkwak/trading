@@ -16,8 +16,10 @@
      직접 조회한 현재가를 우선 사용하고, 유효하지 않으면 보유 잔고의
      `cur_price`로 fallback합니다.
    - 매수 가능 USD는 포트폴리오의 `USD cash`에서 가져오지 않고,
-     `get_orderable_usd`가 KIS `inquire_psamount`의
-     `ovrs_ord_psbl_amt`를 읽어 제공합니다.
+     `get_orderable_usd`가 `broker.kis_broker`를 통해 KIS
+     `inquire_psamount`의 `ovrs_ord_psbl_amt`를 읽어 제공합니다.
+   - 공식 KIS endpoint wrapper는 `execution_service`에서 직접 import하지
+     않고 앱 소유 broker facade 뒤에서 호출합니다.
 
 4. **Unified History Management (통합 히스토리 관리)**:
    - `strategy_history.json` 파일 하나에 모든 전략의 실행 결과를 날짜별로 통합 저장합니다.

@@ -5,6 +5,8 @@
 ## Core Logic (핵심 로직)
 
 1. **캐시 관리**: 메모리 캐시를 통해 API 부하를 줄이며, `force_refresh=True` 시 캐시를 무시하고 최신 데이터를 조회합니다. (단, `scope="all"` 조회 시에만 캐시 갱신)
+   - 캐시 타입과 순수 포트폴리오 변환 로직은 `portfolio_processing.py`에
+     있고, 이 모듈은 조회 orchestration, 저장, 알림을 담당합니다.
 2. **KIS 전용 최적화**: `scope="kis"`일 때 GSheet fetch를 건너뛰는 `kis_only` 플래그를 전달하여 전략 실행 시 불필요한 지연을 방지합니다.
 3. **지능형 스코프 필터링**:
    - `all`, `kis`, `passive` 모드를 지원합니다.
