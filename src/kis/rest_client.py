@@ -79,9 +79,9 @@ class RESTClient:
     def get_portfolio(kis_only: bool = False) -> Dict[str, Any]:
         """Fetch portfolio data with basic retry."""
         try:
-            from kis.portfolio_manager import PortfolioManager
+            from broker import kis_portfolio
 
-            result = PortfolioManager.get_integrated_portfolio(kis_only=kis_only)
+            result = kis_portfolio.get_integrated_portfolio(kis_only=kis_only)
             if result.get("error"):
                 raise KISAPIError(result["error"])
             return result

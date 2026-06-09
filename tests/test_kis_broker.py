@@ -118,6 +118,25 @@ def test_order_admin_delegates_to_kis_wrapper(monkeypatch):
     ]
 
 
+def test_kis_portfolio_delegates_to_portfolio_manager(monkeypatch):
+    from broker import kis_portfolio
+
+    calls = {}
+
+    def fake_get_integrated_portfolio(kis_only=False):
+        calls["kis_only"] = kis_only
+        return {"accounts": []}
+
+    monkeypatch.setattr(
+        kis_portfolio,
+        "_manager_get_integrated_portfolio",
+        fake_get_integrated_portfolio,
+    )
+
+    assert kis_portfolio.get_integrated_portfolio(kis_only=True) == {"accounts": []}
+    assert calls["kis_only"] is True
+
+
 def test_get_orderable_usd_rejects_missing_amount(monkeypatch):
     monkeypatch.setattr(
         kis_broker,
