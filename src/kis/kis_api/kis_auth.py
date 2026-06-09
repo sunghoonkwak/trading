@@ -51,31 +51,8 @@ config_root = os.path.join(os.path.expanduser("~"), "KIS_config")
 # config_root = "$HOME/KIS/config/"  # Folder where the token file is stored; set a path difficult for others to find.
 # token_tmp = config_root + 'KIS000000'  # File name for local token storage; avoid names that make the token value predictable.
 # token_tmp = config_root + 'KIS' + datetime.today().strftime("%Y%m%d%H%M%S")  # Token filename with timestamp (YYYYMMDDHHMMSS)
-token_tmp = os.path.join(
-    config_root, f"KIS{datetime.today().strftime('%Y%m%d')}"
-)  # Token filename with current date (YYYYMMDD)
-
-# Check if the token management file exists; if not, create it.
-if os.path.exists(token_tmp) == False:
-    f = open(token_tmp, "w+")
-
-# Manage App Key, App Secret, Token, Account Number, etc. Please set your own path and filename.
-# pip install PyYAML (Package Installation)
-with open(os.path.join(config_root, "kis_devlp.yaml"), encoding="UTF-8") as f:
-    _cfg = yaml.load(f, Loader=yaml.FullLoader)
-
-from .key.key import get_secrets_from_password
-app_key, app_secret, app_hts_id = get_secrets_from_password()
-
-if app_key is None or app_secret is None or app_hts_id is None:
-    print("\033[91m\n[CRITICAL ERROR] Failed to load credentials.")
-    print("Access denied. The program will now terminate.\033[0m")
-    import sys
-    sys.exit(1)
-
-_cfg["my_app"] = app_key
-_cfg["my_sec"] = app_secret
-_cfg["my_htsid"] = app_hts_id
+token_tmp = os.path.join(config_root, f"KIS{datetime.today().strftime('%Y%m%d')}")
+_cfg = None
 
 _TRENV = tuple()
 _token_expire_time = None
@@ -90,8 +67,42 @@ _base_headers = {
     "Content-Type": "application/json",
     "Accept": "text/plain",
     "charset": "UTF-8",
-    "User-Agent": _cfg["my_agent"],
 }
+
+
+def _get_token_path():
+    return os.path.join(config_root, f"KIS{datetime.today().strftime('%Y%m%d')}")
+
+
+def _get_config():
+    global _cfg
+    if _cfg is not None:
+        return _cfg
+
+    with open(os.path.join(config_root, "kis_devlp.yaml"), encoding="UTF-8") as f:
+        cfg = yaml.load(f, Loader=yaml.FullLoader)
+
+    from .key.key import get_secrets_from_password
+
+    app_key, app_secret, app_hts_id = get_secrets_from_password()
+
+    if app_key is None or app_secret is None or app_hts_id is None:
+        print("\033[91m\n[CRITICAL ERROR] Failed to load credentials.")
+        print("Access denied. The program will now terminate.\033[0m")
+        import sys
+
+        sys.exit(1)
+
+    cfg["my_app"] = app_key
+    cfg["my_sec"] = app_secret
+    cfg["my_htsid"] = app_hts_id
+    _base_headers["User-Agent"] = cfg["my_agent"]
+    _cfg = cfg
+    return _cfg
+
+
+def _resolve_product(product):
+    return product if product is not None else _get_config()["my_prod"]
 
 
 # Save issued token (Token value, expiration: 1 day. Re-requesting within 6 hours returns the same token, notification sent on issuance)
@@ -99,7 +110,8 @@ def save_token(my_token, my_expired):
     # print(type(my_expired), my_expired)
     valid_date = datetime.strptime(my_expired, "%Y-%m-%d %H:%M:%S")
     # print('Save token date: ', valid_date)
-    with open(token_tmp, "w", encoding="utf-8") as f:
+    os.makedirs(config_root, exist_ok=True)
+    with open(_get_token_path(), "w", encoding="utf-8") as f:
         f.write(f"token: {my_token}\n")
         f.write(f"valid-date: {valid_date}\n")
 
@@ -108,7 +120,7 @@ def save_token(my_token, my_expired):
 def read_token():
     try:
         # Read the stored token file
-        with open(token_tmp, encoding="UTF-8") as f:
+        with open(_get_token_path(), encoding="UTF-8") as f:
             tkg_tmp = yaml.load(f, Loader=yaml.FullLoader)
 
         # Token expiration date/time
@@ -168,7 +180,9 @@ def isPaperTrading():  # Paper Trading
 
 
 # Set svr='prod' for Real Trading, svr='vps' for Paper Trading.
-def changeTREnv(token_key, svr="prod", product=_cfg["my_prod"]):
+def changeTREnv(token_key, svr="prod", product=None):
+    cfg_source = _get_config()
+    product = _resolve_product(product)
     cfg = dict()
 
     global _isPaper
@@ -183,34 +197,34 @@ def changeTREnv(token_key, svr="prod", product=_cfg["my_prod"]):
         _isPaper = True
         _smartSleep = 0.5
 
-    cfg["my_app"] = _cfg[ak1]
-    cfg["my_sec"] = _cfg[ak2]
+    cfg["my_app"] = cfg_source[ak1]
+    cfg["my_sec"] = cfg_source[ak2]
 
     if svr == "prod" and product == "01":  # Real: Stock, Consignment, Investment Account
-        cfg["my_acct"] = _cfg["my_acct_stock"]
+        cfg["my_acct"] = cfg_source["my_acct_stock"]
     elif svr == "prod" and product == "03":  # Real: Futures & Options (Derivatives)
-        cfg["my_acct"] = _cfg["my_acct_future"]
+        cfg["my_acct"] = cfg_source["my_acct_future"]
     elif svr == "prod" and product == "08":  # Real: Overseas Futures & Options
-        cfg["my_acct"] = _cfg["my_acct_future"]
+        cfg["my_acct"] = cfg_source["my_acct_future"]
     elif svr == "prod" and product == "22":  # Real: Individual Pension Savings
-        cfg["my_acct"] = _cfg["my_acct_stock"]
+        cfg["my_acct"] = cfg_source["my_acct_stock"]
     elif svr == "prod" and product == "29":  # Real: Retirement Pension Account
-        cfg["my_acct"] = _cfg["my_acct_stock"]
+        cfg["my_acct"] = cfg_source["my_acct_stock"]
     elif svr == "vps" and product == "01":  # Paper: Stock, Consignment, Investment Account
-        cfg["my_acct"] = _cfg["my_paper_stock"]
+        cfg["my_acct"] = cfg_source["my_paper_stock"]
     elif svr == "vps" and product == "03":  # Paper: Futures & Options (Derivatives)
-        cfg["my_acct"] = _cfg["my_paper_future"]
+        cfg["my_acct"] = cfg_source["my_paper_future"]
 
     cfg["my_prod"] = product
-    cfg["my_htsid"] = _cfg["my_htsid"]
-    cfg["my_url"] = _cfg[svr]
+    cfg["my_htsid"] = cfg_source["my_htsid"]
+    cfg["my_url"] = cfg_source[svr]
 
     try:
         my_token = _TRENV.my_token
     except AttributeError:
         my_token = ""
     cfg["my_token"] = my_token if token_key else token_key
-    cfg["my_url_ws"] = _cfg["ops" if svr == "prod" else "vops"]
+    cfg["my_url_ws"] = cfg_source["ops" if svr == "prod" else "vops"]
 
     # print(cfg)
     _setTRENV(cfg)
@@ -233,7 +247,9 @@ def _handle_critical_error(msg):
 
 # Token issuance, valid for 1 day. Re-requesting within 6 hours returns the same token, notification sent on issuance.
 # For paper trading, change svr='vps'. For non-stock accounts (not 01), change product='XX' (last 2 digits of account).
-def auth(svr="prod", product=_cfg["my_prod"], url=None):
+def auth(svr="prod", product=None, url=None):
+    cfg = _get_config()
+    product = _resolve_product(product)
     p = {
         "grant_type": "client_credentials",
     }
@@ -247,8 +263,8 @@ def auth(svr="prod", product=_cfg["my_prod"], url=None):
         ak2 = "paper_sec"  # App Secret (Paper)
 
     # Fetch App Key and App Secret
-    p["appkey"] = _cfg[ak1]
-    p["appsecret"] = _cfg[ak2]
+    p["appkey"] = cfg[ak1]
+    p["appsecret"] = cfg[ak2]
 
     # Check if an issued token already exists
     saved_token_info = read_token()  # Check for existing token (Returns dict or None)
@@ -256,7 +272,7 @@ def auth(svr="prod", product=_cfg["my_prod"], url=None):
     global _token_expire_time
 
     if saved_token_info is None:  # Process issuance if no valid token is found
-        url = f"{_cfg[svr]}/oauth2/tokenP"
+        url = f"{cfg[svr]}/oauth2/tokenP"
         res = requests.post(
             url, data=json.dumps(p), headers=copy.deepcopy(_base_headers)
         )  # Token issuance call
@@ -295,14 +311,15 @@ def auth(svr="prod", product=_cfg["my_prod"], url=None):
 
 # end of initialize, Re-authentication: Checks validity and re-issues token if expired
 # Store in _token_expire_time during execution to check validity; re-issue token upon expiration.
-def reAuth(svr="prod", product=_cfg["my_prod"]):
+def reAuth(svr="prod", product=None):
+    product = _resolve_product(product)
     if _token_expire_time is not None:
         if datetime.now() + timedelta(hours=1) >= _token_expire_time:
             auth(svr, product)
 
 
 def getEnv():
-    return _cfg
+    return _get_config()
 
 
 async def smart_sleep_async():
@@ -318,6 +335,8 @@ def smart_sleep():
 
 
 def getTREnv():
+    if not hasattr(_TRENV, "my_url"):
+        changeTREnv("", "prod")
     return _TRENV
 
 
@@ -537,7 +556,9 @@ def _getBaseHeader_ws():
     return copy.deepcopy(_base_headers_ws)
 
 
-def auth_ws(svr="prod", product=_cfg["my_prod"]):
+def auth_ws(svr="prod", product=None):
+    cfg = _get_config()
+    product = _resolve_product(product)
     p = {"grant_type": "client_credentials"}
     if svr == "prod":
         ak1 = "my_app"
@@ -546,10 +567,10 @@ def auth_ws(svr="prod", product=_cfg["my_prod"]):
         ak1 = "paper_app"
         ak2 = "paper_sec"
 
-    p["appkey"] = _cfg[ak1]
-    p["secretkey"] = _cfg[ak2]
+    p["appkey"] = cfg[ak1]
+    p["secretkey"] = cfg[ak2]
 
-    url = f"{_cfg[svr]}/oauth2/Approval"
+    url = f"{cfg[svr]}/oauth2/Approval"
     res = requests.post(url, data=json.dumps(p), headers=copy.deepcopy(_base_headers))  # Token issuance call
     rescode = res.status_code
     if rescode == 200:  # Successful issuance
@@ -568,7 +589,8 @@ def auth_ws(svr="prod", product=_cfg["my_prod"]):
     logging.info(f"[{_approval_received_time}] => get Approval Key completed!")
 
 
-def reAuth_ws(svr="prod", product=_cfg["my_prod"]):
+def reAuth_ws(svr="prod", product=None):
+    product = _resolve_product(product)
     if _approval_received_time is not None:
         if (datetime.now() - _approval_received_time).total_seconds() >= 86400:
             auth_ws(svr, product)
