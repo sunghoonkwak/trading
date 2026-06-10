@@ -135,3 +135,7 @@ def test_kis_package_does_not_contain_app_websocket_policy_files():
     assert not (SRC_DIR / "kis" / "rest_client.py").exists()
     assert not (SRC_DIR / "kis" / "ws_manager.py").exists()
     assert not (SRC_DIR / "kis" / "event_pipe.py").exists()
+
+
+def test_kis_package_does_not_contain_app_order_admin_policy_files():
+    assert not (SRC_DIR / "kis" / "order_manager.py").exists()

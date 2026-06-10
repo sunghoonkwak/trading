@@ -93,37 +93,83 @@ def test_market_data_get_current_price_uses_market_state(monkeypatch):
     assert calls["ticker"] == "SOXL"
 
 
-def test_order_admin_delegates_to_order_manager(monkeypatch):
+def test_order_admin_fetches_open_orders_through_kis_endpoints(monkeypatch):
     from broker import order_admin
 
-    calls = []
+    calls = {}
 
     monkeypatch.setattr(
         order_admin,
-        "_manager_fetch_open_orders",
-        lambda: calls.append(("fetch",)) or ("df", 1, 2),
-    )
-    monkeypatch.setattr(
-        order_admin,
-        "_manager_execute_action",
-        lambda market, action_type, order_data, new_price=None: (
-            calls.append((market, action_type, order_data, new_price)) or ("res", None)
-        ),
-    )
-    monkeypatch.setattr(
-        order_admin,
-        "_sync_display_open_orders",
-        lambda: calls.append(("sync",)) or True,
+        "_get_trenv",
+        lambda: _FakeTREnv(),
     )
 
-    assert order_admin.fetch_open_orders() == ("df", 1, 2)
-    assert order_admin.execute_manage_action("US", "2", {"odno": "1"}) == ("res", None)
-    assert order_admin.sync_open_orders() is True
-    assert calls == [
-        ("fetch",),
-        ("US", "2", {"odno": "1"}, None),
-        ("sync",),
-    ]
+    def fake_inquire_psbl_rvsecncl(**kwargs):
+        calls["kr"] = kwargs
+        return pd.DataFrame([{"odno": "KR1"}])
+
+    def fake_inquire_nccs_overseas(**kwargs):
+        calls["us"] = kwargs
+        return pd.DataFrame([{"odno": "US1"}])
+
+    monkeypatch.setattr(
+        order_admin,
+        "_get_domestic_order_endpoints",
+        lambda: (fake_inquire_psbl_rvsecncl, lambda **kwargs: None),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_get_overseas_order_endpoints",
+        lambda: (fake_inquire_nccs_overseas, lambda **kwargs: None),
+    )
+
+    df, us_count, kr_count = order_admin.fetch_open_orders()
+
+    assert list(df["_market"]) == ["US", "KR"]
+    assert (us_count, kr_count) == (1, 1)
+    assert calls["us"]["cano"] == "12345678"
+    assert calls["us"]["ovrs_excg_cd"] == "NASD"
+    assert calls["kr"]["acnt_prdt_cd"] == "01"
+
+
+def test_order_admin_executes_overseas_cancel_through_kis_endpoint(monkeypatch):
+    from broker import order_admin
+
+    calls = {}
+
+    monkeypatch.setattr(
+        order_admin,
+        "_get_trenv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_get_domestic_order_endpoints",
+        lambda: (lambda **kwargs: None, lambda **kwargs: None),
+    )
+
+    def fake_order_rvsecncl_overseas(**kwargs):
+        calls["order"] = kwargs
+        return pd.DataFrame([{"result": "ok"}]), "ok"
+
+    monkeypatch.setattr(
+        order_admin,
+        "_get_overseas_order_endpoints",
+        lambda: (lambda **kwargs: None, fake_order_rvsecncl_overseas),
+    )
+
+    result, message = order_admin.execute_manage_action(
+        "US",
+        "2",
+        {"odno": "1", "pdno": "QQQM", "nccs_qty": "3"},
+    )
+
+    assert result.iloc[0]["result"] == "ok"
+    assert message == "ok"
+    assert calls["order"]["orgn_odno"] == "1"
+    assert calls["order"]["rvse_cncl_dvsn_cd"] == "02"
+    assert calls["order"]["ord_qty"] == "3"
+    assert calls["order"]["env_dv"] == "real"
 
 
 def test_kis_portfolio_delegates_to_portfolio_manager(monkeypatch):

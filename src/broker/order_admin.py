@@ -1,32 +1,170 @@
 # -*- coding: utf-8 -*-
-"""Application-owned facade for open-order administration."""
+"""Application-owned runtime for open-order administration."""
+
+import logging
+from typing import Any, Dict, Optional, Tuple
+
+import pandas as pd
 
 from core import trading_config
 from core.display import add_alert, clear_order_states, update_order_state
 
 
-def _get_order_manager():
-    from kis.order_manager import OrderManager
+def _get_trenv():
+    from kis.kis_api import kis_auth as ka
 
-    return OrderManager
-
-
-def _manager_fetch_open_orders():
-    return _get_order_manager().fetch_open_orders()
+    return ka.getTREnv()
 
 
-def _manager_execute_action(market, action_type, order_data, new_price=None):
-    return _get_order_manager().execute_action(market, action_type, order_data, new_price)
+def _get_domestic_order_endpoints():
+    from kis.kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import (
+        inquire_psbl_rvsecncl,
+    )
+    from kis.kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import (
+        order_rvsecncl,
+    )
+
+    return inquire_psbl_rvsecncl, order_rvsecncl
 
 
-def fetch_open_orders():
-    """Fetch open orders through OrderManager."""
-    return _manager_fetch_open_orders()
+def _get_overseas_order_endpoints():
+    from kis.kis_api.overseas_stock.inquire_nccs.inquire_nccs import (
+        inquire_nccs as inquire_nccs_overseas,
+    )
+    from kis.kis_api.overseas_stock.order_rvsecncl.order_rvsecncl import (
+        order_rvsecncl as order_rvsecncl_overseas,
+    )
+
+    return inquire_nccs_overseas, order_rvsecncl_overseas
 
 
-def execute_manage_action(market, action_type, order_data, new_price=None):
-    """Execute an order management action through OrderManager."""
-    return _manager_execute_action(market, action_type, order_data, new_price)
+def fetch_open_orders() -> Tuple[pd.DataFrame, int, int]:
+    """Fetch open orders from all KIS markets."""
+    trenv = _get_trenv()
+    cano = trenv.my_acct
+    prod = trenv.my_prod
+    inquire_psbl_rvsecncl, _ = _get_domestic_order_endpoints()
+    inquire_nccs_overseas, _ = _get_overseas_order_endpoints()
+
+    try:
+        df_us = inquire_nccs_overseas(
+            cano=cano,
+            acnt_prdt_cd=prod,
+            ovrs_excg_cd="NASD",
+            sort_sqn="DS",
+            FK200="",
+            NK200="",
+        )
+        if not df_us.empty:
+            df_us["_market"] = "US"
+    except Exception as e:
+        logging.error("[OrderAdmin] US order fetch failed: %s", e)
+        df_us = pd.DataFrame()
+
+    try:
+        df_kr = inquire_psbl_rvsecncl(
+            cano=cano,
+            acnt_prdt_cd=prod,
+            inqr_dvsn_1="0",
+            inqr_dvsn_2="0",
+        )
+        if not df_kr.empty:
+            df_kr["_market"] = "KR"
+    except Exception as e:
+        logging.error("[OrderAdmin] KR order fetch failed: %s", e)
+        df_kr = pd.DataFrame()
+
+    if df_us.empty and df_kr.empty:
+        return pd.DataFrame(), 0, 0
+
+    combined = pd.concat([df_us, df_kr], ignore_index=True)
+    return combined, len(df_us), len(df_kr)
+
+
+def execute_manage_action(
+    market: str,
+    action_type: str,
+    order_data: Dict[str, Any],
+    new_price: Optional[str] = None,
+) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    """Execute a KIS cancel (2) or correction (1) for an open order."""
+    trenv = _get_trenv()
+    cano = trenv.my_acct
+    prod = trenv.my_prod
+    _, order_rvsecncl = _get_domestic_order_endpoints()
+    _, order_rvsecncl_overseas = _get_overseas_order_endpoints()
+    t_ord = {k.lower(): v for k, v in order_data.items()}
+    order_no = t_ord.get("odno", "Unknown")
+    action_name = "CANCEL" if action_type == "2" else "CORRECT"
+
+    logging.info(
+        "[OrderAdmin] Requesting %s for order %s (%s)",
+        action_name,
+        order_no,
+        market,
+    )
+
+    try:
+        if market == "KR":
+            res_df, msg = order_rvsecncl(
+                env_dv="real",
+                cano=cano,
+                acnt_prdt_cd=prod,
+                krx_fwdg_ord_orgno=t_ord.get(
+                    "ord_gno_brno",
+                    t_ord.get("krx_fwdg_ord_orgno", ""),
+                ),
+                orgn_odno=order_no,
+                ord_dvsn=t_ord.get("ord_dvsn_cd", t_ord.get("ord_dvsn", "00")),
+                rvse_cncl_dvsn_cd="02" if action_type == "2" else "01",
+                ord_qty=t_ord.get("psbl_qty"),
+                ord_unpr=new_price if action_type == "1" else "0",
+                qty_all_ord_yn="Y",
+                excg_id_dvsn_cd=t_ord.get("excg_id_dvsn_cd", "KRX"),
+            )
+        else:
+            qty = t_ord.get(
+                "nccs_qty",
+                t_ord.get("ft_ord_qty4", t_ord.get("ord_qty", 0)),
+            )
+            res_df, msg = order_rvsecncl_overseas(
+                cano=cano,
+                acnt_prdt_cd=prod,
+                ovrs_excg_cd=t_ord.get("ovrs_excg_cd", "NASD"),
+                pdno=t_ord.get("pdno"),
+                orgn_odno=order_no,
+                rvse_cncl_dvsn_cd="02" if action_type == "2" else "01",
+                ord_qty=str(qty),
+                ovrs_ord_unpr=new_price if action_type == "1" else "0",
+                mgco_aptm_odno="",
+                ord_svr_dvsn_cd="0",
+                env_dv="real",
+            )
+
+        if res_df is not None:
+            logging.info(
+                "[OrderAdmin] %s success: %s | Msg: %s",
+                action_name,
+                order_no,
+                msg,
+            )
+        else:
+            logging.warning(
+                "[OrderAdmin] %s failed: %s | Msg: %s",
+                action_name,
+                order_no,
+                msg,
+            )
+
+        return res_df, msg
+    except Exception as e:
+        logging.error(
+            "[OrderAdmin] %s exception: %s | Error: %s",
+            action_name,
+            order_no,
+            e,
+        )
+        return None, str(e)
 
 
 def _sync_display_open_orders():
