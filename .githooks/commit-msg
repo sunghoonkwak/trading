@@ -22,3 +22,34 @@ awk -v max="$max_body_length" '
   }
   END { exit failed }
 ' "$commit_msg_file"
+
+awk '
+  /^#/ { next }
+  !seen_subject {
+    seen_subject = 1
+    next
+  }
+  !seen_separator {
+    if ($0 != "") {
+      printf "Commit body must be separated from the subject by a blank line before line %d.\n", NR > "/dev/stderr"
+      failed = 1
+    }
+    seen_separator = 1
+    next
+  }
+  $0 == "" {
+    if (previous_body_bullet) {
+      blank_after_bullet = 1
+    }
+    next
+  }
+  /^- / && blank_after_bullet {
+    printf "Commit body has a blank line between bullet items before line %d.\n", NR > "/dev/stderr"
+    failed = 1
+  }
+  {
+    previous_body_bullet = ($0 ~ /^- /)
+    blank_after_bullet = 0
+  }
+  END { exit failed }
+' "$commit_msg_file"
