@@ -16,13 +16,6 @@ class PortfolioManager:
     KIS_OWNER_ID = "owner_01"
     KIS_ACCOUNT_KEY = f"{KIS_ACCOUNT_NAME}_{KIS_OWNER_ID}"
 
-    @classmethod
-    def get_integrated_portfolio(cls, kis_only: bool = False) -> Dict[str, Any]:
-        """Compatibility shim for callers that still use the old entry point."""
-        from data.portfolio_integration import get_integrated_portfolio
-
-        return get_integrated_portfolio(kis_only=kis_only)
-
     @staticmethod
     def _get_val(d, keys, default=None):
         """Internal helper to extract values from dict/series with multiple possible keys."""

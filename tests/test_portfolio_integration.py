@@ -41,6 +41,12 @@ def test_data_integration_skips_gsheet_for_kis_only(monkeypatch):
     assert "gsheet_error" not in result["metadata"]
 
 
+def test_kis_portfolio_manager_does_not_own_integration_entrypoint():
+    from kis.portfolio_manager import PortfolioManager
+
+    assert not hasattr(PortfolioManager, "get_integrated_portfolio")
+
+
 def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
     from data import portfolio_integration
 
