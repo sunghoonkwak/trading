@@ -71,7 +71,7 @@ class TradingSystem:
         """Initializes KIS API and WebSocket connection."""
         print("[Startup] Step 2: Initializing KIS API...")
         try:
-            from kis.kis_thread import (
+            from broker.kis_worker import (
                 start_kis_thread, is_kis_thread_running,
                 request_kis_auth, request_kis_ws_auth, wait_for_response,
                 initialize_websocket_and_pipe
@@ -150,7 +150,7 @@ class TradingSystem:
         """Gracefully shuts down all systems."""
         print("\n[System] Shutting down...")
         try:
-            from kis.kis_thread import stop_kis_thread
+            from broker.kis_worker import stop_kis_thread
             stop_kis_thread()
         except: pass
         try:

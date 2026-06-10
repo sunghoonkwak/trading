@@ -11,7 +11,6 @@ from functools import wraps
 
 from kis.kis_api import kis_auth as ka
 from state.system_state import update_kis_state, AuthStatus
-from core.constants import API_TIMEOUT_SHORT
 
 class KISAPIError(Exception):
     """Base exception for KIS API errors."""
@@ -73,18 +72,3 @@ class RESTClient:
         except Exception as e:
             update_kis_state(ws_auth_status=AuthStatus.FAILED, last_error=str(e))
             raise KISAuthError(f"WS Auth failed: {e}")
-
-    @staticmethod
-    @retry_on_exception(max_retries=2, delay=1.0)
-    def get_portfolio(kis_only: bool = False) -> Dict[str, Any]:
-        """Fetch portfolio data with basic retry."""
-        try:
-            from broker import kis_portfolio
-
-            result = kis_portfolio.get_integrated_portfolio(kis_only=kis_only)
-            if result.get("error"):
-                raise KISAPIError(result["error"])
-            return result
-        except Exception as e:
-            logging.error(f"[RESTClient] Portfolio fetch failed: {e}")
-            raise

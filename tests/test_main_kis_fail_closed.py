@@ -39,7 +39,7 @@ def _install_fake_kis_thread(
     ws_init_success=True,
 ):
     calls = []
-    fake_kis_thread = types.ModuleType("kis.kis_thread")
+    fake_kis_thread = types.ModuleType("broker.kis_worker")
 
     def start_kis_thread():
         calls.append("start_kis_thread")
@@ -72,7 +72,7 @@ def _install_fake_kis_thread(
     fake_kis_thread.wait_for_response = wait_for_response
     fake_kis_thread.initialize_websocket_and_pipe = initialize_websocket_and_pipe
 
-    monkeypatch.setitem(sys.modules, "kis.kis_thread", fake_kis_thread)
+    monkeypatch.setitem(sys.modules, "broker.kis_worker", fake_kis_thread)
 
     fake_broker = types.ModuleType("broker")
     fake_order_admin = types.ModuleType("broker.order_admin")

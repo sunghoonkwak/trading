@@ -9,7 +9,7 @@ import logging
 from typing import Dict, List, Tuple, Any
 
 from core.thread_comm import ThreadRequest, RequestType
-from kis.kis_thread import request_portfolio, wait_for_response
+from broker.kis_worker import request_portfolio, wait_for_response
 from state.system_state import is_kis_ready
 from core.display import add_alert
 from data.config_manager import ConfigFile, load_json, save_json
