@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Application-owned facade for KIS portfolio retrieval."""
+"""Application-owned facade for portfolio retrieval through the KIS worker."""
 
 
 def _manager_get_integrated_portfolio(kis_only: bool = False):
-    from kis.portfolio_manager import PortfolioManager
+    from data.portfolio_integration import get_integrated_portfolio
 
-    return PortfolioManager.get_integrated_portfolio(kis_only=kis_only)
+    return get_integrated_portfolio(kis_only=kis_only)
 
 
 def get_integrated_portfolio(kis_only: bool = False):

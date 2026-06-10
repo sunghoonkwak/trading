@@ -1,13 +1,8 @@
 # -*- coding: utf-8 -*-
-"""
-Portfolio Manager Module
-
-Handles fetching and merging account data from KIS API and Google Sheets.
-"""
+"""KIS portfolio source adapter."""
 import logging
 import pandas as pd
-from datetime import datetime, timezone
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, Any
 
 from kis.kis_api import kis_auth as ka
 from kis.kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_balance
@@ -15,40 +10,18 @@ from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance 
 from kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import inquire_psamount
 
 class PortfolioManager:
-    """Orchestrates portfolio data fetching, conversion, and merging."""
+    """Fetch and normalize Korea Investment Securities account data."""
 
-    OWNERS = [
-        {"id": "owner_01", "name": "곽성훈"},
-        {"id": "owner_02", "name": "염인선"}
-    ]
+    KIS_ACCOUNT_NAME = "한국투자증권"
+    KIS_OWNER_ID = "owner_01"
+    KIS_ACCOUNT_KEY = f"{KIS_ACCOUNT_NAME}_{KIS_OWNER_ID}"
 
     @classmethod
     def get_integrated_portfolio(cls, kis_only: bool = False) -> Dict[str, Any]:
-        """Main entry point to get the full integrated portfolio."""
-        from core.display import add_alert
+        """Compatibility shim for callers that still use the old entry point."""
+        from data.portfolio_integration import get_integrated_portfolio
 
-        # 1. Fetch KIS Data
-        add_alert("[KIS] Fetching KIS API data...", "INFO")
-        kis_raw_data = cls._fetch_kis_account_data()
-
-        kis_portfolio = {}
-        if not kis_raw_data.get('error'):
-            kis_portfolio = cls._convert_kis_to_standard(kis_raw_data)
-            add_alert(f"[KIS] {len(kis_portfolio.get('holdings', []))} holdings loaded", "SUCCESS")
-        else:
-            add_alert(f"KIS Error: {kis_raw_data['error']}", "WARN")
-
-        # 2. Fetch GSheet Data (skip when kis_only)
-        gsheet_data = {"accounts": {}, "holdings": [], "asset_info": {}, "cash_holdings": []}
-        gs_errors = None
-        if not kis_only:
-            add_alert("[KIS] Fetching GSheet data...", "INFO")
-            gsheet_data, gs_errors = cls._fetch_gsheet_all()
-            if gs_errors:
-                add_alert(f"GSheet Warning: {gs_errors}", "WARN")
-
-        # 3. Merge and Normalize
-        return cls._merge_all(kis_portfolio, gsheet_data, kis_raw_data.get('exchange_rate'), kis_raw_data.get('error'), gs_errors)
+        return get_integrated_portfolio(kis_only=kis_only)
 
     @staticmethod
     def _get_val(d, keys, default=None):
@@ -60,6 +33,18 @@ class PortfolioManager:
                 val = d[k]
                 if val is not None and str(val).lower() != 'none': return val
         return default
+
+    @classmethod
+    def _to_float(cls, d, keys, default=0.0) -> float:
+        raw_value = cls._get_val(d, keys, default)
+        try:
+            return float(str(raw_value).replace(',', ''))
+        except (TypeError, ValueError):
+            return float(default)
+
+    @classmethod
+    def _to_int(cls, d, keys, default=0) -> int:
+        return int(cls._to_float(d, keys, default))
 
     @classmethod
     def _get_positive_float_from_frames(cls, frames, keys) -> float:
@@ -80,8 +65,9 @@ class PortfolioManager:
     @classmethod
     def _fetch_kis_account_data(cls) -> Dict[str, Any]:
         """Fetches both domestic and overseas balances from KIS."""
-        cano = ka.getTREnv().my_acct
-        prod = ka.getTREnv().my_prod
+        trenv = ka.getTREnv()
+        cano = trenv.my_acct
+        prod = trenv.my_prod
         env_dv = "real"
 
         # Domestic
@@ -93,16 +79,22 @@ class PortfolioManager:
             )
             if not df1.empty:
                 for item in df1.to_dict('records'):
-                    kr_res['stocks'].append({
-                        'name': cls._get_val(item, ['prdt_name', 'PRDT_NAME']),
-                        'qty': int(float(cls._get_val(item, ['hldg_qty', 'HLDG_QTY'], 0))),
-                        'cur_price': float(cls._get_val(item, ['prpr', 'PRPR'], 0)),
-                        'avg_price': float(cls._get_val(item, ['pchs_avg_pric', 'PCHS_AVG_PRIC', 'avg_unpr3'], 0)),
-                        'symbol': cls._get_val(item, ['pdno', 'PDNO'], '')
-                    })
+                    try:
+                        kr_res['stocks'].append({
+                            'name': cls._get_val(item, ['prdt_name', 'PRDT_NAME']),
+                            'qty': cls._to_int(item, ['hldg_qty', 'HLDG_QTY']),
+                            'cur_price': cls._to_float(item, ['prpr', 'PRPR']),
+                            'avg_price': cls._to_float(item, ['pchs_avg_pric', 'PCHS_AVG_PRIC', 'avg_unpr3']),
+                            'symbol': cls._get_val(item, ['pdno', 'PDNO'], '')
+                        })
+                    except Exception as e:
+                        logging.warning("[KIS] Skipping malformed domestic holding: %s", e)
             if not df2.empty:
                 kr_res['asset'] = df2.iloc[0].to_dict()
-                kr_res['krw_orderable'] = int(float(cls._get_val(kr_res['asset'], ['prvs_rcdl_excc_amt', 'PRVS_RCDL_EXCC_AMT'], 0)))
+                kr_res['krw_orderable'] = cls._to_int(
+                    kr_res['asset'],
+                    ['prvs_rcdl_excc_amt', 'PRVS_RCDL_EXCC_AMT'],
+                )
         except Exception as e: kr_res['error'] = str(e)
 
         # Overseas
@@ -123,15 +115,18 @@ class PortfolioManager:
                 for item in df1.to_dict('records'):
                     symbol = cls._get_val(item, ['pdno', 'PDNO']) or cls._get_val(item, ['ovrs_pdno', 'OVRS_PDNO'])
                     if not symbol or symbol in seen: continue
-                    us_res['stocks'].append({
-                        'name': cls._get_val(item, ['prdt_name', 'PRDT_NAME', 'ovrs_prdt_name']),
-                        'qty': float(cls._get_val(item, ['ccld_qty_smtl1', 'ovrs_cblc_qty', 'HLDG_QTY'], 0)),
-                        'cur_price': float(cls._get_val(item, ['ovrs_now_pric1', 'prpr'], 0)),
-                        'avg_price': float(cls._get_val(item, ['avg_unpr3', 'pchs_avg_pric'], 0)),
-                        'symbol': symbol,
-                        'exchange': cls._get_val(item, ['ovrs_excg_cd', 'OVRS_EXCG_CD'], 'US')
-                    })
-                    seen.add(symbol)
+                    try:
+                        us_res['stocks'].append({
+                            'name': cls._get_val(item, ['prdt_name', 'PRDT_NAME', 'ovrs_prdt_name']),
+                            'qty': cls._to_float(item, ['ccld_qty_smtl1', 'ovrs_cblc_qty', 'HLDG_QTY']),
+                            'cur_price': cls._to_float(item, ['ovrs_now_pric1', 'prpr']),
+                            'avg_price': cls._to_float(item, ['avg_unpr3', 'pchs_avg_pric']),
+                            'symbol': symbol,
+                            'exchange': cls._get_val(item, ['ovrs_excg_cd', 'OVRS_EXCG_CD'], 'US')
+                        })
+                        seen.add(symbol)
+                    except Exception as e:
+                        logging.warning("[KIS] Skipping malformed overseas holding: %s", e)
             if not df2.empty:
                 us_res['asset'].update(df2.iloc[0].to_dict())
             us_res['exchange_rate'] = cls._get_positive_float_from_frames(
@@ -170,7 +165,7 @@ class PortfolioManager:
     def _convert_kis_to_standard(cls, kis_data: Dict) -> Dict:
         """Converts KIS raw result to standard portfolio format."""
         holdings, asset_info, cash = [], {}, []
-        kis_acc_key = "한국투자증권_owner_01"
+        kis_acc_key = cls.KIS_ACCOUNT_KEY
 
         # Stocks
         for s in kis_data['domestic_stocks'] + kis_data['overseas_stocks']:
@@ -189,7 +184,7 @@ class PortfolioManager:
 
         # Cash
         if kis_data['krw_orderable'] > 0:
-            cash.append({"account_name": "한국투자증권", "account_key": kis_acc_key, "amount": float(kis_data['krw_orderable']), "currency": "KRW"})
+            cash.append({"account_name": cls.KIS_ACCOUNT_NAME, "account_key": kis_acc_key, "amount": float(kis_data['krw_orderable']), "currency": "KRW"})
         fallback_usd_cash = cls._get_val(
             kis_data['overseas_asset'],
             ['frcr_drwg_psbl_amt_1', 'ovrs_relt_proc_amt'],
@@ -200,63 +195,9 @@ class PortfolioManager:
             fallback_usd_cash if usd_orderable is None else usd_orderable
         )
         if usd_cash > 0:
-            cash.append({"account_name": "한국투자증권", "account_key": kis_acc_key, "amount": usd_cash, "currency": "USD"})
+            cash.append({"account_name": cls.KIS_ACCOUNT_NAME, "account_key": kis_acc_key, "amount": usd_cash, "currency": "USD"})
 
         return {
             "holdings": holdings, "cash_holdings": cash, "asset_info": asset_info,
-            "accounts": {kis_acc_key: {"name": "한국투자증권", "owner_id": "owner_01"}}
-        }
-
-    @staticmethod
-    def _fetch_gsheet_all() -> Tuple[Dict, Optional[str]]:
-        """Fetches GSheet data for all currencies."""
-        from data.gsheet import connect_google_sheet, parse_worksheet_data
-        gs_data = {"accounts": {}, "holdings": [], "asset_info": {}, "cash_holdings": []}
-        errors = []
-        for curr in ['USD', 'KRW']:
-            sheet = connect_google_sheet(curr)
-            if sheet:
-                parsed = parse_worksheet_data(sheet, curr)
-                gs_data["accounts"].update(parsed["accounts"])
-                gs_data["holdings"].extend(parsed["holdings"])
-                gs_data["asset_info"].update(parsed["asset_info"])
-                gs_data["cash_holdings"].extend(parsed["cash_holdings"])
-            else:
-                errors.append(f"Failed to connect {curr} sheet")
-        return gs_data, " | ".join(errors) if errors else None
-
-    @classmethod
-    def _merge_all(cls, kis: Dict, gs: Dict, ex_rate: float, kis_err: str, gs_err: str) -> Dict:
-        """Merges everything into final standardized format."""
-        all_accounts_raw = {**(kis.get("accounts", {})), **(gs.get("accounts", {}))}
-        account_list, id_map = [], {}
-        for idx, (key, acc) in enumerate(all_accounts_raw.items(), start=1):
-            acc_id = f"acc_{idx:02d}"
-            id_map[key] = acc_id
-            account_list.append({"id": acc_id, "owner_id": acc["owner_id"], "name": acc["name"]})
-
-        holdings = []
-        for h in kis.get("holdings", []) + gs.get("holdings", []):
-            holdings.append({
-                "account_id": id_map.get(h["account_key"], "unknown"),
-                "ticker": h["ticker"], "name": h.get("name", h["ticker"]),
-                "qty": h["qty"], "avg_price": h["avg_price"], "cur_price": h.get("cur_price", h["avg_price"])
-            })
-
-        cash_holdings = []
-        for c in kis.get("cash_holdings", []) + gs.get("cash_holdings", []):
-            c_id = id_map.get(c.get("account_key"), "unknown")
-            cash_holdings.append({
-                **c,
-                "account_id": c_id
-            })
-
-        metadata = {"last_updated": datetime.now(timezone.utc).isoformat(), "exchange_rate": ex_rate}
-        if kis_err: metadata["kis_error"] = kis_err
-        if gs_err: metadata["gsheet_error"] = gs_err
-
-        return {
-            "metadata": metadata, "owners": cls.OWNERS, "accounts": account_list,
-            "asset_info": {**(kis.get("asset_info", {})), **(gs.get("asset_info", {}))},
-            "holdings": holdings, "cash_holdings": cash_holdings
+            "accounts": {kis_acc_key: {"name": cls.KIS_ACCOUNT_NAME, "owner_id": cls.KIS_OWNER_ID}}
         }

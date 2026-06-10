@@ -74,6 +74,85 @@ def test_fetch_portfolio_reads_exchange_rate_from_overseas_holdings(monkeypatch)
     assert result["exchange_rate"] == 1375.50
 
 
+def test_fetch_portfolio_parses_comma_numbers_and_reuses_trenv(monkeypatch):
+    calls = {"trenv": 0}
+
+    def fake_get_trenv():
+        calls["trenv"] += 1
+        return _FakeTREnv()
+
+    monkeypatch.setattr(
+        "kis.portfolio_manager.ka.getTREnv",
+        fake_get_trenv,
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_balance",
+        lambda **kwargs: (
+            pd.DataFrame([
+                {
+                    "pdno": "005930",
+                    "prdt_name": "Samsung Electronics",
+                    "hldg_qty": "1,234",
+                    "prpr": "71,000",
+                    "pchs_avg_pric": "68,500",
+                }
+            ]),
+            pd.DataFrame([{"prvs_rcdl_excc_amt": "1,000,000"}]),
+        ),
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_present_balance",
+        lambda **kwargs: (
+            pd.DataFrame([
+                {
+                    "pdno": "QQQM",
+                    "prdt_name": "Invesco NASDAQ 100 ETF",
+                    "ccld_qty_smtl1": "12.5",
+                    "ovrs_now_pric1": "123.45",
+                    "avg_unpr3": "111.11",
+                    "bass_exrt": "1,375.50",
+                }
+            ]),
+            pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
+            pd.DataFrame(),
+        ),
+    )
+    monkeypatch.setattr(
+        "kis.portfolio_manager.inquire_psamount",
+        lambda **kwargs: pd.DataFrame([{"ovrs_ord_psbl_amt": "3,023.49"}]),
+        raising=False,
+    )
+
+    result = PortfolioManager._fetch_kis_account_data()
+
+    assert calls["trenv"] == 1
+    assert result["domestic_stocks"][0]["qty"] == 1234
+    assert result["domestic_stocks"][0]["cur_price"] == 71000.0
+    assert result["domestic_stocks"][0]["avg_price"] == 68500.0
+    assert result["krw_orderable"] == 1000000
+    assert result["overseas_stocks"][0]["qty"] == 12.5
+    assert result["exchange_rate"] == 1375.50
+    assert result["usd_orderable"] == 3023.49
+
+
+def test_kis_standard_portfolio_owner_is_sunghoon_account():
+    portfolio = PortfolioManager._convert_kis_to_standard(
+        {
+            "domestic_stocks": [],
+            "overseas_stocks": [],
+            "domestic_asset": {},
+            "overseas_asset": {},
+            "exchange_rate": 1375.0,
+            "krw_orderable": 0,
+            "usd_orderable": 0,
+            "error": None,
+        }
+    )
+
+    account = portfolio["accounts"]["한국투자증권_owner_01"]
+    assert account == {"name": "한국투자증권", "owner_id": "owner_01"}
+
+
 def test_kis_portfolio_uses_orderable_usd_as_cash(monkeypatch):
     calls = {}
 
