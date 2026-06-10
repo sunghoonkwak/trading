@@ -10,8 +10,8 @@ from datetime import datetime
 import state.market_state as trading_state
 from core import trading_config
 from core.trading_config import strip_market_prefix
-from kis import event_pipe
-from kis.event_pipe import print_viewer
+from core import event_pipe
+from core.event_pipe import print_viewer
 from kis.ws_parser import mask_dict_for_log
 from core.display import add_alert, remove_order_state
 from utils.format_utils import get_fixed_width, format_number

@@ -37,7 +37,7 @@ from core import trading_config
 import state.market_state as trading_state
 from core import display
 from utils.logger import LogManager
-from kis import event_pipe
+from core import event_pipe
 from core import lock_manager
 
 class TradingSystem:

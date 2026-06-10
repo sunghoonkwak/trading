@@ -55,7 +55,7 @@ drift로 감지할 수 있게 합니다.
 
 ### `mask_dict_for_log(data)`
 
-`event_handler.py`의 주문 통보 `FULL DUMP`처럼 이름이 붙은 dict 형태의 record에서
+`broker.kis_event_handler`의 주문 통보 `FULL DUMP`처럼 이름이 붙은 dict 형태의 record에서
 동일한 민감 필드를 `********`로 치환합니다.
 
 ### `should_log_normalization(note, expected_truncation)`

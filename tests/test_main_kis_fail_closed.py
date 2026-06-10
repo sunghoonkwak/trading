@@ -11,12 +11,11 @@ sys.path.insert(0, str(SRC_DIR))
 
 def _load_main(monkeypatch):
     fake_kis = types.ModuleType("kis")
-    fake_event_pipe = types.ModuleType("kis.event_pipe")
+    fake_event_pipe = types.ModuleType("core.event_pipe")
     fake_event_pipe.create_pipe_server = lambda: False
-    fake_kis.event_pipe = fake_event_pipe
 
     monkeypatch.setitem(sys.modules, "kis", fake_kis)
-    monkeypatch.setitem(sys.modules, "kis.event_pipe", fake_event_pipe)
+    monkeypatch.setitem(sys.modules, "core.event_pipe", fake_event_pipe)
 
     spec = importlib.util.spec_from_file_location("main_under_test", SRC_DIR / "main.py")
     module = importlib.util.module_from_spec(spec)

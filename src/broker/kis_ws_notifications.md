@@ -1,4 +1,4 @@
-# KIS WebSocket Notifications (`src/kis/ws_notifications.py`)
+# KIS WebSocket Notifications (`src/broker/kis_ws_notifications.py`)
 
 WebSocket 재연결 Telegram 알림 기준을 관리합니다.
 

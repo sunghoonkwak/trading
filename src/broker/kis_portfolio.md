@@ -7,7 +7,7 @@
 - `get_integrated_portfolio(kis_only=False)`를 제공합니다.
 - 현재 구현은 `data.portfolio_integration.get_integrated_portfolio`로
   lazy 위임합니다.
-- `RESTClient`가 포트폴리오 병합 정책 클래스를 직접 보지 않도록 하는
+- KIS REST 인증/호출 계층이 포트폴리오 병합 정책 클래스를 직접 보지 않도록 하는
   전환 seam입니다.
 
 ## Import Boundary

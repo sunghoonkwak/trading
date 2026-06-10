@@ -21,7 +21,7 @@ def _get_event_pipe():
         return None
 
     try:
-        from kis import event_pipe
+        from core import event_pipe
         _event_pipe_module = event_pipe
         return _event_pipe_module
     except ImportError:

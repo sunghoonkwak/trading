@@ -5,7 +5,7 @@ SRC_DIR = Path(__file__).resolve().parents[1] / "src"
 
 spec = importlib.util.spec_from_file_location(
     "ws_notifications_under_test",
-    SRC_DIR / "kis" / "ws_notifications.py",
+    SRC_DIR / "broker" / "kis_ws_notifications.py",
 )
 ws_notifications = importlib.util.module_from_spec(spec)
 assert spec.loader is not None

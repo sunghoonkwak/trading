@@ -15,8 +15,8 @@ from core.thread_comm import (
     RequestType,
 )
 from state.system_state import ThreadStatus, update_kis_state
-from kis.rest_client import RESTClient
-from kis.ws_manager import WSManager
+from broker.kis_rest_client import RESTClient
+from broker.kis_ws_manager import WSManager
 
 
 _kis_thread: Optional[threading.Thread] = None

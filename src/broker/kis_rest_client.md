@@ -1,4 +1,4 @@
-# KIS REST Client (`src/kis/rest_client.py`)
+# KIS REST Client (`src/broker/kis_rest_client.py`)
 
 KIS REST API와의 통신을 전담하며, 네트워크 안정성을 위해 재시도 및 오류 처리 로직이 강화된 모듈입니다.
 
@@ -22,7 +22,7 @@ WebSocket 접속키를 발급받습니다.
 ## Usage Example (사용 예시)
 
 ```python
-from kis.rest_client import RESTClient
+from broker.kis_rest_client import RESTClient
 
 try:
     # 안전하게 REST 인증 수행 (자동 재시도 포함)

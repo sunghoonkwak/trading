@@ -97,7 +97,7 @@ async def lifespan(app: FastAPI):
 
     # Register broadcast callback with event_pipe
     try:
-        from kis import event_pipe
+        from core import event_pipe
         event_pipe.set_web_broadcast_callback(_broadcast_callback)
         logging.info("[WebServer] Registered web broadcast callback")
     except Exception as e:

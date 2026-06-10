@@ -37,7 +37,7 @@ from kis.ws_parser import (
     should_send_schema_drift_alert,
     split_records,
 )
-from kis.ws_notifications import (
+from broker.kis_ws_notifications import (
     build_reconnection_failure_message,
     build_reconnection_success_message,
     should_notify_reconnection_failure,

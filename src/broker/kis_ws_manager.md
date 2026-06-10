@@ -1,4 +1,4 @@
-# KIS WebSocket Manager (`src/kis/ws_manager.py`)
+# KIS WebSocket Manager (`src/broker/kis_ws_manager.py`)
 
 실시간 시세 수신 및 체결 통보를 위한 WebSocket 연결과 구독(Subscription)을 관리합니다.
 
@@ -25,7 +25,7 @@ WebSocket 스레드가 정상적으로 실행 중인지 확인합니다.
 ## Usage Example (사용 예시)
 
 ```python
-from kis.ws_manager import WSManager
+from broker.kis_ws_manager import WSManager
 
 ws = WSManager()
 ws.initialize()

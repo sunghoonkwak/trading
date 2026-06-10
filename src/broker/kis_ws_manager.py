@@ -29,7 +29,7 @@ class WSManager:
             from kis.kis_api.overseas_stock.asking_price.asking_price import asking_price
             from kis.kis_api.overseas_stock.ccnl_notice.ccnl_notice import ccnl_notice as ccnl_notice_us
             from kis.kis_api.overseas_stock.delayed_ccnl.delayed_ccnl import delayed_ccnl
-            from kis.event_handler import on_result
+            from broker.kis_event_handler import on_result
 
             logging.info("[WSManager] Initializing WebSocket...")
             self._ws_instance = ka.KISWebSocket(api_url="")

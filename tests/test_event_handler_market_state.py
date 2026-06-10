@@ -13,11 +13,10 @@ from state import market_state
 
 def _load_event_handler(monkeypatch):
     fake_kis = types.ModuleType("kis")
-    fake_event_pipe = types.ModuleType("kis.event_pipe")
+    fake_event_pipe = types.ModuleType("core.event_pipe")
     fake_event_pipe.print_viewer = lambda *args, **kwargs: None
     fake_ws_parser = types.ModuleType("kis.ws_parser")
     fake_ws_parser.mask_dict_for_log = lambda value: value
-    fake_kis.event_pipe = fake_event_pipe
     fake_kis.ws_parser = fake_ws_parser
     fake_broker = types.ModuleType("broker")
     fake_order_admin = types.ModuleType("broker.order_admin")
@@ -27,7 +26,7 @@ def _load_event_handler(monkeypatch):
     fake_telegram_utils.send_notification = lambda *args, **kwargs: None
 
     monkeypatch.setitem(sys.modules, "kis", fake_kis)
-    monkeypatch.setitem(sys.modules, "kis.event_pipe", fake_event_pipe)
+    monkeypatch.setitem(sys.modules, "core.event_pipe", fake_event_pipe)
     monkeypatch.setitem(sys.modules, "kis.ws_parser", fake_ws_parser)
     monkeypatch.setitem(sys.modules, "broker", fake_broker)
     monkeypatch.setitem(sys.modules, "broker.order_admin", fake_order_admin)
@@ -36,7 +35,7 @@ def _load_event_handler(monkeypatch):
 
     spec = importlib.util.spec_from_file_location(
         "event_handler_under_test",
-        SRC_DIR / "kis" / "event_handler.py",
+        SRC_DIR / "broker" / "kis_event_handler.py",
     )
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
