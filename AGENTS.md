@@ -54,6 +54,21 @@ container over temporary runtime logging or a service restart.
 - Keep diagnostics read-only and never print or persist credentials, account
   numbers, tokens, or unmasked sensitive payloads.
 
+## Toss API Reference
+
+For Toss Invest Open API work, consult the checked-in OpenAPI reference first:
+`docs/reference/toss-openapi-v1.1.1.json`. It is a public-style API schema with
+dummy examples only; runtime credentials and account data still belong only in
+`KIS_config/` or external mounts.
+
+- Implement Toss helpers under `src/toss/` and keep orchestration in app-owned
+  modules such as `src/broker/`.
+- Use the schema to confirm paths, methods, request body `Content-Type`,
+  required headers such as `X-Tossinvest-Account`, and response field names
+  before changing Toss API calls.
+- Keep live Toss diagnostics read-only unless the user explicitly asks for an
+  order-changing action such as create, modify, or cancel.
+
 ## Coding And Documentation
 
 Use standard Python style: 4-space indentation, `snake_case` functions and
