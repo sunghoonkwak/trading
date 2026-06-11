@@ -264,6 +264,32 @@ def test_order_admin_sync_uses_ticker_when_toss_name_is_missing(monkeypatch):
     assert stock_name_updates == []
 
 
+def test_order_admin_executes_toss_cancel_through_toss_endpoint(monkeypatch):
+    from broker import order_admin
+
+    calls = {}
+
+    monkeypatch.setattr(order_admin, "_get_toss_cancel_helpers", lambda: (
+        lambda: "access-token",
+        lambda access_token: 7,
+        lambda **kwargs: calls.update(kwargs) or {"orderId": "toss-order-1"},
+    ))
+
+    result, message = order_admin.execute_manage_action(
+        "TOSS",
+        "2",
+        {"odno": float("nan"), "orderId": "toss-order-1"},
+    )
+
+    assert message is None
+    assert result.iloc[0]["orderId"] == "toss-order-1"
+    assert calls == {
+        "order_id": "toss-order-1",
+        "account_seq": 7,
+        "access_token": "access-token",
+    }
+
+
 def test_order_admin_executes_overseas_cancel_through_kis_endpoint(monkeypatch):
     from broker import order_admin
 

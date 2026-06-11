@@ -329,9 +329,26 @@ def _cancel_order_sync(order_id: str):
     """Synchronously cancel an order by ID."""
     from broker import order_admin
 
+    def mask_order_id(value):
+        value = str(value)
+        if len(value) <= 12:
+            return value
+        return f"{value[:6]}...{value[-6:]}"
+
+    def first_order_id(row_lower):
+        for key in ("odno", "ord_no", "orderid"):
+            value = row_lower.get(key)
+            if value is not None and str(value).strip() and str(value) != "nan":
+                return str(value)
+        return ""
+
     try:
         df, _, _, _ = order_admin.fetch_open_orders()
         if df.empty:
+            logging.warning(
+                "[WebServer] cancel requested for %s but no open orders were returned",
+                mask_order_id(order_id),
+            )
             return {"success": False, "error": "No open orders found"}
 
         # Find the order by ID
@@ -339,14 +356,25 @@ def _cancel_order_sync(order_id: str):
         market = None
         for _, row in df.iterrows():
             row_lower = {k.lower(): v for k, v in row.items()}
-            odno = row_lower.get('odno', row_lower.get('ord_no', ''))
+            odno = first_order_id(row_lower)
             if str(odno) == str(order_id):
                 target_order = row
                 market = row.get('_market', 'US')
                 break
 
         if target_order is None:
+            logging.warning(
+                "[WebServer] cancel order not found: requested=%s rows=%s",
+                mask_order_id(order_id),
+                len(df),
+            )
             return {"success": False, "error": f"Order {order_id} not found"}
+
+        logging.info(
+            "[WebServer] cancel matched order: requested=%s market=%s",
+            mask_order_id(order_id),
+            market,
+        )
 
         # Execute cancellation (action_type='2' means cancel)
         df_res, err_msg = order_admin.execute_manage_action(market, '2', target_order, None)

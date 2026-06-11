@@ -38,6 +38,14 @@ def _get_overseas_order_endpoints():
     return inquire_nccs_overseas, order_rvsecncl_overseas
 
 
+def _get_toss_cancel_helpers():
+    from toss.cancel_order import cancel_order
+    from toss.get_holdings import _get_default_account_seq
+    from toss.get_prices import load_access_token
+
+    return load_access_token, _get_default_account_seq, cancel_order
+
+
 def _fetch_toss_open_orders() -> pd.DataFrame:
     from toss.get_holdings import _get_default_account_seq
     from toss.get_orders import get_orders
@@ -67,6 +75,13 @@ def _first_present(*values, default=None):
             continue
         return value
     return default
+
+
+def _mask_order_id(value):
+    value = str(value)
+    if len(value) <= 12:
+        return value
+    return f"{value[:6]}...{value[-6:]}"
 
 
 def fetch_open_orders() -> Tuple[pd.DataFrame, int, int, int]:
@@ -133,17 +148,37 @@ def execute_manage_action(
     _, order_rvsecncl = _get_domestic_order_endpoints()
     _, order_rvsecncl_overseas = _get_overseas_order_endpoints()
     t_ord = {k.lower(): v for k, v in order_data.items()}
-    order_no = t_ord.get("odno", "Unknown")
+    order_no = _first_present(
+        t_ord.get("odno"),
+        t_ord.get("ord_no"),
+        t_ord.get("orderid"),
+        default="Unknown",
+    )
     action_name = "CANCEL" if action_type == "2" else "CORRECT"
 
     logging.info(
         "[OrderAdmin] Requesting %s for order %s (%s)",
         action_name,
-        order_no,
+        _mask_order_id(order_no),
         market,
     )
 
     try:
+        if market == "TOSS":
+            if action_type != "2":
+                return None, "Toss order correction is not supported"
+
+            load_access_token, get_default_account_seq, cancel_order = _get_toss_cancel_helpers()
+            access_token = load_access_token()
+            account_seq = get_default_account_seq(access_token)
+            result = cancel_order(
+                order_id=str(order_no),
+                account_seq=account_seq,
+                access_token=access_token,
+            )
+            logging.info("[OrderAdmin] TOSS CANCEL success: %s", _mask_order_id(order_no))
+            return pd.DataFrame([result]), None
+
         if market == "KR":
             res_df, msg = order_rvsecncl(
                 env_dv="real",
