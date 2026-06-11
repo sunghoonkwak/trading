@@ -25,6 +25,8 @@
    - `strategy_history.json` 파일 하나에 모든 전략의 실행 결과를 날짜별로 통합 저장합니다.
    - 실행 이력이 있는 경우, 성공한 주문(`succeeded`)은 건너뛰고 실패한 주문(`pending`)만 선별하여 재실행을 시도합니다.
    - 사용자가 승인한 `cash_ticker` 조달 결과는 RAOEO의 `cash_funding_results`에 별도로 저장하여, 실패한 조달 주문이 일반 전략 재시도 주문으로 자동 실행되지 않게 합니다.
+   - RAOEO 자동 실행에서 `normal`/`average` 매수 예산이 1주 가격에 미달해 주문이 없으면,
+     해당 금액은 `skipped_buy_budgets`에 티커별 총액으로 저장되어 다음 RAOEO 계산에 이월됩니다.
 
 5. **Timeout Handling (타임아웃 방어 메커니즘)**:
    - 외부 API 응답 지연을 방지하기 위하여 `requests.exceptions.Timeout` 에러를 독립적으로 포착합니다.

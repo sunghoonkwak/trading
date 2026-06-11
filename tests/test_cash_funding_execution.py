@@ -225,3 +225,54 @@ def test_run_raoeo_passes_history_to_order_calculation(monkeypatch):
 
     assert received["history_data"] is history
     assert received["today_date"] == report["date"]
+
+
+def test_run_raoeo_persists_skipped_buy_budget_history(monkeypatch):
+    saved = {}
+    config = {
+        "raoeo": {
+            "enabled": True,
+            "targets": {
+                "FAS": {
+                    "enabled": True,
+                    "seed": 10000,
+                    "duration": 60,
+                    "phase": [{"name": "defensive", "buy": [], "sell": []}],
+                }
+            },
+        }
+    }
+    monkeypatch.setattr(
+        execution_service,
+        "_get_market_status",
+        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
+    )
+    monkeypatch.setattr(execution_service, "_load_history", lambda: [])
+    monkeypatch.setattr(execution_service, "load_json", lambda file_type, default=None: config)
+    monkeypatch.setattr(
+        execution_service,
+        "get_market_data",
+        lambda force_refresh=False: ({}, {"FAS": 134.0}),
+    )
+    monkeypatch.setattr(
+        execution_service.raoeo,
+        "calculate_orders",
+        lambda **kwargs: (
+            [],
+            {
+                "ticker_info": {},
+                "skipped_buy_budgets": {"FAS": 83.33},
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "save_json",
+        lambda file_type, data: saved.setdefault("history", data),
+    )
+
+    report = execution_service.run_raoeo_strategy(execute=True)
+
+    assert report["status"].value == "skipped"
+    assert saved["history"][0]["raoeo"]["orders"] == []
+    assert saved["history"][0]["raoeo"]["skipped_buy_budgets"] == {"FAS": 83.33}

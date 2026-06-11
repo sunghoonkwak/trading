@@ -19,6 +19,9 @@
      - 공통 로직: `buy_price = (min(price_percent_cap, 최저목표수익률) + 1) * 평단가 - 0.01` 기반으로 산출됩니다.
      - `type: "normal"`: `price_percent_cap: 0.1`로 설정하여 목표 수익률에 연동시킵니다.
      - `type: "average"`: `price_percent_cap: 0.0`으로 설정하여 평단가 근처에서 매수되게 유도합니다.
+     - `normal`/`average` 예산이 주문가 기준 1주에 미달하면 해당 매수 주문은 생성하지 않습니다.
+     - 한 Phase에 `normal`과 `average`가 함께 있으면 `normal`을 먼저 해당 비율 예산으로 계산하고,
+       `normal` 주문금액을 제외한 나머지 전체 예산을 `average` 예산으로 사용합니다.
      - `type: "filling"`: `price_percent_cap: -0.05` 등으로 설정하여 평단가 대비 할인된 가격에 매수하며, `target_ratio`에 다다를 때까지의 부족분 수량을 보충(Fill) 매수합니다.
 
 3. **Buy Price Cap (매수 가격 상한)**:
@@ -27,9 +30,14 @@
    - 상수 `MAX_BUY_PRICE_RATIO = 1.25`로 관리됩니다.
 
 4. **Buy Budget Carryover (매수 예산 이월)**:
-   - `normal` 및 `average` 매수는 주문가 기준으로 목표 예산(`target_budget`)을 history에 저장합니다.
+   - 매일 `seed / duration`에 이전 이월 예산을 더해 티커별 당일 매수 예산 풀을 만듭니다.
+   - `normal` 및 `average` 매수 주문은 주문가 기준 목표 예산(`target_budget`)을 history에 저장합니다.
    - 다음 RAOEO 계산 시 가장 최근 이전 history에서 성공한 `Buy Normal`/`Buy Average` 주문의
-     `target_budget - (qty * price)` 차액을 같은 매수 타입의 당일 예산에 더합니다.
+     `target_budget - (qty * price)` 차액을 티커별 이월 예산에 더합니다.
+   - 예산이 주문가 기준 1주에 미달해 주문이 생성되지 않은 `normal`/`average` 예산은
+     `skipped_buy_budgets`에 티커별 총액으로 저장하고 다음 계산 시 당일 예산 풀에 전액 더합니다.
+   - `normal`과 `average`가 함께 있는 Phase에서는 `normal` 미사용 예산이 당일 `average` 예산에
+     포함되므로, 같은 금액을 이월 예산으로 중복 저장하지 않습니다.
    - `filling` 매수는 금액이 아니라 목표 수량을 보충하는 규칙이므로 예산 이월 대상에서 제외합니다.
    - 실제 체결가가 아니라 주문가 기준 보정입니다. 체결가 기준 보정은 별도의 체결내역 조회가 필요합니다.
 

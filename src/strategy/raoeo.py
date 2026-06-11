@@ -7,7 +7,7 @@ It dynamically parses the "phase" array rules provided in the configuration.
 It is a pure calculation module without direct API dependencies.
 """
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional, Tuple
 from datetime import datetime
 import math
 
@@ -17,6 +17,14 @@ from utils.price_utils import resolve_current_price
 from kis.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
 _BUDGETED_BUY_REASONS = {"Buy Normal", "Buy Average"}
+
+
+class BuyPlan(NamedTuple):
+    index: int
+    buy_type: str
+    reason: str
+    price: float
+    budget: float
 
 
 def _cap_buy_price(price: float, cur_price: float) -> float:
@@ -57,21 +65,28 @@ def _validate_phase_config(ticker: str, phases: List[Dict]) -> None:
                 raise ValueError(f"[{ticker}] Absurd sell profit: {profit} ({profit*100}%). Allowed: 0.0 ~ 0.50 (50%).")
 
 
-def _budget_carryover_by_reason(
+def _buy_budget_carryover(
     ticker: str,
     history_data: Optional[List[Dict]],
     today_date: Optional[str],
-) -> Dict[str, float]:
-    """Return unused previous RAOEO buy budget by buy reason."""
+) -> float:
+    """Return unused previous RAOEO buy budget for a ticker."""
     if not history_data:
-        return {}
+        return 0.0
 
     for entry in history_data:
         if today_date and entry.get("date") == today_date:
             continue
 
-        orders = entry.get("raoeo", {}).get("orders", [])
-        carryovers: Dict[str, float] = {}
+        raoeo_data = entry.get("raoeo", {})
+        skipped_budgets = raoeo_data.get("skipped_buy_budgets", {})
+        carryover = 0.0
+        skipped_budget = skipped_budgets.get(ticker, 0.0)
+        if isinstance(skipped_budget, dict):
+            skipped_budget = sum(float(value) for value in skipped_budget.values())
+        carryover = round(carryover + float(skipped_budget), 2)
+
+        orders = raoeo_data.get("orders", [])
         for order in orders:
             if order.get("ticker") != ticker:
                 continue
@@ -90,12 +105,12 @@ def _budget_carryover_by_reason(
 
             ordered_notional = float(order.get("qty", 0)) * float(order.get("price", 0.0))
             unused_budget = max(0.0, float(target_budget) - ordered_notional)
-            carryovers[reason] = round(carryovers.get(reason, 0.0) + unused_budget, 2)
+            carryover = round(carryover + unused_budget, 2)
 
-        if carryovers:
-            return carryovers
+        if carryover:
+            return carryover
 
-    return {}
+    return 0.0
 
 
 def _is_rule_disabled(rule: Dict) -> bool:
@@ -178,44 +193,156 @@ def _buy_price_for_rule(
     return _cap_buy_price(target_buy_px, cur_price)
 
 
-def _build_buy_orders(
-    ticker: str,
-    qty: int,
-    seed: float,
-    daily_budget: float,
+def _budgeted_buy_contexts(
+    total_buy_budget: float,
     base_price: float,
     cur_price: float,
     buy_rules: List[Dict],
     sell_rules: List[Dict],
-    budget_carryovers: Dict[str, float],
-) -> List[StrategyOrder]:
-    orders: List[StrategyOrder] = []
-    buy_qty_main = 0
+) -> List[BuyPlan]:
     min_profit = _min_active_sell_profit(sell_rules)
+    contexts = []
+    for index, buy_rule in enumerate(buy_rules):
+        if _is_rule_disabled(buy_rule):
+            continue
+
+        buy_type = buy_rule.get("type", "normal")
+        if buy_type not in ("normal", "average"):
+            continue
+
+        buy_reason = "Buy Normal" if buy_type == "normal" else "Buy Average"
+        buy_ratio = float(buy_rule.get("ratio", 1.0))
+        alloc_budget = round(total_buy_budget * buy_ratio, 2)
+        contexts.append(BuyPlan(
+            index=index,
+            buy_type=buy_type,
+            reason=buy_reason,
+            price=_buy_price_for_rule(buy_rule, base_price, cur_price, min_profit),
+            budget=alloc_budget,
+        ))
+
+    return contexts
+
+
+def _build_budgeted_buy_order(
+    ticker: str,
+    plan: BuyPlan,
+    budget: float,
+) -> Tuple[Optional[StrategyOrder], float, int]:
+    rule_qty = int(budget / plan.price)
+    if rule_qty <= 0:
+        return None, budget, 0
+
+    order = StrategyOrder(
+        symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
+        price=plan.price, order_type=ORDER_TYPE_US_LOC,
+        reason=plan.reason, target_budget=budget,
+    )
+    return order, 0.0, rule_qty
+
+
+def _build_normal_then_average_orders(
+    ticker: str,
+    plans: List[BuyPlan],
+) -> Tuple[List[StrategyOrder], float, int]:
+    orders_by_index = []
+    buy_qty = 0
+    normal_spent = 0.0
+    normal_plans = [plan for plan in plans if plan.buy_type == "normal"]
+    average_plans = [plan for plan in plans if plan.buy_type == "average"]
+
+    for plan in normal_plans:
+        normal_budget = plan.budget
+        rule_qty = int(normal_budget / plan.price)
+        if rule_qty <= 0:
+            continue
+
+        spent_budget = round(rule_qty * plan.price, 2)
+        normal_spent = round(normal_spent + spent_budget, 2)
+        buy_qty += rule_qty
+        orders_by_index.append((
+            plan.index,
+            StrategyOrder(
+                symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
+                price=plan.price, order_type=ORDER_TYPE_US_LOC,
+                reason=plan.reason, target_budget=spent_budget,
+            ),
+        ))
+
+    average_budget = round(sum(plan.budget for plan in plans) - normal_spent, 2)
+    average_base_budget = round(sum(plan.budget for plan in average_plans), 2)
+    remaining_budget = average_budget
+    skipped_budget = 0.0
+
+    for index, plan in enumerate(average_plans):
+        if index == len(average_plans) - 1 or average_base_budget <= 0:
+            plan_budget = remaining_budget
+        else:
+            plan_budget = round(average_budget * plan.budget / average_base_budget, 2)
+            remaining_budget = round(remaining_budget - plan_budget, 2)
+
+        order, skipped, rule_qty = _build_budgeted_buy_order(
+            ticker,
+            plan,
+            plan_budget,
+        )
+        skipped_budget = round(skipped_budget + skipped, 2)
+        if order:
+            orders_by_index.append((plan.index, order))
+            buy_qty += rule_qty
+
+    orders = [order for _, order in sorted(orders_by_index, key=lambda item: item[0])]
+    return orders, skipped_budget, buy_qty
+
+
+def _build_buy_orders(
+    ticker: str,
+    qty: int,
+    seed: float,
+    total_buy_budget: float,
+    base_price: float,
+    cur_price: float,
+    buy_rules: List[Dict],
+    sell_rules: List[Dict],
+) -> Tuple[List[StrategyOrder], float]:
+    orders: List[StrategyOrder] = []
+    skipped_budget = 0.0
+    buy_qty_main = 0
+    buy_plans = _budgeted_buy_contexts(
+        total_buy_budget,
+        base_price,
+        cur_price,
+        buy_rules,
+        sell_rules,
+    )
+    has_normal = any(plan.buy_type == "normal" for plan in buy_plans)
+    has_average = any(plan.buy_type == "average" for plan in buy_plans)
+
+    if has_normal and has_average:
+        budgeted_orders, skipped_budget, buy_qty_main = (
+            _build_normal_then_average_orders(ticker, buy_plans)
+        )
+        orders.extend(budgeted_orders)
+    else:
+        for plan in buy_plans:
+            order, skipped, rule_qty = _build_budgeted_buy_order(
+                ticker,
+                plan,
+                plan.budget,
+            )
+            skipped_budget = round(skipped_budget + skipped, 2)
+            if order:
+                orders.append(order)
+                buy_qty_main += rule_qty
 
     for buy_rule in buy_rules:
         if _is_rule_disabled(buy_rule):
             continue
 
         buy_type = buy_rule.get("type", "normal")
-        buy_price = _buy_price_for_rule(buy_rule, base_price, cur_price, min_profit)
-
-        if buy_type in ("normal", "average"):
-            buy_reason = "Buy Normal" if buy_type == "normal" else "Buy Average"
-            buy_ratio = float(buy_rule.get("ratio", 1.0))
-            alloc_budget = round(
-                daily_budget * buy_ratio + budget_carryovers.get(buy_reason, 0.0),
-                2,
-            )
-            rule_qty = max(1, int(alloc_budget / buy_price))
-            buy_qty_main += rule_qty
-            orders.append(StrategyOrder(
-                symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
-                price=buy_price, order_type=ORDER_TYPE_US_LOC, reason=buy_reason,
-                target_budget=alloc_budget,
-            ))
-
-        elif buy_type == "filling":
+        if buy_type == "filling":
+            min_profit = _min_active_sell_profit(sell_rules)
+            buy_price = _buy_price_for_rule(buy_rule, base_price, cur_price, min_profit)
             target_ratio = float(buy_rule.get("target_ratio", 0.1))
             target_seed_qty = int((seed * target_ratio) / base_price)
             rem_qty = target_seed_qty - qty - buy_qty_main
@@ -225,7 +352,7 @@ def _build_buy_orders(
                     price=buy_price, order_type=ORDER_TYPE_US_LOC, reason="Buy Filling"
                 ))
 
-    return orders
+    return orders, skipped_budget
 
 
 def _calculate_ticker_orders(
@@ -270,20 +397,21 @@ def _calculate_ticker_orders(
     phase_name = matched_phase.get("name", "Unknown Phase")
     sell_rules = matched_phase.get("sell", [])
     buy_rules = matched_phase.get("buy", [])
-    budget_carryovers = _budget_carryover_by_reason(ticker, history_data, today_date)
+    budget_carryover = _buy_budget_carryover(ticker, history_data, today_date)
+    total_buy_budget = round(daily_budget + budget_carryover, 2)
 
     ticker_orders = _build_sell_orders(ticker, qty, avg_price, sell_rules)
-    ticker_orders.extend(_build_buy_orders(
+    buy_orders, skipped_buy_budget = _build_buy_orders(
         ticker=ticker,
         qty=qty,
         seed=seed,
-        daily_budget=daily_budget,
+        total_buy_budget=total_buy_budget,
         base_price=base_price,
         cur_price=cur_price,
         buy_rules=buy_rules,
         sell_rules=sell_rules,
-        budget_carryovers=budget_carryovers,
-    ))
+    )
+    ticker_orders.extend(buy_orders)
 
     buy_orders = [order for order in ticker_orders if order.side == OrderSide.BUY]
     sell_orders = [order for order in ticker_orders if order.side == OrderSide.SELL]
@@ -300,7 +428,8 @@ def _calculate_ticker_orders(
         "progress_pct": progress_ratio * 100,
         "cur_price": cur_price,
         "avg_price": avg_price,
-        "budget_carryover": round(sum(budget_carryovers.values()), 2),
+        "budget_carryover": budget_carryover,
+        "skipped_buy_budget": skipped_buy_budget,
     }
 
 
@@ -387,7 +516,7 @@ def calculate_orders(
             2. Info dictionary with ticker metadata.
     """
     orders: List[StrategyOrder] = []
-    info = {"ticker_info": {}}
+    info = {"ticker_info": {}, "skipped_buy_budgets": {}}
 
     if not targets_config:
         logging.warning("RAOEO: No targets configured.")
@@ -406,5 +535,7 @@ def calculate_orders(
             continue
         orders.extend(ticker_orders)
         info["ticker_info"][ticker] = ticker_info
+        if ticker_info["skipped_buy_budget"]:
+            info["skipped_buy_budgets"][ticker] = ticker_info["skipped_buy_budget"]
 
     return orders, info

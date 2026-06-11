@@ -312,6 +312,11 @@ def _build_strategy_history_data(
     if extra_fields:
         data.update(extra_fields)
 
+    if strategy_key == "raoeo":
+        skipped_buy_budgets = report.get("info", {}).get("skipped_buy_budgets")
+        if skipped_buy_budgets:
+            data["skipped_buy_budgets"] = skipped_buy_budgets
+
     # Build order list from execution results or calculated orders
     if report.get("execution_results"):
         for res in report["execution_results"]:
@@ -630,6 +635,9 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
 
         if not orders:
             report["status"] = StrategyStatus.SKIPPED
+            if execute and report["info"].get("skipped_buy_budgets"):
+                hist_data = _build_strategy_history_data(report, "raoeo")
+                _save_strategy_to_history(today_str, "raoeo", hist_data)
             return report
 
         # Step 6: Execute if requested
