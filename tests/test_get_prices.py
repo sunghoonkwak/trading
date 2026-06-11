@@ -72,11 +72,11 @@ class GetPricesTest(unittest.TestCase):
         token_dir = ROOT / "tests" / ".tmp-prices-token"
         self.addCleanup(lambda: self._remove_tree(token_dir))
         token_dir.mkdir()
-        (token_dir / "toss_token_20260611_120000.json").write_text(
+        (token_dir / "TOSS20260611_120000.json").write_text(
             json.dumps({"access_token": "old-token"}),
             encoding="utf-8",
         )
-        (token_dir / "toss_token_20260611_130000.json").write_text(
+        (token_dir / "TOSS20260611_130000.json").write_text(
             json.dumps({"access_token": "latest-token"}),
             encoding="utf-8",
         )

@@ -16,7 +16,7 @@ from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT, TOKEN_DIR, load_latest_
 def load_access_token(token_dir=TOKEN_DIR) -> str:
     token_payload = load_latest_token(token_dir)
     if not token_payload:
-        raise RuntimeError("No saved Toss token found. Run src/api/auth.py first.")
+        raise RuntimeError("No saved Toss token found. Run src/toss/auth.py first.")
 
     access_token = token_payload.get("access_token")
     if not isinstance(access_token, str) or not access_token:

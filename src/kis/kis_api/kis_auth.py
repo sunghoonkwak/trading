@@ -82,7 +82,7 @@ def _get_config():
     with open(os.path.join(config_root, "kis_devlp.yaml"), encoding="UTF-8") as f:
         cfg = yaml.load(f, Loader=yaml.FullLoader)
 
-    from .key.key import get_secrets_from_password
+    from core.credentials import get_secrets_from_password
 
     app_key, app_secret, app_hts_id = get_secrets_from_password()
 

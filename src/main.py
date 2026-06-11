@@ -125,9 +125,24 @@ class TradingSystem:
             logging.error(f"[Startup] KIS error: {e}")
             return False
 
+    def initialize_toss(self):
+        """Initializes Toss access token for today's trading session."""
+        print("[Startup] Step 3: Initializing Toss API...")
+        try:
+            from toss.auth import ensure_daily_token
+
+            token_path = ensure_daily_token()
+            logging.info(f"[Startup] Toss token ready: {token_path}")
+            print("[Startup] ✓ Toss API token ready")
+            return True
+        except Exception as e:
+            logging.error(f"[Startup] Toss error: {e}")
+            print("[Startup] ✗ Toss API initialization failed")
+            return False
+
     def start_scheduler(self):
         """Starts the background task scheduler."""
-        print("[Startup] Step 3: Starting Scheduler Service...")
+        print("[Startup] Step 4: Starting Scheduler Service...")
         try:
             from scheduler.scheduler import start_scheduler
             start_scheduler()
@@ -137,7 +152,7 @@ class TradingSystem:
 
     def start_web_server(self):
         """Starts the Web Event Viewer dashboard."""
-        print("[Startup] Step 4: Starting Web Event Viewer...")
+        print("[Startup] Step 5: Starting Web Event Viewer...")
         from core.constants import DEFAULT_WEB_PORT, DEFAULT_HOST
         try:
             from core.web_server import start_web_server
@@ -184,10 +199,16 @@ class TradingSystem:
             self.shutdown()
             sys.exit(1)
         time.sleep(0.5)
+        if not self.initialize_toss():
+            logging.critical("[Startup] Toss initialization failed; refusing to start scheduler/web services")
+            print("\n[ERROR] Toss initialization failed. Scheduler and web services will not start.")
+            self.shutdown()
+            sys.exit(1)
+        time.sleep(0.5)
         self.start_scheduler()
         self.start_web_server()
 
-        print("\n[Startup] Step 5: System is ready. Running in daemon mode.")
+        print("\n[Startup] Step 6: System is ready. Running in daemon mode.")
         try:
             while not self.shutdown_event.is_set():
                 time.sleep(1)

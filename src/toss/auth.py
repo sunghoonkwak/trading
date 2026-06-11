@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 from urllib import error, parse, request
 
+from core.constants import CONFIG_ROOT
+from core.credentials import load_credentials
+
 
 DEFAULT_BASE_URL = "https://openapi.tossinvest.com"
 DEFAULT_TIMEOUT = 10.0
-ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
-TOKEN_DIR = Path(__file__).resolve().parents[2] / "token"
+CONFIG_ROOT_PATH = Path(CONFIG_ROOT)
+TOKEN_DIR = CONFIG_ROOT_PATH
 
 
 @dataclass(frozen=True)
@@ -29,30 +31,11 @@ class TossToken:
     expires_in: int
 
 
-def _parse_env_file(env_path: Path) -> dict[str, str]:
-    if not env_path.exists():
-        return {}
-
-    values: dict[str, str] = {}
-    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        values[key.strip()] = value.strip().strip("'\"")
-    return values
-
-
-def _get_env_value(values: dict[str, str], key: str) -> str:
-    return os.environ.get(key) or values.get(key, "")
-
-
-def load_config(env_path: Path = ENV_PATH) -> TossAuthConfig:
-    values = _parse_env_file(env_path)
-
+def load_config(config_root: Path | str = CONFIG_ROOT_PATH) -> TossAuthConfig:
+    credentials = load_credentials(config_root=Path(config_root))
     config = TossAuthConfig(
-        client_id=_get_env_value(values, "TOSS_CLIENT_ID"),
-        client_secret=_get_env_value(values, "TOSS_CLIENT_SECRET"),
+        client_id=credentials.toss_client_id,
+        client_secret=credentials.toss_client_secret,
     )
 
     missing = [
@@ -117,7 +100,7 @@ def save_token(
     expires_at = issued_at + timedelta(seconds=token.expires_in)
     token_dir.mkdir(parents=True, exist_ok=True)
 
-    token_path = token_dir / f"toss_token_{issued_at.strftime('%Y%m%d_%H%M%S')}.json"
+    token_path = token_dir / f"TOSS{issued_at.strftime('%Y%m%d_%H%M%S')}.json"
     payload = {
         "access_token": token.access_token,
         "token_type": token.token_type,
@@ -133,10 +116,27 @@ def save_token(
 
 
 def load_latest_token(token_dir: Path = TOKEN_DIR) -> dict[str, object] | None:
-    token_files = sorted(token_dir.glob("toss_token_*.json"))
+    token_files = sorted(token_dir.glob("TOSS*.json"))
     if not token_files:
         return None
     return json.loads(token_files[-1].read_text(encoding="utf-8"))
+
+
+def ensure_daily_token(
+    config: TossAuthConfig | None = None,
+    *,
+    token_dir: Path = TOKEN_DIR,
+    now: datetime | None = None,
+    issue_token_func: Callable[[TossAuthConfig], TossToken] = issue_token,
+) -> Path:
+    issued_at = now or datetime.now().astimezone()
+    today_pattern = f"TOSS{issued_at.strftime('%Y%m%d')}_*.json"
+    today_tokens = sorted(token_dir.glob(today_pattern))
+    if today_tokens:
+        return today_tokens[-1]
+
+    token = issue_token_func(config or load_config())
+    return save_token(token, token_dir=token_dir, issued_at=issued_at)
 
 
 def _mask_token(token: str) -> str:
@@ -146,12 +146,12 @@ def _mask_token(token: str) -> str:
 
 
 def main() -> None:
-    token = issue_token(load_config())
-    token_path = save_token(token)
-    print("Toss access token issued.")
-    print(f"token_type: {token.token_type}")
-    print(f"expires_in: {token.expires_in}")
-    print(f"access_token: {_mask_token(token.access_token)}")
+    token_path = ensure_daily_token()
+    token_payload = json.loads(token_path.read_text(encoding="utf-8"))
+    print("Toss access token ready.")
+    print(f"token_type: {token_payload['token_type']}")
+    print(f"expires_in: {token_payload['expires_in']}")
+    print(f"access_token: {_mask_token(token_payload['access_token'])}")
     print(f"saved_to: {token_path}")
 
 
