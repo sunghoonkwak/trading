@@ -4,7 +4,6 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
-
 OWNERS = [
     {"id": "owner_01", "name": "곽성훈"},
     {"id": "owner_02", "name": "염인선"},
@@ -18,26 +17,6 @@ def _empty_source() -> Dict[str, Any]:
         "asset_info": {},
         "cash_holdings": [],
     }
-
-
-def _fetch_kis_portfolio() -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Fetch KIS holdings and convert them to the standard source format."""
-    from core.display import add_alert
-    from kis.portfolio_manager import PortfolioManager
-
-    add_alert("[KIS] Fetching KIS API data...", "INFO")
-    kis_raw_data = PortfolioManager._fetch_kis_account_data()
-
-    if kis_raw_data.get("error"):
-        add_alert(f"KIS Error: {kis_raw_data['error']}", "WARN")
-        return _empty_source(), kis_raw_data
-
-    kis_portfolio = PortfolioManager._convert_kis_to_standard(kis_raw_data)
-    add_alert(
-        f"[KIS] {len(kis_portfolio.get('holdings', []))} holdings loaded",
-        "SUCCESS",
-    )
-    return kis_portfolio, kis_raw_data
 
 
 def fetch_gsheet_portfolio() -> Tuple[Dict[str, Any], Optional[str]]:
@@ -60,12 +39,50 @@ def fetch_gsheet_portfolio() -> Tuple[Dict[str, Any], Optional[str]]:
     return gs_data, " | ".join(errors) if errors else None
 
 
+def replace_account_source(
+    base: Dict[str, Any],
+    replacement: Dict[str, Any],
+    account_key: str,
+) -> Dict[str, Any]:
+    """Replace one account's standardized source records inside a source."""
+    result = {
+        "accounts": dict(base.get("accounts", {})),
+        "holdings": [
+            holding
+            for holding in base.get("holdings", [])
+            if holding.get("account_key") != account_key
+        ],
+        "asset_info": dict(base.get("asset_info", {})),
+        "cash_holdings": [
+            cash
+            for cash in base.get("cash_holdings", [])
+            if cash.get("account_key") != account_key
+        ],
+    }
+
+    result["accounts"].pop(account_key, None)
+
+    kept_tickers = {holding.get("ticker") for holding in result["holdings"]}
+    result["asset_info"] = {
+        ticker: info
+        for ticker, info in result["asset_info"].items()
+        if ticker in kept_tickers
+    }
+
+    result["accounts"].update(replacement.get("accounts", {}))
+    result["holdings"].extend(replacement.get("holdings", []))
+    result["asset_info"].update(replacement.get("asset_info", {}))
+    result["cash_holdings"].extend(replacement.get("cash_holdings", []))
+    return result
+
+
 def merge_portfolio_sources(
     kis: Dict[str, Any],
     gsheet: Dict[str, Any],
     exchange_rate: float,
     kis_error: Optional[str],
     gsheet_error: Optional[str],
+    toss_error: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Merge standardized KIS and GSheet sources into raw portfolio data."""
     all_accounts_raw = {
@@ -115,6 +132,8 @@ def merge_portfolio_sources(
         metadata["kis_error"] = kis_error
     if gsheet_error:
         metadata["gsheet_error"] = gsheet_error
+    if toss_error:
+        metadata["toss_error"] = toss_error
 
     return {
         "metadata": metadata,
@@ -132,16 +151,38 @@ def merge_portfolio_sources(
 def get_integrated_portfolio(kis_only: bool = False) -> Dict[str, Any]:
     """Fetch and merge portfolio sources for application data consumers."""
     from core.display import add_alert
+    from broker.kis_portfolio import fetch_kis_portfolio
 
-    kis_portfolio, kis_raw_data = _fetch_kis_portfolio()
+    kis_portfolio, kis_raw_data = fetch_kis_portfolio()
 
     gsheet_data = _empty_source()
     gsheet_error = None
+    toss_error = None
     if not kis_only:
+        from broker.toss_portfolio import TOSS_ACCOUNT_KEY, fetch_toss_portfolio
+
         add_alert("[Data] Fetching GSheet data...", "INFO")
         gsheet_data, gsheet_error = fetch_gsheet_portfolio()
         if gsheet_error:
             add_alert(f"GSheet Warning: {gsheet_error}", "WARN")
+        try:
+            add_alert("[Toss] Fetching Toss API data...", "INFO")
+            toss_data, toss_error = fetch_toss_portfolio()
+            if toss_error:
+                add_alert(f"Toss Warning: {toss_error}", "WARN")
+            else:
+                gsheet_data = replace_account_source(
+                    gsheet_data,
+                    toss_data,
+                    TOSS_ACCOUNT_KEY,
+                )
+                add_alert(
+                    f"[Toss] {len(toss_data.get('holdings', []))} holdings loaded",
+                    "SUCCESS",
+                )
+        except Exception as e:
+            toss_error = str(e)
+            add_alert(f"Toss Warning: {toss_error}", "WARN")
 
     return merge_portfolio_sources(
         kis_portfolio,
@@ -149,4 +190,5 @@ def get_integrated_portfolio(kis_only: bool = False) -> Dict[str, Any]:
         kis_raw_data.get("exchange_rate"),
         kis_raw_data.get("error"),
         gsheet_error,
+        toss_error,
     )

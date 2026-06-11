@@ -4,14 +4,16 @@
 
 ## Responsibilities
 
+- `fetch_kis_portfolio()`로 KIS API 데이터를 조회하고 표준 source 포맷으로
+  변환합니다.
+- KIS 조회 실패 시 빈 source와 raw metadata를 반환해 data 계층이 병합
+  정책을 계속 적용할 수 있게 합니다.
 - `get_integrated_portfolio(kis_only=False)`를 제공합니다.
-- 현재 구현은 `data.portfolio_integration.get_integrated_portfolio`로
-  lazy 위임합니다.
-- KIS REST 인증/호출 계층이 포트폴리오 병합 정책 클래스를 직접 보지 않도록 하는
-  전환 seam입니다.
+- `get_integrated_portfolio`는 기존 호출부 호환을 위해
+  `data.portfolio_integration.get_integrated_portfolio`로 lazy 위임합니다.
 
 ## Import Boundary
 
-통합 모듈은 함수 호출 시점에 lazy-load합니다. `kis.portfolio_manager`는
-한투 원천 조회와 표준 포맷 변환만 담당하고, 전체 자산 병합 정책은
-data 계층에 둡니다.
+`data.portfolio_integration`은 이 facade를 lazy-load한 뒤 표준 source
+데이터를 병합합니다. KIS raw API 조회와 KIS raw 응답 필드 처리는 broker/KIS
+계층에 두고, 전체 자산 병합 정책은 data 계층에 둡니다.

@@ -6,7 +6,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from broker import market_data
-from kis.portfolio_manager import PortfolioManager
+from kis.portfolio_manager import KisPortfolioSourceAdapter
 from kis.kis_api.overseas_stock.price import price as price_module
 from kis.kis_api import kis_auth as ka
 
@@ -39,7 +39,7 @@ def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch)
         fake_inquire_present_balance,
     )
 
-    PortfolioManager._fetch_kis_account_data()
+    KisPortfolioSourceAdapter._fetch_kis_account_data()
 
     assert calls == {
         "domestic_env": "real",

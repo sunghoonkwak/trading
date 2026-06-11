@@ -9,8 +9,11 @@ from kis.kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_b
 from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import inquire_present_balance
 from kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import inquire_psamount
 
-class PortfolioManager:
-    """Fetch and normalize Korea Investment Securities account data."""
+class KisPortfolioSourceAdapter:
+    """KIS-only source adapter.
+
+    This adapter does not own integrated portfolio policy.
+    """
 
     KIS_ACCOUNT_NAME = "한국투자증권"
     KIS_OWNER_ID = "owner_01"

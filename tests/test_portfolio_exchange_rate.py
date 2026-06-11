@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data.data_service import PortfolioProcessor
-from kis.portfolio_manager import PortfolioManager
+from kis.portfolio_manager import KisPortfolioSourceAdapter
 from kis.kis_api.overseas_stock.inquire_present_balance import (
     inquire_present_balance as inquire_present_balance_module,
 )
@@ -69,7 +69,7 @@ def test_fetch_portfolio_reads_exchange_rate_from_overseas_holdings(monkeypatch)
         ),
     )
 
-    result = PortfolioManager._fetch_kis_account_data()
+    result = KisPortfolioSourceAdapter._fetch_kis_account_data()
 
     assert result["exchange_rate"] == 1375.50
 
@@ -123,7 +123,7 @@ def test_fetch_portfolio_parses_comma_numbers_and_reuses_trenv(monkeypatch):
         raising=False,
     )
 
-    result = PortfolioManager._fetch_kis_account_data()
+    result = KisPortfolioSourceAdapter._fetch_kis_account_data()
 
     assert calls["trenv"] == 1
     assert result["domestic_stocks"][0]["qty"] == 1234
@@ -136,7 +136,7 @@ def test_fetch_portfolio_parses_comma_numbers_and_reuses_trenv(monkeypatch):
 
 
 def test_kis_standard_portfolio_owner_is_sunghoon_account():
-    portfolio = PortfolioManager._convert_kis_to_standard(
+    portfolio = KisPortfolioSourceAdapter._convert_kis_to_standard(
         {
             "domestic_stocks": [],
             "overseas_stocks": [],
@@ -183,8 +183,8 @@ def test_kis_portfolio_uses_orderable_usd_as_cash(monkeypatch):
         raising=False,
     )
 
-    raw = PortfolioManager._fetch_kis_account_data()
-    portfolio = PortfolioManager._convert_kis_to_standard(raw)
+    raw = KisPortfolioSourceAdapter._fetch_kis_account_data()
+    portfolio = KisPortfolioSourceAdapter._convert_kis_to_standard(raw)
 
     usd_cash = [
         cash for cash in portfolio["cash_holdings"]
@@ -220,8 +220,8 @@ def test_kis_portfolio_falls_back_to_balance_cash_when_orderable_usd_fails(monke
         raising=False,
     )
 
-    raw = PortfolioManager._fetch_kis_account_data()
-    portfolio = PortfolioManager._convert_kis_to_standard(raw)
+    raw = KisPortfolioSourceAdapter._fetch_kis_account_data()
+    portfolio = KisPortfolioSourceAdapter._convert_kis_to_standard(raw)
 
     usd_cash = [
         cash for cash in portfolio["cash_holdings"]
@@ -254,8 +254,8 @@ def test_kis_portfolio_keeps_zero_orderable_usd(monkeypatch):
         raising=False,
     )
 
-    raw = PortfolioManager._fetch_kis_account_data()
-    portfolio = PortfolioManager._convert_kis_to_standard(raw)
+    raw = KisPortfolioSourceAdapter._fetch_kis_account_data()
+    portfolio = KisPortfolioSourceAdapter._convert_kis_to_standard(raw)
 
     usd_cash = [
         cash for cash in portfolio["cash_holdings"]
