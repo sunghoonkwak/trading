@@ -63,16 +63,17 @@ def add_alert(message: str, level: str = "INFO", time_str: str = None):
         pipe.send_log("ALT", f"[{level}] {message}", time_str)
 
 def update_order_state(order_id: str, ticker: str, name: str, side: str,
-                       price: str, qty: str, state: str, notify: bool = True, time_str: str = None):
+                       price: str, qty: str, state: str, notify: bool = True,
+                       time_str: str = None, broker: str = "KIS"):
     """Send order update to Event Viewer via IPC.
 
-    Format: ODR|ticker|name|side|qty|price|state|order_id
+    Format: ODR|name|ticker|side|qty|broker|price|state|order_id
     """
     pipe = _get_event_pipe()
     if pipe:
         # Include name for display in viewer
         fixed_name = get_fixed_width(name, 20)
-        order_msg = f"{fixed_name}|{ticker}|{side}|{qty}|{price}|{state}|{order_id}"
+        order_msg = f"{fixed_name}|{ticker}|{side}|{qty}|{broker}|{price}|{state}|{order_id}"
         pipe.send_log("ODR", order_msg, time_str)
 
     if notify:

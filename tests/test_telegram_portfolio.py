@@ -93,3 +93,37 @@ def test_format_placed_orders_groups_by_ticker():
         "🟢 <b>Buy</b>",
         "  LOC매수  1 @ $140.48",
     ])
+
+
+def test_format_placed_orders_includes_toss_orders():
+    df = pd.DataFrame([
+        {
+            "_market": "TOSS",
+            "symbol": "AAPL",
+            "side": "BUY",
+            "orderType": "LIMIT",
+            "price": "185.5",
+            "remainingQuantity": "3",
+        },
+        {
+            "_market": "TOSS",
+            "symbol": "005930",
+            "side": "SELL",
+            "orderType": "MARKET",
+            "quantity": "2",
+        },
+    ])
+
+    msg = format_placed_orders(df, num_us=0, num_kr=0, num_toss=2)
+
+    assert msg == "\n".join([
+        "📋 <b>Open Orders</b> (US: 0 / KR: 0 / Toss: 2)",
+        "",
+        "<b>AAPL</b>",
+        "🟢 <b>Buy</b>",
+        "  LIMIT  3 @ $185.50",
+        "",
+        "<b>005930</b>",
+        "🔴 <b>Sell</b>",
+        "  MARKET  2 @ Market",
+    ])

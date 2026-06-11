@@ -330,7 +330,7 @@ def _cancel_order_sync(order_id: str):
     from broker import order_admin
 
     try:
-        df, _, _ = order_admin.fetch_open_orders()
+        df, _, _, _ = order_admin.fetch_open_orders()
         if df.empty:
             return {"success": False, "error": "No open orders found"}
 

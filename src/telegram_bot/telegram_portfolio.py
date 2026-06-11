@@ -471,16 +471,35 @@ async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-def format_placed_orders(df, num_us: int, num_kr: int) -> str:
+def format_placed_orders(df, num_us: int, num_kr: int, num_toss: int | None = None) -> str:
     """Format open orders for Telegram message."""
     if df.empty:
         return "📋 <b>Open Orders</b>\n\nNo open orders."
+
+    def as_float(value, default=0.0):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return default
+        return default if number != number else number
+
+    def first_value(*values):
+        for value in values:
+            if value is None:
+                continue
+            if isinstance(value, float) and value != value:
+                continue
+            return value
+        return None
 
     def row_to_order(row):
         market = row.get('_market', 'US')
         row_lower = {k.lower(): v for k, v in row.items()}
 
-        pdno = row_lower.get('pdno', row_lower.get('stck_shrn_iscd', 'Unknown'))
+        pdno = row_lower.get(
+            'pdno',
+            row_lower.get('stck_shrn_iscd', row_lower.get('symbol', 'Unknown')),
+        )
 
         if market == "KR":
             is_buy = row_lower.get('sll_buy_dvsn_cd') == '02'
@@ -488,6 +507,25 @@ def format_placed_orders(df, num_us: int, num_kr: int) -> str:
             order_type = "매수" if is_buy else "매도"
             price = f"₩{int(float(row_lower.get('ord_unpr', '0'))):,}"
             qty = str(row_lower.get('psbl_qty', 0))
+        elif market == "TOSS":
+            side_value = str(row_lower.get('side', '')).upper()
+            side = "Buy" if side_value == "BUY" else "Sell"
+            order_type = str(row_lower.get('ordertype', row_lower.get('order_type', side))).upper()
+            p_val = row_lower.get('price')
+            p_float = as_float(p_val)
+            if p_float > 0:
+                currency = "₩" if str(pdno).isdigit() else "$"
+                price = f"{currency}{p_float:,.0f}" if currency == "₩" else f"{currency}{p_float:,.2f}"
+            else:
+                price = "Market"
+            q_val = first_value(
+                row_lower.get('remainingquantity'),
+                row_lower.get('remaining_quantity'),
+                row_lower.get('quantity'),
+                row_lower.get('orderquantity'),
+                0,
+            )
+            qty = str(int(as_float(q_val)))
         else:
             is_buy = row_lower.get('sll_buy_dvsn_cd') == '02'
             side_text = str(row_lower.get('sll_buy_dvsn_cd_name', row_lower.get('sll_buy_dvsn_name', ''))).strip()
@@ -514,9 +552,12 @@ def format_placed_orders(df, num_us: int, num_kr: int) -> str:
             {"Buy": [], "Sell": []},
         )[order["side"]].append(order)
 
+    counts = f"US: {num_us} / KR: {num_kr}"
+    if num_toss is not None:
+        counts = f"{counts} / Toss: {num_toss}"
     lines = [
-        f"📋 <b>Open Orders</b> (US: {num_us} / KR: {num_kr})",
-        ""
+        f"📋 <b>Open Orders</b> ({counts})",
+        "",
     ]
 
     for idx, (ticker, group) in enumerate(grouped.items()):
@@ -548,8 +589,8 @@ async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"[TG] /placed_orders from user")
     try:
         loop = asyncio.get_running_loop()
-        df, num_us, num_kr = await loop.run_in_executor(None, order_admin.fetch_open_orders)
-        msg = format_placed_orders(df, num_us, num_kr)
+        df, num_us, num_kr, num_toss = await loop.run_in_executor(None, order_admin.fetch_open_orders)
+        msg = format_placed_orders(df, num_us, num_kr, num_toss)
         await wrap_reply(update, msg, parse_mode='HTML')
     except Exception as e:
         logging.error(f"[TG] cmd_placed_orders failed: {e}")

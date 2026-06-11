@@ -19,6 +19,8 @@
 ### `update_order_state(..., time_str=None)`
 주문 상태 변경 시 호출됩니다.
 - 변경 내역을 `core.event_pipe`를 통해 웹 뷰어로 전송합니다 (`ODR` 메시지).
+- 주문 메시지는 `name|ticker|side|qty|broker|price|state|order_id`
+  순서이며, 웹 뷰어는 수량 다음에 `KIS` 또는 `TOSS`를 표시합니다.
 - `time_str` 파라미터를 통해 주문의 실제 체결 시간을 전달할 수 있습니다.
 - `notify=True`이면 동일 내용을 `add_alert()`로도 남기며, `notify=False`이면 웹 뷰어 상태만 갱신합니다.
 

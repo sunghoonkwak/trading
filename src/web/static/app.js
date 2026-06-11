@@ -220,12 +220,24 @@ function handleOrderMessage(content, time) {
     }
 
     if (parts.length >= 6) {
-        const [name, ticker, side, qty, price, state, orderId] = parts.map(p => p.trim());
+        const fields = parts.map(p => p.trim());
+        const [name, ticker, side, qty] = fields;
+        let broker = 'KIS';
+        let price;
+        let state;
+        let orderId;
+
+        if (fields.length >= 8) {
+            [, , , , broker, price, state, orderId] = fields;
+        } else {
+            [, , , , price, state, orderId] = fields;
+        }
+
         const id = orderId || `${ticker}_${Date.now()}`;
 
         orders.set(id, {
             time: time || new Date().toLocaleTimeString('en-US', { hour12: false }),
-            name, ticker, side, qty, price, state
+            name, ticker, side, qty, broker, price, state
         });
 
         while (orders.size > maxOrders) {
@@ -293,6 +305,7 @@ function updateOrdersPanel() {
                     <span style="width:70px;display:inline-block;color:${sideClass === 'buy' ? 'var(--accent-success)' : 'var(--accent-danger)'}">${order.side}</span>
                     <span style="width:70px;text-align:right;display:inline-block">${formatNumber(order.price)}</span>
                     <span style="width:40px;text-align:right;display:inline-block">${order.qty}</span>
+                    <span style="width:48px;text-align:center;display:inline-block;color:var(--text-dim)">${order.broker || 'KIS'}</span>
                     <span style="margin-left:auto;color:var(--text-dim)">${order.state}${cancelLink}</span>
                 </div>`;
         }).join('');

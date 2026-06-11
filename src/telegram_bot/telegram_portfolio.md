@@ -24,7 +24,8 @@
 - 그룹 constituents는 main ticker에 합산되어 표시
 
 ### `format_placed_orders`
-미체결 주문을 티커별로 묶고, 각 티커 안에서 매도/매수 섹션으로 나눠 표시합니다.
+KIS US/KR 및 Toss 미체결 주문을 티커별로 묶고, 각 티커 안에서
+매도/매수 섹션으로 나눠 표시합니다.
 
 ### `timeout_handler`
 60초 동안 활동이 없을 경우 세션을 자동으로 종료합니다.

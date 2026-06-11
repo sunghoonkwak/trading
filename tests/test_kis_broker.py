@@ -123,13 +123,145 @@ def test_order_admin_fetches_open_orders_through_kis_endpoints(monkeypatch):
         lambda: (fake_inquire_nccs_overseas, lambda **kwargs: None),
     )
 
-    df, us_count, kr_count = order_admin.fetch_open_orders()
+    monkeypatch.setattr(order_admin, "_fetch_toss_open_orders", lambda: pd.DataFrame())
+
+    df, us_count, kr_count, toss_count = order_admin.fetch_open_orders()
 
     assert list(df["_market"]) == ["US", "KR"]
-    assert (us_count, kr_count) == (1, 1)
+    assert (us_count, kr_count, toss_count) == (1, 1, 0)
     assert calls["us"]["cano"] == "12345678"
     assert calls["us"]["ovrs_excg_cd"] == "NASD"
     assert calls["kr"]["acnt_prdt_cd"] == "01"
+
+
+def test_order_admin_fetches_open_orders_from_toss(monkeypatch):
+    from broker import order_admin
+
+    monkeypatch.setattr(
+        order_admin,
+        "_get_trenv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_get_domestic_order_endpoints",
+        lambda: (lambda **kwargs: pd.DataFrame(), lambda **kwargs: None),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_get_overseas_order_endpoints",
+        lambda: (lambda **kwargs: pd.DataFrame(), lambda **kwargs: None),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_fetch_toss_open_orders",
+        lambda: pd.DataFrame([{"orderId": "toss-1", "symbol": "AAPL"}]),
+    )
+
+    df, us_count, kr_count, toss_count = order_admin.fetch_open_orders()
+
+    assert (us_count, kr_count, toss_count) == (0, 0, 1)
+    assert df.iloc[0]["_market"] == "TOSS"
+    assert df.iloc[0]["orderId"] == "toss-1"
+
+
+def test_order_admin_sync_sends_toss_orders_to_event_viewer(monkeypatch):
+    from broker import order_admin
+
+    updates = []
+    alerts = []
+
+    monkeypatch.setattr(
+        order_admin,
+        "fetch_open_orders",
+        lambda: (
+            pd.DataFrame([
+                {
+                    "_market": "TOSS",
+                    "pdno": float("nan"),
+                    "prdt_name": float("nan"),
+                    "ord_tmd": float("nan"),
+                    "orderId": "toss-1",
+                    "symbol": "AAPL",
+                    "symbolName": "Apple Inc.",
+                    "side": "BUY",
+                    "price": "185.5",
+                    "remainingQuantity": "3",
+                }
+            ]),
+            0,
+            0,
+            1,
+        ),
+    )
+    monkeypatch.setattr(order_admin, "clear_order_states", lambda: updates.append(("clear",)))
+    monkeypatch.setattr(order_admin, "add_alert", lambda message, level: alerts.append((message, level)))
+    monkeypatch.setattr(
+        order_admin,
+        "update_order_state",
+        lambda *args, **kwargs: updates.append((args, kwargs)),
+    )
+    monkeypatch.setattr(order_admin.trading_config, "update_stock_name", lambda *args: None)
+    monkeypatch.setattr(order_admin.trading_config, "get_stock_info", lambda ticker: {"name": "Unknown"})
+
+    assert order_admin.sync_open_orders() is True
+
+    assert alerts[-1] == ("[ORD] updated! Orders US/KR/Toss : 0 / 0 / 1", "SUCCESS")
+    assert updates[0] == ("clear",)
+    assert updates[1] == (
+        ("toss-1", "AAPL", "Apple Inc.", "Buy", "185.50", "3", "PLACED"),
+        {"notify": False, "time_str": None, "broker": "TOSS"},
+    )
+
+
+def test_order_admin_sync_uses_ticker_when_toss_name_is_missing(monkeypatch):
+    from broker import order_admin
+
+    updates = []
+    stock_name_updates = []
+
+    monkeypatch.setattr(
+        order_admin,
+        "fetch_open_orders",
+        lambda: (
+            pd.DataFrame([
+                {
+                    "_market": "TOSS",
+                    "orderId": "toss-qqqm",
+                    "symbol": "QQQM",
+                    "side": "BUY",
+                    "price": "260",
+                    "remainingQuantity": "1",
+                }
+            ]),
+            0,
+            0,
+            1,
+        ),
+    )
+    monkeypatch.setattr(order_admin, "clear_order_states", lambda: None)
+    monkeypatch.setattr(order_admin, "add_alert", lambda *args: None)
+    monkeypatch.setattr(
+        order_admin,
+        "update_order_state",
+        lambda *args, **kwargs: updates.append((args, kwargs)),
+    )
+    monkeypatch.setattr(
+        order_admin.trading_config,
+        "update_stock_name",
+        lambda *args: stock_name_updates.append(args),
+    )
+    monkeypatch.setattr(order_admin.trading_config, "get_stock_info", lambda ticker: {})
+
+    assert order_admin.sync_open_orders() is True
+
+    assert updates == [
+        (
+            ("toss-qqqm", "QQQM", "QQQM", "Buy", "260.00", "1", "PLACED"),
+            {"notify": False, "time_str": None, "broker": "TOSS"},
+        )
+    ]
+    assert stock_name_updates == []
 
 
 def test_order_admin_executes_overseas_cancel_through_kis_endpoint(monkeypatch):

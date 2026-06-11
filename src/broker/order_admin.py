@@ -38,8 +38,39 @@ def _get_overseas_order_endpoints():
     return inquire_nccs_overseas, order_rvsecncl_overseas
 
 
-def fetch_open_orders() -> Tuple[pd.DataFrame, int, int]:
-    """Fetch open orders from all KIS markets."""
+def _fetch_toss_open_orders() -> pd.DataFrame:
+    from toss.get_holdings import _get_default_account_seq
+    from toss.get_orders import get_orders
+    from toss.get_prices import load_access_token
+
+    access_token = load_access_token()
+    account_seq = _get_default_account_seq(access_token)
+    result = get_orders(
+        account_seq=account_seq,
+        status="OPEN",
+        access_token=access_token,
+    )
+    orders = result.get("orders")
+    if not isinstance(orders, list) or not orders:
+        return pd.DataFrame()
+
+    df_toss = pd.DataFrame(orders)
+    df_toss["_market"] = "TOSS"
+    return df_toss
+
+
+def _first_present(*values, default=None):
+    for value in values:
+        if value is None or pd.isna(value):
+            continue
+        if isinstance(value, str) and value.strip() in {"", "Unknown", "nan", "None"}:
+            continue
+        return value
+    return default
+
+
+def fetch_open_orders() -> Tuple[pd.DataFrame, int, int, int]:
+    """Fetch open orders from all configured markets."""
     trenv = _get_trenv()
     cano = trenv.my_acct
     prod = trenv.my_prod
@@ -74,11 +105,19 @@ def fetch_open_orders() -> Tuple[pd.DataFrame, int, int]:
         logging.error("[OrderAdmin] KR order fetch failed: %s", e)
         df_kr = pd.DataFrame()
 
-    if df_us.empty and df_kr.empty:
-        return pd.DataFrame(), 0, 0
+    try:
+        df_toss = _fetch_toss_open_orders()
+        if not df_toss.empty:
+            df_toss["_market"] = "TOSS"
+    except Exception as e:
+        logging.error("[OrderAdmin] Toss order fetch failed: %s", e)
+        df_toss = pd.DataFrame()
 
-    combined = pd.concat([df_us, df_kr], ignore_index=True)
-    return combined, len(df_us), len(df_kr)
+    if df_us.empty and df_kr.empty and df_toss.empty:
+        return pd.DataFrame(), 0, 0, 0
+
+    combined = pd.concat([df_us, df_kr, df_toss], ignore_index=True)
+    return combined, len(df_us), len(df_kr), len(df_toss)
 
 
 def execute_manage_action(
@@ -171,26 +210,70 @@ def _sync_display_open_orders():
     add_alert("[ORD] Syncing open orders...", "INFO")
     clear_order_states()
     try:
-        df, num_us, num_kr = fetch_open_orders()
-        add_alert(f"[ORD] updated! Orders US/KR : {num_us} / {num_kr}", "SUCCESS")
+        df, num_us, num_kr, num_toss = fetch_open_orders()
+        add_alert(
+            f"[ORD] updated! Orders US/KR/Toss : {num_us} / {num_kr} / {num_toss}",
+            "SUCCESS",
+        )
         if not df.empty:
             for _, row in df.iterrows():
                 row_l = {k.lower(): v for k, v in row.items()}
-                odno = row_l.get('odno', row_l.get('ord_no', 'Unknown'))
-                pdno = row_l.get('pdno', row_l.get('stck_shrn_iscd', 'Unknown'))
-                api_name = row_l.get(
-                    'prdt_name',
-                    row_l.get('stck_nm', row_l.get('stck_nm40', 'Unknown')),
+                odno = _first_present(
+                    row_l.get('odno'),
+                    row_l.get('ord_no'),
+                    row_l.get('orderid'),
+                    default='Unknown',
+                )
+                pdno = _first_present(
+                    row_l.get('pdno'),
+                    row_l.get('stck_shrn_iscd'),
+                    row_l.get('symbol'),
+                    default='Unknown',
+                )
+                api_name = _first_present(
+                    row_l.get('prdt_name'),
+                    row_l.get('stck_nm'),
+                    row_l.get('stck_nm40'),
+                    row_l.get('symbolname'),
+                    row_l.get('instrumentname'),
+                    row_l.get('name'),
+                    default='Unknown',
                 )
 
-                trading_config.update_stock_name(pdno, api_name)
-                stock_info = trading_config.get_stock_info(pdno)
                 market = row.get('_market', 'US')
+                broker = "TOSS" if market == "TOSS" else "KIS"
+                if market == "TOSS" and api_name == "Unknown":
+                    api_name = pdno
+                if api_name != pdno:
+                    trading_config.update_stock_name(pdno, api_name)
+                stock_info = trading_config.get_stock_info(pdno)
 
                 if market == "KR":
                     side = "Buy" if row_l.get('sll_buy_dvsn_cd') == '02' else "Sell"
                     price = str(int(float(row_l.get('ord_unpr', '0'))))
                     qty = str(row_l.get('psbl_qty', 0))
+                elif market == "TOSS":
+                    side = "Buy" if str(row_l.get('side', '')).upper() == "BUY" else "Sell"
+                    p_val = row_l.get('price')
+                    try:
+                        p_float = float(p_val)
+                        price = f"{p_float:.2f}" if p_float > 0 else "Market"
+                    except Exception:
+                        price = "Market"
+                    q_val = next(
+                        (
+                            value
+                            for value in (
+                                row_l.get('remainingquantity'),
+                                row_l.get('remaining_quantity'),
+                                row_l.get('quantity'),
+                                row_l.get('orderquantity'),
+                            )
+                            if value is not None and not pd.isna(value)
+                        ),
+                        0,
+                    )
+                    qty = str(int(float(q_val)))
                 else:
                     side_text = row_l.get(
                         'sll_buy_dvsn_cd_name',
@@ -226,19 +309,26 @@ def _sync_display_open_orders():
 
                 raw_time = row_l.get('ord_tmd', '')
                 time_str = None
+                if raw_time is not None and not pd.isna(raw_time):
+                    raw_time = str(raw_time)
+                else:
+                    raw_time = ''
                 if raw_time and len(raw_time) == 6:
                     time_str = f"{raw_time[:2]}:{raw_time[2:4]}:{raw_time[4:]}"
+
+                display_name = _first_present(stock_info.get('name'), api_name, default=pdno)
 
                 update_order_state(
                     odno,
                     pdno,
-                    stock_info.get('name', api_name),
+                    display_name,
                     side,
                     price,
                     qty,
                     "PLACED",
                     notify=False,
                     time_str=time_str,
+                    broker=broker,
                 )
         return True
     except Exception as e:
