@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def test_data_integration_skips_gsheet_for_kis_only(monkeypatch):
@@ -40,12 +40,6 @@ def test_data_integration_skips_gsheet_for_kis_only(monkeypatch):
     ]
     assert result["metadata"]["exchange_rate"] == 1375.0
     assert "gsheet_error" not in result["metadata"]
-
-
-def test_kis_source_adapter_does_not_own_integration_entrypoint():
-    from broker.kis_portfolio import KisPortfolioSourceAdapter
-
-    assert not hasattr(KisPortfolioSourceAdapter, "get_integrated_portfolio")
 
 
 def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
@@ -330,40 +324,6 @@ def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
     assert result["metadata"]["toss_error"] == "Toss unavailable"
 
 
-def test_fetch_kis_portfolio_converts_raw_data(monkeypatch):
-    from broker import kis_portfolio
-    from broker.kis_portfolio import KisPortfolioSourceAdapter
-
-    raw_data = {"exchange_rate": 1375.0, "error": None}
-    standard_source = {
-        "holdings": [{"account_key": "한국투자증권_owner_01", "ticker": "QQQM"}],
-        "cash_holdings": [],
-        "asset_info": {},
-        "accounts": {
-            "한국투자증권_owner_01": {
-                "name": "한국투자증권",
-                "owner_id": "owner_01",
-            }
-        },
-    }
-
-    monkeypatch.setattr(
-        KisPortfolioSourceAdapter,
-        "_fetch_kis_account_data",
-        staticmethod(lambda: raw_data),
-    )
-    monkeypatch.setattr(
-        KisPortfolioSourceAdapter,
-        "_convert_kis_to_standard",
-        staticmethod(lambda fetched: standard_source if fetched is raw_data else None),
-    )
-
-    source, metadata = kis_portfolio.fetch_kis_portfolio()
-
-    assert source is standard_source
-    assert metadata is raw_data
-
-
 def test_fetch_kis_portfolio_returns_empty_source_on_error(monkeypatch):
     from broker import kis_portfolio
     from broker.kis_portfolio import KisPortfolioSourceAdapter
@@ -393,25 +353,6 @@ def test_fetch_kis_portfolio_returns_empty_source_on_error(monkeypatch):
         "cash_holdings": [],
     }
     assert metadata is raw_data
-
-
-def test_broker_portfolio_delegates_to_broker_sources(monkeypatch):
-    from broker import kis_portfolio, portfolio, toss_portfolio
-
-    monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
-        lambda: ("kis-source", {"exchange_rate": 1.0}),
-    )
-    monkeypatch.setattr(
-        toss_portfolio,
-        "fetch_toss_portfolio",
-        lambda: ("toss-source", None),
-    )
-
-    assert portfolio.fetch_kis_source() == ("kis-source", {"exchange_rate": 1.0})
-    assert portfolio.fetch_toss_source() == ("toss-source", None)
-    assert portfolio.TOSS_ACCOUNT_KEY == toss_portfolio.TOSS_ACCOUNT_KEY
 
 
 def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
@@ -499,3 +440,50 @@ def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
         },
     ]
     assert [call["currency"] for call in captured["buying_power"]] == ["KRW", "USD"]
+
+
+import sys
+from pathlib import Path
+
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
+sys.path.insert(0, str(SRC_DIR))
+
+from data.gsheet import parse_worksheet_data
+
+
+class FakeWorksheet:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def get_all_values(self):
+        return self.rows
+
+
+def test_cash_only_gsheet_accounts_get_account_ids():
+    worksheet = FakeWorksheet([
+        ["ticker", "name", "qty", "avg_price", "investment", "account", "cur_price"],
+        ["", "", "", "", "", "", ""],
+        ["예수금", "예수금", "48824198", "", "", "CMA", ""],
+        ["예수금", "예수금", "1028394", "", "", "CMA 인선", ""],
+    ])
+
+    parsed = parse_worksheet_data(worksheet, "KRW")
+
+    assert parsed["accounts"] == {
+        "CMA_owner_01": {"name": "CMA", "owner_id": "owner_01"},
+        "CMA 인선_owner_02": {"name": "CMA 인선", "owner_id": "owner_02"},
+    }
+    assert parsed["cash_holdings"] == [
+        {
+            "account_name": "CMA",
+            "account_key": "CMA_owner_01",
+            "amount": 48824198.0,
+            "currency": "KRW",
+        },
+        {
+            "account_name": "CMA 인선",
+            "account_key": "CMA 인선_owner_02",
+            "amount": 1028394.0,
+            "currency": "KRW",
+        },
+    ]

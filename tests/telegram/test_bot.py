@@ -2,7 +2,7 @@ import sys
 import asyncio
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from telegram_bot import telegram_strategy
 from strategy.base import OrderSide, StrategyOrder, StrategyStatus

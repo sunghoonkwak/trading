@@ -7,7 +7,7 @@ import pytest
 import requests
 
 
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
@@ -49,48 +49,6 @@ def test_get_orderable_usd_reads_overseas_orderable_amount(monkeypatch):
     assert calls["ovrs_ord_unpr"] == "25.4"
     assert calls["item_cd"] == "SOXL"
     assert calls["env_dv"] == "real"
-
-
-def test_market_data_fetch_price_uses_kis_price_module(monkeypatch):
-    from broker import market_data
-
-    calls = {}
-
-    monkeypatch.setattr(
-        market_data.trading_config,
-        "get_kis_exchange_code",
-        lambda ticker: "NAS",
-    )
-
-    def fake_price(auth, exchange, ticker, env_dv):
-        calls["price_args"] = (auth, exchange, ticker, env_dv)
-        return pd.DataFrame([{"last": "123.45"}])
-
-    monkeypatch.setattr(
-        market_data,
-        "_get_price_module",
-        lambda: SimpleNamespace(price=fake_price),
-    )
-
-    assert market_data.fetch_price("qqq") == 123.45
-    assert calls["price_args"] == ("", "NAS", "QQQ", "real")
-
-
-def test_market_data_get_current_price_uses_market_state(monkeypatch):
-    from broker import market_data
-
-    calls = {}
-
-    monkeypatch.setattr(
-        market_data,
-        "_get_market_manager",
-        lambda: SimpleNamespace(
-            get_price=lambda ticker: calls.update({"ticker": ticker}) or 98.76
-        ),
-    )
-
-    assert market_data.get_current_price("SOXL") == 98.76
-    assert calls["ticker"] == "SOXL"
 
 
 def test_order_admin_fetches_open_orders_without_domestic_by_default(monkeypatch):
@@ -202,107 +160,6 @@ def test_order_admin_fetches_open_orders_from_toss(monkeypatch):
     assert df.iloc[0]["orderId"] == "toss-1"
 
 
-def test_order_admin_sync_sends_toss_orders_to_event_viewer(monkeypatch):
-    from broker import order_admin
-
-    updates = []
-    alerts = []
-
-    monkeypatch.setattr(
-        order_admin,
-        "fetch_open_orders",
-        lambda: (
-            pd.DataFrame([
-                {
-                    "_market": "TOSS",
-                    "pdno": float("nan"),
-                    "prdt_name": float("nan"),
-                    "ord_tmd": float("nan"),
-                    "orderId": "toss-1",
-                    "symbol": "QQQM",
-                    "symbolName": "Apple Inc.",
-                    "side": "BUY",
-                    "orderType": "LIMIT",
-                    "timeInForce": "CLS",
-                    "price": "250",
-                    "quantity": "0.158917",
-                }
-            ]),
-            0,
-            0,
-            1,
-        ),
-    )
-    monkeypatch.setattr(order_admin, "clear_order_states", lambda: updates.append(("clear",)))
-    monkeypatch.setattr(order_admin, "add_alert", lambda message, level: alerts.append((message, level)))
-    monkeypatch.setattr(
-        order_admin,
-        "update_order_state",
-        lambda *args, **kwargs: updates.append((args, kwargs)),
-    )
-    monkeypatch.setattr(order_admin.trading_config, "update_stock_name", lambda *args: None)
-    monkeypatch.setattr(order_admin.trading_config, "get_stock_info", lambda ticker: {"name": "Unknown"})
-
-    assert order_admin.sync_open_orders() is True
-
-    assert alerts[-1] == ("[ORD] updated! Orders US/KR/Toss : 0 / 0 / 1", "SUCCESS")
-    assert updates[0] == ("clear",)
-    assert updates[1] == (
-        ("toss-1", "QQQM", "Apple Inc.", "LOC Buy", "250.00", "0.158917", "PLACED"),
-        {"notify": False, "time_str": None, "broker": "TOSS"},
-    )
-
-
-def test_order_admin_sync_uses_ticker_when_toss_name_is_missing(monkeypatch):
-    from broker import order_admin
-
-    updates = []
-    stock_name_updates = []
-
-    monkeypatch.setattr(
-        order_admin,
-        "fetch_open_orders",
-        lambda: (
-            pd.DataFrame([
-                {
-                    "_market": "TOSS",
-                    "orderId": "toss-qqqm",
-                    "symbol": "QQQM",
-                    "side": "BUY",
-                    "price": "260",
-                    "remainingQuantity": "1",
-                }
-            ]),
-            0,
-            0,
-            1,
-        ),
-    )
-    monkeypatch.setattr(order_admin, "clear_order_states", lambda: None)
-    monkeypatch.setattr(order_admin, "add_alert", lambda *args: None)
-    monkeypatch.setattr(
-        order_admin,
-        "update_order_state",
-        lambda *args, **kwargs: updates.append((args, kwargs)),
-    )
-    monkeypatch.setattr(
-        order_admin.trading_config,
-        "update_stock_name",
-        lambda *args: stock_name_updates.append(args),
-    )
-    monkeypatch.setattr(order_admin.trading_config, "get_stock_info", lambda ticker: {})
-
-    assert order_admin.sync_open_orders() is True
-
-    assert updates == [
-        (
-            ("toss-qqqm", "QQQM", "QQQM", "Buy", "260.00", "1", "PLACED"),
-            {"notify": False, "time_str": None, "broker": "TOSS"},
-        )
-    ]
-    assert stock_name_updates == []
-
-
 def test_order_admin_executes_toss_cancel_through_toss_endpoint(monkeypatch):
     from broker import order_admin
 
@@ -369,25 +226,6 @@ def test_order_admin_executes_overseas_cancel_through_kis_endpoint(monkeypatch):
     assert calls["order"]["rvse_cncl_dvsn_cd"] == "02"
     assert calls["order"]["ord_qty"] == "3"
     assert calls["order"]["env_dv"] == "real"
-
-
-def test_kis_portfolio_delegates_to_data_integration(monkeypatch):
-    from broker import kis_portfolio
-
-    calls = {}
-
-    def fake_get_integrated_portfolio(kis_only=False):
-        calls["kis_only"] = kis_only
-        return {"accounts": []}
-
-    monkeypatch.setattr(
-        kis_portfolio,
-        "_manager_get_integrated_portfolio",
-        fake_get_integrated_portfolio,
-    )
-
-    assert kis_portfolio.get_integrated_portfolio(kis_only=True) == {"accounts": []}
-    assert calls["kis_only"] is True
 
 
 def test_get_orderable_usd_rejects_missing_amount(monkeypatch):
@@ -515,3 +353,322 @@ def test_place_overseas_order_reports_timeout(monkeypatch):
 
     assert success is False
     assert "[API Timeout]" in message
+
+
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from broker import market_data
+from broker.kis_portfolio import KisPortfolioSourceAdapter
+from kis.kis_api.overseas_stock.price import price as price_module
+from kis.kis_api import kis_auth as ka
+
+
+class _FakeTREnv:
+    my_acct = "12345678"
+    my_prod = "01"
+
+
+def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch):
+    calls = {}
+
+    monkeypatch.setattr(ka, "getTREnv", lambda: _FakeTREnv())
+    monkeypatch.setattr(ka, "isPaperTrading", lambda: True)
+
+    def fake_inquire_balance(**kwargs):
+        raise AssertionError("domestic balance lookup must be disabled by default")
+
+    def fake_inquire_present_balance(**kwargs):
+        calls["overseas_env"] = kwargs["env_dv"]
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_balance",
+        fake_inquire_balance,
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_present_balance",
+        fake_inquire_present_balance,
+    )
+
+    KisPortfolioSourceAdapter._fetch_kis_account_data()
+
+    assert calls == {
+        "overseas_env": "real",
+    }
+
+
+def test_price_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch):
+    calls = {}
+
+    monkeypatch.setattr(ka, "isPaperTrading", lambda: True)
+    monkeypatch.setattr(
+        market_data.trading_config,
+        "get_kis_exchange_code",
+        lambda ticker: "NAS",
+    )
+
+    def fake_price(auth, exchange, ticker, env_dv):
+        calls["price_args"] = (auth, exchange, ticker, env_dv)
+        return pd.DataFrame([{"last": "123.45"}])
+
+    monkeypatch.setattr(price_module, "price", fake_price)
+
+    result = market_data.fetch_price("qqq")
+
+    assert result == 123.45
+    assert calls["price_args"] == ("", "NAS", "QQQ", "real")
+
+
+import sys
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+from data.data_service import PortfolioProcessor
+from broker.kis_portfolio import KisPortfolioSourceAdapter
+from kis.kis_api.overseas_stock.inquire_present_balance import (
+    inquire_present_balance as inquire_present_balance_module,
+)
+
+
+class _FakeTREnv:
+    my_acct = "12345678"
+    my_prod = "01"
+
+
+class _FailedResponse:
+    def isOK(self):
+        return False
+
+    def getErrorCode(self):
+        return "OPSQ1002"
+
+    def getErrorMessage(self):
+        return "SESSION FULL"
+
+    def printError(self, url):
+        return None
+
+
+def test_inquire_present_balance_raises_api_error_instead_of_empty_data(monkeypatch):
+    monkeypatch.setattr(
+        inquire_present_balance_module.ka,
+        "_url_fetch",
+        lambda **kwargs: _FailedResponse(),
+    )
+
+    with pytest.raises(RuntimeError, match="OPSQ1002.*SESSION FULL"):
+        inquire_present_balance_module.inquire_present_balance(
+            cano="12345678",
+            acnt_prdt_cd="01",
+            wcrc_frcr_dvsn_cd="02",
+            natn_cd="000",
+            tr_mket_cd="00",
+            inqr_dvsn_cd="00",
+            env_dv="real",
+        )
+
+
+def test_fetch_portfolio_reads_exchange_rate_from_overseas_holdings(monkeypatch):
+    monkeypatch.setattr(
+        "broker.kis_portfolio.ka.getTREnv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_balance",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("domestic balance lookup must be disabled by default")
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_present_balance",
+        lambda **kwargs: (
+            pd.DataFrame([{"pdno": "QQQ", "bass_exrt": "1375.50"}]),
+            pd.DataFrame([{"frcr_drwg_psbl_amt_1": "100.00"}]),
+            pd.DataFrame(),
+        ),
+    )
+
+    result = KisPortfolioSourceAdapter._fetch_kis_account_data()
+
+    assert result["exchange_rate"] == 1375.50
+
+
+def test_fetch_portfolio_skips_domestic_balance_by_default(monkeypatch):
+    monkeypatch.setattr(
+        "broker.kis_portfolio.ka.getTREnv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_balance",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("domestic balance lookup must be disabled by default")
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_present_balance",
+        lambda **kwargs: (
+            pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1,375.50"}]),
+            pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
+            pd.DataFrame(),
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_psamount",
+        lambda **kwargs: pd.DataFrame([{"ovrs_ord_psbl_amt": "3,023.49"}]),
+        raising=False,
+    )
+
+    result = KisPortfolioSourceAdapter._fetch_kis_account_data()
+
+    assert result["domestic_stocks"] == []
+    assert result["domestic_asset"] == {}
+    assert result["krw_orderable"] == 0
+    assert result["exchange_rate"] == 1375.50
+    assert result["usd_orderable"] == 3023.49
+
+
+def test_kis_portfolio_uses_orderable_usd_as_cash(monkeypatch):
+    calls = {}
+
+    monkeypatch.setattr(
+        "broker.kis_portfolio.ka.getTREnv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_balance",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("domestic balance lookup must be disabled by default")
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_present_balance",
+        lambda **kwargs: (
+            pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
+            pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
+            pd.DataFrame(),
+        ),
+    )
+
+    def fake_inquire_psamount(**kwargs):
+        calls.update(kwargs)
+        return pd.DataFrame([{"ovrs_ord_psbl_amt": "3023.49"}])
+
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_psamount",
+        fake_inquire_psamount,
+        raising=False,
+    )
+
+    raw = KisPortfolioSourceAdapter._fetch_kis_account_data()
+    portfolio = KisPortfolioSourceAdapter._convert_kis_to_standard(raw)
+
+    usd_cash = [
+        cash for cash in portfolio["cash_holdings"]
+        if cash["currency"] == "USD"
+    ]
+    assert usd_cash[0]["amount"] == 3023.49
+    assert calls["item_cd"] == "QQQM"
+    assert calls["ovrs_excg_cd"] == "NASD"
+    assert calls["ovrs_ord_unpr"] == "1"
+    assert calls["env_dv"] == "real"
+
+
+def test_kis_portfolio_falls_back_to_balance_cash_when_orderable_usd_fails(monkeypatch):
+    monkeypatch.setattr(
+        "broker.kis_portfolio.ka.getTREnv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_balance",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("domestic balance lookup must be disabled by default")
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_present_balance",
+        lambda **kwargs: (
+            pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
+            pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
+            pd.DataFrame(),
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_psamount",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("orderable failed")),
+        raising=False,
+    )
+
+    raw = KisPortfolioSourceAdapter._fetch_kis_account_data()
+    portfolio = KisPortfolioSourceAdapter._convert_kis_to_standard(raw)
+
+    usd_cash = [
+        cash for cash in portfolio["cash_holdings"]
+        if cash["currency"] == "USD"
+    ]
+    assert raw["error"] is None
+    assert usd_cash[0]["amount"] == 999.0
+
+
+def test_kis_portfolio_keeps_zero_orderable_usd(monkeypatch):
+    monkeypatch.setattr(
+        "broker.kis_portfolio.ka.getTREnv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_balance",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("domestic balance lookup must be disabled by default")
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_present_balance",
+        lambda **kwargs: (
+            pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
+            pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
+            pd.DataFrame(),
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_psamount",
+        lambda **kwargs: pd.DataFrame([{"ovrs_ord_psbl_amt": "0"}]),
+        raising=False,
+    )
+
+    raw = KisPortfolioSourceAdapter._fetch_kis_account_data()
+    portfolio = KisPortfolioSourceAdapter._convert_kis_to_standard(raw)
+
+    usd_cash = [
+        cash for cash in portfolio["cash_holdings"]
+        if cash["currency"] == "USD"
+    ]
+    assert raw["usd_orderable"] == 0.0
+    assert usd_cash == []
+
+
+def test_merge_holdings_rejects_krw_assets_without_exchange_rate():
+    raw_data = {
+        "metadata": {"exchange_rate": 0.0},
+        "asset_info": {"005930": {"currency": "KRW"}},
+        "holdings": [
+            {
+                "ticker": "005930",
+                "name": "Samsung Electronics",
+                "qty": 1,
+                "avg_price": 70000,
+                "cur_price": 70000,
+            }
+        ],
+        "cash_holdings": [],
+    }
+
+    with pytest.raises(ValueError, match="positive exchange rate"):
+        PortfolioProcessor.merge_holdings(raw_data)

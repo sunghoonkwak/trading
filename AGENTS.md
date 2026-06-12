@@ -93,9 +93,20 @@ reapplying during upstream updates.
 
 ## Testing
 
-Add deterministic `tests/test_*.py` tests with descriptive names. Strategy,
-formatter, and state tests should avoid live KIS, Telegram, or market calls.
-For strategy changes, run the relevant tests and backtest scripts; before
+Keep durable regression tests under module-oriented directories such as
+`tests/kis/`, `tests/toss/`, `tests/raoeo/`, `tests/telegram/`, `tests/data/`,
+`tests/core/`, and `tests/scheduler/`. Use descriptive `test_*.py` filenames
+inside those directories, and avoid splitting one behavior area into many tiny
+files.
+
+When creating temporary tests only to guide an implementation or debug a
+one-off issue, put them under `tests/tmp/`. Treat that directory as scratch
+space: run the temporary tests while working, then either promote useful
+regression coverage into the relevant module directory or delete the temporary
+files before shipping. Do not rely on `tests/tmp/` for permanent coverage.
+
+Strategy, formatter, and state tests should avoid live KIS, Telegram, or market
+calls. For strategy changes, run the relevant tests and backtest scripts; before
 shipping, run `docker compose exec trading-bot python -m pytest tests`.
 
 ## Commits And Pull Requests

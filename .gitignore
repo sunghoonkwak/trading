@@ -112,3 +112,5 @@ venv/
 trading_system.log
 wheels/
 .app.lock
+tests/tmp/*
+!tests/tmp/.gitkeep
