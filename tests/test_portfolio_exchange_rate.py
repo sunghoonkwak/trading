@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from data.data_service import PortfolioProcessor
-from kis.portfolio_manager import KisPortfolioSourceAdapter
+from broker.kis_portfolio import KisPortfolioSourceAdapter
 from kis.kis_api.overseas_stock.inquire_present_balance import (
     inquire_present_balance as inquire_present_balance_module,
 )
@@ -53,15 +53,15 @@ def test_inquire_present_balance_raises_api_error_instead_of_empty_data(monkeypa
 
 def test_fetch_portfolio_reads_exchange_rate_from_overseas_holdings(monkeypatch):
     monkeypatch.setattr(
-        "kis.portfolio_manager.ka.getTREnv",
+        "broker.kis_portfolio.ka.getTREnv",
         lambda: _FakeTREnv(),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_balance",
+        "broker.kis_portfolio.inquire_balance",
         lambda **kwargs: (pd.DataFrame(), pd.DataFrame()),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_present_balance",
+        "broker.kis_portfolio.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame([{"pdno": "QQQ", "bass_exrt": "1375.50"}]),
             pd.DataFrame([{"frcr_drwg_psbl_amt_1": "100.00"}]),
@@ -82,11 +82,11 @@ def test_fetch_portfolio_parses_comma_numbers_and_reuses_trenv(monkeypatch):
         return _FakeTREnv()
 
     monkeypatch.setattr(
-        "kis.portfolio_manager.ka.getTREnv",
+        "broker.kis_portfolio.ka.getTREnv",
         fake_get_trenv,
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_balance",
+        "broker.kis_portfolio.inquire_balance",
         lambda **kwargs: (
             pd.DataFrame([
                 {
@@ -101,7 +101,7 @@ def test_fetch_portfolio_parses_comma_numbers_and_reuses_trenv(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_present_balance",
+        "broker.kis_portfolio.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame([
                 {
@@ -118,7 +118,7 @@ def test_fetch_portfolio_parses_comma_numbers_and_reuses_trenv(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_psamount",
+        "broker.kis_portfolio.inquire_psamount",
         lambda **kwargs: pd.DataFrame([{"ovrs_ord_psbl_amt": "3,023.49"}]),
         raising=False,
     )
@@ -157,15 +157,15 @@ def test_kis_portfolio_uses_orderable_usd_as_cash(monkeypatch):
     calls = {}
 
     monkeypatch.setattr(
-        "kis.portfolio_manager.ka.getTREnv",
+        "broker.kis_portfolio.ka.getTREnv",
         lambda: _FakeTREnv(),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_balance",
+        "broker.kis_portfolio.inquire_balance",
         lambda **kwargs: (pd.DataFrame(), pd.DataFrame()),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_present_balance",
+        "broker.kis_portfolio.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
             pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
@@ -178,7 +178,7 @@ def test_kis_portfolio_uses_orderable_usd_as_cash(monkeypatch):
         return pd.DataFrame([{"ovrs_ord_psbl_amt": "3023.49"}])
 
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_psamount",
+        "broker.kis_portfolio.inquire_psamount",
         fake_inquire_psamount,
         raising=False,
     )
@@ -199,15 +199,15 @@ def test_kis_portfolio_uses_orderable_usd_as_cash(monkeypatch):
 
 def test_kis_portfolio_falls_back_to_balance_cash_when_orderable_usd_fails(monkeypatch):
     monkeypatch.setattr(
-        "kis.portfolio_manager.ka.getTREnv",
+        "broker.kis_portfolio.ka.getTREnv",
         lambda: _FakeTREnv(),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_balance",
+        "broker.kis_portfolio.inquire_balance",
         lambda **kwargs: (pd.DataFrame(), pd.DataFrame()),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_present_balance",
+        "broker.kis_portfolio.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
             pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
@@ -215,7 +215,7 @@ def test_kis_portfolio_falls_back_to_balance_cash_when_orderable_usd_fails(monke
         ),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_psamount",
+        "broker.kis_portfolio.inquire_psamount",
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("orderable failed")),
         raising=False,
     )
@@ -233,15 +233,15 @@ def test_kis_portfolio_falls_back_to_balance_cash_when_orderable_usd_fails(monke
 
 def test_kis_portfolio_keeps_zero_orderable_usd(monkeypatch):
     monkeypatch.setattr(
-        "kis.portfolio_manager.ka.getTREnv",
+        "broker.kis_portfolio.ka.getTREnv",
         lambda: _FakeTREnv(),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_balance",
+        "broker.kis_portfolio.inquire_balance",
         lambda **kwargs: (pd.DataFrame(), pd.DataFrame()),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_present_balance",
+        "broker.kis_portfolio.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
             pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
@@ -249,7 +249,7 @@ def test_kis_portfolio_keeps_zero_orderable_usd(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_psamount",
+        "broker.kis_portfolio.inquire_psamount",
         lambda **kwargs: pd.DataFrame([{"ovrs_ord_psbl_amt": "0"}]),
         raising=False,
     )

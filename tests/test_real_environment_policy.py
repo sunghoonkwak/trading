@@ -6,7 +6,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from broker import market_data
-from kis.portfolio_manager import KisPortfolioSourceAdapter
+from broker.kis_portfolio import KisPortfolioSourceAdapter
 from kis.kis_api.overseas_stock.price import price as price_module
 from kis.kis_api import kis_auth as ka
 
@@ -31,11 +31,11 @@ def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch)
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_balance",
+        "broker.kis_portfolio.inquire_balance",
         fake_inquire_balance,
     )
     monkeypatch.setattr(
-        "kis.portfolio_manager.inquire_present_balance",
+        "broker.kis_portfolio.inquire_present_balance",
         fake_inquire_present_balance,
     )
 

@@ -6,12 +6,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 
 def test_data_integration_skips_gsheet_for_kis_only(monkeypatch):
-    from broker import kis_portfolio
+    from broker import portfolio
     from data import portfolio_integration
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio,
+        "fetch_kis_source",
         lambda: (
             {
                 "holdings": [],
@@ -43,18 +43,18 @@ def test_data_integration_skips_gsheet_for_kis_only(monkeypatch):
 
 
 def test_kis_source_adapter_does_not_own_integration_entrypoint():
-    from kis.portfolio_manager import KisPortfolioSourceAdapter
+    from broker.kis_portfolio import KisPortfolioSourceAdapter
 
     assert not hasattr(KisPortfolioSourceAdapter, "get_integrated_portfolio")
 
 
 def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
-    from broker import kis_portfolio
+    from broker import portfolio
     from data import portfolio_integration
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio,
+        "fetch_kis_source",
         lambda: (
             {
                 "holdings": [
@@ -142,13 +142,12 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
 
 
 def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
-    from broker import kis_portfolio
+    from broker import portfolio
     from data import portfolio_integration
-    from broker import toss_portfolio
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio,
+        "fetch_kis_source",
         lambda: (
             {
                 "holdings": [],
@@ -213,8 +212,8 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        toss_portfolio,
-        "fetch_toss_portfolio",
+        portfolio,
+        "fetch_toss_source",
         lambda: (
             {
                 "holdings": [
@@ -264,13 +263,12 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
 
 
 def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
-    from broker import kis_portfolio
+    from broker import portfolio
     from data import portfolio_integration
-    from broker import toss_portfolio
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio,
+        "fetch_kis_source",
         lambda: (
             {
                 "holdings": [],
@@ -320,8 +318,8 @@ def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        toss_portfolio,
-        "fetch_toss_portfolio",
+        portfolio,
+        "fetch_toss_source",
         lambda: (_ for _ in ()).throw(RuntimeError("Toss unavailable")),
     )
 
@@ -334,7 +332,7 @@ def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
 
 def test_fetch_kis_portfolio_converts_raw_data(monkeypatch):
     from broker import kis_portfolio
-    from kis.portfolio_manager import KisPortfolioSourceAdapter
+    from broker.kis_portfolio import KisPortfolioSourceAdapter
 
     raw_data = {"exchange_rate": 1375.0, "error": None}
     standard_source = {
@@ -368,7 +366,7 @@ def test_fetch_kis_portfolio_converts_raw_data(monkeypatch):
 
 def test_fetch_kis_portfolio_returns_empty_source_on_error(monkeypatch):
     from broker import kis_portfolio
-    from kis.portfolio_manager import KisPortfolioSourceAdapter
+    from broker.kis_portfolio import KisPortfolioSourceAdapter
 
     raw_data = {"exchange_rate": None, "error": "KIS unavailable"}
     monkeypatch.setattr(
@@ -395,6 +393,25 @@ def test_fetch_kis_portfolio_returns_empty_source_on_error(monkeypatch):
         "cash_holdings": [],
     }
     assert metadata is raw_data
+
+
+def test_broker_portfolio_delegates_to_broker_sources(monkeypatch):
+    from broker import kis_portfolio, portfolio, toss_portfolio
+
+    monkeypatch.setattr(
+        kis_portfolio,
+        "fetch_kis_portfolio",
+        lambda: ("kis-source", {"exchange_rate": 1.0}),
+    )
+    monkeypatch.setattr(
+        toss_portfolio,
+        "fetch_toss_portfolio",
+        lambda: ("toss-source", None),
+    )
+
+    assert portfolio.fetch_kis_source() == ("kis-source", {"exchange_rate": 1.0})
+    assert portfolio.fetch_toss_source() == ("toss-source", None)
+    assert portfolio.TOSS_ACCOUNT_KEY == toss_portfolio.TOSS_ACCOUNT_KEY
 
 
 def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):

@@ -330,7 +330,7 @@ def test_order_admin_executes_overseas_cancel_through_kis_endpoint(monkeypatch):
     assert calls["order"]["env_dv"] == "real"
 
 
-def test_kis_portfolio_delegates_to_portfolio_manager(monkeypatch):
+def test_kis_portfolio_delegates_to_data_integration(monkeypatch):
     from broker import kis_portfolio
 
     calls = {}

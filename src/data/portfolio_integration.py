@@ -151,15 +151,15 @@ def merge_portfolio_sources(
 def get_integrated_portfolio(kis_only: bool = False) -> Dict[str, Any]:
     """Fetch and merge portfolio sources for application data consumers."""
     from core.display import add_alert
-    from broker.kis_portfolio import fetch_kis_portfolio
+    from broker.portfolio import fetch_kis_source
 
-    kis_portfolio, kis_raw_data = fetch_kis_portfolio()
+    kis_portfolio, kis_raw_data = fetch_kis_source()
 
     gsheet_data = _empty_source()
     gsheet_error = None
     toss_error = None
     if not kis_only:
-        from broker.toss_portfolio import TOSS_ACCOUNT_KEY, fetch_toss_portfolio
+        from broker.portfolio import TOSS_ACCOUNT_KEY, fetch_toss_source
 
         add_alert("[Data] Fetching GSheet data...", "INFO")
         gsheet_data, gsheet_error = fetch_gsheet_portfolio()
@@ -167,7 +167,7 @@ def get_integrated_portfolio(kis_only: bool = False) -> Dict[str, Any]:
             add_alert(f"GSheet Warning: {gsheet_error}", "WARN")
         try:
             add_alert("[Toss] Fetching Toss API data...", "INFO")
-            toss_data, toss_error = fetch_toss_portfolio()
+            toss_data, toss_error = fetch_toss_source()
             if toss_error:
                 add_alert(f"Toss Warning: {toss_error}", "WARN")
             else:
