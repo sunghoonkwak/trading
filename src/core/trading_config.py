@@ -1,6 +1,16 @@
 import os
 import json
 
+
+def is_kis_domestic_enabled() -> bool:
+    """Return whether KIS domestic-stock account/order surfaces are enabled."""
+    return os.getenv("KIS_ENABLE_DOMESTIC", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 # Load Stock Configuration from JSON
 CONFIG = {}
 

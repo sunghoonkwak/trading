@@ -11,6 +11,8 @@
 - `get_integrated_portfolio(kis_only=False)`를 제공합니다.
 - `get_integrated_portfolio`는 기존 호출부 호환을 위해
   `data.portfolio_integration.get_integrated_portfolio`로 lazy 위임합니다.
+- KIS 국내주식 잔고조회는 기본 비활성화되어 있습니다. 국내 계좌를
+  다시 포함하려면 런타임 환경변수 `KIS_ENABLE_DOMESTIC=true`를 설정합니다.
 
 ## Import Boundary
 

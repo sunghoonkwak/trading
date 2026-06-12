@@ -8,8 +8,10 @@
 - `fetch_open_orders()`를 제공합니다.
 - `execute_manage_action(market, action_type, order_data, new_price=None)`를 제공합니다.
 - `sync_open_orders()`를 제공합니다.
-- 국내/해외 KIS 미체결 주문과 Toss OPEN 주문 조회 결과를 하나의
-  DataFrame으로 합치고 `_market` 필드를 부여합니다.
+- 해외 KIS 미체결 주문과 Toss OPEN 주문 조회 결과를 하나의 DataFrame으로
+  합치고 `_market` 필드를 부여합니다.
+- KIS 국내 주문 조회/관리는 기본 비활성화되어 있습니다. 국내 주문을
+  다시 관리하려면 런타임 환경변수 `KIS_ENABLE_DOMESTIC=true`를 설정합니다.
 - 주문 취소(`2`)와 정정(`1`) 요청을 공식 KIS endpoint wrapper 인자로
   변환합니다.
 - `sync_open_orders()`는 조회 결과를 display state에 반영합니다.

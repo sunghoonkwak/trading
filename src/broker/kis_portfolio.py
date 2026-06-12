@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 import pandas as pd
 
+from core.trading_config import is_kis_domestic_enabled
 from kis.kis_api import kis_auth as ka
 from kis.kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_balance
 from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import (
@@ -73,47 +74,52 @@ class KisPortfolioSourceAdapter:
         env_dv = "real"
 
         kr_res = {"stocks": [], "asset": {}, "krw_orderable": 0, "error": None}
-        try:
-            df1, df2 = inquire_balance(
-                env_dv=env_dv,
-                cano=cano,
-                acnt_prdt_cd=prod,
-                inqr_dvsn="02",
-                unpr_dvsn="01",
-                afhr_flpr_yn="N",
-                fund_sttl_icld_yn="N",
-                fncg_amt_auto_rdpt_yn="N",
-                prcs_dvsn="00",
-            )
-            if not df1.empty:
-                for item in df1.to_dict("records"):
-                    try:
-                        kr_res["stocks"].append(
-                            {
-                                "name": cls._get_val(
-                                    item, ["prdt_name", "PRDT_NAME"]
-                                ),
-                                "qty": cls._to_int(item, ["hldg_qty", "HLDG_QTY"]),
-                                "cur_price": cls._to_float(item, ["prpr", "PRPR"]),
-                                "avg_price": cls._to_float(
-                                    item,
-                                    ["pchs_avg_pric", "PCHS_AVG_PRIC", "avg_unpr3"],
-                                ),
-                                "symbol": cls._get_val(item, ["pdno", "PDNO"], ""),
-                            }
-                        )
-                    except Exception as e:
-                        logging.warning(
-                            "[KIS] Skipping malformed domestic holding: %s", e
-                        )
-            if not df2.empty:
-                kr_res["asset"] = df2.iloc[0].to_dict()
-                kr_res["krw_orderable"] = cls._to_int(
-                    kr_res["asset"],
-                    ["prvs_rcdl_excc_amt", "PRVS_RCDL_EXCC_AMT"],
+        if is_kis_domestic_enabled():
+            try:
+                df1, df2 = inquire_balance(
+                    env_dv=env_dv,
+                    cano=cano,
+                    acnt_prdt_cd=prod,
+                    inqr_dvsn="02",
+                    unpr_dvsn="01",
+                    afhr_flpr_yn="N",
+                    fund_sttl_icld_yn="N",
+                    fncg_amt_auto_rdpt_yn="N",
+                    prcs_dvsn="00",
                 )
-        except Exception as e:
-            kr_res["error"] = str(e)
+                if not df1.empty:
+                    for item in df1.to_dict("records"):
+                        try:
+                            kr_res["stocks"].append(
+                                {
+                                    "name": cls._get_val(
+                                        item, ["prdt_name", "PRDT_NAME"]
+                                    ),
+                                    "qty": cls._to_int(item, ["hldg_qty", "HLDG_QTY"]),
+                                    "cur_price": cls._to_float(item, ["prpr", "PRPR"]),
+                                    "avg_price": cls._to_float(
+                                        item,
+                                        [
+                                            "pchs_avg_pric",
+                                            "PCHS_AVG_PRIC",
+                                            "avg_unpr3",
+                                        ],
+                                    ),
+                                    "symbol": cls._get_val(item, ["pdno", "PDNO"], ""),
+                                }
+                            )
+                        except Exception as e:
+                            logging.warning(
+                                "[KIS] Skipping malformed domestic holding: %s", e
+                            )
+                if not df2.empty:
+                    kr_res["asset"] = df2.iloc[0].to_dict()
+                    kr_res["krw_orderable"] = cls._to_int(
+                        kr_res["asset"],
+                        ["prvs_rcdl_excc_amt", "PRVS_RCDL_EXCC_AMT"],
+                    )
+            except Exception as e:
+                kr_res["error"] = str(e)
 
         us_res = {
             "stocks": [],

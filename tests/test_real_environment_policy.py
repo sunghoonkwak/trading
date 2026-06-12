@@ -23,8 +23,7 @@ def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch)
     monkeypatch.setattr(ka, "isPaperTrading", lambda: True)
 
     def fake_inquire_balance(**kwargs):
-        calls["domestic_env"] = kwargs["env_dv"]
-        return pd.DataFrame(), pd.DataFrame()
+        raise AssertionError("domestic balance lookup must be disabled by default")
 
     def fake_inquire_present_balance(**kwargs):
         calls["overseas_env"] = kwargs["env_dv"]
@@ -42,7 +41,6 @@ def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch)
     KisPortfolioSourceAdapter._fetch_kis_account_data()
 
     assert calls == {
-        "domestic_env": "real",
         "overseas_env": "real",
     }
 

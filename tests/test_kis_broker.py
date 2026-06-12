@@ -93,7 +93,7 @@ def test_market_data_get_current_price_uses_market_state(monkeypatch):
     assert calls["ticker"] == "SOXL"
 
 
-def test_order_admin_fetches_open_orders_through_kis_endpoints(monkeypatch):
+def test_order_admin_fetches_open_orders_without_domestic_by_default(monkeypatch):
     from broker import order_admin
 
     calls = {}
@@ -105,8 +105,7 @@ def test_order_admin_fetches_open_orders_through_kis_endpoints(monkeypatch):
     )
 
     def fake_inquire_psbl_rvsecncl(**kwargs):
-        calls["kr"] = kwargs
-        return pd.DataFrame([{"odno": "KR1"}])
+        raise AssertionError("domestic open-order lookup must be disabled by default")
 
     def fake_inquire_nccs_overseas(**kwargs):
         calls["us"] = kwargs
@@ -115,7 +114,9 @@ def test_order_admin_fetches_open_orders_through_kis_endpoints(monkeypatch):
     monkeypatch.setattr(
         order_admin,
         "_get_domestic_order_endpoints",
-        lambda: (fake_inquire_psbl_rvsecncl, lambda **kwargs: None),
+        lambda: (_ for _ in ()).throw(
+            AssertionError("domestic order endpoints must be disabled by default")
+        ),
     )
     monkeypatch.setattr(
         order_admin,
@@ -127,10 +128,44 @@ def test_order_admin_fetches_open_orders_through_kis_endpoints(monkeypatch):
 
     df, us_count, kr_count, toss_count = order_admin.fetch_open_orders()
 
-    assert list(df["_market"]) == ["US", "KR"]
-    assert (us_count, kr_count, toss_count) == (1, 1, 0)
+    assert list(df["_market"]) == ["US"]
+    assert (us_count, kr_count, toss_count) == (1, 0, 0)
     assert calls["us"]["cano"] == "12345678"
     assert calls["us"]["ovrs_excg_cd"] == "NASD"
+
+
+def test_order_admin_fetches_domestic_open_orders_when_enabled(monkeypatch):
+    from broker import order_admin
+
+    calls = {}
+
+    monkeypatch.setenv("KIS_ENABLE_DOMESTIC", "true")
+    monkeypatch.setattr(
+        order_admin,
+        "_get_trenv",
+        lambda: _FakeTREnv(),
+    )
+
+    def fake_inquire_psbl_rvsecncl(**kwargs):
+        calls["kr"] = kwargs
+        return pd.DataFrame([{"odno": "KR1"}])
+
+    monkeypatch.setattr(
+        order_admin,
+        "_get_domestic_order_endpoints",
+        lambda: (fake_inquire_psbl_rvsecncl, lambda **kwargs: None),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_get_overseas_order_endpoints",
+        lambda: (lambda **kwargs: pd.DataFrame(), lambda **kwargs: None),
+    )
+    monkeypatch.setattr(order_admin, "_fetch_toss_open_orders", lambda: pd.DataFrame())
+
+    df, us_count, kr_count, toss_count = order_admin.fetch_open_orders()
+
+    assert list(df["_market"]) == ["KR"]
+    assert (us_count, kr_count, toss_count) == (0, 1, 0)
     assert calls["kr"]["acnt_prdt_cd"] == "01"
 
 
@@ -145,7 +180,9 @@ def test_order_admin_fetches_open_orders_from_toss(monkeypatch):
     monkeypatch.setattr(
         order_admin,
         "_get_domestic_order_endpoints",
-        lambda: (lambda **kwargs: pd.DataFrame(), lambda **kwargs: None),
+        lambda: (_ for _ in ()).throw(
+            AssertionError("domestic order endpoints must be disabled by default")
+        ),
     )
     monkeypatch.setattr(
         order_admin,
@@ -303,7 +340,9 @@ def test_order_admin_executes_overseas_cancel_through_kis_endpoint(monkeypatch):
     monkeypatch.setattr(
         order_admin,
         "_get_domestic_order_endpoints",
-        lambda: (lambda **kwargs: None, lambda **kwargs: None),
+        lambda: (_ for _ in ()).throw(
+            AssertionError("domestic order endpoints are not needed for US cancel")
+        ),
     )
 
     def fake_order_rvsecncl_overseas(**kwargs):

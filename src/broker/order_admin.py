@@ -89,7 +89,6 @@ def fetch_open_orders() -> Tuple[pd.DataFrame, int, int, int]:
     trenv = _get_trenv()
     cano = trenv.my_acct
     prod = trenv.my_prod
-    inquire_psbl_rvsecncl, _ = _get_domestic_order_endpoints()
     inquire_nccs_overseas, _ = _get_overseas_order_endpoints()
 
     try:
@@ -107,18 +106,20 @@ def fetch_open_orders() -> Tuple[pd.DataFrame, int, int, int]:
         logging.error("[OrderAdmin] US order fetch failed: %s", e)
         df_us = pd.DataFrame()
 
-    try:
-        df_kr = inquire_psbl_rvsecncl(
-            cano=cano,
-            acnt_prdt_cd=prod,
-            inqr_dvsn_1="0",
-            inqr_dvsn_2="0",
-        )
-        if not df_kr.empty:
-            df_kr["_market"] = "KR"
-    except Exception as e:
-        logging.error("[OrderAdmin] KR order fetch failed: %s", e)
-        df_kr = pd.DataFrame()
+    df_kr = pd.DataFrame()
+    if trading_config.is_kis_domestic_enabled():
+        inquire_psbl_rvsecncl, _ = _get_domestic_order_endpoints()
+        try:
+            df_kr = inquire_psbl_rvsecncl(
+                cano=cano,
+                acnt_prdt_cd=prod,
+                inqr_dvsn_1="0",
+                inqr_dvsn_2="0",
+            )
+            if not df_kr.empty:
+                df_kr["_market"] = "KR"
+        except Exception as e:
+            logging.error("[OrderAdmin] KR order fetch failed: %s", e)
 
     try:
         df_toss = _fetch_toss_open_orders()
@@ -145,7 +146,6 @@ def execute_manage_action(
     trenv = _get_trenv()
     cano = trenv.my_acct
     prod = trenv.my_prod
-    _, order_rvsecncl = _get_domestic_order_endpoints()
     _, order_rvsecncl_overseas = _get_overseas_order_endpoints()
     t_ord = {k.lower(): v for k, v in order_data.items()}
     order_no = _first_present(
@@ -180,6 +180,10 @@ def execute_manage_action(
             return pd.DataFrame([result]), None
 
         if market == "KR":
+            if not trading_config.is_kis_domestic_enabled():
+                return None, "KIS domestic order management is disabled"
+
+            _, order_rvsecncl = _get_domestic_order_endpoints()
             res_df, msg = order_rvsecncl(
                 env_dv="real",
                 cano=cano,

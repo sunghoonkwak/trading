@@ -23,9 +23,6 @@ class WSManager:
         """Initialize WebSocket subscriptions and start the connection thread."""
         try:
             # Import specific subscription handlers
-            from kis.kis_api.domestic_stock.asking_price_total.asking_price_total import asking_price_total
-            from kis.kis_api.domestic_stock.ccnl_total.ccnl_total import ccnl_total
-            from kis.kis_api.domestic_stock.ccnl_notice.ccnl_notice import ccnl_notice as ccnl_notice_kr
             from kis.kis_api.overseas_stock.asking_price.asking_price import asking_price
             from kis.kis_api.overseas_stock.ccnl_notice.ccnl_notice import ccnl_notice as ccnl_notice_us
             from kis.kis_api.overseas_stock.delayed_ccnl.delayed_ccnl import delayed_ccnl
@@ -33,18 +30,40 @@ class WSManager:
 
             logging.info("[WSManager] Initializing WebSocket...")
             self._ws_instance = ka.KISWebSocket(api_url="")
+            domestic_enabled = trading_config.is_kis_domestic_enabled()
 
             # 1. Personal Order Notifications
             htsid = ka.getTREnv().my_htsid
             if htsid:
-                self._ws_instance.subscribe(ccnl_notice_kr, htsid, kwargs={"env_dv": "real"})
                 self._ws_instance.subscribe(ccnl_notice_us, htsid, kwargs={"env_dv": "real"})
+                if domestic_enabled:
+                    from kis.kis_api.domestic_stock.ccnl_notice.ccnl_notice import (
+                        ccnl_notice as ccnl_notice_kr,
+                    )
+
+                    self._ws_instance.subscribe(
+                        ccnl_notice_kr,
+                        htsid,
+                        kwargs={"env_dv": "real"},
+                    )
 
             # 2. Market Data Subscriptions (KR)
-            watch_list_kr = [s["ticker"] for s in trading_config.CONFIG.get("KR", []) if not s.get("disabled")]
-            if watch_list_kr:
-                self._ws_instance.subscribe(asking_price_total, watch_list_kr)
-                self._ws_instance.subscribe(ccnl_total, watch_list_kr)
+            if domestic_enabled:
+                from kis.kis_api.domestic_stock.asking_price_total.asking_price_total import (
+                    asking_price_total,
+                )
+                from kis.kis_api.domestic_stock.ccnl_total.ccnl_total import (
+                    ccnl_total,
+                )
+
+                watch_list_kr = [
+                    s["ticker"]
+                    for s in trading_config.CONFIG.get("KR", [])
+                    if not s.get("disabled")
+                ]
+                if watch_list_kr:
+                    self._ws_instance.subscribe(asking_price_total, watch_list_kr)
+                    self._ws_instance.subscribe(ccnl_total, watch_list_kr)
 
             # 3. Market Data Subscriptions (US)
             watch_list_us = [s["ticker"] for s in trading_config.CONFIG.get("US", []) if not s.get("disabled")]
