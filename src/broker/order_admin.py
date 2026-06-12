@@ -2,6 +2,7 @@
 """Application-owned runtime for open-order administration."""
 
 import logging
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
@@ -75,6 +76,34 @@ def _first_present(*values, default=None):
             continue
         return value
     return default
+
+
+def _format_order_quantity(value) -> str:
+    """Preserve broker fractional quantities while keeping whole shares compact."""
+    if value is None or pd.isna(value):
+        return "0"
+
+    text = str(value).strip()
+    if not text:
+        return "0"
+
+    try:
+        quantity = Decimal(text)
+    except (InvalidOperation, ValueError):
+        return text
+
+    if quantity == quantity.to_integral_value():
+        return str(quantity.quantize(Decimal("1")))
+
+    return format(quantity.normalize(), "f")
+
+
+def _toss_order_label(row_l: Dict[str, Any]) -> str:
+    order_type = str(row_l.get("ordertype", row_l.get("order_type", ""))).upper()
+    time_in_force = str(row_l.get("timeinforce", row_l.get("time_in_force", ""))).upper()
+    if order_type == "LIMIT" and time_in_force == "CLS":
+        return "LOC"
+    return order_type
 
 
 def _mask_order_id(value):
@@ -293,6 +322,9 @@ def _sync_display_open_orders():
                     qty = str(row_l.get('psbl_qty', 0))
                 elif market == "TOSS":
                     side = "Buy" if str(row_l.get('side', '')).upper() == "BUY" else "Sell"
+                    order_label = _toss_order_label(row_l)
+                    if order_label == "LOC":
+                        side = f"LOC {side}"
                     p_val = row_l.get('price')
                     try:
                         p_float = float(p_val)
@@ -312,7 +344,7 @@ def _sync_display_open_orders():
                         ),
                         0,
                     )
-                    qty = str(int(float(q_val)))
+                    qty = _format_order_quantity(q_val)
                 else:
                     side_text = row_l.get(
                         'sll_buy_dvsn_cd_name',

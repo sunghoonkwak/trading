@@ -7,6 +7,7 @@ for interactive ticker selection.
 """
 import logging
 import warnings
+from decimal import Decimal, InvalidOperation
 from telegram.warnings import PTBUserWarning
 warnings.filterwarnings("ignore", category=PTBUserWarning)
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -489,17 +490,44 @@ def format_placed_orders(df, num_us: int, num_kr: int, num_toss: int | None = No
                 continue
             if isinstance(value, float) and value != value:
                 continue
+            if isinstance(value, str) and value.strip() in {"", "Unknown", "nan", "None"}:
+                continue
             return value
         return None
+
+    def format_quantity(value):
+        value = first_value(value, 0)
+        text = str(value).strip()
+        try:
+            quantity = Decimal(text)
+        except (InvalidOperation, ValueError):
+            return text
+        if quantity == quantity.to_integral_value():
+            return str(quantity.quantize(Decimal("1")))
+        return format(quantity.normalize(), "f")
+
+    def toss_order_label(row_lower):
+        order_type = str(row_lower.get('ordertype', row_lower.get('order_type', ''))).upper()
+        time_in_force = str(row_lower.get('timeinforce', row_lower.get('time_in_force', ''))).upper()
+        if order_type == "LIMIT" and time_in_force == "CLS":
+            return "LOC"
+        return order_type
 
     def row_to_order(row):
         market = row.get('_market', 'US')
         row_lower = {k.lower(): v for k, v in row.items()}
 
-        pdno = row_lower.get(
-            'pdno',
-            row_lower.get('stck_shrn_iscd', row_lower.get('symbol', 'Unknown')),
+        pdno = first_value(
+            row_lower.get('pdno'),
+            row_lower.get('stck_shrn_iscd'),
+            row_lower.get('symbol'),
+            'Unknown',
         )
+
+        if market == "TOSS":
+            broker = "Toss"
+        else:
+            broker = "KIS"
 
         if market == "KR":
             is_buy = row_lower.get('sll_buy_dvsn_cd') == '02'
@@ -510,7 +538,9 @@ def format_placed_orders(df, num_us: int, num_kr: int, num_toss: int | None = No
         elif market == "TOSS":
             side_value = str(row_lower.get('side', '')).upper()
             side = "Buy" if side_value == "BUY" else "Sell"
-            order_type = str(row_lower.get('ordertype', row_lower.get('order_type', side))).upper()
+            order_type = toss_order_label(row_lower)
+            if order_type == "MARKET":
+                order_type = ""
             p_val = row_lower.get('price')
             p_float = as_float(p_val)
             if p_float > 0:
@@ -525,11 +555,11 @@ def format_placed_orders(df, num_us: int, num_kr: int, num_toss: int | None = No
                 row_lower.get('orderquantity'),
                 0,
             )
-            qty = str(int(as_float(q_val)))
+            qty = format_quantity(q_val)
         else:
             is_buy = row_lower.get('sll_buy_dvsn_cd') == '02'
             side_text = str(row_lower.get('sll_buy_dvsn_cd_name', row_lower.get('sll_buy_dvsn_name', ''))).strip()
-            order_type = side_text if side_text and side_text not in ['?', 'nan', 'None', ''] else ("Buy" if is_buy else "Sell")
+            order_type = "LOC" if "LOC" in side_text.upper() else ""
             side = "Buy" if is_buy else "Sell"
             p_val = row_lower.get('ft_ord_unpr3', row_lower.get('ft_ord_unpr4', row_lower.get('ovrs_ord_unpr', row_lower.get('ord_unpr', '0'))))
             price = f"${float(p_val):,.2f}" if float(p_val) > 0 else "Market"
@@ -537,6 +567,7 @@ def format_placed_orders(df, num_us: int, num_kr: int, num_toss: int | None = No
             qty = str(int(float(q_val)))
 
         return {
+            "broker": broker,
             "ticker": pdno,
             "side": side,
             "order_type": order_type,
@@ -544,13 +575,37 @@ def format_placed_orders(df, num_us: int, num_kr: int, num_toss: int | None = No
             "qty": qty,
         }
 
-    orders = [row_to_order(row) for _, row in df.head(10).iterrows()]
-    grouped = {}
-    for order in orders:
-        grouped.setdefault(
-            order["ticker"],
-            {"Buy": [], "Sell": []},
-        )[order["side"]].append(order)
+    def append_grouped_orders(lines, grouped):
+        for idx, (ticker, group) in enumerate(grouped.items()):
+            if idx > 0:
+                lines.append("")
+
+            lines.append(f"<b>{ticker}</b>")
+
+            for side, emoji in (("Sell", "🔴"), ("Buy", "🟢")):
+                side_orders = group[side]
+                if not side_orders:
+                    continue
+
+                lines.append(f"{emoji} <b>{side}</b>")
+                label_width = max(len(order["order_type"]) for order in side_orders)
+                for order in side_orders:
+                    if order["order_type"]:
+                        label = order["order_type"].ljust(label_width)
+                        lines.append(f"  {label}  {order['qty']} @ {order['price']}")
+                    else:
+                        lines.append(f"  {order['qty']} @ {order['price']}")
+
+    def grouped_by_ticker(orders_for_broker):
+        grouped = {}
+        for order in orders_for_broker:
+            grouped.setdefault(
+                order["ticker"],
+                {"Buy": [], "Sell": []},
+            )[order["side"]].append(order)
+        return grouped
+
+    orders = [row_to_order(row) for _, row in df.iterrows()]
 
     counts = f"US: {num_us} / KR: {num_kr}"
     if num_toss is not None:
@@ -560,26 +615,20 @@ def format_placed_orders(df, num_us: int, num_kr: int, num_toss: int | None = No
         "",
     ]
 
-    for idx, (ticker, group) in enumerate(grouped.items()):
-        if idx > 0:
-            lines.append("")
-
-        lines.append(f"<b>{ticker}</b>")
-
-        for side, emoji in (("Sell", "🔴"), ("Buy", "🟢")):
-            side_orders = group[side]
-            if not side_orders:
+    if num_toss is None:
+        append_grouped_orders(lines, grouped_by_ticker(orders))
+    else:
+        first_section = True
+        for broker in ("KIS", "Toss"):
+            broker_orders = [order for order in orders if order["broker"] == broker]
+            if not broker_orders:
                 continue
-
-            lines.append(f"{emoji} <b>{side}</b>")
-            label_width = max(len(order["order_type"]) for order in side_orders)
-            for order in side_orders:
-                label = order["order_type"].ljust(label_width)
-                lines.append(f"  {label}  {order['qty']} @ {order['price']}")
-
-    if len(df) > 10:
-        lines.append("")
-        lines.append(f"<i>...and {len(df) - 10} more</i>")
+            if not first_section:
+                lines.append("")
+            lines.append(f"<b>{broker}</b>")
+            lines.append("")
+            append_grouped_orders(lines, grouped_by_ticker(broker_orders))
+            first_section = False
 
     return "\n".join(lines)
 

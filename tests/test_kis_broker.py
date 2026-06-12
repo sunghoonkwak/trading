@@ -219,11 +219,13 @@ def test_order_admin_sync_sends_toss_orders_to_event_viewer(monkeypatch):
                     "prdt_name": float("nan"),
                     "ord_tmd": float("nan"),
                     "orderId": "toss-1",
-                    "symbol": "AAPL",
+                    "symbol": "QQQM",
                     "symbolName": "Apple Inc.",
                     "side": "BUY",
-                    "price": "185.5",
-                    "remainingQuantity": "3",
+                    "orderType": "LIMIT",
+                    "timeInForce": "CLS",
+                    "price": "250",
+                    "quantity": "0.158917",
                 }
             ]),
             0,
@@ -246,7 +248,7 @@ def test_order_admin_sync_sends_toss_orders_to_event_viewer(monkeypatch):
     assert alerts[-1] == ("[ORD] updated! Orders US/KR/Toss : 0 / 0 / 1", "SUCCESS")
     assert updates[0] == ("clear",)
     assert updates[1] == (
-        ("toss-1", "AAPL", "Apple Inc.", "Buy", "185.50", "3", "PLACED"),
+        ("toss-1", "QQQM", "Apple Inc.", "LOC Buy", "250.00", "0.158917", "PLACED"),
         {"notify": False, "time_str": None, "broker": "TOSS"},
     )
 

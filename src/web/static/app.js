@@ -304,7 +304,7 @@ function updateOrdersPanel() {
                     <span style="width:55px;display:inline-block" class="ticker-link" onclick="openTickerModal('${order.ticker}')">${order.ticker}</span>
                     <span style="width:70px;display:inline-block;color:${sideClass === 'buy' ? 'var(--accent-success)' : 'var(--accent-danger)'}">${order.side}</span>
                     <span style="width:70px;text-align:right;display:inline-block">${formatNumber(order.price)}</span>
-                    <span style="width:40px;text-align:right;display:inline-block">${order.qty}</span>
+                    <span style="width:72px;text-align:right;display:inline-block">${order.qty}</span>
                     <span style="width:48px;text-align:center;display:inline-block;color:var(--text-dim)">${order.broker || 'KIS'}</span>
                     <span style="margin-left:auto;color:var(--text-dim)">${order.state}${cancelLink}</span>
                 </div>`;
