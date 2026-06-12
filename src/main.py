@@ -177,6 +177,9 @@ class TradingSystem:
     def run(self):
         """Main execution loop."""
         self.setup_logging()
+        from broker.kis_logger import install_kis_logging
+
+        install_kis_logging()
         print("=== KIS Real-time Trading System ===\n")
 
         # Ensure the script is only run within a Docker container

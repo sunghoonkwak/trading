@@ -5,12 +5,13 @@ import json
 import sys
 from pathlib import Path
 from typing import Callable
-from urllib import error, parse, request
+from urllib import parse, request
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
+from toss.client import request_json
 from toss.get_holdings import _get_default_account_seq
 from toss.get_prices import load_access_token
 
@@ -56,14 +57,13 @@ def get_orders(
         method="GET",
     )
 
-    try:
-        with urlopen(api_request, timeout=timeout) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        details = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Toss orders request failed: HTTP {exc.code} {details}") from exc
-    except error.URLError as exc:
-        raise RuntimeError(f"Toss orders request failed: {exc.reason}") from exc
+    payload = request_json(
+        api_request,
+        group="ORDER_HISTORY",
+        action_name="orders",
+        timeout=timeout,
+        urlopen=urlopen,
+    )
 
     result = payload.get("result")
     if not isinstance(result, dict):

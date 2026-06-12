@@ -43,6 +43,11 @@ from broker.kis_ws_notifications import (
     should_notify_reconnection_failure,
     should_notify_reconnection_success,
 )
+from broker.kis_logger import (
+    log_api_resp_debug,
+    log_api_request_debug,
+    log_ws_send,
+)
 
 clearConsole = lambda: os.system("cls" if os.name in ("nt", "dos") else "clear")
 
@@ -407,20 +412,7 @@ class APIResp:
         return self._err_message
 
     def printAll(self):
-        logging.debug("<Header>")
-        for x in self.getHeader()._fields:
-            val = getattr(self.getHeader(), x)
-            # Mask sensitive tokens in header output
-            if x.lower() in ["authorization", "appkey", "appsecret", "secretkey", "approval_key"]:
-                val = "********"
-            logging.debug(f"\t-{x}: {val}")
-        logging.debug("<Body>")
-        for x in self.getBody()._fields:
-            val = getattr(self.getBody(), x)
-            # Mask sensitive body fields
-            if x.lower() in ["appkey", "appsecret", "secretkey"]:
-                val = "********"
-            logging.debug(f"\t-{x}: {val}")
+        log_api_resp_debug(self)
 
     def printError(self, url):
         logging.error("-" * 31)
@@ -508,19 +500,7 @@ def _url_fetch(
                 headers[x] = appendHeaders.get(x)
 
     if _DEBUG:
-        # Global masking helper
-        def _mask_dict(d):
-            if not isinstance(d, dict): return d
-            masked = copy.deepcopy(d)
-            for k in masked.keys():
-                if k.lower() in ["appkey", "appsecret", "authorization", "secretkey", "approval_key", "my_hts_id"]:
-                    masked[k] = "********"
-            return masked
-
-        logging.debug("< Sending Info >")
-        logging.debug(f"URL: {url}, TR: {tr_id}")
-        logging.debug(f"<header>\n{_mask_dict(headers)}")
-        logging.debug(f"<body>\n{_mask_dict(params)}")
+        log_api_request_debug(url=url, tr_id=tr_id, headers=headers, body=params)
 
     if postFlag:
         # if (hashFlag): set_order_hash_key(headers, params)
@@ -608,16 +588,7 @@ def data_fetch(tr_id, tr_type, params, appendHeaders=None) -> dict:
                 headers[x] = appendHeaders.get(x)
 
     if _DEBUG:
-        def _mask_dict(d):
-            if not isinstance(d, dict): return d
-            masked = copy.deepcopy(d)
-            for k in list(masked.keys()):
-                if k.lower() in ["appkey", "appsecret", "authorization", "secretkey", "approval_key"]:
-                    masked[k] = "********"
-            return masked
-
-        logging.debug(f"<Sending Info> TR: {tr_id}")
-        logging.debug(f"<header>\n{_mask_dict(headers)}")
+        log_api_request_debug(tr_id=tr_id, headers=headers)
 
     inp = {
         "tr_id": tr_id,
@@ -1055,15 +1026,7 @@ class KISWebSocket:
 
         add_data_map(tr_id=msg["body"]["input"]["tr_id"], columns=columns)
 
-        # Mask sensitive data in WebSocket logs
-        def _mask_recursive(d):
-            if isinstance(d, dict):
-                return {k: ("********" if k.lower() in ["appkey", "secretkey", "tr_key", "approval_key"] else _mask_recursive(v)) for k, v in d.items()}
-            elif isinstance(d, list):
-                return [_mask_recursive(i) for i in d]
-            return d
-
-        logging.info("send message >> %s" % json.dumps(_mask_recursive(msg)))
+        log_ws_send(msg)
 
         await ws.send(json.dumps(msg))
         await asyncio.sleep(0.5) # Reverted to 0.5s as requested

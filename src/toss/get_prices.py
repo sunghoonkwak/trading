@@ -5,12 +5,13 @@ import json
 import sys
 from pathlib import Path
 from typing import Callable, Sequence
-from urllib import error, parse, request
+from urllib import parse, request
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT, TOKEN_DIR, load_latest_token
+from toss.client import request_json
 
 
 def load_access_token(token_dir=TOKEN_DIR) -> str:
@@ -46,14 +47,13 @@ def get_prices(
         method="GET",
     )
 
-    try:
-        with urlopen(prices_request, timeout=timeout) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        details = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Toss prices request failed: HTTP {exc.code} {details}") from exc
-    except error.URLError as exc:
-        raise RuntimeError(f"Toss prices request failed: {exc.reason}") from exc
+    payload = request_json(
+        prices_request,
+        group="MARKET_DATA",
+        action_name="prices",
+        timeout=timeout,
+        urlopen=urlopen,
+    )
 
     result = payload.get("result")
     if not isinstance(result, list):

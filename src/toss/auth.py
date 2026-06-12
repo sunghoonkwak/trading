@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
-from urllib import error, parse, request
+from urllib import parse, request
 
 from core.constants import CONFIG_ROOT
 from core.credentials import load_credentials
+from toss.client import request_json
 
 
 DEFAULT_BASE_URL = "https://openapi.tossinvest.com"
@@ -74,14 +75,13 @@ def issue_token(
         method="POST",
     )
 
-    try:
-        with urlopen(token_request, timeout=timeout) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        details = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Toss token request failed: HTTP {exc.code} {details}") from exc
-    except error.URLError as exc:
-        raise RuntimeError(f"Toss token request failed: {exc.reason}") from exc
+    payload = request_json(
+        token_request,
+        group="AUTH",
+        action_name="token",
+        timeout=timeout,
+        urlopen=urlopen,
+    )
 
     return TossToken(
         access_token=payload["access_token"],
