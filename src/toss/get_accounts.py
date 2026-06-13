@@ -12,7 +12,7 @@ if __package__ in {None, ""}:
 
 from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
 from toss.client import request_json
-from toss.get_prices import load_access_token
+from toss.auth import load_access_token
 
 
 def get_accounts(

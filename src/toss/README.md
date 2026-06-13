@@ -1,41 +1,45 @@
 # Toss Invest Helpers (`src/toss/`)
 
-This package contains small command-line and importable helpers for the Toss
-Invest Open API.
+이 패키지는 Toss Invest Open API를 호출하는 작은 CLI/helper 함수들을
+담고 있습니다.
 
 ## Reference
 
-Before changing Toss request code, check the OpenAPI schema at
-`docs/reference/toss-openapi-v1.1.1.json`.
+Toss 요청 코드를 변경하기 전에는 먼저 체크인된 OpenAPI schema
+`docs/reference/toss-openapi-v1.1.1.json`를 확인합니다.
 
-Useful lookup patterns:
+자주 쓰는 검색 패턴:
 
 ```bash
 rg -n '"/api/v1/orders|operationId|cancelOrder|modifyOrder' docs/reference/toss-openapi-v1.1.1.json
 ```
 
-Confirm these details from the schema:
+schema에서 다음 항목을 확인합니다.
 
-- endpoint path and HTTP method
-- request `Content-Type` and body shape
-- `X-Tossinvest-Account` header requirements
-- response field names such as `orderId`, `orders`, and `nextCursor`
+- endpoint path와 HTTP method
+- 요청 `Content-Type`과 body 형태
+- `X-Tossinvest-Account` header 필요 여부
+- `orderId`, `orders`, `nextCursor` 같은 응답 field 이름
 
 ## Runtime Notes
 
-- Load tokens through `toss.get_prices.load_access_token()`.
-- Resolve default account sequence through
-  `toss.get_holdings._get_default_account_seq(access_token)`.
-- Keep order-changing diagnostics (`create_order`, `modify_order`,
-  `cancel_order`) behind explicit user approval.
-- Toss API calls currently routed through the shared rate-limit manager:
+- 토큰은 `toss.auth.load_access_token()`을 통해 로드합니다. 이 함수는
+  저장된 토큰의 `expires_at`을 확인하고, 만료된 경우 다음 API 요청 전에 새
+  토큰을 발급해 반환합니다.
+- 기본 계좌 sequence는
+  `toss.get_holdings._get_default_account_seq(access_token)`로 확인합니다.
+- 주문 상태를 바꾸는 진단(`create_order`, `modify_order`, `cancel_order`)은
+  사용자의 명시적인 요청이 있을 때만 실행합니다.
+- 현재 shared rate-limit manager를 거치는 Toss API 호출:
   `auth`, `get_accounts`, `get_holdings`, `get_buying_power`, `get_prices`,
-  `get_orders`, `get_order`, `create_order`, `modify_order`, and
+  `get_orders`, `get_order`, `create_order`, `modify_order`,
   `cancel_order`.
-- TODO: migrate the remaining lower-priority helpers to the shared manager:
+- `toss.client.request_json()`은 최종 Toss API query 실패를 RuntimeError로
+  올리기 전에 Telegram 알림을 전송합니다. 429 재시도 중간 실패는 알림을
+  보내지 않고, 재시도 후에도 실패한 경우에만 알림을 보냅니다.
+- TODO: 아직 shared manager로 옮기지 않은 낮은 우선순위 helper:
   `get_candles`, `get_commissions`, `get_exchange_rate`,
   `get_kr_market_calendar`, `get_orderbook`, `get_price_limit`,
-  `get_sellable_quantity`, `get_trades`, and `get_us_market_calendar`.
-- The shared Toss request helper logs requests and responses at INFO while the
-  integration is new. After the runtime is stable, lower these logs to DEBUG in
-  `toss.client`.
+  `get_sellable_quantity`, `get_trades`, `get_us_market_calendar`.
+- shared Toss request helper는 연동 초기 안정화 기간 동안 요청/응답을 INFO
+  로그로 남깁니다. 런타임이 안정화되면 `toss.client`에서 DEBUG로 낮춥니다.

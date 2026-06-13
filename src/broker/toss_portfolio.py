@@ -37,7 +37,7 @@ def fetch_toss_portfolio(
     """Fetch Toss holdings and buying power in the standard source format."""
     from toss.get_buying_power import get_buying_power
     from toss.get_holdings import get_holdings
-    from toss.get_prices import load_access_token
+    from toss.auth import load_access_token
 
     access_token = load_access_token()
     holdings_result = get_holdings(

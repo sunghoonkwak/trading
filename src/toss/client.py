@@ -17,6 +17,7 @@ def request_json(
     urlopen: Callable[..., object],
     rate_limiter: TossRateLimitManager = DEFAULT_RATE_LIMIT_MANAGER,
     max_retries: int = 3,
+    notify_func: Callable[[str], None] | None = None,
 ) -> dict[str, object]:
     attempt = 0
     while True:
@@ -37,9 +38,16 @@ def request_json(
             rate_limiter.update_from_headers(group, headers)
             _log_response(group, action_name, exc.code, headers, details)
             if exc.code != 429 or attempt >= max_retries:
-                raise RuntimeError(
+                message = (
                     f"Toss {action_name} request failed: HTTP {exc.code} {details}"
-                ) from exc
+                )
+                _send_failure_notification(
+                    group=group,
+                    action_name=action_name,
+                    message=message,
+                    notify_func=notify_func,
+                )
+                raise RuntimeError(message) from exc
 
             delay = rate_limiter.retry_delay(headers, attempt)
             logging.info(
@@ -59,7 +67,37 @@ def request_json(
                 action_name,
                 exc.reason,
             )
-            raise RuntimeError(f"Toss {action_name} request failed: {exc.reason}") from exc
+            message = f"Toss {action_name} request failed: {exc.reason}"
+            _send_failure_notification(
+                group=group,
+                action_name=action_name,
+                message=message,
+                notify_func=notify_func,
+            )
+            raise RuntimeError(message) from exc
+
+
+def _send_failure_notification(
+    *,
+    group: str,
+    action_name: str,
+    message: str,
+    notify_func: Callable[[str], None] | None,
+) -> None:
+    try:
+        sender = notify_func
+        if sender is None:
+            from telegram_bot.telegram_utils import send_notification
+
+            sender = send_notification
+        sender(
+            "<b>Toss API query failed</b>\n"
+            f"Group: {group}\n"
+            f"Action: {action_name}\n"
+            f"{message}"
+        )
+    except Exception as exc:
+        logging.warning("[TossAPI] failed to send query failure notification: %s", exc)
 
 
 def _log_request(api_request, group: str, action_name: str, attempt: int) -> None:

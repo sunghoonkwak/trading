@@ -1,7 +1,8 @@
+import io
 import json
 import sys
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib import error, request
 
@@ -176,6 +177,95 @@ class TossAuthTest(unittest.TestCase):
             "new-token",
         )
 
+    def test_ensure_daily_token_reissues_expired_today_token(self):
+        from toss.auth import TossAuthConfig, TossToken, ensure_daily_token
+
+        token_dir = ROOT / "tests" / ".tmp-expired-today-token"
+        self.addCleanup(lambda: self._remove_tree(token_dir))
+        token_dir.mkdir()
+        (token_dir / "TOSS20260612_000403.json").write_text(
+            json.dumps(
+                {
+                    "access_token": "expired-token",
+                    "token_type": "Bearer",
+                    "expires_in": 60,
+                    "issued_at": "2026-06-12T00:04:03+00:00",
+                    "expires_at": "2026-06-12T00:05:03+00:00",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        calls = []
+
+        def fake_issue(config):
+            calls.append(config.client_id)
+            return TossToken(
+                access_token="new-token",
+                token_type="Bearer",
+                expires_in=86400,
+            )
+
+        token_path = ensure_daily_token(
+            TossAuthConfig(client_id="client-id", client_secret="client-secret"),
+            token_dir=token_dir,
+            now=datetime(2026, 6, 12, 0, 36, tzinfo=timezone.utc),
+            issue_token_func=fake_issue,
+        )
+
+        self.assertEqual(calls, ["client-id"])
+        self.assertEqual(token_path.name, "TOSS20260612_003600.json")
+        self.assertEqual(
+            json.loads(token_path.read_text(encoding="utf-8"))["access_token"],
+            "new-token",
+        )
+
+    def test_load_access_token_renews_expired_token(self):
+        from toss.auth import TossAuthConfig, TossToken
+        from toss.auth import load_access_token
+
+        token_dir = ROOT / "tests" / ".tmp-expired-load-token"
+        self.addCleanup(lambda: self._remove_tree(token_dir))
+        token_dir.mkdir()
+        (token_dir / "TOSS20260612_000403.json").write_text(
+            json.dumps(
+                {
+                    "access_token": "expired-token",
+                    "token_type": "Bearer",
+                    "expires_in": 86399,
+                    "issued_at": "2026-06-12T00:04:03+09:00",
+                    "expires_at": "2026-06-13T00:04:02+09:00",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        def fake_issue(config):
+            self.assertEqual(config.client_id, "client-id")
+            return TossToken(
+                access_token="renewed-token",
+                token_type="Bearer",
+                expires_in=86400,
+            )
+
+        access_token = load_access_token(
+            token_dir=token_dir,
+            config=TossAuthConfig(
+                client_id="client-id",
+                client_secret="client-secret",
+            ),
+            now=datetime(2026, 6, 13, 0, 36, tzinfo=timezone(timedelta(hours=9))),
+            issue_token_func=fake_issue,
+        )
+
+        self.assertEqual(access_token, "renewed-token")
+        self.assertEqual(
+            json.loads((token_dir / "TOSS20260613_003600.json").read_text(
+                encoding="utf-8",
+            ))["access_token"],
+            "renewed-token",
+        )
+
     def _remove_tree(self, path):
         if not path.exists():
             return
@@ -293,6 +383,64 @@ class TossRateLimitTest(unittest.TestCase):
         self.assertEqual(payload["result"], {"ok": True})
         self.assertEqual(len(calls), 2)
         self.assertEqual(clock.sleeps, [2.0])
+
+    def test_request_json_notifies_on_final_http_failure(self):
+        from toss.client import request_json
+        from toss.rate_limit import TossRateLimitManager
+
+        notifications = []
+        manager = TossRateLimitManager(sleep_func=lambda _seconds: None)
+
+        def fake_urlopen(api_request, timeout):
+            raise error.HTTPError(
+                api_request.full_url,
+                401,
+                "Unauthorized",
+                {},
+                io.BytesIO(b'{"error":{"code":"expired-token"}}'),
+            )
+
+        with self.assertRaisesRegex(RuntimeError, "HTTP 401"):
+            request_json(
+                request.Request("https://example.test/api/v1/holdings", method="GET"),
+                group="ASSET",
+                action_name="holdings",
+                timeout=10.0,
+                urlopen=fake_urlopen,
+                rate_limiter=manager,
+                notify_func=notifications.append,
+            )
+
+        self.assertEqual(len(notifications), 1)
+        self.assertIn("Toss API query failed", notifications[0])
+        self.assertIn("Group: ASSET", notifications[0])
+        self.assertIn("Action: holdings", notifications[0])
+        self.assertIn("expired-token", notifications[0])
+
+    def test_request_json_notifies_on_transport_failure(self):
+        from toss.client import request_json
+        from toss.rate_limit import TossRateLimitManager
+
+        notifications = []
+        manager = TossRateLimitManager(sleep_func=lambda _seconds: None)
+
+        def fake_urlopen(api_request, timeout):
+            raise error.URLError("network down")
+
+        with self.assertRaisesRegex(RuntimeError, "network down"):
+            request_json(
+                request.Request("https://example.test/api/v1/holdings", method="GET"),
+                group="ASSET",
+                action_name="holdings",
+                timeout=10.0,
+                urlopen=fake_urlopen,
+                rate_limiter=manager,
+                notify_func=notifications.append,
+            )
+
+        self.assertEqual(len(notifications), 1)
+        self.assertIn("Toss API query failed", notifications[0])
+        self.assertIn("network down", notifications[0])
 
 
 class FakeClock:

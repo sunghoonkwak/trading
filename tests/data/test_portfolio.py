@@ -359,7 +359,7 @@ def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
     captured = {"buying_power": []}
 
     monkeypatch.setattr(
-        "toss.get_prices.load_access_token",
+        "toss.auth.load_access_token",
         lambda: "access-token",
     )
     monkeypatch.setattr(

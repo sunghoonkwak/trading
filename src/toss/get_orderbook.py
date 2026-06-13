@@ -11,7 +11,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
-from toss.get_prices import load_access_token
+from toss.auth import load_access_token
 
 
 def _get_payload(

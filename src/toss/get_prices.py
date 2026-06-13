@@ -10,19 +10,8 @@ from urllib import parse, request
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT, TOKEN_DIR, load_latest_token
+from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT, load_access_token
 from toss.client import request_json
-
-
-def load_access_token(token_dir=TOKEN_DIR) -> str:
-    token_payload = load_latest_token(token_dir)
-    if not token_payload:
-        raise RuntimeError("No saved Toss token found. Run src/toss/auth.py first.")
-
-    access_token = token_payload.get("access_token")
-    if not isinstance(access_token, str) or not access_token:
-        raise RuntimeError("Saved Toss token file does not contain access_token.")
-    return access_token
 
 
 def get_prices(
