@@ -4,9 +4,8 @@
 from typing import Any, Dict, Optional, Tuple
 
 
-TOSS_OWNER_ID = "owner_01"
 TOSS_ACCOUNT_NAME = "토스"
-TOSS_ACCOUNT_KEY = f"{TOSS_ACCOUNT_NAME}_{TOSS_OWNER_ID}"
+TOSS_ACCOUNT_KEY = TOSS_ACCOUNT_NAME
 TOSS_DEFAULT_ACCOUNT_SEQ = 1
 
 
@@ -49,7 +48,6 @@ def fetch_toss_portfolio(
     toss_data = _empty_source()
     toss_data["accounts"][TOSS_ACCOUNT_KEY] = {
         "name": TOSS_ACCOUNT_NAME,
-        "owner_id": TOSS_OWNER_ID,
     }
 
     for item in holdings_result.get("items", []):

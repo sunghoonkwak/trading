@@ -4,11 +4,6 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
-OWNERS = [
-    {"id": "owner_01", "name": "곽성훈"},
-    {"id": "owner_02", "name": "염인선"},
-]
-
 
 def _empty_source() -> Dict[str, Any]:
     return {
@@ -97,7 +92,6 @@ def merge_portfolio_sources(
         account_list.append(
             {
                 "id": account_id,
-                "owner_id": account["owner_id"],
                 "name": account["name"],
             }
         )
@@ -137,7 +131,6 @@ def merge_portfolio_sources(
 
     return {
         "metadata": metadata,
-        "owners": OWNERS,
         "accounts": account_list,
         "asset_info": {
             **kis.get("asset_info", {}),

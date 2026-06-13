@@ -16,18 +16,6 @@ SCOPES = [
 ]
 SPREADSHEET_NAME = 'financial portfolio'
 
-# Owner definitions
-OWNERS = [
-    {"id": "owner_01", "name": "곽성훈"},
-    {"id": "owner_02", "name": "염인선"}
-]
-
-
-def _get_owner_id(account_name: str) -> str:
-    """Determine owner ID based on account name."""
-    return "owner_02" if "인선" in account_name else "owner_01"
-
-
 def _normalize_account_name(raw_name: str) -> str:
     """Create normalized account name for unique identification."""
     return raw_name.strip()
@@ -78,12 +66,13 @@ def parse_worksheet_data(worksheet, currency: str) -> dict:
         stock_name = row[1].strip()  # Col B: name
         qty_str = row[2].strip().replace(',', '')  # Col C: qty
         avg_price_str = row[3].strip().replace(',', '').replace('$', '').replace('₩', '').replace('\\', '')  # Col D: avg_price
-        account_name = row[5].strip() if len(row) > 5 else ""  # Col F: account
+        raw_account_name = row[5].strip() if len(row) > 5 else ""  # Col F: account
         cur_price_str = row[6].strip().replace(',', '').replace('$', '').replace('₩', '').replace('\\', '') if len(row) > 6 else ""  # Col G: current_price
 
         # Skip empty rows
-        if not ticker or not account_name:
+        if not ticker or not raw_account_name:
             continue
+        account_name = _normalize_account_name(raw_account_name)
 
         # Parse quantity and prices
         try:
@@ -95,13 +84,11 @@ def parse_worksheet_data(worksheet, currency: str) -> dict:
 
         # Create or get account before cash handling, so cash-only accounts
         # such as CMA accounts are included in the account map.
-        owner_id = _get_owner_id(account_name)
-        account_key = f"{account_name}_{owner_id}"
+        account_key = account_name
 
         if account_key not in accounts:
             accounts[account_key] = {
                 "name": account_name,
-                "owner_id": owner_id
             }
 
         # Handle cash holdings (예수금)

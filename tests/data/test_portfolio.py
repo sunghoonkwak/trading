@@ -18,9 +18,8 @@ def test_data_integration_skips_gsheet_for_kis_only(monkeypatch):
                 "cash_holdings": [],
                 "asset_info": {},
                 "accounts": {
-                    "한국투자증권_owner_01": {
+                    "한국투자증권": {
                         "name": "한국투자증권",
-                        "owner_id": "owner_01",
                     }
                 },
             },
@@ -35,8 +34,9 @@ def test_data_integration_skips_gsheet_for_kis_only(monkeypatch):
 
     result = portfolio_integration.get_integrated_portfolio(kis_only=True)
 
+    assert "owners" not in result
     assert result["accounts"] == [
-        {"id": "acc_01", "owner_id": "owner_01", "name": "한국투자증권"}
+        {"id": "acc_01", "name": "한국투자증권"}
     ]
     assert result["metadata"]["exchange_rate"] == 1375.0
     assert "gsheet_error" not in result["metadata"]
@@ -53,7 +53,7 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
             {
                 "holdings": [
                     {
-                        "account_key": "한국투자증권_owner_01",
+                        "account_key": "한국투자증권",
                         "ticker": "QQQM",
                         "name": "Invesco NASDAQ 100 ETF",
                         "qty": 2,
@@ -64,7 +64,7 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
                 "cash_holdings": [
                     {
                         "account_name": "한국투자증권",
-                        "account_key": "한국투자증권_owner_01",
+                        "account_key": "한국투자증권",
                         "amount": 50.0,
                         "currency": "USD",
                     }
@@ -78,9 +78,8 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
                     }
                 },
                 "accounts": {
-                    "한국투자증권_owner_01": {
+                    "한국투자증권": {
                         "name": "한국투자증권",
-                        "owner_id": "owner_01",
                     }
                 },
             },
@@ -94,7 +93,7 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
             {
                 "holdings": [
                     {
-                        "account_key": "ISA_owner_01",
+                        "account_key": "ISA",
                         "ticker": "005930",
                         "name": "Samsung Electronics",
                         "qty": 1,
@@ -112,9 +111,8 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
                     }
                 },
                 "accounts": {
-                    "ISA_owner_01": {
+                    "ISA": {
                         "name": "ISA",
-                        "owner_id": "owner_01",
                     }
                 },
             },
@@ -159,7 +157,7 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
             {
                 "holdings": [
                     {
-                        "account_key": "토스_owner_01",
+                        "account_key": "토스",
                         "ticker": "OLD",
                         "name": "Old Toss Sheet Holding",
                         "qty": 9,
@@ -167,7 +165,7 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
                         "cur_price": 1,
                     },
                     {
-                        "account_key": "ISA_owner_01",
+                        "account_key": "ISA",
                         "ticker": "005930",
                         "name": "Samsung Electronics",
                         "qty": 1,
@@ -178,7 +176,7 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
                 "cash_holdings": [
                     {
                         "account_name": "토스",
-                        "account_key": "토스_owner_01",
+                        "account_key": "토스",
                         "amount": 123.0,
                         "currency": "KRW",
                     }
@@ -198,8 +196,8 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
                     },
                 },
                 "accounts": {
-                    "토스_owner_01": {"name": "토스", "owner_id": "owner_01"},
-                    "ISA_owner_01": {"name": "ISA", "owner_id": "owner_01"},
+                    "토스": {"name": "토스"},
+                    "ISA": {"name": "ISA"},
                 },
             },
             None,
@@ -212,7 +210,7 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
             {
                 "holdings": [
                     {
-                        "account_key": "토스_owner_01",
+                        "account_key": "토스",
                         "ticker": "AAPL",
                         "name": "Apple Inc.",
                         "qty": 2.5,
@@ -223,7 +221,7 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
                 "cash_holdings": [
                     {
                         "account_name": "토스",
-                        "account_key": "토스_owner_01",
+                        "account_key": "토스",
                         "amount": 3500.5,
                         "currency": "USD",
                     }
@@ -237,7 +235,7 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
                     }
                 },
                 "accounts": {
-                    "토스_owner_01": {"name": "토스", "owner_id": "owner_01"}
+                    "토스": {"name": "토스"}
                 },
             },
             None,
@@ -280,7 +278,7 @@ def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
             {
                 "holdings": [
                     {
-                        "account_key": "토스_owner_01",
+                        "account_key": "토스",
                         "ticker": "QQQM",
                         "name": "Invesco NASDAQ 100 ETF",
                         "qty": 2,
@@ -291,7 +289,7 @@ def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
                 "cash_holdings": [
                     {
                         "account_name": "토스",
-                        "account_key": "토스_owner_01",
+                        "account_key": "토스",
                         "amount": 50.0,
                         "currency": "USD",
                     }
@@ -305,7 +303,7 @@ def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
                     }
                 },
                 "accounts": {
-                    "토스_owner_01": {"name": "토스", "owner_id": "owner_01"}
+                    "토스": {"name": "토스"}
                 },
             },
             None,
@@ -403,11 +401,11 @@ def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
 
     assert error is None
     assert source["accounts"] == {
-        "토스_owner_01": {"name": "토스", "owner_id": "owner_01"}
+        "토스": {"name": "토스"}
     }
     assert source["holdings"] == [
         {
-            "account_key": "토스_owner_01",
+            "account_key": "토스",
             "ticker": "005930",
             "name": "삼성전자",
             "qty": 10.0,
@@ -415,7 +413,7 @@ def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
             "cur_price": 72000.0,
         },
         {
-            "account_key": "토스_owner_01",
+            "account_key": "토스",
             "ticker": "AAPL",
             "name": "Apple Inc.",
             "qty": 2.5,
@@ -428,13 +426,13 @@ def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
     assert source["cash_holdings"] == [
         {
             "account_name": "토스",
-            "account_key": "토스_owner_01",
+            "account_key": "토스",
             "amount": 5000000.0,
             "currency": "KRW",
         },
         {
             "account_name": "토스",
-            "account_key": "토스_owner_01",
+            "account_key": "토스",
             "amount": 3500.5,
             "currency": "USD",
         },
@@ -464,25 +462,25 @@ def test_cash_only_gsheet_accounts_get_account_ids():
         ["ticker", "name", "qty", "avg_price", "investment", "account", "cur_price"],
         ["", "", "", "", "", "", ""],
         ["예수금", "예수금", "48824198", "", "", "CMA", ""],
-        ["예수금", "예수금", "1028394", "", "", "CMA 인선", ""],
+        ["예수금", "예수금", "1028394", "", "", "CMA 보조", ""],
     ])
 
     parsed = parse_worksheet_data(worksheet, "KRW")
 
     assert parsed["accounts"] == {
-        "CMA_owner_01": {"name": "CMA", "owner_id": "owner_01"},
-        "CMA 인선_owner_02": {"name": "CMA 인선", "owner_id": "owner_02"},
+        "CMA": {"name": "CMA"},
+        "CMA 보조": {"name": "CMA 보조"},
     }
     assert parsed["cash_holdings"] == [
         {
             "account_name": "CMA",
-            "account_key": "CMA_owner_01",
+            "account_key": "CMA",
             "amount": 48824198.0,
             "currency": "KRW",
         },
         {
-            "account_name": "CMA 인선",
-            "account_key": "CMA 인선_owner_02",
+            "account_name": "CMA 보조",
+            "account_key": "CMA 보조",
             "amount": 1028394.0,
             "currency": "KRW",
         },

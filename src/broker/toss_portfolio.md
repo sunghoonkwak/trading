@@ -4,7 +4,7 @@
 
 ## Responsibilities
 
-- Toss Open API helpers를 호출해 `토스_owner_01` 계정 데이터를 읽습니다.
+- Toss Open API helpers를 호출해 `토스` 계정 데이터를 읽습니다.
 - `/api/v1/holdings` 응답을 표준 source 포맷의 holdings와 asset info로
   변환합니다.
 - `/api/v1/buying-power`의 KRW/USD `cashBuyingPower`를 cash holdings로

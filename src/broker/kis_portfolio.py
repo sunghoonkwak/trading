@@ -20,8 +20,7 @@ class KisPortfolioSourceAdapter:
     """KIS-only source adapter."""
 
     KIS_ACCOUNT_NAME = "한국투자증권"
-    KIS_OWNER_ID = "owner_01"
-    KIS_ACCOUNT_KEY = f"{KIS_ACCOUNT_NAME}_{KIS_OWNER_ID}"
+    KIS_ACCOUNT_KEY = KIS_ACCOUNT_NAME
 
     @staticmethod
     def _get_val(d, keys, default=None):
@@ -284,7 +283,6 @@ class KisPortfolioSourceAdapter:
             "accounts": {
                 kis_acc_key: {
                     "name": cls.KIS_ACCOUNT_NAME,
-                    "owner_id": cls.KIS_OWNER_ID,
                 }
             },
         }
