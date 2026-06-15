@@ -458,6 +458,46 @@ class TossOrderApiTest(unittest.TestCase):
 
 
 class TossRateLimitTest(unittest.TestCase):
+    def test_request_json_waits_one_second_between_requests(self):
+        from toss.client import request_json
+        from toss.rate_limit import TossRateLimitManager
+
+        clock = FakeClock()
+        manager = TossRateLimitManager(
+            sleep_func=clock.sleep,
+            monotonic_func=clock.monotonic,
+        )
+        request_times = []
+
+        def fake_urlopen(api_request, timeout):
+            request_times.append(clock.monotonic())
+            return _response({"result": {"ok": True}})
+
+        api_request = request.Request(
+            "https://example.test/api/v1/orders",
+            method="GET",
+        )
+
+        request_json(
+            api_request,
+            group="ORDER",
+            action_name="orders",
+            timeout=10.0,
+            urlopen=fake_urlopen,
+            rate_limiter=manager,
+        )
+        request_json(
+            api_request,
+            group="ORDER",
+            action_name="orders",
+            timeout=10.0,
+            urlopen=fake_urlopen,
+            rate_limiter=manager,
+        )
+
+        self.assertEqual(request_times, [0.0, 1.0])
+        self.assertEqual(clock.sleeps, [1.0])
+
     def test_request_json_retries_429_after_retry_after(self):
         from toss.client import request_json
         from toss.rate_limit import TossRateLimitManager

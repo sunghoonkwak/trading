@@ -35,15 +35,18 @@ class TossRateLimitManager:
         self,
         *,
         default_limits: Mapping[str, int] = DEFAULT_GROUP_LIMITS,
+        min_request_interval: float = 1.0,
         sleep_func: Callable[[float], None] = time.sleep,
         monotonic_func: Callable[[], float] = time.monotonic,
         jitter_func: Callable[[float, float], float] = random.uniform,
     ):
         self._default_limits = dict(default_limits)
+        self._min_request_interval = max(0.0, min_request_interval)
         self._sleep = sleep_func
         self._monotonic = monotonic_func
         self._jitter = jitter_func
         self._buckets: dict[str, _Bucket] = {}
+        self._next_request_at = 0.0
         self._lock = threading.RLock()
 
     def wait(self, group: str) -> None:
@@ -53,8 +56,15 @@ class TossRateLimitManager:
                 self._refill(bucket)
                 if bucket.tokens >= 1.0:
                     bucket.tokens -= 1.0
-                    return
+                    now = self._monotonic()
+                    request_at = max(now, self._next_request_at)
+                    self._next_request_at = request_at + self._min_request_interval
+                    wait_seconds = max(0.0, request_at - now)
+                    break
                 wait_seconds = max(0.0, (1.0 - bucket.tokens) / bucket.limit)
+            if wait_seconds > 0.0:
+                self._sleep(wait_seconds)
+        if wait_seconds > 0.0:
             self._sleep(wait_seconds)
 
     def update_from_headers(self, group: str, headers: Mapping[str, object]) -> None:
