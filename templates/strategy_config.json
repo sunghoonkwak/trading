@@ -1,4 +1,5 @@
 {
+    "strategy_broker": "toss",
     "cash_ticker": "TLTW",
     "raoeo": {
         "enabled": true,

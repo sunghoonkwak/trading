@@ -15,11 +15,13 @@
    - 현재가는 `utils.price_utils.resolve_current_price`의 공통 규칙을 따릅니다.
      직접 조회한 현재가를 우선 사용하고, 유효하지 않으면 보유 잔고의
      `cur_price`로 fallback합니다.
+   - 전략 포트폴리오는 `strategy_config.json`의 `strategy_broker`가
+     가리키는 계좌 scope만 사용합니다.
    - 매수 가능 USD는 포트폴리오의 `USD cash`에서 가져오지 않고,
-     `get_orderable_usd`가 `broker.kis_broker`를 통해 KIS
-     `inquire_psamount`의 `ovrs_ord_psbl_amt`를 읽어 제공합니다.
-   - 공식 KIS endpoint wrapper는 `execution_service`에서 직접 import하지
-     않고 앱 소유 broker facade 뒤에서 호출합니다.
+     `broker.strategy_broker`를 통해 선택된 broker의 주문가능금액 API를
+     조회합니다.
+   - 공식 KIS/Toss endpoint helper는 `execution_service`에서 직접
+     import하지 않고 앱 소유 broker facade 뒤에서 호출합니다.
 
 4. **Unified History Management (통합 히스토리 관리)**:
    - `strategy_history.json` 파일 하나에 모든 전략의 실행 결과를 날짜별로 통합 저장합니다.
@@ -57,18 +59,18 @@
   유효하지 않으면 해당 종목은 `current_prices`에 포함하지 않습니다.
 
 ### `get_orderable_usd`
-대표 매수 주문의 종목, 거래소, 주문 가격으로 해외주식
+대표 매수 주문의 종목과 주문 가격으로 선택된 전략 broker의
 매수가능금액조회를 수행합니다.
 
 - **입력**: `symbol` (str), `order_price` (float)
-- **출력**: `ovrs_ord_psbl_amt` 기반의 해외주문가능 USD
+- **출력**: broker별 주문가능금액 API 기반의 주문가능 USD
 - RAOEO의 `cash_ticker` 조달 부족분과 리밸런싱의 매수 여력 판단에
   사용합니다.
 - Telegram 명령에 의한 확인은 항상 새로 조회하며, 자동 주기
   리밸런싱만 거래일 단위 조회 결과를 재사용합니다.
 
 ### `_execute_orders`
-주문 목록을 받아 순차적으로 KIS API를 통해 실행합니다.
+주문 목록을 받아 순차적으로 선택된 전략 broker API를 통해 실행합니다.
 
 - **입력 (Input)**:
   - `orders` (List[StrategyOrder]): 실행할 주문 객체 리스트
@@ -88,10 +90,13 @@
 
 ## Configuration (`strategy_config.json`)
 
-각 전략 섹션(`raoeo`, `value_averaging`, `rebalancing`)의 `enabled` 필드를 확인하여 실행 여부를 결정합니다.
+`strategy_broker`로 전략 실행 계좌를 선택하고, 각 전략 섹션
+(`raoeo`, `value_averaging`, `rebalancing`)의 `enabled` 필드를 확인하여
+실행 여부를 결정합니다.
 
 ```json
 {
+  "strategy_broker": "kis",
   "raoeo": {
     "enabled": true, // 전략 전체 활성화 여부
     "targets": {

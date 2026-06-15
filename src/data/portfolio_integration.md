@@ -14,7 +14,9 @@
    `holdings`, `cash_holdings`, `asset_info`를 병합하고 `account_id`를
    부여합니다.
 5. **KIS 전용 최적화**: `kis_only=True`일 때 GSheet/Toss 조회를 건너뛰어
-   전략 실행용 KIS 계좌 조회를 빠르게 유지합니다.
+   전략 실행용 KIS 계좌 조회를 빠르게 유지합니다. 전략 실행은
+   `data_service`의 `scope="strategy"` 필터를 통해 설정된 broker 계좌만
+   사용합니다.
 
 ## Key Functions
 

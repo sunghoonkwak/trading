@@ -355,6 +355,45 @@ def test_place_overseas_order_reports_timeout(monkeypatch):
     assert "[API Timeout]" in message
 
 
+def test_strategy_broker_defaults_to_kis(monkeypatch):
+    from broker import strategy_broker
+
+    monkeypatch.setattr(
+        strategy_broker,
+        "load_json",
+        lambda file_type, default=None: {},
+    )
+
+    assert strategy_broker.get_strategy_broker_name() == "kis"
+    assert strategy_broker.get_strategy_account_name() == "한국투자증권"
+
+
+def test_strategy_broker_selects_toss_from_strategy_config(monkeypatch):
+    from broker import strategy_broker
+
+    monkeypatch.setattr(
+        strategy_broker,
+        "load_json",
+        lambda file_type, default=None: {"strategy_broker": "toss"},
+    )
+
+    assert strategy_broker.get_strategy_broker_name() == "toss"
+    assert strategy_broker.get_strategy_account_name() == "토스"
+
+
+def test_strategy_broker_rejects_unknown_broker(monkeypatch):
+    from broker import strategy_broker
+
+    monkeypatch.setattr(
+        strategy_broker,
+        "load_json",
+        lambda file_type, default=None: {"strategy_broker": "other"},
+    )
+
+    with pytest.raises(ValueError, match="strategy_broker"):
+        strategy_broker.get_strategy_broker_name()
+
+
 import sys
 from pathlib import Path
 

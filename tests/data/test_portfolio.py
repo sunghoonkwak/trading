@@ -440,6 +440,74 @@ def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
     assert [call["currency"] for call in captured["buying_power"]] == ["KRW", "USD"]
 
 
+def test_data_service_strategy_scope_filters_configured_broker(monkeypatch):
+    from data import data_service
+
+    raw = {
+        "metadata": {"exchange_rate": 1300.0},
+        "asset_info": {
+            "QQQM": {"currency": "USD"},
+            "AAPL": {"currency": "USD"},
+        },
+        "accounts": [
+            {"id": "acc_01", "name": "한국투자증권"},
+            {"id": "acc_02", "name": "토스"},
+        ],
+        "holdings": [
+            {
+                "account_id": "acc_01",
+                "ticker": "QQQM",
+                "name": "QQQM",
+                "qty": 1,
+                "avg_price": 100,
+                "cur_price": 100,
+            },
+            {
+                "account_id": "acc_02",
+                "ticker": "AAPL",
+                "name": "Apple",
+                "qty": 2,
+                "avg_price": 150,
+                "cur_price": 160,
+            },
+        ],
+        "cash_holdings": [
+            {
+                "account_id": "acc_01",
+                "account_name": "한국투자증권",
+                "amount": 10,
+                "currency": "USD",
+            },
+            {
+                "account_id": "acc_02",
+                "account_name": "토스",
+                "amount": 20,
+                "currency": "USD",
+            },
+        ],
+    }
+    data = {
+        "raw": raw,
+        "merged_data": {},
+        "total_value_usd": 0,
+        "stats": {},
+        "accounts": raw["accounts"],
+        "holdings": raw["holdings"],
+        "metadata": raw["metadata"],
+    }
+
+    monkeypatch.setattr(
+        "broker.strategy_broker.get_strategy_account_name",
+        lambda: "토스",
+    )
+
+    scoped = data_service._apply_scope_filter(data, "strategy")
+
+    assert {holding["ticker"] for holding in scoped["holdings"]} == {"AAPL"}
+    assert set(scoped["merged_data"]) == {"AAPL", "USD cash"}
+    assert scoped["merged_data"]["USD cash"]["qty"] == 20
+
+
 import sys
 from pathlib import Path
 

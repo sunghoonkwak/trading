@@ -43,8 +43,12 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     if not is_kis_ready():
         return {"error": "KIS Thread not ready"}
 
-    # Skip GSheet when only KIS data is needed (e.g., strategy execution)
+    # Skip GSheet when only KIS data is needed.
     kis_only = (scope == "kis")
+    if scope == "strategy":
+        from broker.strategy_broker import get_strategy_broker_name
+
+        kis_only = get_strategy_broker_name() == "kis"
     add_alert("[Data] Fetching portfolio...", "INFO")
     request_id = request_portfolio(force_refresh=force_refresh, kis_only=kis_only)
     response = wait_for_response(request_id, timeout=60.0)
@@ -94,14 +98,24 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     return _apply_scope_filter(result, scope)
 
 def _apply_scope_filter(data: Dict, scope: str) -> Dict:
-    """Filters processed data by account scope (all/kis/passive)."""
+    """Filters processed data by account scope (all/kis/passive/strategy)."""
     if scope == "all": return data
 
     raw = data["raw"]
     accounts = raw.get("accounts", [])
     kis_ids = {a["id"] for a in accounts if a.get("name") == "한국투자증권"}
 
-    target_ids = kis_ids if scope == "kis" else ({a["id"] for a in accounts} - kis_ids)
+    if scope == "kis":
+        target_ids = kis_ids
+    elif scope == "strategy":
+        from broker.strategy_broker import get_strategy_account_name
+
+        account_name = get_strategy_account_name()
+        target_ids = {
+            a["id"] for a in accounts if a.get("name") == account_name
+        }
+    else:
+        target_ids = {a["id"] for a in accounts} - kis_ids
 
     # Log the account scope applied to this filtered view.
     logging.info(f"[Filter] Scope: {scope}, TargetIDs: {target_ids}")

@@ -8,13 +8,14 @@ This module handles the orchestration of strategy execution:
 3. Single integrated history file (strategy_history.json)
 """
 import logging
+import requests
 import time
 from datetime import datetime
 from typing import Dict, List, Tuple, Any
 
 import pytz
 
-from broker import kis_broker, market_data
+from broker import market_data, strategy_broker
 from strategy import raoeo, value_averaging, rebalancing
 from strategy.base import StrategyOrder, StrategyStatus, OrderSide
 from data.config_manager import ConfigFile, load_json, save_json
@@ -40,7 +41,7 @@ def get_market_data(
     """
     from data.data_service import get_portfolio_data
 
-    portfolio = get_portfolio_data(force_refresh=force_refresh, scope="kis")
+    portfolio = get_portfolio_data(force_refresh=force_refresh, scope="strategy")
     holdings = portfolio.get('merged_data', {})
 
     strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
@@ -68,8 +69,8 @@ def get_market_data(
 
 
 def get_orderable_usd(symbol: str, order_price: float) -> float:
-    """Return KIS overseas buying power for a representative USD buy."""
-    return kis_broker.get_orderable_usd(symbol, order_price)
+    """Return strategy-broker USD buying power for a representative buy."""
+    return strategy_broker.get_orderable_usd(symbol, order_price)
 
 
 def _get_rebalancing_orderable_usd(
@@ -87,8 +88,8 @@ def _get_rebalancing_orderable_usd(
 
 
 def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
-    """Execute a single strategy order via KIS API."""
-    return kis_broker.place_overseas_order(order)
+    """Execute a single strategy order via the configured strategy broker."""
+    return strategy_broker.place_order(order)
 
 
 def _get_market_status(today_str: str) -> Dict:

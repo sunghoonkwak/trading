@@ -12,3 +12,4 @@
 
 - `broker.kis_portfolio`: KIS API source 조회와 표준 포맷 변환
 - `broker.toss_portfolio`: Toss API source 조회와 표준 포맷 변환
+- `broker.strategy_broker`: 전략 실행 계좌 선택 및 주문/매수가능금액 위임

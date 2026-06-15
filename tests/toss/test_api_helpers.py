@@ -275,6 +275,118 @@ class TossAuthTest(unittest.TestCase):
 
 
 class TossOrderApiTest(unittest.TestCase):
+    def test_toss_broker_reads_usd_buying_power(self):
+        from broker import toss_broker
+
+        calls = {}
+
+        def fake_get_buying_power(**kwargs):
+            calls.update(kwargs)
+            return {"cashBuyingPower": "3500.5"}
+
+        original_load = toss_broker.load_access_token
+        original_account = toss_broker.get_default_account_seq
+        original_buying_power = toss_broker.get_buying_power
+        try:
+            toss_broker.load_access_token = lambda: "access-token"
+            toss_broker.get_default_account_seq = lambda access_token: 3
+            toss_broker.get_buying_power = fake_get_buying_power
+
+            amount = toss_broker.get_orderable_usd("AAPL", 200.0)
+        finally:
+            toss_broker.load_access_token = original_load
+            toss_broker.get_default_account_seq = original_account
+            toss_broker.get_buying_power = original_buying_power
+
+        self.assertEqual(amount, 3500.5)
+        self.assertEqual(
+            calls,
+            {
+                "account_seq": 3,
+                "currency": "USD",
+                "access_token": "access-token",
+            },
+        )
+
+    def test_toss_broker_maps_strategy_limit_order(self):
+        from broker import toss_broker
+        from strategy.base import OrderSide, StrategyOrder
+
+        calls = {}
+
+        def fake_create_order(**kwargs):
+            calls.update(kwargs)
+            return {"orderId": "order-1"}
+
+        original_load = toss_broker.load_access_token
+        original_account = toss_broker.get_default_account_seq
+        original_create_order = toss_broker.create_order
+        try:
+            toss_broker.load_access_token = lambda: "access-token"
+            toss_broker.get_default_account_seq = lambda access_token: 3
+            toss_broker.create_order = fake_create_order
+
+            success, message = toss_broker.place_order(
+                StrategyOrder(
+                    symbol="AAPL",
+                    side=OrderSide.BUY,
+                    quantity=2,
+                    price=185.12,
+                    order_type="00",
+                )
+            )
+        finally:
+            toss_broker.load_access_token = original_load
+            toss_broker.get_default_account_seq = original_account
+            toss_broker.create_order = original_create_order
+
+        self.assertTrue(success)
+        self.assertEqual(message, "Success")
+        self.assertEqual(calls["account_seq"], 3)
+        self.assertEqual(calls["access_token"], "access-token")
+        self.assertEqual(calls["symbol"], "AAPL")
+        self.assertEqual(calls["side"], "BUY")
+        self.assertEqual(calls["order_type"], "LIMIT")
+        self.assertEqual(calls["quantity"], "2")
+        self.assertEqual(calls["price"], "185.12")
+        self.assertNotIn("time_in_force", calls)
+
+    def test_toss_broker_maps_strategy_loc_order(self):
+        from broker import toss_broker
+        from strategy.base import OrderSide, StrategyOrder
+
+        calls = {}
+
+        original_load = toss_broker.load_access_token
+        original_account = toss_broker.get_default_account_seq
+        original_create_order = toss_broker.create_order
+        try:
+            toss_broker.load_access_token = lambda: "access-token"
+            toss_broker.get_default_account_seq = lambda access_token: 3
+            toss_broker.create_order = lambda **kwargs: calls.update(kwargs) or {
+                "orderId": "order-1"
+            }
+
+            success, message = toss_broker.place_order(
+                StrategyOrder(
+                    symbol="AAPL",
+                    side=OrderSide.SELL,
+                    quantity=2,
+                    price=190.0,
+                    order_type="34",
+                )
+            )
+        finally:
+            toss_broker.load_access_token = original_load
+            toss_broker.get_default_account_seq = original_account
+            toss_broker.create_order = original_create_order
+
+        self.assertTrue(success)
+        self.assertEqual(message, "Success")
+        self.assertEqual(calls["side"], "SELL")
+        self.assertEqual(calls["order_type"], "LIMIT")
+        self.assertEqual(calls["time_in_force"], "CLS")
+
     def test_cancel_order_posts_empty_json_body(self):
         from toss.cancel_order import cancel_order
 
@@ -416,6 +528,45 @@ class TossRateLimitTest(unittest.TestCase):
         self.assertIn("Group: ASSET", notifications[0])
         self.assertIn("Action: holdings", notifications[0])
         self.assertIn("expired-token", notifications[0])
+
+    def test_request_json_sanitizes_html_http_failure(self):
+        from toss.client import request_json
+        from toss.rate_limit import TossRateLimitManager
+
+        notifications = []
+        manager = TossRateLimitManager(sleep_func=lambda _seconds: None)
+        html_body = b"""<!DOCTYPE HTML>
+<HTML><HEAD><TITLE>ERROR: The request could not be satisfied</TITLE></HEAD>
+<BODY><H1>403 ERROR</H1><PRE>Request ID: abc</PRE></BODY></HTML>"""
+
+        def fake_urlopen(api_request, timeout):
+            raise error.HTTPError(
+                api_request.full_url,
+                403,
+                "Forbidden",
+                {},
+                io.BytesIO(html_body),
+            )
+
+        with self.assertRaisesRegex(RuntimeError, "HTTP 403"):
+            request_json(
+                request.Request(
+                    "https://example.test/api/v1/buying-power?currency=USD",
+                    method="GET",
+                ),
+                group="ORDER_INFO",
+                action_name="buying-power",
+                timeout=10.0,
+                urlopen=fake_urlopen,
+                rate_limiter=manager,
+                notify_func=notifications.append,
+            )
+
+        self.assertEqual(len(notifications), 1)
+        self.assertIn("non-JSON response", notifications[0])
+        self.assertIn("403 ERROR", notifications[0])
+        self.assertNotIn("<!DOCTYPE", notifications[0])
+        self.assertNotIn("<HTML", notifications[0])
 
     def test_request_json_notifies_on_transport_failure(self):
         from toss.client import request_json

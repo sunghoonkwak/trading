@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Callable, Mapping
 from urllib import error
 
@@ -38,8 +39,9 @@ def request_json(
             rate_limiter.update_from_headers(group, headers)
             _log_response(group, action_name, exc.code, headers, details)
             if exc.code != 429 or attempt >= max_retries:
+                summary = _summarize_error_details(details)
                 message = (
-                    f"Toss {action_name} request failed: HTTP {exc.code} {details}"
+                    f"Toss {action_name} request failed: HTTP {exc.code} {summary}"
                 )
                 _send_failure_notification(
                     group=group,
@@ -75,6 +77,22 @@ def request_json(
                 notify_func=notify_func,
             )
             raise RuntimeError(message) from exc
+
+
+def _summarize_error_details(details: str, max_length: int = 300) -> str:
+    """Return a compact, Telegram-safe summary of an HTTP error body."""
+    try:
+        payload = json.loads(details)
+    except json.JSONDecodeError:
+        text = re.sub(r"<[^>]+>", " ", details)
+        text = " ".join(text.split())
+        if not text:
+            text = "empty body"
+        if len(text) > max_length:
+            text = f"{text[:max_length].rstrip()}..."
+        return f"non-JSON response: {text}"
+
+    return str(_sanitize_payload(payload))
 
 
 def _send_failure_notification(
