@@ -7,9 +7,9 @@ from typing import Dict, Tuple
 from strategy.base import OrderSide, StrategyOrder
 from strategy.constants import ORDER_TYPE_LOC
 from toss.auth import load_access_token
+from toss.account_cache import get_default_account_seq
 from toss.create_order import create_order
 from toss.get_buying_power import get_buying_power
-from toss.get_holdings import _get_default_account_seq as get_default_account_seq
 
 
 def _to_float(value, field_name: str) -> float:

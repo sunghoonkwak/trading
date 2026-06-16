@@ -27,7 +27,9 @@ schema에서 다음 항목을 확인합니다.
   저장된 토큰의 `expires_at`을 확인하고, 만료된 경우 다음 API 요청 전에 새
   토큰을 발급해 반환합니다.
 - 기본 계좌 sequence는
-  `toss.get_holdings._get_default_account_seq(access_token)`로 확인합니다.
+  `toss.account_cache.get_default_account_seq(access_token)`로 확인합니다.
+  이 값은 같은 프로세스 안에서 `access_token`과 Toss base URL별로 캐시되어
+  같은 토큰으로 반복 API 호출 시 `/api/v1/accounts`를 다시 조회하지 않습니다.
 - 주문 상태를 바꾸는 진단(`create_order`, `modify_order`, `cancel_order`)은
   사용자의 명시적인 요청이 있을 때만 실행합니다.
 - 현재 shared rate-limit manager를 거치는 Toss API 호출:

@@ -19,7 +19,7 @@ if __package__ in {None, ""}:
 
 from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
 from toss.client import request_json
-from toss.get_holdings import _get_default_account_seq
+from toss.account_cache import get_default_account_seq
 from toss.auth import load_access_token
 
 
@@ -68,7 +68,7 @@ def main() -> None:
     args = parser.parse_args()
 
     access_token = load_access_token()
-    account_seq = args.account_seq or _get_default_account_seq(access_token)
+    account_seq = args.account_seq or get_default_account_seq(access_token)
     result = get_order(
         order_id=args.order_id,
         account_seq=account_seq,

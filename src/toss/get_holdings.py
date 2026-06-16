@@ -19,7 +19,7 @@ if __package__ in {None, ""}:
 
 from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
 from toss.client import request_json
-from toss.get_accounts import get_accounts
+from toss.account_cache import get_default_account_seq
 from toss.auth import load_access_token
 
 
@@ -57,17 +57,6 @@ def get_holdings(
     return result
 
 
-def _get_default_account_seq(access_token: str) -> int:
-    accounts = get_accounts(access_token=access_token)
-    if not accounts:
-        raise RuntimeError("No Toss account found. Cannot query holdings.")
-
-    account_seq = accounts[0].get("accountSeq")
-    if not isinstance(account_seq, int):
-        raise RuntimeError("First Toss account does not contain integer accountSeq.")
-    return account_seq
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Get Toss Invest holdings.")
     parser.add_argument("--account-seq", type=int, help="Toss accountSeq from get_accounts.py")
@@ -75,7 +64,7 @@ def main() -> None:
     args = parser.parse_args()
 
     access_token = load_access_token()
-    account_seq = args.account_seq or _get_default_account_seq(access_token)
+    account_seq = args.account_seq or get_default_account_seq(access_token)
     holdings = get_holdings(
         account_seq=account_seq,
         access_token=access_token,

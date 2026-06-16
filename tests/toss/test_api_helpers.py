@@ -13,6 +13,42 @@ sys.path.insert(0, str(SRC))
 
 
 class TossPortfolioApiTest(unittest.TestCase):
+    def test_get_holdings_does_not_expose_default_account_resolver(self):
+        import toss.get_holdings as get_holdings
+
+        self.assertFalse(hasattr(get_holdings, "_get_default_account_seq"))
+
+    def test_default_account_seq_is_cached_per_access_token(self):
+        from toss.account_cache import (
+            clear_default_account_cache,
+            get_default_account_seq,
+        )
+
+        clear_default_account_cache()
+        self.addCleanup(clear_default_account_cache)
+        calls = []
+
+        def fake_urlopen(request, timeout):
+            calls.append((request.full_url, timeout))
+            return _response(
+                {
+                    "result": [
+                        {
+                            "accountNo": "12345678901",
+                            "accountSeq": 7,
+                            "accountType": "BROKERAGE",
+                        }
+                    ]
+                }
+            )
+
+        first = get_default_account_seq("access-token", urlopen=fake_urlopen)
+        second = get_default_account_seq("access-token", urlopen=fake_urlopen)
+
+        self.assertEqual(first, 7)
+        self.assertEqual(second, 7)
+        self.assertEqual(len(calls), 1)
+
     def test_get_holdings_sends_account_header(self):
         from toss.get_holdings import get_holdings
 

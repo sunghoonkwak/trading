@@ -41,19 +41,19 @@ def _get_overseas_order_endpoints():
 
 def _get_toss_cancel_helpers():
     from toss.cancel_order import cancel_order
-    from toss.get_holdings import _get_default_account_seq
+    from toss.account_cache import get_default_account_seq
     from toss.auth import load_access_token
 
-    return load_access_token, _get_default_account_seq, cancel_order
+    return load_access_token, get_default_account_seq, cancel_order
 
 
 def _fetch_toss_open_orders() -> pd.DataFrame:
-    from toss.get_holdings import _get_default_account_seq
+    from toss.account_cache import get_default_account_seq
     from toss.get_orders import get_orders
     from toss.auth import load_access_token
 
     access_token = load_access_token()
-    account_seq = _get_default_account_seq(access_token)
+    account_seq = get_default_account_seq(access_token)
     result = get_orders(
         account_seq=account_seq,
         status="OPEN",
