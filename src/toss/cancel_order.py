@@ -1,3 +1,9 @@
+"""토스증권 주문 취소 API 래퍼.
+
+POST /api/v1/orders/{orderId}/cancel로 기존 미체결 주문 취소를 요청한다.
+계좌 헤더 X-Tossinvest-Account가 필요하며 Rate Limits Group은 ORDER다.
+"""
+
 from __future__ import annotations
 
 import argparse

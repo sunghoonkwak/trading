@@ -1,3 +1,10 @@
+"""토스증권 주문 목록 조회 API 래퍼.
+
+GET /api/v1/orders로 진행 중(OPEN) 또는 종료된(CLOSED) 주문 목록을 조회한다.
+symbol과 기간으로 필터링할 수 있으며 계좌 헤더가 필요하다.
+Rate Limits Group은 ORDER_HISTORY다.
+"""
+
 from __future__ import annotations
 
 import argparse

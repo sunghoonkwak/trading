@@ -1,3 +1,10 @@
+"""토스증권 미국 장 운영 정보 조회 API 래퍼.
+
+GET /api/v1/market-calendar/US로 미국 시장의 데이/프리/정규/애프터마켓 운영
+시간을 조회한다. 기준일 주변 3영업일 정보를 KST 기준으로 반환하며
+Rate Limits Group은 MARKET_INFO다.
+"""
+
 from __future__ import annotations
 
 import argparse

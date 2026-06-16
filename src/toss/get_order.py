@@ -1,3 +1,10 @@
+"""토스증권 주문 상세 조회 API 래퍼.
+
+GET /api/v1/orders/{orderId}로 특정 주문의 상태, 체결 내역, 수수료/세금 등
+주문 단위 상세 정보를 조회한다. 계좌 헤더가 필요하며 Rate Limits Group은
+ORDER_HISTORY다.
+"""
+
 from __future__ import annotations
 
 import argparse

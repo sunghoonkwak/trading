@@ -1,3 +1,9 @@
+"""토스증권 OAuth2 액세스 토큰 발급 API 래퍼.
+
+POST /oauth2/token으로 client credentials를 access token으로 교환한다.
+이 엔드포인트만 Authorization 헤더 없이 호출하며 Rate Limits Group은 AUTH다.
+"""
+
 from __future__ import annotations
 
 import json

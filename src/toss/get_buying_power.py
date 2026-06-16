@@ -1,3 +1,10 @@
+"""토스증권 매수 가능 금액 조회 API 래퍼.
+
+GET /api/v1/buying-power로 특정 종목 매수 주문에 사용할 수 있는 현금 기반
+매수 가능 금액을 조회한다. 계좌 헤더 X-Tossinvest-Account가 필요하며
+Rate Limits Group은 ORDER_INFO다.
+"""
+
 from __future__ import annotations
 
 import argparse

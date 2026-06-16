@@ -1,3 +1,9 @@
+"""토스증권 호가 조회 API 래퍼.
+
+GET /api/v1/orderbook으로 종목의 매수/매도 호가와 잔량을 조회한다.
+계좌 정보 없이 액세스 토큰만으로 호출하며 Rate Limits Group은 MARKET_DATA다.
+"""
+
 from __future__ import annotations
 
 import argparse

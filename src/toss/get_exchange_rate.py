@@ -1,3 +1,9 @@
+"""토스증권 환율 조회 API 래퍼.
+
+GET /api/v1/exchange-rate로 KRW와 USD 사이의 참고용 표시 환율을 조회한다.
+특정 시각의 환율 조회도 지원하며 Rate Limits Group은 MARKET_INFO다.
+"""
+
 from __future__ import annotations
 
 import argparse

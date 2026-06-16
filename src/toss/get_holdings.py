@@ -1,3 +1,10 @@
+"""토스증권 보유 주식 조회 API 래퍼.
+
+GET /api/v1/holdings로 계좌의 국내/미국 주식 보유 현황과 통화별 평가 요약을
+조회한다. symbol을 주면 해당 종목으로 필터링하며 계좌 헤더가 필요하다.
+Rate Limits Group은 ASSET다.
+"""
+
 from __future__ import annotations
 
 import argparse

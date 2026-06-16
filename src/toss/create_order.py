@@ -1,3 +1,10 @@
+"""토스증권 주문 생성 API 래퍼.
+
+POST /api/v1/orders로 국내/미국 주식 매수 또는 매도 주문을 생성한다.
+수량(quantity) 또는 금액(orderAmount) 중 하나로 주문하며 계좌 헤더가 필요하다.
+Rate Limits Group은 ORDER다.
+"""
+
 from __future__ import annotations
 
 import argparse

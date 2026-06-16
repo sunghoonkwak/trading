@@ -1,3 +1,9 @@
+"""토스증권 주문 정정 API 래퍼.
+
+POST /api/v1/orders/{orderId}/modify로 기존 주문의 가격 또는 수량 정정을 요청한다.
+계좌 헤더 X-Tossinvest-Account가 필요하며 Rate Limits Group은 ORDER다.
+"""
+
 from __future__ import annotations
 
 import argparse

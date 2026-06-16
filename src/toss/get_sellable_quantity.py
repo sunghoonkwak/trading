@@ -1,3 +1,10 @@
+"""토스증권 판매 가능 수량 조회 API 래퍼.
+
+GET /api/v1/sellable-quantity로 특정 종목의 매도 가능 수량을 조회한다.
+주문 전 최대 매도 가능 수량 확인에 쓰며 계좌 헤더가 필요하다.
+Rate Limits Group은 ORDER_INFO다.
+"""
+
 from __future__ import annotations
 
 import argparse

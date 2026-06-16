@@ -1,3 +1,10 @@
+"""토스증권 캔들 차트 조회 API 래퍼.
+
+GET /api/v1/candles로 종목의 OHLCV 캔들 데이터를 최대 200개까지 조회한다.
+1분봉/일봉과 페이지네이션 before 값을 지원하며 Rate Limits Group은
+MARKET_DATA_CHART다.
+"""
+
 from __future__ import annotations
 
 import argparse

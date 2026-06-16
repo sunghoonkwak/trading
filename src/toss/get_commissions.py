@@ -1,3 +1,9 @@
+"""토스증권 매매 수수료 조회 API 래퍼.
+
+GET /api/v1/commissions로 현재 계좌의 시장별 매매 수수료율을 조회한다.
+계좌 헤더 X-Tossinvest-Account가 필요하며 Rate Limits Group은 ORDER_INFO다.
+"""
+
 from __future__ import annotations
 
 import argparse

@@ -1,3 +1,10 @@
+"""토스증권 현재가 조회 API 래퍼.
+
+GET /api/v1/prices로 하나 이상의 종목 현재가 정보를 조회한다.
+symbols를 콤마로 구분해 최대 200개까지 요청할 수 있으며 Rate Limits Group은
+MARKET_DATA다.
+"""
+
 from __future__ import annotations
 
 import argparse

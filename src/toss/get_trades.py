@@ -1,3 +1,9 @@
+"""토스증권 최근 체결 내역 조회 API 래퍼.
+
+GET /api/v1/trades로 종목의 당일 최근 체결 내역을 조회한다.
+조회 건수는 최대 50개이며 Rate Limits Group은 MARKET_DATA다.
+"""
+
 from __future__ import annotations
 
 import argparse

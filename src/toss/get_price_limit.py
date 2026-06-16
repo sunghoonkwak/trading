@@ -1,3 +1,9 @@
+"""토스증권 상/하한가 조회 API 래퍼.
+
+GET /api/v1/price-limits로 종목의 당일 상한가와 하한가를 조회한다.
+계좌 정보 없이 액세스 토큰만으로 호출하며 Rate Limits Group은 MARKET_DATA다.
+"""
+
 from __future__ import annotations
 
 import argparse

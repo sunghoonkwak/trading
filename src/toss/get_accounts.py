@@ -1,3 +1,10 @@
+"""토스증권 계좌 목록 조회 API 래퍼.
+
+GET /api/v1/accounts로 정상 상태의 종합매매 계좌 목록을 조회한다.
+응답의 accountSeq는 보유/주문/매수가능금액 API의 계좌 헤더 값으로 사용된다.
+Rate Limits Group은 ACCOUNT다.
+"""
+
 from __future__ import annotations
 
 import argparse
