@@ -8,9 +8,8 @@ It calculates orders to bring assets back to their target weights.
 import logging
 from typing import Dict, List, Optional, Tuple
 from strategy.base import StrategyOrder, OrderSide
-from strategy.constants import DEFAULT_REBALANCE_THRESHOLD
+from strategy.constants import DEFAULT_REBALANCE_THRESHOLD, ORDER_TYPE_LIMIT
 from utils.price_utils import resolve_current_price
-from kis.constants import ORDER_TYPE_US_LIMIT
 
 
 def _initial_info(seed: float) -> Dict:
@@ -141,7 +140,7 @@ def _build_rebalance_orders(
                     side=OrderSide.SELL,
                     quantity=sell_qty,
                     price=price,
-                    order_type=ORDER_TYPE_US_LIMIT,
+                    order_type=ORDER_TYPE_LIMIT,
                     reason=f"➔ Est.Total: ${expected_total:,.1f} ({pct:.1f}%)",
                 ))
         elif diff_val > 0:
@@ -156,7 +155,7 @@ def _build_rebalance_orders(
                     side=OrderSide.BUY,
                     quantity=buy_qty,
                     price=price,
-                    order_type=ORDER_TYPE_US_LIMIT,
+                    order_type=ORDER_TYPE_LIMIT,
                     reason=f"➔ Est.Total: ${expected_total:,.1f} ({pct:.1f}%)",
                 ))
 

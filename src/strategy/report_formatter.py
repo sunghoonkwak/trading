@@ -7,6 +7,7 @@ Uses the unified report structure with StrategyStatus enum.
 """
 from typing import Dict, List
 from strategy.base import StrategyOrder, StrategyStatus, OrderSide
+from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 
 
 def _format_market_status_line(report: Dict) -> str:
@@ -183,7 +184,12 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
                 t_orders = orders_by_ticker.get(ticker, [])
                 if t_orders:
                     for o in t_orders:
-                        type_map = {"34": "LOC", "00": "MKT"}
+                        type_map = {
+                            ORDER_TYPE_LOC: "LOC",
+                            ORDER_TYPE_LIMIT: "LIMIT",
+                            "34": "LOC",
+                            "00": "LIMIT",
+                        }
                         type_str = type_map.get(o.order_type, o.order_type)
                         lines.append(f"    └ {o.side.name} {o.quantity} shares ({type_str})")
                 else:

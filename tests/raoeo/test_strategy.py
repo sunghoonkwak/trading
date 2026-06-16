@@ -5,6 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from strategy import raoeo
 from strategy.base import OrderSide
+from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 
 
 def _targets_config():
@@ -105,11 +106,45 @@ def test_standard_orders_do_not_automatically_sell_cash_ticker():
     assert cash_sales == []
 
 
+def test_raoeo_uses_broker_neutral_order_types():
+    orders, _ = raoeo.calculate_orders(
+        targets_config={
+            "TQQQ": {
+                "seed": 1000,
+                "duration": 1,
+                "phase": [
+                    {
+                        "name": "initial",
+                        "threshold": 1.0,
+                        "buy": [{"type": "normal", "ratio": 1.0}],
+                        "sell": [
+                            {"type": "Limit", "ratio": 0.5, "profit": 0.1},
+                            {"type": "LOC", "ratio": 0.5, "profit": 0.2},
+                        ],
+                    }
+                ],
+            }
+        },
+        portfolio={"TQQQ": {"qty": 10, "avg_price": 100.0, "cur_price": 100.0}},
+        current_prices={"TQQQ": 100.0},
+    )
+
+    sell_orders = [order for order in orders if order.side == OrderSide.SELL]
+    buy_orders = [order for order in orders if order.side == OrderSide.BUY]
+
+    assert [order.order_type for order in sell_orders] == [
+        ORDER_TYPE_LIMIT,
+        ORDER_TYPE_LOC,
+    ]
+    assert buy_orders[0].order_type == ORDER_TYPE_LOC
+
+
 def test_cash_funding_sell_uses_full_buy_budget_without_orderable_usd():
     cash_sell, info = _cash_funding()
 
     assert cash_sell.quantity == 10
     assert cash_sell.price == 99.0
+    assert cash_sell.order_type == ORDER_TYPE_LIMIT
     assert info["required"] is True
 
 

@@ -8,10 +8,8 @@ It is now a pure calculation module without direct API dependencies.
 import logging
 from typing import Dict, List, Optional, Tuple
 from strategy.base import StrategyOrder, OrderSide
-from strategy.constants import DEFAULT_VA_THRESHOLD
+from strategy.constants import DEFAULT_VA_THRESHOLD, ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 from utils.price_utils import resolve_current_price
-
-from kis.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
 
 def _current_value(holding: Dict) -> float:
@@ -124,7 +122,7 @@ def _build_order(
                 side=OrderSide.BUY,
                 quantity=buy_qty,
                 price=buy_price,
-                order_type=ORDER_TYPE_US_LOC,
+                order_type=ORDER_TYPE_LOC,
                 reason=f"VA Day {day_count} (Target: {daily_target_amount:.2f})",
             )
 
@@ -137,7 +135,7 @@ def _build_order(
                 side=OrderSide.SELL,
                 quantity=sell_qty,
                 price=0.0,
-                order_type=ORDER_TYPE_US_LIMIT,
+                order_type=ORDER_TYPE_LIMIT,
                 reason=f"VA Sell Day {day_count} (Target: {daily_target_amount:.2f})",
             )
 

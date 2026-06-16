@@ -4,8 +4,8 @@
 import logging
 from typing import Dict, Tuple
 
-from kis.constants import ORDER_TYPE_US_LOC
 from strategy.base import OrderSide, StrategyOrder
+from strategy.constants import ORDER_TYPE_LOC
 from toss.auth import load_access_token
 from toss.create_order import create_order
 from toss.get_buying_power import get_buying_power
@@ -45,7 +45,7 @@ def _order_payload(order: StrategyOrder) -> Dict[str, str]:
     else:
         payload["order_type"] = "MARKET"
 
-    if order.order_type == ORDER_TYPE_US_LOC:
+    if order.order_type == ORDER_TYPE_LOC:
         if order.price <= 0:
             raise ValueError("Toss LOC order requires a positive limit price.")
         payload["order_type"] = "LIMIT"

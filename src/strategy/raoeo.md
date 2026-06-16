@@ -13,6 +13,7 @@
 2. **Order Calculation (주문 계산)**:
    - `strategy_config.json`에 정의된 `targets.[TICKER].phase` 배열을 위에서부터 차례대로 판독합니다.
    - 보유 자본금 대비 사용된 금액(`spent_amount / seed`)의 비율이 `threshold` 미만일 때 해당 Phase의 룰(`buy` 및 `sell`)을 채택하여 주문을 계산합니다. 마지막 원소인 경우 기본(fallback) 설정으로 `threshold` 없이 동작할 수 있습니다.
+   - 생성된 `StrategyOrder.order_type`은 KIS/Toss 코드가 아니라 `LIMIT`, `LOC` 같은 브로커 독립 주문 의도입니다. 실제 API 주문 코드는 선택된 broker facade에서 변환합니다.
    - **매도 로직 (Sell)**:
      - `sell` 배열 내 각 항목(type, ratio, profit)에 따라 보유 수량을 분할하여 한도와 목표가를 정합니다. (`LOC` 혹은 `Limit` 주문)
    - **매수 로직 (Buy)**:

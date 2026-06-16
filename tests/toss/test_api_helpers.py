@@ -311,6 +311,7 @@ class TossOrderApiTest(unittest.TestCase):
     def test_toss_broker_maps_strategy_limit_order(self):
         from broker import toss_broker
         from strategy.base import OrderSide, StrategyOrder
+        from strategy.constants import ORDER_TYPE_LIMIT
 
         calls = {}
 
@@ -332,7 +333,7 @@ class TossOrderApiTest(unittest.TestCase):
                     side=OrderSide.BUY,
                     quantity=2,
                     price=185.12,
-                    order_type="00",
+                    order_type=ORDER_TYPE_LIMIT,
                 )
             )
         finally:
@@ -354,6 +355,7 @@ class TossOrderApiTest(unittest.TestCase):
     def test_toss_broker_maps_strategy_loc_order(self):
         from broker import toss_broker
         from strategy.base import OrderSide, StrategyOrder
+        from strategy.constants import ORDER_TYPE_LOC
 
         calls = {}
 
@@ -373,7 +375,7 @@ class TossOrderApiTest(unittest.TestCase):
                     side=OrderSide.SELL,
                     quantity=2,
                     price=190.0,
-                    order_type="34",
+                    order_type=ORDER_TYPE_LOC,
                 )
             )
         finally:

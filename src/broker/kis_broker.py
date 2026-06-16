@@ -7,12 +7,18 @@ from typing import Tuple
 import requests
 
 from core import trading_config
-from kis.constants import EXCHANGE_CODE_MAP, ORDER_TYPE_US_LIMIT
+from kis.constants import EXCHANGE_CODE_MAP, ORDER_TYPE_US_LIMIT, ORDER_TYPE_US_LOC
 from strategy.base import OrderSide, StrategyOrder
+from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 
 ka = None
 inquire_psamount = None
 order_overseas_stock = None
+
+_ORDER_TYPE_TO_KIS = {
+    ORDER_TYPE_LIMIT: ORDER_TYPE_US_LIMIT,
+    ORDER_TYPE_LOC: ORDER_TYPE_US_LOC,
+}
 
 
 def _get_kis_auth():
@@ -73,7 +79,7 @@ def place_overseas_order(order: StrategyOrder) -> Tuple[bool, str]:
         ord_dv = "buy" if order.side == OrderSide.BUY else "sell"
 
         exec_price = order.price
-        exec_type = order.order_type
+        exec_type = _ORDER_TYPE_TO_KIS.get(order.order_type, order.order_type)
         if order.side == OrderSide.SELL and order.price == 0:
             exec_price = 0.01
             exec_type = ORDER_TYPE_US_LIMIT

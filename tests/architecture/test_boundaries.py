@@ -75,6 +75,15 @@ assert not (pathlib.Path.home() / "KIS_config").exists()
     assert result.returncode == 0, result.stderr
 
 
+def test_strategy_modules_do_not_import_kis_constants():
+    offenders = []
+    for path in (SRC_DIR / "strategy").glob("*.py"):
+        if "kis.constants" in path.read_text(encoding="utf-8"):
+            offenders.append(path.name)
+
+    assert offenders == []
+
+
 def test_broker_package_import_does_not_touch_kis_config(tmp_path):
     result = _run_import_check(
         tmp_path,

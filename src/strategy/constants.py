@@ -6,6 +6,10 @@ DEFAULT_VA_THRESHOLD = 0.15
 DEFAULT_RAOEO_PROFIT = 0.10
 DEFAULT_REBALANCE_THRESHOLD = 0.05
 
+# Broker-neutral order intents used by strategies.
+ORDER_TYPE_LIMIT = "LIMIT"
+ORDER_TYPE_LOC = "LOC"
+
 # KIS rejects buy orders exceeding 30% above current price.
 # Use 25% cap as a safety margin.
 MAX_BUY_PRICE_RATIO = 1.25

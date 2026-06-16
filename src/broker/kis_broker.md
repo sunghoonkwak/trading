@@ -8,7 +8,8 @@ facade입니다. `src/kis/kis_api/**`는 공식 배포판 경계로 유지하고
 
 - 해외주식 매수가능금액조회(`inquire_psamount`) 결과에서
   `ovrs_ord_psbl_amt`를 읽어 주문 가능 USD를 반환합니다.
-- `StrategyOrder`를 KIS 해외주식 주문 wrapper의 인자로 변환합니다.
+- `StrategyOrder`의 브로커 독립 주문 의도(`LIMIT`, `LOC`)를 KIS
+  해외주식 주문구분 코드(`00`, `34`)로 변환합니다.
 - API timeout을 `[API Timeout]` 메시지로 정규화합니다.
 
 ## Import Boundary

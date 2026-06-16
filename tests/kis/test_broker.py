@@ -250,13 +250,15 @@ def test_get_orderable_usd_rejects_missing_amount(monkeypatch):
 
 
 def test_place_overseas_order_maps_strategy_order(monkeypatch):
+    from strategy.constants import ORDER_TYPE_LIMIT
+
     calls = {}
     order = StrategyOrder(
         symbol="TQQQ",
         side=OrderSide.BUY,
         quantity=3,
         price=50.25,
-        order_type="00",
+        order_type=ORDER_TYPE_LIMIT,
     )
 
     monkeypatch.setattr(
@@ -292,13 +294,15 @@ def test_place_overseas_order_maps_strategy_order(monkeypatch):
 
 
 def test_place_overseas_order_uses_limit_price_for_zero_price_sell(monkeypatch):
+    from strategy.constants import ORDER_TYPE_LOC
+
     calls = {}
     order = StrategyOrder(
         symbol="BIL",
         side=OrderSide.SELL,
         quantity=2,
         price=0,
-        order_type="34",
+        order_type=ORDER_TYPE_LOC,
     )
 
     monkeypatch.setattr(

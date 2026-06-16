@@ -7,7 +7,7 @@
 - Toss `buying-power`의 `cashBuyingPower`를 USD 매수 가능 금액으로
   반환합니다.
 - `StrategyOrder`를 Toss 주문 생성 API 인자로 변환합니다.
-- KIS 주문 코드 `34`(LOC)는 Toss `LIMIT` + `timeInForce=CLS`로
+- 전략 주문 의도 `LOC`는 Toss `LIMIT` + `timeInForce=CLS`로
   변환합니다.
 
 ## Boundaries

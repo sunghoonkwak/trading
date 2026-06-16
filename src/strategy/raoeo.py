@@ -12,9 +12,8 @@ from datetime import datetime
 import math
 
 from strategy.base import StrategyOrder, OrderSide
-from strategy.constants import MAX_BUY_PRICE_RATIO
+from strategy.constants import MAX_BUY_PRICE_RATIO, ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 from utils.price_utils import resolve_current_price
-from kis.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
 _BUDGETED_BUY_REASONS = {"Buy Normal", "Buy Average"}
 
@@ -156,7 +155,7 @@ def _build_sell_orders(
 
         if rule_qty > 0:
             order_type_str = sell_rule.get("type", "Limit")
-            order_type = ORDER_TYPE_US_LOC if order_type_str == "LOC" else ORDER_TYPE_US_LIMIT
+            order_type = ORDER_TYPE_LOC if order_type_str == "LOC" else ORDER_TYPE_LIMIT
 
             orders.append(StrategyOrder(
                 symbol=ticker,
@@ -235,7 +234,7 @@ def _build_budgeted_buy_order(
 
     order = StrategyOrder(
         symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
-        price=plan.price, order_type=ORDER_TYPE_US_LOC,
+        price=plan.price, order_type=ORDER_TYPE_LOC,
         reason=plan.reason, target_budget=budget,
     )
     return order, 0.0, rule_qty
@@ -264,7 +263,7 @@ def _build_normal_then_average_orders(
             plan.index,
             StrategyOrder(
                 symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
-                price=plan.price, order_type=ORDER_TYPE_US_LOC,
+                price=plan.price, order_type=ORDER_TYPE_LOC,
                 reason=plan.reason, target_budget=spent_budget,
             ),
         ))
@@ -349,7 +348,7 @@ def _build_buy_orders(
             if rem_qty > 0:
                 orders.append(StrategyOrder(
                     symbol=ticker, side=OrderSide.BUY, quantity=rem_qty,
-                    price=buy_price, order_type=ORDER_TYPE_US_LOC, reason="Buy Filling"
+                    price=buy_price, order_type=ORDER_TYPE_LOC, reason="Buy Filling"
                 ))
 
     return orders, skipped_budget
@@ -482,7 +481,7 @@ def calculate_cash_funding_order(
         side=OrderSide.SELL,
         quantity=required_qty,
         price=sell_price,
-        order_type=ORDER_TYPE_US_LIMIT,
+        order_type=ORDER_TYPE_LIMIT,
         reason=(
             f"Fund RAOEO Buys "
             f"(Buy: ${total_buy_budget:.2f}, Orderable USD: ${orderable_usd:.2f}, "

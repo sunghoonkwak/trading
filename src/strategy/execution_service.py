@@ -18,6 +18,7 @@ import pytz
 from broker import market_data, strategy_broker
 from strategy import raoeo, value_averaging, rebalancing
 from strategy.base import StrategyOrder, StrategyStatus, OrderSide
+from strategy.constants import ORDER_TYPE_LIMIT
 from data.config_manager import ConfigFile, load_json, save_json
 from utils.market_utils import get_us_market_status, is_market_holiday
 from utils.price_utils import resolve_current_price
@@ -154,7 +155,7 @@ def _restore_orders_from_strategy_history(
                 side=OrderSide[order_data["side"]],
                 quantity=order_data["qty"],
                 price=order_data["price"],
-                order_type=order_data.get("order_type", "00"),
+                order_type=order_data.get("order_type", ORDER_TYPE_LIMIT),
                 reason=order_data.get("reason", ""),
                 target_budget=order_data.get("target_budget"),
             )

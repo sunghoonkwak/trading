@@ -35,7 +35,7 @@
   - `side` (OrderSide): 주문 방향
   - `quantity` (int): 주문 수량
   - `price` (float): 주문 가격 (0이면 시장가)
-  - `order_type` (str): 주문 유형 코드 ("34": LOC, "00": 지정가 등)
+  - `order_type` (str): 브로커 독립 주문 의도 (`LIMIT`, `LOC` 등)
   - `reason` (str): 주문 사유 (로그/디버깅용)
 
 ### `__str__`

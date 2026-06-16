@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from strategy.constants import ORDER_TYPE_LIMIT
+
 
 class OrderSide(Enum):
     BUY = "BUY"
@@ -27,7 +29,7 @@ class StrategyOrder:
     quantity: int
     price: float = 0.0  # 0 for market price
     reason: str = ""
-    order_type: str = "00"  # "00": market, "01": limit
+    order_type: str = ORDER_TYPE_LIMIT
     target_budget: Optional[float] = None
 
     def __str__(self):
