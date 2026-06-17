@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
-def test_data_integration_skips_gsheet_for_kis_only(monkeypatch):
+def test_data_integration_skips_gsheet_and_toss_for_kis_scope(monkeypatch):
     from broker import portfolio
     from data import portfolio_integration
 
@@ -31,8 +31,13 @@ def test_data_integration_skips_gsheet_for_kis_only(monkeypatch):
         "fetch_gsheet_portfolio",
         lambda: (_ for _ in ()).throw(AssertionError("GSheet must be skipped")),
     )
+    monkeypatch.setattr(
+        portfolio,
+        "fetch_toss_source",
+        lambda: (_ for _ in ()).throw(AssertionError("Toss must be skipped")),
+    )
 
-    result = portfolio_integration.get_integrated_portfolio(kis_only=True)
+    result = portfolio_integration.get_integrated_portfolio(scope="kis")
 
     assert "owners" not in result
     assert result["accounts"] == [
@@ -40,6 +45,101 @@ def test_data_integration_skips_gsheet_for_kis_only(monkeypatch):
     ]
     assert result["metadata"]["exchange_rate"] == 1375.0
     assert "gsheet_error" not in result["metadata"]
+    assert "toss_error" not in result["metadata"]
+
+
+def test_data_integration_fetches_only_toss_for_toss_scope(monkeypatch):
+    from broker import portfolio
+    from data import portfolio_integration
+
+    monkeypatch.setattr(
+        portfolio,
+        "fetch_kis_source",
+        lambda: (_ for _ in ()).throw(AssertionError("KIS must be skipped")),
+    )
+    monkeypatch.setattr(
+        portfolio_integration,
+        "fetch_gsheet_portfolio",
+        lambda: (_ for _ in ()).throw(AssertionError("GSheet must be skipped")),
+    )
+    monkeypatch.setattr(
+        portfolio,
+        "fetch_toss_source",
+        lambda: (
+            {
+                "holdings": [
+                    {
+                        "account_key": "토스",
+                        "ticker": "AAPL",
+                        "name": "Apple Inc.",
+                        "qty": 2,
+                        "avg_price": 150,
+                        "cur_price": 160,
+                    }
+                ],
+                "cash_holdings": [
+                    {
+                        "account_name": "토스",
+                        "account_key": "토스",
+                        "amount": 300,
+                        "currency": "USD",
+                    }
+                ],
+                "asset_info": {
+                    "AAPL": {
+                        "name": "Apple Inc.",
+                        "market": "US",
+                        "asset_type": "Stock",
+                        "currency": "USD",
+                    }
+                },
+                "accounts": {"토스": {"name": "토스"}},
+            },
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        portfolio_integration,
+        "fetch_toss_exchange_rate",
+        lambda: (1375.0, None),
+    )
+
+    result = portfolio_integration.get_integrated_portfolio(scope="toss")
+
+    assert [account["name"] for account in result["accounts"]] == ["토스"]
+    assert [holding["ticker"] for holding in result["holdings"]] == ["AAPL"]
+    assert result["cash_holdings"][0]["amount"] == 300
+    assert "kis_error" not in result["metadata"]
+    assert "gsheet_error" not in result["metadata"]
+    assert "toss_error" not in result["metadata"]
+
+
+def test_data_integration_does_not_use_gsheet_fallback_for_toss_scope(monkeypatch):
+    from broker import portfolio
+    from data import portfolio_integration
+
+    monkeypatch.setattr(
+        portfolio,
+        "fetch_kis_source",
+        lambda: (_ for _ in ()).throw(AssertionError("KIS must be skipped")),
+    )
+    monkeypatch.setattr(
+        portfolio_integration,
+        "fetch_gsheet_portfolio",
+        lambda: (_ for _ in ()).throw(AssertionError("GSheet must be skipped")),
+    )
+    monkeypatch.setattr(
+        portfolio,
+        "fetch_toss_source",
+        lambda: (_ for _ in ()).throw(RuntimeError("Toss unavailable")),
+    )
+
+    result = portfolio_integration.get_integrated_portfolio(scope="toss")
+
+    assert result["accounts"] == []
+    assert result["holdings"] == []
+    assert result["cash_holdings"] == []
+    assert result["metadata"]["toss_error"] == "Toss unavailable"
 
 
 def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
@@ -440,7 +540,7 @@ def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
     assert [call["currency"] for call in captured["buying_power"]] == ["KRW", "USD"]
 
 
-def test_data_service_strategy_scope_filters_configured_broker(monkeypatch):
+def test_data_service_toss_scope_filters_toss_account(monkeypatch):
     from data import data_service
 
     raw = {
@@ -496,16 +596,42 @@ def test_data_service_strategy_scope_filters_configured_broker(monkeypatch):
         "metadata": raw["metadata"],
     }
 
-    monkeypatch.setattr(
-        "broker.strategy_broker.get_strategy_account_name",
-        lambda: "토스",
-    )
-
-    scoped = data_service._apply_scope_filter(data, "strategy")
+    scoped = data_service._apply_scope_filter(data, "toss")
 
     assert {holding["ticker"] for holding in scoped["holdings"]} == {"AAPL"}
     assert set(scoped["merged_data"]) == {"AAPL", "USD cash"}
     assert scoped["merged_data"]["USD cash"]["qty"] == 20
+
+
+def test_data_service_passes_scope_to_portfolio_worker(monkeypatch):
+    from data import data_service
+
+    captured = {}
+
+    class Response:
+        success = False
+        error = "stop after request"
+
+    monkeypatch.setattr(data_service.PortfolioCacheManager, "get", lambda force: None)
+    monkeypatch.setattr(data_service, "is_kis_ready", lambda: True)
+    monkeypatch.setattr(data_service, "add_alert", lambda message, level: None)
+    monkeypatch.setattr(
+        data_service,
+        "request_portfolio",
+        lambda force_refresh=False, scope="all": captured.update(
+            {"force_refresh": force_refresh, "scope": scope}
+        ) or "request-1",
+    )
+    monkeypatch.setattr(
+        data_service,
+        "wait_for_response",
+        lambda request_id, timeout=60.0: Response(),
+    )
+
+    result = data_service.get_portfolio_data(force_refresh=True, scope="toss")
+
+    assert result == {"error": "stop after request"}
+    assert captured == {"force_refresh": True, "scope": "toss"}
 
 
 import sys

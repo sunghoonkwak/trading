@@ -8,7 +8,6 @@ It separates data fetching, caching, and transformation logic.
 import logging
 from typing import Dict, List, Tuple, Any
 
-from core.thread_comm import ThreadRequest, RequestType
 from broker.kis_worker import request_portfolio, wait_for_response
 from state.system_state import is_kis_ready
 from core.display import add_alert
@@ -17,6 +16,12 @@ from data.portfolio_processing import (
     PortfolioCache,
     PortfolioCacheManager,
     PortfolioProcessor,
+)
+from data.portfolio_scope import (
+    PORTFOLIO_SCOPE_ALL,
+    PORTFOLIO_SCOPE_KIS,
+    PORTFOLIO_SCOPE_TOSS,
+    normalize_portfolio_scope,
 )
 from broker import market_data
 from utils.market_utils import get_fear_and_greed
@@ -30,6 +35,8 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     """
     Orchestrates portfolio data fetching and processing.
     """
+    scope = normalize_portfolio_scope(scope)
+
     # 1. Return cached portfolio data when it is still valid.
     cached = PortfolioCacheManager.get(force_refresh)
     if cached:
@@ -43,14 +50,8 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     if not is_kis_ready():
         return {"error": "KIS Thread not ready"}
 
-    # Skip GSheet when only KIS data is needed.
-    kis_only = (scope == "kis")
-    if scope == "strategy":
-        from broker.strategy_broker import get_strategy_broker_name
-
-        kis_only = get_strategy_broker_name() == "kis"
     add_alert("[Data] Fetching portfolio...", "INFO")
-    request_id = request_portfolio(force_refresh=force_refresh, kis_only=kis_only)
+    request_id = request_portfolio(force_refresh=force_refresh, scope=scope)
     response = wait_for_response(request_id, timeout=60.0)
 
     if not response or not response.success:
@@ -89,7 +90,7 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
 
     # 5. Cache complete data only when upstream sources succeeded.
     if not (result["metadata"].get("gsheet_error") or result["metadata"].get("kis_error")):
-        if scope == "all":
+        if scope == PORTFOLIO_SCOPE_ALL:
             PortfolioCacheManager.set(result)
         add_alert("[Data] Portfolio loaded", "SUCCESS")
     else:
@@ -98,24 +99,23 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     return _apply_scope_filter(result, scope)
 
 def _apply_scope_filter(data: Dict, scope: str) -> Dict:
-    """Filters processed data by account scope (all/kis/passive/strategy)."""
-    if scope == "all": return data
+    """Filters processed data by account scope."""
+    scope = normalize_portfolio_scope(scope)
+    if scope == PORTFOLIO_SCOPE_ALL:
+        return data
 
     raw = data["raw"]
     accounts = raw.get("accounts", [])
     kis_ids = {a["id"] for a in accounts if a.get("name") == "한국투자증권"}
 
-    if scope == "kis":
+    if scope == PORTFOLIO_SCOPE_KIS:
         target_ids = kis_ids
-    elif scope == "strategy":
-        from broker.strategy_broker import get_strategy_account_name
-
-        account_name = get_strategy_account_name()
+    elif scope == PORTFOLIO_SCOPE_TOSS:
         target_ids = {
-            a["id"] for a in accounts if a.get("name") == account_name
+            a["id"] for a in accounts if a.get("name") == "토스"
         }
     else:
-        target_ids = {a["id"] for a in accounts} - kis_ids
+        target_ids = set()
 
     # Log the account scope applied to this filtered view.
     logging.info(f"[Filter] Scope: {scope}, TargetIDs: {target_ids}")

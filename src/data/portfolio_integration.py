@@ -4,6 +4,13 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
+from data.portfolio_scope import (
+    PORTFOLIO_SCOPE_ALL,
+    PORTFOLIO_SCOPE_KIS,
+    PORTFOLIO_SCOPE_TOSS,
+    normalize_portfolio_scope,
+)
+
 
 def _empty_source() -> Dict[str, Any]:
     return {
@@ -32,6 +39,22 @@ def fetch_gsheet_portfolio() -> Tuple[Dict[str, Any], Optional[str]]:
             errors.append(f"Failed to connect {currency} sheet")
 
     return gs_data, " | ".join(errors) if errors else None
+
+
+def fetch_toss_exchange_rate() -> Tuple[Optional[float], Optional[str]]:
+    """Fetch the Toss USD/KRW rate used for Toss-only portfolio valuation."""
+    try:
+        from toss.auth import load_access_token
+        from toss.get_exchange_rate import get_exchange_rate
+
+        result = get_exchange_rate(
+            base_currency="USD",
+            quote_currency="KRW",
+            access_token=load_access_token(),
+        )
+        return float(str(result.get("rate", "")).replace(",", "")), None
+    except Exception as e:
+        return None, str(e)
 
 
 def replace_account_source(
@@ -141,17 +164,48 @@ def merge_portfolio_sources(
     }
 
 
-def get_integrated_portfolio(kis_only: bool = False) -> Dict[str, Any]:
+def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]:
     """Fetch and merge portfolio sources for application data consumers."""
     from core.display import add_alert
-    from broker.portfolio import fetch_kis_source
 
-    kis_portfolio, kis_raw_data = fetch_kis_source()
+    scope = normalize_portfolio_scope(scope)
+
+    kis_portfolio = _empty_source()
+    kis_raw_data = {"exchange_rate": None, "error": None}
+    if scope in {PORTFOLIO_SCOPE_ALL, PORTFOLIO_SCOPE_KIS}:
+        from broker.portfolio import fetch_kis_source
+
+        kis_portfolio, kis_raw_data = fetch_kis_source()
 
     gsheet_data = _empty_source()
     gsheet_error = None
     toss_error = None
-    if not kis_only:
+    exchange_rate = kis_raw_data.get("exchange_rate")
+
+    if scope == PORTFOLIO_SCOPE_TOSS:
+        from broker.portfolio import fetch_toss_source
+
+        try:
+            add_alert("[Toss] Fetching Toss API data...", "INFO")
+            gsheet_data, toss_error = fetch_toss_source()
+            if toss_error:
+                add_alert(f"Toss Warning: {toss_error}", "WARN")
+            else:
+                add_alert(
+                    f"[Toss] {len(gsheet_data.get('holdings', []))} holdings loaded",
+                    "SUCCESS",
+                )
+        except Exception as e:
+            toss_error = str(e)
+            add_alert(f"Toss Warning: {toss_error}", "WARN")
+
+        if not toss_error:
+            exchange_rate, exchange_error = fetch_toss_exchange_rate()
+            if exchange_error:
+                toss_error = " | ".join(filter(None, [toss_error, exchange_error]))
+                add_alert(f"Toss Exchange Warning: {exchange_error}", "WARN")
+
+    elif scope == PORTFOLIO_SCOPE_ALL:
         from broker.portfolio import TOSS_ACCOUNT_KEY, fetch_toss_source
 
         add_alert("[Data] Fetching GSheet data...", "INFO")
@@ -180,7 +234,7 @@ def get_integrated_portfolio(kis_only: bool = False) -> Dict[str, Any]:
     return merge_portfolio_sources(
         kis_portfolio,
         gsheet_data,
-        kis_raw_data.get("exchange_rate"),
+        exchange_rate,
         kis_raw_data.get("error"),
         gsheet_error,
         toss_error,

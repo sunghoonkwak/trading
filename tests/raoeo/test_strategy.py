@@ -287,6 +287,37 @@ def test_prepare_cash_funding_uses_pending_raoeo_orders(monkeypatch):
     assert requested == [("TQQQ", 100.0)]
 
 
+def test_get_market_data_uses_configured_broker_as_portfolio_scope(monkeypatch):
+    requested = []
+
+    monkeypatch.setattr(
+        execution_service.strategy_broker,
+        "get_strategy_broker_name",
+        lambda: "toss",
+    )
+    monkeypatch.setattr(
+        "data.data_service.get_portfolio_data",
+        lambda force_refresh=False, scope="all": requested.append(
+            (force_refresh, scope)
+        ) or {"merged_data": {"AAPL": {"qty": 2, "cur_price": 160.0}}},
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: {
+            "raoeo": {"targets": {}},
+            "value_averaging": {"targets": {}},
+            "rebalancing": {"assets": []},
+        },
+    )
+
+    holdings, prices = execution_service.get_market_data(force_refresh=True)
+
+    assert holdings == {"AAPL": {"qty": 2, "cur_price": 160.0}}
+    assert prices == {}
+    assert requested == [(True, "toss")]
+
+
 def test_execute_cash_funding_does_not_submit_strategy_orders_on_failure(monkeypatch):
     funding_order = StrategyOrder(
         symbol="BIL",

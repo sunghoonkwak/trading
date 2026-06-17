@@ -23,8 +23,8 @@ KIS 런타임 요청을 앱 소유 큐/스레드에서 직렬 처리하는 worke
 
 ### `request_portfolio`
 
-포트폴리오 조회 요청을 큐에 등록합니다. `kis_only=True` 시 data 통합
-계층이 GSheet을 건너뛰고 KIS source만 조회합니다.
+포트폴리오 조회 요청을 큐에 등록합니다. `scope`는 `all`, `kis`, `toss`
+중 하나이며 data 통합 계층이 해당 scope에 맞는 source만 조회합니다.
 
 ### `wait_for_response`
 

@@ -42,7 +42,10 @@ def get_market_data(
     """
     from data.data_service import get_portfolio_data
 
-    portfolio = get_portfolio_data(force_refresh=force_refresh, scope="strategy")
+    portfolio = get_portfolio_data(
+        force_refresh=force_refresh,
+        scope=strategy_broker.get_strategy_broker_name(),
+    )
     holdings = portfolio.get('merged_data', {})
 
     strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})

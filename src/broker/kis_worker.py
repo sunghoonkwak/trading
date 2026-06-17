@@ -35,8 +35,8 @@ def _handle_request(request: ThreadRequest) -> ThreadResponse:
         elif request.request_type == RequestType.GET_PORTFOLIO:
             from data.portfolio_integration import get_integrated_portfolio
 
-            kis_only = request.kwargs.get("kis_only", False)
-            result = get_integrated_portfolio(kis_only=kis_only)
+            scope = request.kwargs.get("scope", "all")
+            result = get_integrated_portfolio(scope=scope)
         else:
             return ThreadResponse(
                 request.request_id,
@@ -119,10 +119,10 @@ def request_kis_ws_auth() -> str:
     return req.request_id
 
 
-def request_portfolio(force_refresh: bool = False, kis_only: bool = False) -> str:
+def request_portfolio(force_refresh: bool = False, scope: str = "all") -> str:
     req = ThreadRequest(
         RequestType.GET_PORTFOLIO,
-        kwargs={"force_refresh": force_refresh, "kis_only": kis_only},
+        kwargs={"force_refresh": force_refresh, "scope": scope},
     )
     kis_request_queue.put(req)
     return req.request_id
