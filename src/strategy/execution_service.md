@@ -93,6 +93,10 @@
 `strategy_broker`로 전략 실행 계좌를 선택하고, 각 전략 섹션
 (`raoeo`, `value_averaging`, `rebalancing`)의 `enabled` 필드를 확인하여
 실행 여부를 결정합니다.
+RAOEO와 Value Averaging은 활성화된 target이 하나도 없으면 history 조회나
+market data 조회 없이 `disabled` 상태로 종료합니다.
+Value Averaging은 오늘 history가 있으면 `orders`가 비어 있어도 저장된
+상태와 target context를 재사용하며 market data를 다시 조회하지 않습니다.
 
 ```json
 {

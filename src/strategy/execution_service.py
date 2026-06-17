@@ -493,7 +493,11 @@ def _handle_va_history(
     report["info"]["targets_context"] = va_hist.get("targets_context", {})
 
     if not failed:
-        report["status"] = StrategyStatus.EXECUTED
+        hist_status = va_hist.get("status")
+        try:
+            report["status"] = StrategyStatus(hist_status)
+        except ValueError:
+            report["status"] = StrategyStatus.EXECUTED
         return
 
     if not execute:
@@ -696,7 +700,11 @@ def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
 
         va_conf = va_section.get('targets', {})
 
-        if not va_conf:
+        active_targets = {
+            t: c for t, c in va_conf.items() if c.get('enabled', True)
+        }
+
+        if not active_targets:
             report["status"] = StrategyStatus.DISABLED
             return report
 
@@ -707,7 +715,7 @@ def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
         today_entry = _get_today_entry(hist_data, today_str)
         va_hist = today_entry.get("va") if today_entry else None
 
-        if va_hist and va_hist.get("orders"):
+        if va_hist:
             _handle_va_history(
                 report,
                 va_hist,
@@ -726,7 +734,7 @@ def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
 
         # VA needs history for day_count calculation
         orders, context_map = value_averaging.calculate_orders(
-            targets_config=va_conf,
+            targets_config=active_targets,
             portfolio=holdings,
             current_prices=prices,
             history_data=hist_data,

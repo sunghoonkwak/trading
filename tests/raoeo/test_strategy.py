@@ -449,6 +449,91 @@ def test_run_raoeo_persists_skipped_buy_budget_history(monkeypatch):
     assert saved["history"][0]["raoeo"]["skipped_buy_budgets"] == {"FAS": 83.33}
 
 
+def test_run_va_with_all_targets_disabled_stops_before_history(monkeypatch):
+    config = {
+        "value_averaging": {
+            "enabled": True,
+            "targets": {
+                "QLD": {"enabled": False},
+                "TQQQ": {"enabled": False},
+            },
+        },
+    }
+    monkeypatch.setattr(
+        execution_service,
+        "_get_market_status",
+        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: config,
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "_load_history",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("disabled VA must not check history")
+        ),
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "get_market_data",
+        lambda force_refresh=False: (_ for _ in ()).throw(
+            AssertionError("disabled VA must not fetch market data")
+        ),
+    )
+
+    report = execution_service.run_va_strategy(execute=False)
+
+    assert report["status"].value == "disabled"
+
+
+def test_run_va_reuses_empty_order_history_without_fetching_data(monkeypatch):
+    config = {
+        "value_averaging": {
+            "enabled": True,
+            "targets": {
+                "QLD": {"enabled": True},
+            },
+        },
+    }
+    history = [{
+        "date": "2026-06-17",
+        "va": {
+            "time": "08:12:04",
+            "status": "skipped",
+            "orders": [],
+            "targets_context": {"QLD": {"day_count": 3}},
+        },
+    }]
+    monkeypatch.setattr(
+        execution_service,
+        "_get_market_status",
+        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: config,
+    )
+    monkeypatch.setattr(execution_service, "_load_history", lambda: history)
+    monkeypatch.setattr(
+        execution_service,
+        "get_market_data",
+        lambda force_refresh=False: (_ for _ in ()).throw(
+            AssertionError("VA history reuse must not fetch market data")
+        ),
+    )
+
+    report = execution_service.run_va_strategy(execute=False)
+
+    assert report["status"].value == "skipped"
+    assert report["orders"] == []
+    assert report["pending_orders"] == []
+    assert report["info"]["targets_context"] == {"QLD": {"day_count": 3}}
+
+
 import sys
 from pathlib import Path
 
