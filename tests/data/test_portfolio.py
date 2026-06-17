@@ -219,6 +219,11 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
             None,
         ),
     )
+    monkeypatch.setattr(
+        portfolio,
+        "fetch_toss_source",
+        lambda: (_ for _ in ()).throw(RuntimeError("Toss unavailable")),
+    )
 
     result = portfolio_integration.get_integrated_portfolio()
 
@@ -231,6 +236,7 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
         "005930",
     }
     assert {cash["account_id"] for cash in result["cash_holdings"]} == {"acc_01"}
+    assert result["metadata"]["toss_error"] == "Toss unavailable"
 
 
 def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
