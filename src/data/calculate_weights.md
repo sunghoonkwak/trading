@@ -11,7 +11,9 @@
 4. `satellites` 항목은 `ratio * core_score`로 점수화합니다.
 5. `group` 항목은 목표를 대표 티커에 만들고, 구성 티커의 현재 보유 비중을
    대표 티커에 합산합니다.
-6. `strategy: weighted_split` 항목은 목표 비중을 내부 구성 종목의
+6. `name`이 `Bonds`인 group은 현금성 보유분으로 간주해 목표 비중을
+   만들지 않습니다.
+7. `strategy: weighted_split` 항목은 목표 비중을 내부 구성 종목의
    `weight` 비율대로 나눕니다.
 
 ## 설정 구조
@@ -36,9 +38,9 @@
     {
       "type": "group",
       "name": "Bonds",
-      "ratio": 0.10,
+      "ratio": 0,
       "main_ticker": "TLTW",
-      "constituents": ["TLT"]
+      "constituents": ["TLT", "453850"]
     },
     {
       "type": "individual",
@@ -107,8 +109,8 @@ item_weight = item_score / total_score * stock_total
 
 ### `group`
 
-`main_ticker`에 목표 비중을 생성합니다. `constituents`는 현재 비중을
-계산할 때만 사용합니다.
+`main_ticker`에 목표 비중을 생성합니다. `constituents`는 현재 비중과
+평가액을 계산할 때만 사용합니다.
 
 예를 들어 `main_ticker`가 `TLTW`이고 `constituents`가 `["TLT"]`이면:
 
@@ -116,6 +118,10 @@ item_weight = item_score / total_score * stock_total
 목표 비중: TLTW
 현재 비교 비중: TLTW + TLT
 ```
+
+`name`이 `Bonds`인 group은 예외입니다. 이 group은 목표 비중을 0으로
+고정하고 리밸런싱 매수/매도 목록에서 제외합니다. 현재 보유액은 현금
+현재 비중에 더해 표시합니다.
 
 ### `strategy` + `weighted_split`
 

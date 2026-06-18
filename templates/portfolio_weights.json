@@ -40,10 +40,11 @@
         {
             "type": "group",
             "name": "Bonds",
-            "ratio": 0.1,
+            "ratio": 0,
             "main_ticker": "TLTW",
             "constituents": [
-                "TLT"
+                "TLT",
+                "453850"
             ]
         },
         {
@@ -120,11 +121,6 @@
                     "weight": 3
                 }
             ]
-        },
-        {
-            "type": "individual",
-            "ticker": "453850",
-            "ratio": 0.0
         }
     ]
 }

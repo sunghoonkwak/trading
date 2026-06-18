@@ -83,6 +83,9 @@ def format_weight_diffs(diffs: list, total_usd: float, cash_info: dict) -> str:
     sell_lines = []
     buy_lines = []
 
+    def format_usd_k(value: float) -> str:
+        return f"${value/1000:,.1f}K"
+
     for d in diffs:
         # Show top diffs if absolute diff >= 0.5% OR relative diff >= 30%
         is_significant_abs = d['abs_diff'] >= 0.005
@@ -94,7 +97,18 @@ def format_weight_diffs(diffs: list, total_usd: float, cash_info: dict) -> str:
         ticker = d['ticker']
         # For Korean stocks (numeric ticker), show name instead
         display_name = d.get('name', ticker) if ticker.isdigit() else ticker
-        msg = f"- <b>{display_name}</b>: {d['diff']*100:+.1f}% ({d['cur_w']*100:.1f}% -> {d['tgt_w']*100:.1f}%) | <b>Qty: {d['qty_diff']:+d}</b>"
+        if d.get("is_group"):
+            group_name = d.get("name", ticker)
+            current_value = format_usd_k(d.get("current_value_usd", d["cur_w"] * total_usd))
+            target_value = format_usd_k(d.get("target_value_usd", d["tgt_w"] * total_usd))
+            msg = (
+                f"- <b>{group_name}</b> [{ticker}]: "
+                f"{d['diff']*100:+.1f}% ({d['cur_w']*100:.1f}% -> {d['tgt_w']*100:.1f}%) "
+                f"| {current_value} → {target_value} "
+                f"| <b>Qty: {d['qty_diff']:+d} {ticker}</b>"
+            )
+        else:
+            msg = f"- <b>{display_name}</b>: {d['diff']*100:+.1f}% ({d['cur_w']*100:.1f}% -> {d['tgt_w']*100:.1f}%) | <b>Qty: {d['qty_diff']:+d}</b>"
 
         if d['diff'] < 0:
             sell_lines.append(msg)

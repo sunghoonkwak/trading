@@ -41,6 +41,10 @@ def _item_target_ticker(item: dict) -> str:
     return item['ticker']
 
 
+def _is_cash_like_bonds_group(item: dict) -> bool:
+    return item.get('type') == 'group' and item.get('name') == 'Bonds'
+
+
 def _add_weighted_split_target(target_weights: dict, item: dict, target_weight: float) -> None:
     constituents = item.get('constituents', [])
     total_internal_weight = sum(c.get('weight', 0) for c in constituents)
@@ -57,6 +61,9 @@ def _add_weighted_split_target(target_weights: dict, item: dict, target_weight: 
 
 
 def _add_item_target(target_weights: dict, item: dict, target_weight: float) -> None:
+    if _is_cash_like_bonds_group(item):
+        return
+
     item_type = item.get('type')
 
     if item_type == 'strategy' and item.get('strategy') == 'weighted_split':
@@ -125,7 +132,7 @@ def calculate_target_weights(
     satellite_items = config.get('satellites', [])
     core_score = sum(item['score'] for item in core_items)
     satellite_scores = [
-        item.get('ratio', 0.0) * core_score
+        0.0 if _is_cash_like_bonds_group(item) else item.get('ratio', 0.0) * core_score
         for item in satellite_items
     ]
     total_score = core_score + sum(satellite_scores)

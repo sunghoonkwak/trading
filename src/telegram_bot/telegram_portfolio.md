@@ -21,7 +21,10 @@
 ### `format_weight_diffs`
 리밸런싱 정보를 포맷팅합니다.
 - **F&G 지수**를 헤더에 표시
-- 그룹 constituents는 main ticker에 합산되어 표시
+- 일반 그룹 constituents는 main ticker에 합산되어 그룹명, 대표 티커,
+  현재/목표 평가액과 함께 표시
+- `name`이 `Bonds`인 그룹은 현금성 보유분으로 간주해 현금 현재 비중에
+  합산하고 매수/매도 목록에서는 제외
 
 ### `format_placed_orders`
 KIS US/KR 및 Toss 미체결 주문을 티커별로 묶고, 각 티커 안에서

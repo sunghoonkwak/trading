@@ -285,3 +285,35 @@ def test_portfolio_weight_command_uses_valid_portfolio_scope(monkeypatch):
 
     assert captured == {"scope": "all"}
     assert replies
+
+
+def test_format_weight_diffs_shows_group_total_and_main_ticker(monkeypatch):
+    monkeypatch.setattr(
+        telegram_portfolio,
+        "get_fear_and_greed",
+        lambda: 50,
+        raising=False,
+    )
+
+    text = telegram_portfolio.format_weight_diffs(
+        [
+            {
+                "ticker": "QQQM",
+                "name": "Nasdaq100",
+                "cur_w": 0.40,
+                "tgt_w": 0.60,
+                "diff": 0.20,
+                "abs_diff": 0.20,
+                "qty_diff": 10,
+                "is_group": True,
+                "current_value_usd": 4000,
+                "target_value_usd": 6000,
+            }
+        ],
+        10000,
+        {"current": 0.20, "target": 0.20},
+    )
+
+    assert "<b>Nasdaq100</b> [QQQM]" in text
+    assert "$4.0K → $6.0K" in text
+    assert "Qty: +10 QQQM" in text

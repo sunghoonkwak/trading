@@ -51,9 +51,9 @@ def test_satellite_group_uses_core_score_without_expanding_base():
     targets, total_score, cash_weight = calculate_target_weights({}, config, 50)
 
     assert cash_weight == pytest.approx(0.2)
-    assert total_score == pytest.approx(198)
-    assert targets["QQQM"] == pytest.approx((120 / 198) * 0.8)
-    assert targets["TLTW"] == pytest.approx((18 / 198) * 0.8)
+    assert total_score == pytest.approx(180)
+    assert targets["QQQM"] == pytest.approx((120 / 180) * 0.8)
+    assert "TLTW" not in targets
 
 
 def test_satellite_individuals_and_weighted_split_use_core_score():
@@ -161,7 +161,7 @@ def test_extreme_fear_leverage_allocation_still_applies():
     assert targets["TQQQ"] == pytest.approx(0.05)
 
 
-def test_weight_diffs_merge_satellite_group_constituents(monkeypatch):
+def test_weight_diffs_merge_non_bonds_group_constituents(monkeypatch):
     from data import data_service
 
     monkeypatch.setattr(
@@ -173,7 +173,7 @@ def test_weight_diffs_merge_satellite_group_constituents(monkeypatch):
             "satellites": [
                 {
                     "type": "group",
-                    "name": "Bonds",
+                    "name": "Treasury",
                     "ratio": 0.1,
                     "main_ticker": "TLTW",
                     "constituents": ["TLT"],
@@ -214,3 +214,130 @@ def test_weight_diffs_merge_satellite_group_constituents(monkeypatch):
     assert {d["ticker"] for d in diffs} == {"TLTW"}
     assert diffs[0]["cur_w"] == pytest.approx(0.07)
     assert diffs[0]["tgt_w"] == pytest.approx(0.05)
+
+
+def test_weight_diffs_exclude_bonds_group_and_count_it_as_cash(monkeypatch):
+    from data import data_service
+
+    monkeypatch.setattr(
+        data_service,
+        "load_json",
+        lambda _config_file: {
+            "cash_strategy": {"min": 0.1, "mid": 0.2, "max": 0.3},
+            "core": [],
+            "satellites": [
+                {
+                    "type": "group",
+                    "name": "Bonds",
+                    "ratio": 0.1,
+                    "main_ticker": "TLTW",
+                    "constituents": ["TLT"],
+                },
+                {"type": "individual", "ticker": "TSM", "ratio": 0.1},
+            ],
+        },
+    )
+    monkeypatch.setattr(data_service, "get_fear_and_greed", lambda: 50)
+    monkeypatch.setattr(
+        data_service,
+        "get_portfolio_data",
+        lambda scope="all": {
+            "merged_data": {
+                "USD cash": {
+                    "name": "USD cash",
+                    "type": "CASH",
+                    "current_value_usd": 1000,
+                },
+                "TLTW": {
+                    "name": "TLTW",
+                    "type": "STOCK",
+                    "cur_price": 30,
+                    "currency": "USD",
+                    "current_value_usd": 300,
+                },
+                "TLT": {
+                    "name": "TLT",
+                    "type": "STOCK",
+                    "cur_price": 90,
+                    "currency": "USD",
+                    "current_value_usd": 400,
+                },
+                "TSM": {
+                    "name": "TSM",
+                    "type": "STOCK",
+                    "cur_price": 200,
+                    "currency": "USD",
+                    "current_value_usd": 500,
+                },
+            },
+            "total_value_usd": 10000,
+            "targets": {"TLTW": 0.05, "TSM": 0.10},
+            "current_weights": {"USD cash": 0.10, "TLTW": 0.03, "TLT": 0.04, "TSM": 0.05},
+            "exchange_rate": 1.0,
+        },
+    )
+
+    diffs, _, cash_info = data_service.get_weight_diffs("all")
+
+    assert {d["ticker"] for d in diffs} == {"TSM"}
+    assert cash_info["current"] == pytest.approx(0.17)
+    assert cash_info["target"] == pytest.approx(0.20)
+
+
+def test_weight_diffs_include_group_value_and_main_ticker_trade_qty(monkeypatch):
+    from data import data_service
+
+    monkeypatch.setattr(
+        data_service,
+        "load_json",
+        lambda _config_file: {
+            "cash_strategy": {"min": 0.1, "mid": 0.2, "max": 0.3},
+            "core": [
+                {
+                    "type": "group",
+                    "name": "Nasdaq100",
+                    "score": 100,
+                    "main_ticker": "QQQM",
+                    "constituents": ["QQQ"],
+                }
+            ],
+            "satellites": [],
+        },
+    )
+    monkeypatch.setattr(data_service, "get_fear_and_greed", lambda: 50)
+    monkeypatch.setattr(
+        data_service,
+        "get_portfolio_data",
+        lambda scope="all": {
+            "merged_data": {
+                "QQQM": {
+                    "name": "QQQM",
+                    "type": "STOCK",
+                    "cur_price": 200,
+                    "currency": "USD",
+                    "current_value_usd": 1000,
+                },
+                "QQQ": {
+                    "name": "QQQ",
+                    "type": "STOCK",
+                    "cur_price": 500,
+                    "currency": "USD",
+                    "current_value_usd": 3000,
+                },
+            },
+            "total_value_usd": 10000,
+            "targets": {"QQQM": 0.60},
+            "current_weights": {"QQQM": 0.10, "QQQ": 0.30},
+            "exchange_rate": 1.0,
+        },
+    )
+
+    diffs, _, _ = data_service.get_weight_diffs("all")
+
+    assert len(diffs) == 1
+    assert diffs[0]["ticker"] == "QQQM"
+    assert diffs[0]["name"] == "Nasdaq100"
+    assert diffs[0]["is_group"] is True
+    assert diffs[0]["current_value_usd"] == pytest.approx(4000)
+    assert diffs[0]["target_value_usd"] == pytest.approx(6000)
+    assert diffs[0]["qty_diff"] == 10
