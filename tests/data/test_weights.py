@@ -209,7 +209,7 @@ def test_weight_diffs_merge_satellite_group_constituents(monkeypatch):
         },
     )
 
-    diffs, _, _ = data_service.get_weight_diffs("passive")
+    diffs, _, _ = data_service.get_weight_diffs("all")
 
     assert {d["ticker"] for d in diffs} == {"TLTW"}
     assert diffs[0]["cur_w"] == pytest.approx(0.07)

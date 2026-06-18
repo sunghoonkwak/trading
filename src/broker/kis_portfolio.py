@@ -192,6 +192,11 @@ class KisPortfolioSourceAdapter:
                     (psamount_df,),
                     ["ovrs_ord_psbl_amt", "OVRS_ORD_PSBL_AMT"],
                 )
+                if us_res["exchange_rate"] <= 0:
+                    us_res["exchange_rate"] = cls._get_positive_float_from_frames(
+                        (psamount_df,),
+                        ["exrt", "EXRT"],
+                    )
             except Exception as e:
                 logging.warning(
                     "[KIS] Failed to fetch orderable USD from inquire_psamount: %s",

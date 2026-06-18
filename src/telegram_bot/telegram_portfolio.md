@@ -7,7 +7,7 @@
 | Command | Description |
 |---------|-------------|
 | `/portfolio` | **대화형(Interactive)** 포트폴리오 관리 시작. 종목 버튼을 통해 상세 정보 조회 |
-| `/portfolio_weight` | 목표 비중 대비 리밸런싱 제안. F&G 지수 기반 현금 배분 및 그룹 처리 |
+| `/portfolio_weight` | 전체 포트폴리오 기준 목표 비중 대비 리밸런싱 제안. F&G 지수 기반 현금 배분 및 그룹 처리 |
 | `/placed_orders` | 현재 미체결 주문 목록을 종목별로 묶어 보여줍니다. |
 
 ## Key Functions (주요 함수)

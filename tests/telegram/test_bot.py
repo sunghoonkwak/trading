@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from telegram_bot import telegram_strategy
+from telegram_bot import telegram_portfolio, telegram_strategy
 from strategy.base import OrderSide, StrategyOrder, StrategyStatus
 
 
@@ -236,3 +236,52 @@ def test_execute_without_cash_sale_skips_funding_and_runs_strategies(monkeypatch
 
     assert calls == [("raoeo", True), ("va", True)]
     assert len(formatted) == 1
+
+
+def test_portfolio_weight_command_uses_valid_portfolio_scope(monkeypatch):
+    captured = {}
+
+    def fake_get_weight_diffs(scope="all"):
+        captured["scope"] = scope
+        return [], 0.0, {"current": 0.0, "target": 0.1}
+
+    class ImmediateResult:
+        def __init__(self, value):
+            self.value = value
+
+        def __await__(self):
+            yield
+            return self.value
+
+    class FakeLoop:
+        def run_in_executor(self, executor, func, *args):
+            return ImmediateResult(func(*args))
+
+    replies = []
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append(text)
+
+    monkeypatch.setattr(
+        telegram_portfolio.asyncio,
+        "get_running_loop",
+        lambda: FakeLoop(),
+    )
+    monkeypatch.setattr(telegram_portfolio, "get_weight_diffs", fake_get_weight_diffs)
+    monkeypatch.setattr(
+        telegram_portfolio,
+        "format_weight_diffs",
+        lambda diffs, total_usd, cash_info: "weights",
+    )
+    monkeypatch.setattr(telegram_portfolio, "wrap_reply", fake_reply)
+
+    class Update:
+        pass
+
+    class Context:
+        user_data = {}
+
+    asyncio.run(telegram_portfolio.cmd_portfolio_weight(Update(), Context()))
+
+    assert captured == {"scope": "all"}
+    assert replies

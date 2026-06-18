@@ -545,6 +545,38 @@ def test_fetch_portfolio_reads_exchange_rate_from_overseas_holdings(monkeypatch)
     assert result["exchange_rate"] == 1375.50
 
 
+def test_fetch_portfolio_reads_exchange_rate_from_psamount_when_holdings_empty(monkeypatch):
+    monkeypatch.setattr(
+        "broker.kis_portfolio.ka.getTREnv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_balance",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("domestic balance lookup must be disabled by default")
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_present_balance",
+        lambda **kwargs: (
+            pd.DataFrame(),
+            pd.DataFrame([{"frcr_drwg_psbl_amt_1": "0"}]),
+            pd.DataFrame(),
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_psamount",
+        lambda **kwargs: pd.DataFrame(
+            [{"ovrs_ord_psbl_amt": "0", "exrt": "1,512.80"}]
+        ),
+        raising=False,
+    )
+
+    result = KisPortfolioSourceAdapter._fetch_kis_account_data()
+
+    assert result["exchange_rate"] == 1512.80
+
+
 def test_fetch_portfolio_skips_domestic_balance_by_default(monkeypatch):
     monkeypatch.setattr(
         "broker.kis_portfolio.ka.getTREnv",

@@ -650,8 +650,7 @@ async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYP
     logging.info(f"[TG] /portfolio_weight from user")
     try:
         loop = asyncio.get_running_loop()
-        # /portfolio_weight is restricted to passive/long-term accounts
-        diffs, total_usd, cash_info = await loop.run_in_executor(None, get_weight_diffs, "passive")
+        diffs, total_usd, cash_info = await loop.run_in_executor(None, get_weight_diffs, "all")
         msg = format_weight_diffs(diffs, total_usd, cash_info)
         await wrap_reply(update, msg, parse_mode='HTML')
     except Exception as e:

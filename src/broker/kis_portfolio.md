@@ -13,6 +13,9 @@
   `data.portfolio_integration.get_integrated_portfolio`로 lazy 위임합니다.
 - KIS 국내주식 잔고조회는 기본 비활성화되어 있습니다. 국내 계좌를
   다시 포함하려면 런타임 환경변수 `KIS_ENABLE_DOMESTIC=true`를 설정합니다.
+- 해외 현재잔고 응답에서 환율을 찾지 못하면 `inquire_psamount`의 `exrt`를
+  fallback 환율로 사용합니다. 보유 종목이 0개여도 KRW 현금/자산 변환에
+  필요한 환율을 유지하기 위함입니다.
 
 ## Import Boundary
 
