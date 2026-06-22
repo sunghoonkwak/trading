@@ -12,14 +12,14 @@
 
 3. **Unified Data Fetching (데이터 조회 통합)**:
    - `get_market_data`는 전략 대상의 보유 수량과 현재가를 조회합니다.
-   - 현재가는 `utils.price_utils.resolve_current_price`의 공통 규칙을 따릅니다.
-     직접 조회한 현재가를 우선 사용하고, 유효하지 않으면 보유 잔고의
-     `cur_price`로 fallback합니다.
+   - 현재가는 보유 잔고의 `cur_price`를 먼저 사용하고, 없는 종목만 Toss
+     다건 현재가 API로 조회합니다. Toss에서 누락되거나 실패한 종목만 KIS
+     단건 가격 조회로 보완합니다.
    - 전략 포트폴리오는 `strategy_config.json`의 `strategy_broker`가
      가리키는 계좌 scope만 사용합니다.
-   - 매수 가능 USD는 포트폴리오의 `USD cash`에서 가져오지 않고,
-     `broker.strategy_broker`를 통해 선택된 broker의 주문가능금액 API를
-     조회합니다.
+   - `StrategyRunContext`는 RAOEO/VA 같은 한 실행 묶음 안에서 포트폴리오와
+     가격 스냅샷을 공유합니다. Telegram과 scheduler 모두 이 공통 경로를
+     사용합니다.
    - 공식 KIS/Toss endpoint helper는 `execution_service`에서 직접
      import하지 않고 앱 소유 broker facade 뒤에서 호출합니다.
 
@@ -35,6 +35,11 @@
    - 타임아웃 발생 시, 스로틀이나 영구 정지 없이 `[API Timeout]` 메시지와 함께 사유를 로깅하고 `StrategyStatus.ERROR`로 무사히 보고를 마칩니다.
 
 ## Key Functions (주요 함수)
+
+### `run_strategy_suite`
+RAOEO와 Value Averaging을 같은 `StrategyRunContext`로 실행하여 포트폴리오와
+가격 스냅샷을 공유합니다. Telegram `/strategy`와 scheduler 일일 주문 실행은
+이 함수를 사용합니다.
 
 ### `run_raoeo_strategy`, `run_va_strategy`, `run_rebalancing_strategy`
 각 전략을 실행하고 결과를 반환합니다.
@@ -55,8 +60,11 @@
 현재 포트폴리오 잔고와 전략 대상 종목들의 현재가를 조회합니다.
 - **입력**: `force_refresh` (bool)
 - **출력**: `holdings` (잔고 딕셔너리), `current_prices` (현재가 딕셔너리)
-- 현재가 조회 실패 시 보유 잔고의 `cur_price`를 사용하며, 두 값 모두
-  유효하지 않으면 해당 종목은 `current_prices`에 포함하지 않습니다.
+- 보유 잔고의 `cur_price`를 먼저 사용합니다. 가격이 없는 전략 대상만
+  Toss 다건 현재가 API로 한 번에 조회하고, Toss 누락/실패 종목만 KIS
+  단건 가격 조회로 보완합니다.
+- 같은 실행 묶음에서는 `StrategyRunContext`가 포트폴리오/가격 스냅샷을
+  재사용해 중복 포트폴리오 조회를 줄입니다.
 
 ### `get_orderable_usd`
 대표 매수 주문의 종목과 주문 가격으로 선택된 전략 broker의
@@ -81,9 +89,10 @@
 `/strategy` 수동 실행에서만 사용하는 현금 조달 단계입니다.
 
 - 현재 대기 중인 RAOEO 매수 주문에 대해 `get_orderable_usd`로 조회한
-  해외주문가능금액만으로 부족분을 판단하며, 이 단계에서만
-  `cash_ticker` 시세를 추가 조회합니다. Value Averaging 주문은 조달
-  계산에 포함하지 않습니다.
+  해외주문가능금액만으로 부족분을 판단합니다. Toss 전략 broker에서는
+  이미 포트폴리오 조회에 포함된 `USD cash` buying power를 재사용해
+  중복 buying-power 조회를 피합니다. Value Averaging 주문은 조달 계산에
+  포함하지 않습니다.
 - 자동 스케줄의 `run_raoeo_strategy(execute=True)`는 `cash_ticker` 매도 주문을 만들지 않습니다.
 - 사용자가 조달 매도를 선택한 경우에만 매도 주문을 접수하며, 접수 성공 후 5초 대기하고 후속 전략 실행으로 진행합니다.
 - 조달 주문을 만들 수 없거나 주문 접수가 실패하면 호출자는 RAOEO와 Value Averaging 실행 모두를 중단합니다.

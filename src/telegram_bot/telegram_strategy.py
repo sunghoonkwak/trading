@@ -16,8 +16,7 @@ from strategy.execution_service import (
     TZ_ET,
     execute_raoeo_cash_funding,
     prepare_raoeo_cash_funding,
-    run_raoeo_strategy,
-    run_va_strategy,
+    run_strategy_suite,
     save_raoeo_cash_funding_result,
 )
 from strategy.report_formatter import format_strategy_report
@@ -57,8 +56,7 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"[TG] /strategy from user")
 
     try:
-        raoeo_rep = run_raoeo_strategy(execute=False)
-        va_rep = run_va_strategy(execute=False)
+        raoeo_rep, va_rep = run_strategy_suite(execute=False)
     except Exception as e:
         logging.error(f"Strategy Calc Error: {e}", exc_info=True)
         await wrap_reply(update, f"⚠️ Error calculating strategies: {e}")
@@ -116,7 +114,10 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
         try:
             funding_result = None
             if data == "strategy_with_cash_sale":
-                funding_result, funding_info = execute_raoeo_cash_funding()
+                stored_raoeo_report = context.user_data.get('strategy_raoeo')
+                funding_result, funding_info = execute_raoeo_cash_funding(
+                    stored_raoeo_report
+                )
                 funding_failed = (
                     funding_info.get("required")
                     and (funding_result is None or not funding_result["success"])
@@ -139,8 +140,7 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
                     context.user_data.pop('strategy_va', None)
                     return ConversationHandler.END
 
-            raoeo_res = run_raoeo_strategy(execute=True)
-            va_res = run_va_strategy(execute=True)
+            raoeo_res, va_res = run_strategy_suite(execute=True)
             if funding_result is not None:
                 raoeo_res["cash_funding_results"] = [funding_result]
 

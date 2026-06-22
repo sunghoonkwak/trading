@@ -2,7 +2,7 @@
 """Application-owned facade for market data lookups."""
 
 import logging
-from typing import Optional
+from typing import Dict, Iterable, Optional
 
 from core import trading_config
 
@@ -32,6 +32,50 @@ def fetch_price(ticker: str, exchange: Optional[str] = None) -> float:
     except Exception as e:
         logging.warning(f"[MarketData] {ticker} price fetch failed: {e}")
         return 0.0
+
+
+def fetch_prices(tickers: Iterable[str]) -> Dict[str, float]:
+    """Fetch current prices through Toss first, then fill gaps with KIS."""
+    symbols = sorted(
+        {
+            str(ticker).strip().upper()
+            for ticker in tickers
+            if str(ticker).strip()
+        }
+    )
+    if not symbols:
+        return {}
+
+    prices: Dict[str, float] = {}
+    try:
+        from toss.auth import load_access_token
+        from toss.get_prices import get_prices
+
+        for start in range(0, len(symbols), 200):
+            batch = symbols[start:start + 200]
+            for item in get_prices(batch, access_token=load_access_token()):
+                symbol = str(item.get("symbol", "")).strip().upper()
+                price = _to_positive_float(item.get("lastPrice"))
+                if symbol and price > 0:
+                    prices[symbol] = price
+    except Exception as e:
+        logging.warning(f"[MarketData] Toss batch price fetch failed: {e}")
+
+    for symbol in symbols:
+        if prices.get(symbol, 0.0) <= 0:
+            price = fetch_price(symbol)
+            if price > 0:
+                prices[symbol] = price
+
+    return prices
+
+
+def _to_positive_float(value) -> float:
+    try:
+        price = float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return 0.0
+    return price if price > 0 else 0.0
 
 
 def _get_market_manager():

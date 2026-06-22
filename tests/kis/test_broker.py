@@ -628,6 +628,27 @@ def test_price_fetch_is_blocked_when_kis_rest_api_disabled(monkeypatch):
     assert market_data.fetch_price("qqq") == 0.0
 
 
+def test_batch_price_fallback_respects_kis_rest_api_disabled(monkeypatch):
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    monkeypatch.setattr(
+        "toss.auth.load_access_token",
+        lambda: "access-token",
+    )
+    monkeypatch.setattr(
+        "toss.get_prices.get_prices",
+        lambda symbols, access_token: [],
+    )
+    monkeypatch.setattr(
+        market_data,
+        "_get_price_module",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("KIS REST price module must not be loaded")
+        ),
+    )
+
+    assert market_data.fetch_prices(["QQQ"]) == {}
+
+
 def test_websocket_price_cache_stays_available_when_kis_rest_api_disabled(monkeypatch):
     monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
     monkeypatch.setattr(

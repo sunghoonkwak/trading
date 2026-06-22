@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from strategy import raoeo
-from strategy.base import OrderSide
+from strategy.base import OrderSide, StrategyStatus
 from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 
 
@@ -319,6 +319,153 @@ def test_get_market_data_uses_configured_broker_as_portfolio_scope(monkeypatch):
     assert requested == [(True, "toss")]
 
 
+def test_get_market_data_uses_holding_price_before_rest_price(monkeypatch):
+    monkeypatch.setattr(
+        execution_service.strategy_broker,
+        "get_strategy_broker_name",
+        lambda: "toss",
+    )
+    monkeypatch.setattr(
+        "data.data_service.get_portfolio_data",
+        lambda force_refresh=False, scope="all": {
+            "merged_data": {"AAPL": {"qty": 2, "cur_price": 160.0}},
+        },
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: {
+            "raoeo": {"targets": {"AAPL": {"enabled": True}}},
+            "value_averaging": {"targets": {}},
+            "rebalancing": {"assets": []},
+        },
+    )
+    monkeypatch.setattr(
+        execution_service.market_data,
+        "fetch_price",
+        lambda ticker: (_ for _ in ()).throw(
+            AssertionError("holding cur_price should avoid REST price lookup")
+        ),
+    )
+
+    holdings, prices = execution_service.get_market_data(force_refresh=True)
+
+    assert holdings == {"AAPL": {"qty": 2, "cur_price": 160.0}}
+    assert prices == {"AAPL": 160.0}
+
+
+def test_get_market_data_fetches_missing_prices_in_batch(monkeypatch):
+    requested = []
+    monkeypatch.setattr(
+        execution_service.strategy_broker,
+        "get_strategy_broker_name",
+        lambda: "toss",
+    )
+    monkeypatch.setattr(
+        "data.data_service.get_portfolio_data",
+        lambda force_refresh=False, scope="all": {
+            "merged_data": {"AAPL": {"qty": 2, "cur_price": 0.0}},
+        },
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: {
+            "raoeo": {"targets": {"AAPL": {"enabled": True}}},
+            "value_averaging": {"targets": {"MSFT": {"enabled": True}}},
+            "rebalancing": {"assets": []},
+        },
+    )
+    monkeypatch.setattr(
+        execution_service.market_data,
+        "fetch_prices",
+        lambda tickers: requested.append(set(tickers)) or {
+            "AAPL": 160.0,
+            "MSFT": 420.0,
+        },
+    )
+    monkeypatch.setattr(
+        execution_service.market_data,
+        "fetch_price",
+        lambda ticker: (_ for _ in ()).throw(
+            AssertionError("single KIS price lookup should not be used first")
+        ),
+    )
+
+    holdings, prices = execution_service.get_market_data(force_refresh=True)
+
+    assert holdings == {"AAPL": {"qty": 2, "cur_price": 0.0}}
+    assert prices == {"AAPL": 160.0, "MSFT": 420.0}
+    assert requested == [{"AAPL", "MSFT"}]
+
+
+def test_prepare_cash_funding_reuses_report_market_data(monkeypatch):
+    report = {
+        "pending_orders": [_buy_order()],
+        "info": {
+            "holdings": {"BIL": {"qty": 20, "cur_price": 100.0}},
+            "current_prices": {"BIL": 100.0},
+        },
+    }
+    monkeypatch.setattr(
+        execution_service,
+        "get_orderable_usd",
+        lambda symbol, price: 100.0,
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "get_market_data",
+        lambda force_refresh=False, include_cash_ticker=False: (_ for _ in ()).throw(
+            AssertionError("report market data should be reused")
+        ),
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: {"cash_ticker": "BIL"},
+    )
+
+    order, info = execution_service.prepare_raoeo_cash_funding(report)
+
+    assert info["required"] is True
+    assert order.symbol == "BIL"
+
+
+def test_prepare_cash_funding_reuses_toss_usd_cash_as_orderable_usd(monkeypatch):
+    report = {
+        "pending_orders": [_buy_order()],
+        "info": {
+            "holdings": {
+                "BIL": {"qty": 20, "cur_price": 100.0},
+                "USD cash": {"type": "CASH", "qty": 100.0},
+            },
+            "current_prices": {"BIL": 100.0},
+        },
+    }
+    monkeypatch.setattr(
+        execution_service.strategy_broker,
+        "get_strategy_broker_name",
+        lambda: "toss",
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "get_orderable_usd",
+        lambda symbol, price: (_ for _ in ()).throw(
+            AssertionError("Toss USD cash should avoid a second buying-power call")
+        ),
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: {"cash_ticker": "BIL"},
+    )
+
+    order, info = execution_service.prepare_raoeo_cash_funding(report)
+
+    assert info["orderable_usd"] == 100.0
+    assert order.symbol == "BIL"
+
+
 def test_execute_cash_funding_does_not_submit_strategy_orders_on_failure(monkeypatch):
     funding_order = StrategyOrder(
         symbol="BIL",
@@ -449,6 +596,11 @@ def test_run_raoeo_persists_skipped_buy_budget_history(monkeypatch):
         execution_service,
         "_get_market_status",
         lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
+    )
+    monkeypatch.setattr(
+        execution_service.strategy_broker,
+        "get_strategy_broker_name",
+        lambda: "toss",
     )
     monkeypatch.setattr(execution_service, "_load_history", lambda: [])
     monkeypatch.setattr(execution_service, "load_json", lambda file_type, default=None: config)
@@ -707,3 +859,125 @@ def test_run_rebalancing_passes_api_orderable_usd_to_calculation(monkeypatch):
     execution_service.run_rebalancing_strategy(execute=False)
 
     assert received["orderable_usd"] == 3023.49
+
+
+def test_run_va_strategy_can_reuse_market_snapshot(monkeypatch):
+    config = {
+        "value_averaging": {
+            "enabled": True,
+            "targets": {"AAPL": {"enabled": True}},
+        },
+    }
+    received = {}
+    monkeypatch.setattr(
+        execution_service,
+        "_get_market_status",
+        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
+    )
+    monkeypatch.setattr(execution_service, "_load_history", lambda: [])
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: config,
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "get_market_data",
+        lambda force_refresh=False: (_ for _ in ()).throw(
+            AssertionError("provided market snapshot should be reused")
+        ),
+    )
+
+    def fake_calculate_orders(**kwargs):
+        received.update(kwargs)
+        return [], {"AAPL": {"day_count": 1}}
+
+    monkeypatch.setattr(
+        execution_service.value_averaging,
+        "calculate_orders",
+        fake_calculate_orders,
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "_save_strategy_to_history",
+        lambda *args, **kwargs: None,
+    )
+
+    execution_service.run_va_strategy(
+        execute=False,
+        market_snapshot=({"AAPL": {"qty": 2}}, {"AAPL": 160.0}),
+    )
+
+    assert received["portfolio"] == {"AAPL": {"qty": 2}}
+    assert received["current_prices"] == {"AAPL": 160.0}
+
+
+def test_run_strategy_suite_reuses_context_for_raoeo_and_va(monkeypatch):
+    config = {
+        "raoeo": {
+            "enabled": True,
+            "targets": {
+                "AAPL": {
+                    "enabled": True,
+                    "seed": 1200,
+                    "duration": 12,
+                    "phase": [{
+                        "name": "initial",
+                        "threshold": 1.0,
+                        "buy": [],
+                        "sell": [],
+                    }],
+                },
+            },
+        },
+        "value_averaging": {
+            "enabled": True,
+            "targets": {"MSFT": {"enabled": True}},
+        },
+    }
+    portfolio_calls = []
+    va_received = {}
+    monkeypatch.setattr(
+        execution_service,
+        "_get_market_status",
+        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
+    )
+    monkeypatch.setattr(execution_service, "_load_history", lambda: [])
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: config,
+    )
+    monkeypatch.setattr(
+        "data.data_service.get_portfolio_data",
+        lambda force_refresh=False, scope="all": portfolio_calls.append(
+            (force_refresh, scope)
+        ) or {
+            "merged_data": {
+                "AAPL": {"qty": 0, "cur_price": 160.0, "avg_price": 0.0},
+                "MSFT": {"qty": 0, "cur_price": 420.0, "avg_price": 0.0},
+            },
+        },
+    )
+
+    def fake_va_calculate_orders(**kwargs):
+        va_received.update(kwargs)
+        return [], {"MSFT": {"day_count": 1}}
+
+    monkeypatch.setattr(
+        execution_service.value_averaging,
+        "calculate_orders",
+        fake_va_calculate_orders,
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "_save_strategy_to_history",
+        lambda *args, **kwargs: None,
+    )
+
+    raoeo_report, va_report = execution_service.run_strategy_suite(execute=False)
+
+    assert raoeo_report["info"]["holdings"] is va_received["portfolio"]
+    assert raoeo_report["info"]["current_prices"] is va_received["current_prices"]
+    assert va_report["status"] == StrategyStatus.SKIPPED
+    assert portfolio_calls == [(True, "toss")]

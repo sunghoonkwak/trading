@@ -5,7 +5,8 @@
 ## Core Logic (핵심 로직)
 
 1. **Strategy Status Check (전략 상태 확인)**:
-   - `execution_service.run_raoeo_strategy`와 `run_va_strategy`를 호출하여 현재 시장 상황과 주문 생성 여부를 확인합니다.
+   - `execution_service.run_strategy_suite`를 호출하여 RAOEO와 Value Averaging을
+     같은 실행 컨텍스트에서 계산합니다.
    - 이때 `execute=False`로 호출하여 실제 주문은 전송하지 않고 시뮬레이션 결과만 받습니다.
 
 2. **Interactive Execution (대화형 실행)**:
@@ -21,7 +22,7 @@
 
 ### `cmd_strategy`
 `/strategy` 명령어 입력 시 호출되는 메인 함수입니다.
-- 두 전략(RAOEO, VA)을 차례로 실행하고 통합 리포트를 생성하여 전송합니다.
+- 두 전략(RAOEO, VA)을 공통 실행 묶음으로 계산하고 통합 리포트를 생성하여 전송합니다.
 
 ### `handle_strategy_callback`
 사용자가 실행 방법 버튼을 눌렀을 때 호출되는 콜백 함수입니다.

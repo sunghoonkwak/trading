@@ -27,13 +27,8 @@ def test_strategy_command_shows_cash_funding_summary(monkeypatch):
     }
     monkeypatch.setattr(
         telegram_strategy,
-        "run_raoeo_strategy",
-        lambda execute=False: raoeo_report,
-    )
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_va_strategy",
-        lambda execute=False: va_report,
+        "run_strategy_suite",
+        lambda execute=False: (raoeo_report, va_report),
     )
     monkeypatch.setattr(
         telegram_strategy,
@@ -86,7 +81,7 @@ def test_failed_cash_funding_stops_all_strategy_execution(monkeypatch):
     monkeypatch.setattr(
         telegram_strategy,
         "execute_raoeo_cash_funding",
-        lambda: (funding_result, {"required": True}),
+        lambda report=None: (funding_result, {"required": True}),
         raising=False,
     )
     monkeypatch.setattr(
@@ -97,13 +92,10 @@ def test_failed_cash_funding_stops_all_strategy_execution(monkeypatch):
     )
     monkeypatch.setattr(
         telegram_strategy,
-        "run_raoeo_strategy",
-        lambda execute=False: (_ for _ in ()).throw(AssertionError("RAOEO must stop")),
-    )
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_va_strategy",
-        lambda execute=False: (_ for _ in ()).throw(AssertionError("VA must stop")),
+        "run_strategy_suite",
+        lambda execute=False: (_ for _ in ()).throw(
+            AssertionError("strategies must stop")
+        ),
     )
 
     edits = []
@@ -139,7 +131,7 @@ def test_successful_cash_funding_runs_strategies_and_reports_sale(monkeypatch):
     monkeypatch.setattr(
         telegram_strategy,
         "execute_raoeo_cash_funding",
-        lambda: (funding_result, {"required": True}),
+        lambda report=None: (funding_result, {"required": True}),
     )
     saved = []
     monkeypatch.setattr(
@@ -150,13 +142,11 @@ def test_successful_cash_funding_runs_strategies_and_reports_sale(monkeypatch):
     calls = []
     monkeypatch.setattr(
         telegram_strategy,
-        "run_raoeo_strategy",
-        lambda execute=False: calls.append(("raoeo", execute)) or {"date": "2026-05-27"},
-    )
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_va_strategy",
-        lambda execute=False: calls.append(("va", execute)) or {},
+        "run_strategy_suite",
+        lambda execute=False: calls.append(("suite", execute)) or (
+            {"date": "2026-05-27"},
+            {},
+        ),
     )
     formatted = []
     monkeypatch.setattr(
@@ -184,7 +174,7 @@ def test_successful_cash_funding_runs_strategies_and_reports_sale(monkeypatch):
 
     asyncio.run(telegram_strategy.handle_strategy_callback(Update(), Context()))
 
-    assert calls == [("raoeo", True), ("va", True)]
+    assert calls == [("suite", True)]
     assert saved == [("2026-05-27", funding_result)]
     assert formatted[0]["cash_funding_results"] == [funding_result]
 
@@ -200,13 +190,11 @@ def test_execute_without_cash_sale_skips_funding_and_runs_strategies(monkeypatch
     calls = []
     monkeypatch.setattr(
         telegram_strategy,
-        "run_raoeo_strategy",
-        lambda execute=False: calls.append(("raoeo", execute)) or {"date": "2026-05-27"},
-    )
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_va_strategy",
-        lambda execute=False: calls.append(("va", execute)) or {},
+        "run_strategy_suite",
+        lambda execute=False: calls.append(("suite", execute)) or (
+            {"date": "2026-05-27"},
+            {},
+        ),
     )
     formatted = []
     monkeypatch.setattr(
@@ -234,7 +222,7 @@ def test_execute_without_cash_sale_skips_funding_and_runs_strategies(monkeypatch
 
     asyncio.run(telegram_strategy.handle_strategy_callback(Update(), Context()))
 
-    assert calls == [("raoeo", True), ("va", True)]
+    assert calls == [("suite", True)]
     assert len(formatted) == 1
 
 

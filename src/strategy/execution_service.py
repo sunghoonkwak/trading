@@ -11,7 +11,7 @@ import logging
 import requests
 import time
 from datetime import datetime
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any
 
 import pytz
 
@@ -26,6 +26,52 @@ from utils.price_utils import resolve_current_price
 # Timezone constant
 TZ_ET = pytz.timezone('US/Eastern')
 _orderable_usd_cache: Dict[str, float] = {}
+
+
+class StrategyRunContext:
+    """Share expensive market data across one strategy execution bundle."""
+
+    def __init__(self):
+        self._market_snapshot: Optional[Tuple[Dict, Dict]] = None
+
+    def get_market_data(
+        self,
+        force_refresh: bool = True,
+        include_cash_ticker: bool = False,
+    ) -> Tuple[Dict, Dict]:
+        if self._market_snapshot is None:
+            if include_cash_ticker:
+                self._market_snapshot = get_market_data(
+                    force_refresh=force_refresh,
+                    include_cash_ticker=True,
+                )
+            else:
+                self._market_snapshot = get_market_data(
+                    force_refresh=force_refresh,
+                )
+        elif include_cash_ticker:
+            self._ensure_cash_ticker_price()
+        return self._market_snapshot
+
+    def _ensure_cash_ticker_price(self) -> None:
+        if self._market_snapshot is None:
+            return
+
+        strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
+        cash_ticker = strategy_config.get("cash_ticker", "")
+        if not cash_ticker:
+            return
+
+        holdings, prices = self._market_snapshot
+        if prices.get(cash_ticker, 0.0) > 0:
+            return
+
+        holding_price = resolve_current_price(cash_ticker, holdings.get(cash_ticker, {}), {})
+        if holding_price > 0:
+            prices[cash_ticker] = holding_price
+            return
+
+        prices.update(market_data.fetch_prices([cash_ticker]))
 
 
 # -------------------------------------------------------------------------
@@ -59,15 +105,18 @@ def get_market_data(
     if include_cash_ticker and cash_ticker:
         all_tickers.add(cash_ticker)
     current_prices = {}
+    missing_price_tickers = []
 
     for t in all_tickers:
-        price = resolve_current_price(
-            t,
-            holdings.get(t, {}),
-            {t: market_data.fetch_price(t)},
-        )
+        holding = holdings.get(t, {})
+        price = resolve_current_price(t, holding, {})
         if price > 0:
             current_prices[t] = price
+        else:
+            missing_price_tickers.append(t)
+
+    if missing_price_tickers:
+        current_prices.update(market_data.fetch_prices(missing_price_tickers))
 
     return holdings, current_prices
 
@@ -342,7 +391,10 @@ def _build_strategy_history_data(
     return data
 
 
-def prepare_raoeo_cash_funding(raoeo_report: Dict = None) -> Tuple[Any, Dict]:
+def prepare_raoeo_cash_funding(
+    raoeo_report: Dict = None,
+    context: StrategyRunContext = None,
+) -> Tuple[Any, Dict]:
     """Calculate a manual cash-ticker funding order for pending RAOEO buys."""
     if raoeo_report is None:
         raoeo_report = run_raoeo_strategy(execute=False)
@@ -352,16 +404,24 @@ def prepare_raoeo_cash_funding(raoeo_report: Dict = None) -> Tuple[Any, Dict]:
         (order for order in pending_orders if order.side == OrderSide.BUY),
         None,
     )
-    orderable_usd = (
-        get_orderable_usd(reference_buy.symbol, reference_buy.price)
-        if reference_buy
-        else 0.0
-    )
     strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
-    holdings, prices = get_market_data(
-        force_refresh=True,
-        include_cash_ticker=True,
-    )
+    report_info = raoeo_report.get("info", {})
+    holdings = report_info.get("holdings")
+    prices = report_info.get("current_prices", {})
+    if holdings is None:
+        run_context = context or StrategyRunContext()
+        holdings, prices = run_context.get_market_data(
+            force_refresh=True,
+            include_cash_ticker=True,
+        )
+
+    orderable_usd = _report_orderable_usd(report_info)
+    if orderable_usd is None:
+        orderable_usd = (
+            get_orderable_usd(reference_buy.symbol, reference_buy.price)
+            if reference_buy
+            else 0.0
+        )
     return raoeo.calculate_cash_funding_order(
         orders=pending_orders,
         portfolio=holdings,
@@ -371,9 +431,30 @@ def prepare_raoeo_cash_funding(raoeo_report: Dict = None) -> Tuple[Any, Dict]:
     )
 
 
-def execute_raoeo_cash_funding(raoeo_report: Dict = None) -> Tuple[Any, Dict]:
+def _report_orderable_usd(report_info: Dict) -> Any:
+    """Reuse Toss portfolio buying power captured as USD cash when available."""
+    if strategy_broker.get_strategy_broker_name() != "toss":
+        return None
+
+    usd_cash = report_info.get("holdings", {}).get("USD cash", {})
+    if usd_cash.get("type") != "CASH":
+        return None
+
+    try:
+        return float(usd_cash.get("qty", 0.0))
+    except (TypeError, ValueError):
+        return None
+
+
+def execute_raoeo_cash_funding(
+    raoeo_report: Dict = None,
+    context: StrategyRunContext = None,
+) -> Tuple[Any, Dict]:
     """Execute approved funding first; callers must stop if it fails."""
-    order, info = prepare_raoeo_cash_funding(raoeo_report)
+    if context is None:
+        order, info = prepare_raoeo_cash_funding(raoeo_report)
+    else:
+        order, info = prepare_raoeo_cash_funding(raoeo_report, context=context)
     if not info.get("required"):
         return None, info
     if order is None:
@@ -578,7 +659,10 @@ def _rebalancing_history_context(calc_info: Dict) -> Dict:
 # RAOEO Execution
 # -------------------------------------------------------------------------
 
-def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
+def run_raoeo_strategy(
+    execute: bool = False,
+    context: StrategyRunContext = None,
+) -> Dict[str, Any]:
     """
     Run RAOEO strategy with unified 6-step flow.
     """
@@ -628,8 +712,10 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
             report["status"] = StrategyStatus.HOLIDAY
             return report
 
-        holdings, prices = get_market_data(force_refresh=True)
+        run_context = context or StrategyRunContext()
+        holdings, prices = run_context.get_market_data(force_refresh=True)
         report["info"]["holdings"] = holdings
+        report["info"]["current_prices"] = prices
 
         orders, calc_info = raoeo.calculate_orders(
             targets_config=active_targets,
@@ -684,7 +770,11 @@ def run_raoeo_strategy(execute: bool = False) -> Dict[str, Any]:
 # Value Averaging Execution
 # -------------------------------------------------------------------------
 
-def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
+def run_va_strategy(
+    execute: bool = False,
+    market_snapshot: Tuple[Dict, Dict] = None,
+    context: StrategyRunContext = None,
+) -> Dict[str, Any]:
     """
     Run Value Averaging strategy with unified 6-step flow.
     """
@@ -733,7 +823,11 @@ def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
             report["status"] = StrategyStatus.HOLIDAY
             return report
 
-        holdings, prices = get_market_data(force_refresh=True)
+        if market_snapshot is not None:
+            holdings, prices = market_snapshot
+        else:
+            run_context = context or StrategyRunContext()
+            holdings, prices = run_context.get_market_data(force_refresh=True)
 
         # VA needs history for day_count calculation
         orders, context_map = value_averaging.calculate_orders(
@@ -780,6 +874,17 @@ def run_va_strategy(execute: bool = False) -> Dict[str, Any]:
         report["error"] = str(e)
 
     return report
+
+
+def run_strategy_suite(
+    execute: bool = False,
+    context: StrategyRunContext = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Run RAOEO and Value Averaging with shared market data."""
+    run_context = context or StrategyRunContext()
+    raoeo_report = run_raoeo_strategy(execute=execute, context=run_context)
+    va_report = run_va_strategy(execute=execute, context=run_context)
+    return raoeo_report, va_report
 
 
 # -------------------------------------------------------------------------

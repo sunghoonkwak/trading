@@ -7,7 +7,7 @@ Reuses the same execution and reporting logic as the Telegram bot.
 """
 import logging
 from telegram_bot.telegram_utils import send_notification
-from strategy.execution_service import run_raoeo_strategy, run_va_strategy, run_rebalancing_strategy
+from strategy.execution_service import run_strategy_suite, run_rebalancing_strategy
 from strategy.report_formatter import format_strategy_report
 
 def run_daily_order_report():
@@ -18,11 +18,8 @@ def run_daily_order_report():
     logging.info("[Scheduler] Starting daily order report & execution job.")
 
     try:
-        # Run RAOEO (Execute Mode)
-        raoeo_res = run_raoeo_strategy(execute=True)
-
-        # Run Value Averaging (Execute Mode)
-        va_res = run_va_strategy(execute=True)
+        # Run RAOEO and Value Averaging with shared market data.
+        raoeo_res, va_res = run_strategy_suite(execute=True)
 
         raoeo_err = raoeo_res.get("error")
         va_err = va_res.get("error")
