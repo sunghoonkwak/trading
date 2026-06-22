@@ -11,6 +11,8 @@
 
 - **`CONFIG_ROOT`**: 사용자 설정 및 데이터 파일이 저장되는 기본 경로 (`~/KIS_config`).
 - **`DEFAULT_WEB_PORT`**: 웹 이벤트 뷰어의 기본 포트 (8080).
+- **`DEFAULT_USD_KRW_EXCHANGE_RATE`**: 저장된 포트폴리오 이력에 환율이
+  없을 때 쓰는 USD/KRW 임시 기준값.
 - **`API_TIMEOUT_SHORT` / `API_TIMEOUT_LONG`**: KIS REST 호출 등에 쓰는 기본 타임아웃.
 - **`PORTFOLIO_CACHE_EXPIRE`**: 포트폴리오 캐시 만료 시간.
 - **`MARKET_STATE_SAVE_INTERVAL`**: 실시간 시세 데이터의 자동 저장 주기 (60초).

@@ -11,7 +11,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Optional
 
-from core.constants import CONFIG_ROOT
+from core.constants import CONFIG_ROOT, DEFAULT_USD_KRW_EXCHANGE_RATE
 from telegram_bot.telegram_portfolio import format_portfolio_summary
 from telegram_bot.telegram_utils import send_notification
 from data.data_service import get_portfolio_data
@@ -101,7 +101,7 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
         # Prefer metadata exchange rate, then the legacy top-level field.
         exchange_rate = data.get('metadata', {}).get('exchange_rate')
         if not exchange_rate:
-            exchange_rate = data.get('exchange_rate', 1400)
+            exchange_rate = data.get('exchange_rate', DEFAULT_USD_KRW_EXCHANGE_RATE)
 
         merged_data = data.get('merged_data', {})
 
@@ -148,7 +148,7 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
         total_krw = get_total_equity(data)
         exchange_rate = data.get('metadata', {}).get('exchange_rate')
         if not exchange_rate:
-            exchange_rate = data.get('exchange_rate', 1400)
+            exchange_rate = data.get('exchange_rate', DEFAULT_USD_KRW_EXCHANGE_RATE)
 
         if exchange_rate > 0:
             return total_krw / exchange_rate
