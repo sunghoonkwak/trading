@@ -1,3 +1,4 @@
+import datetime as dt
 import sys
 from pathlib import Path
 
@@ -521,6 +522,11 @@ def test_run_va_with_all_targets_disabled_stops_before_history(monkeypatch):
 
 
 def test_run_va_reuses_empty_order_history_without_fetching_data(monkeypatch):
+    class FrozenDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            return tz.localize(dt.datetime(2026, 6, 17, 8, 12, 4))
+
     config = {
         "value_averaging": {
             "enabled": True,
@@ -536,8 +542,9 @@ def test_run_va_reuses_empty_order_history_without_fetching_data(monkeypatch):
             "status": "skipped",
             "orders": [],
             "targets_context": {"QLD": {"day_count": 3}},
-        },
-    }]
+            },
+        }]
+    monkeypatch.setattr(execution_service, "datetime", FrozenDateTime)
     monkeypatch.setattr(
         execution_service,
         "_get_market_status",
