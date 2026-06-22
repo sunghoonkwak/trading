@@ -185,14 +185,14 @@ def _sanitize_body(body: object) -> object:
 
 def _sanitize_payload(payload: object) -> object:
     if isinstance(payload, str):
-        return payload[:1000]
+        return payload
     if isinstance(payload, dict):
         return {
             key: _masked_value(key, value)
-            for key, value in list(payload.items())[:50]
+            for key, value in payload.items()
         }
     if isinstance(payload, list):
-        return [_sanitize_payload(item) for item in payload[:10]]
+        return [_sanitize_payload(item) for item in payload]
     return payload
 
 
