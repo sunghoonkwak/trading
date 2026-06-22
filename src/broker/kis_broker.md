@@ -10,6 +10,9 @@ facade입니다. `src/kis/kis_api/**`는 공식 배포판 경계로 유지하고
   `ovrs_ord_psbl_amt`를 읽어 주문 가능 USD를 반환합니다.
 - `StrategyOrder`의 브로커 독립 주문 의도(`LIMIT`, `LOC`)를 KIS
   해외주식 주문구분 코드(`00`, `34`)로 변환합니다.
+- 런타임 환경변수 `KIS_ENABLE_REST_API=false`이면 KIS REST 주문/조회
+  호출을 인증 전에 차단합니다. KIS WebSocket 가격 구독은 이 플래그의
+  대상이 아닙니다.
 - API timeout을 `[API Timeout]` 메시지로 정규화합니다.
 
 ## Import Boundary

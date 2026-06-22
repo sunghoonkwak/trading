@@ -7,7 +7,9 @@
 - `fetch_price(ticker, exchange=None)`를 제공합니다.
 - `get_current_price(ticker)`를 제공합니다.
 - REST 가격 조회는 공식 KIS price endpoint wrapper를 호출합니다.
+  `KIS_ENABLE_REST_API=false`이면 KIS REST 가격 조회는 `0.0`을 반환합니다.
 - 현재가 캐시는 `state.market_state`의 WebSocket cache를 조회합니다.
+- WebSocket cache 조회는 KIS REST 비활성화와 무관하게 계속 동작합니다.
 - 전략/데이터 서비스가 KIS 영역의 compat wrapper에 직접 의존하지 않도록
   하는 전환 seam입니다.
 

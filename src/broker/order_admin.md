@@ -10,6 +10,8 @@
 - `sync_open_orders()`를 제공합니다.
 - 해외 KIS 미체결 주문과 Toss OPEN 주문 조회 결과를 하나의 DataFrame으로
   합치고 `_market` 필드를 부여합니다.
+- 런타임 환경변수 `KIS_ENABLE_REST_API=false`이면 KIS 미체결 조회/취소/
+  정정을 건너뜁니다. Toss OPEN 조회와 Toss 취소는 계속 허용됩니다.
 - KIS 국내 주문 조회/관리는 기본 비활성화되어 있습니다. 국내 주문을
   다시 관리하려면 런타임 환경변수 `KIS_ENABLE_DOMESTIC=true`를 설정합니다.
 - 주문 취소(`2`)와 정정(`1`) 요청을 공식 KIS endpoint wrapper 인자로

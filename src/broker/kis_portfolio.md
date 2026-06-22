@@ -8,6 +8,8 @@
   변환합니다.
 - KIS 조회 실패 시 빈 source와 raw metadata를 반환해 data 계층이 병합
   정책을 계속 적용할 수 있게 합니다.
+- 런타임 환경변수 `KIS_ENABLE_REST_API=false`이면 KIS REST 잔고/매수가능
+  조회를 인증 전에 차단하고 빈 source와 disabled metadata를 반환합니다.
 - `get_integrated_portfolio(scope="all")`를 제공합니다.
 - `get_integrated_portfolio`는
   `data.portfolio_integration.get_integrated_portfolio`로 lazy 위임합니다.

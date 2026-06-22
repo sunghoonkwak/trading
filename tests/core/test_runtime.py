@@ -68,6 +68,23 @@ class CredentialsTest(unittest.TestCase):
         path.rmdir()
 
 
+def test_kis_rest_api_flag_defaults_to_enabled(monkeypatch):
+    from core import trading_config
+
+    monkeypatch.delenv("KIS_ENABLE_REST_API", raising=False)
+
+    assert trading_config.is_kis_rest_api_enabled() is True
+
+
+def test_kis_rest_api_flag_can_be_disabled(monkeypatch):
+    from core import trading_config
+
+    for value in ["0", "false", "no", "off"]:
+        monkeypatch.setenv("KIS_ENABLE_REST_API", value)
+
+        assert trading_config.is_kis_rest_api_enabled() is False
+
+
 import json
 import sys
 from pathlib import Path
@@ -395,6 +412,26 @@ def test_initialize_kis_fails_closed_when_rest_auth_fails(monkeypatch):
     assert "request_kis_ws_auth" not in calls
     assert "initialize_websocket_and_pipe" not in calls
     assert "sync_open_orders" not in calls
+
+
+def test_initialize_kis_skips_rest_auth_when_rest_api_disabled(monkeypatch):
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    main = _load_main(monkeypatch)
+    calls = _install_fake_kis_thread(
+        monkeypatch,
+        main,
+        rest_response=_Response(False, "REST should be skipped"),
+        ws_response=_Response(True),
+    )
+
+    system = main.TradingSystem()
+
+    assert system.initialize_kis() is True
+    assert "request_kis_auth" not in calls
+    assert "wait_for_response:rest" not in calls
+    assert "request_kis_ws_auth" in calls
+    assert "initialize_websocket_and_pipe" in calls
+    assert "sync_open_orders" in calls
 
 
 def test_initialize_kis_fails_closed_when_ws_auth_fails(monkeypatch):

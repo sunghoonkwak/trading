@@ -7,6 +7,16 @@
 
 ## Key Functions (주요 함수)
 
+### `is_kis_rest_api_enabled`
+KIS REST API 표면을 사용할지 여부를 반환합니다.
+- 환경변수 `KIS_ENABLE_REST_API`가 `0`, `false`, `no`, `off`이면 비활성화됩니다.
+- 미설정 시 기존 운영 호환성을 위해 활성화됩니다.
+- KIS WebSocket 가격 구독은 이 플래그의 대상이 아니며 계속 사용할 수 있습니다.
+
+### `is_kis_domestic_enabled`
+KIS 국내 주식 계좌/주문 표면을 사용할지 여부를 반환합니다.
+- 환경변수 `KIS_ENABLE_DOMESTIC`가 `1`, `true`, `yes`, `on`일 때만 활성화됩니다.
+
 ### `strip_market_prefix`
 해외 주식 코드에서 시장 접두사(DNAS, DNYS, DAMS)를 제거하여 표시용 티커를 반환합니다.
 #### input

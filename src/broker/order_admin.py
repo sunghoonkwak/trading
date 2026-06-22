@@ -115,40 +115,41 @@ def _mask_order_id(value):
 
 def fetch_open_orders() -> Tuple[pd.DataFrame, int, int, int]:
     """Fetch open orders from all configured markets."""
-    trenv = _get_trenv()
-    cano = trenv.my_acct
-    prod = trenv.my_prod
-    inquire_nccs_overseas, _ = _get_overseas_order_endpoints()
-
-    try:
-        df_us = inquire_nccs_overseas(
-            cano=cano,
-            acnt_prdt_cd=prod,
-            ovrs_excg_cd="NASD",
-            sort_sqn="DS",
-            FK200="",
-            NK200="",
-        )
-        if not df_us.empty:
-            df_us["_market"] = "US"
-    except Exception as e:
-        logging.error("[OrderAdmin] US order fetch failed: %s", e)
-        df_us = pd.DataFrame()
-
+    df_us = pd.DataFrame()
     df_kr = pd.DataFrame()
-    if trading_config.is_kis_domestic_enabled():
-        inquire_psbl_rvsecncl, _ = _get_domestic_order_endpoints()
+    if trading_config.is_kis_rest_api_enabled():
+        trenv = _get_trenv()
+        cano = trenv.my_acct
+        prod = trenv.my_prod
+        inquire_nccs_overseas, _ = _get_overseas_order_endpoints()
+
         try:
-            df_kr = inquire_psbl_rvsecncl(
+            df_us = inquire_nccs_overseas(
                 cano=cano,
                 acnt_prdt_cd=prod,
-                inqr_dvsn_1="0",
-                inqr_dvsn_2="0",
+                ovrs_excg_cd="NASD",
+                sort_sqn="DS",
+                FK200="",
+                NK200="",
             )
-            if not df_kr.empty:
-                df_kr["_market"] = "KR"
+            if not df_us.empty:
+                df_us["_market"] = "US"
         except Exception as e:
-            logging.error("[OrderAdmin] KR order fetch failed: %s", e)
+            logging.error("[OrderAdmin] US order fetch failed: %s", e)
+
+        if trading_config.is_kis_domestic_enabled():
+            inquire_psbl_rvsecncl, _ = _get_domestic_order_endpoints()
+            try:
+                df_kr = inquire_psbl_rvsecncl(
+                    cano=cano,
+                    acnt_prdt_cd=prod,
+                    inqr_dvsn_1="0",
+                    inqr_dvsn_2="0",
+                )
+                if not df_kr.empty:
+                    df_kr["_market"] = "KR"
+            except Exception as e:
+                logging.error("[OrderAdmin] KR order fetch failed: %s", e)
 
     try:
         df_toss = _fetch_toss_open_orders()
@@ -172,10 +173,6 @@ def execute_manage_action(
     new_price: Optional[str] = None,
 ) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
     """Execute a KIS cancel (2) or correction (1) for an open order."""
-    trenv = _get_trenv()
-    cano = trenv.my_acct
-    prod = trenv.my_prod
-    _, order_rvsecncl_overseas = _get_overseas_order_endpoints()
     t_ord = {k.lower(): v for k, v in order_data.items()}
     order_no = _first_present(
         t_ord.get("odno"),
@@ -207,6 +204,14 @@ def execute_manage_action(
             )
             logging.info("[OrderAdmin] TOSS CANCEL success: %s", _mask_order_id(order_no))
             return pd.DataFrame([result]), None
+
+        if not trading_config.is_kis_rest_api_enabled():
+            return None, "KIS REST API is disabled"
+
+        trenv = _get_trenv()
+        cano = trenv.my_acct
+        prod = trenv.my_prod
+        _, order_rvsecncl_overseas = _get_overseas_order_endpoints()
 
         if market == "KR":
             if not trading_config.is_kis_domestic_enabled():

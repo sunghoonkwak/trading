@@ -51,6 +51,51 @@ def test_get_orderable_usd_reads_overseas_orderable_amount(monkeypatch):
     assert calls["env_dv"] == "real"
 
 
+def test_get_orderable_usd_is_blocked_when_kis_rest_api_disabled(monkeypatch):
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    monkeypatch.setattr(
+        kis_broker,
+        "ka",
+        SimpleNamespace(
+            getTREnv=lambda: (_ for _ in ()).throw(
+                AssertionError("KIS auth must not be touched")
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        kis_broker,
+        "inquire_psamount",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("KIS REST endpoint must not be called")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="KIS REST API is disabled"):
+        kis_broker.get_orderable_usd("SOXL", 25.40)
+
+
+def test_place_overseas_order_is_blocked_when_kis_rest_api_disabled(monkeypatch):
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    order = StrategyOrder(
+        symbol="TQQQ",
+        side=OrderSide.BUY,
+        quantity=1,
+        price=50.0,
+    )
+    monkeypatch.setattr(
+        kis_broker,
+        "order_overseas_stock",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("KIS REST endpoint must not be called")
+        ),
+    )
+
+    success, message = kis_broker.place_overseas_order(order)
+
+    assert success is False
+    assert "KIS REST API is disabled" in message
+
+
 def test_order_admin_fetches_open_orders_without_domestic_by_default(monkeypatch):
     from broker import order_admin
 
@@ -90,6 +135,87 @@ def test_order_admin_fetches_open_orders_without_domestic_by_default(monkeypatch
     assert (us_count, kr_count, toss_count) == (1, 0, 0)
     assert calls["us"]["cano"] == "12345678"
     assert calls["us"]["ovrs_excg_cd"] == "NASD"
+
+
+def test_order_admin_skips_kis_open_orders_when_rest_api_disabled(monkeypatch):
+    from broker import order_admin
+
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    monkeypatch.setattr(
+        order_admin,
+        "_get_trenv",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("KIS auth must not be touched")
+        ),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_get_overseas_order_endpoints",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("KIS REST endpoints must not be loaded")
+        ),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_fetch_toss_open_orders",
+        lambda: pd.DataFrame([{"orderId": "toss-1", "symbol": "AAPL"}]),
+    )
+
+    df, us_count, kr_count, toss_count = order_admin.fetch_open_orders()
+
+    assert (us_count, kr_count, toss_count) == (0, 0, 1)
+    assert df.iloc[0]["_market"] == "TOSS"
+
+
+def test_order_admin_blocks_kis_cancel_when_rest_api_disabled(monkeypatch):
+    from broker import order_admin
+
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    monkeypatch.setattr(
+        order_admin,
+        "_get_trenv",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("KIS auth must not be touched")
+        ),
+    )
+
+    result, message = order_admin.execute_manage_action(
+        "US",
+        "2",
+        {"odno": "1", "pdno": "QQQM", "nccs_qty": "3"},
+    )
+
+    assert result is None
+    assert "KIS REST API is disabled" in message
+
+
+def test_order_admin_allows_toss_cancel_when_kis_rest_api_disabled(monkeypatch):
+    from broker import order_admin
+
+    calls = {}
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    monkeypatch.setattr(
+        order_admin,
+        "_get_trenv",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("KIS auth must not be touched")
+        ),
+    )
+    monkeypatch.setattr(order_admin, "_get_toss_cancel_helpers", lambda: (
+        lambda: "access-token",
+        lambda access_token: 7,
+        lambda **kwargs: calls.update(kwargs) or {"orderId": "toss-order-1"},
+    ))
+
+    result, message = order_admin.execute_manage_action(
+        "TOSS",
+        "2",
+        {"orderId": "toss-order-1"},
+    )
+
+    assert message is None
+    assert result.iloc[0]["orderId"] == "toss-order-1"
+    assert calls["order_id"] == "toss-order-1"
 
 
 def test_order_admin_fetches_domestic_open_orders_when_enabled(monkeypatch):
@@ -445,6 +571,28 @@ def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch)
     }
 
 
+def test_portfolio_fetch_is_blocked_when_kis_rest_api_disabled(monkeypatch):
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    monkeypatch.setattr(
+        "broker.kis_portfolio.ka.getTREnv",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("KIS auth must not be touched")
+        ),
+    )
+    monkeypatch.setattr(
+        "broker.kis_portfolio.inquire_present_balance",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("KIS REST endpoint must not be called")
+        ),
+    )
+
+    result = KisPortfolioSourceAdapter._fetch_kis_account_data()
+
+    assert result["error"] == "KIS REST API is disabled"
+    assert result["exchange_rate"] == 0.0
+    assert result["overseas_stocks"] == []
+
+
 def test_price_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch):
     calls = {}
 
@@ -465,6 +613,49 @@ def test_price_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch):
 
     assert result == 123.45
     assert calls["price_args"] == ("", "NAS", "QQQ", "real")
+
+
+def test_price_fetch_is_blocked_when_kis_rest_api_disabled(monkeypatch):
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    monkeypatch.setattr(
+        market_data,
+        "_get_price_module",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("KIS REST price module must not be loaded")
+        ),
+    )
+
+    assert market_data.fetch_price("qqq") == 0.0
+
+
+def test_websocket_price_cache_stays_available_when_kis_rest_api_disabled(monkeypatch):
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    monkeypatch.setattr(
+        market_data,
+        "_get_market_manager",
+        lambda: SimpleNamespace(get_price=lambda ticker: 123.45),
+    )
+
+    assert market_data.get_current_price("QQQ") == 123.45
+
+
+def test_kis_worker_blocks_rest_auth_when_rest_api_disabled(monkeypatch):
+    from broker import kis_worker
+    from core.thread_comm import RequestType, ThreadRequest
+
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+    monkeypatch.setattr(
+        kis_worker.RESTClient,
+        "authenticate",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("KIS REST auth must not be called")
+        ),
+    )
+
+    response = kis_worker._handle_request(ThreadRequest(RequestType.KIS_AUTH))
+
+    assert response.success is False
+    assert response.error == "KIS REST API is disabled"
 
 
 import sys

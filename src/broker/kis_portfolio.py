@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 import pandas as pd
 
-from core.trading_config import is_kis_domestic_enabled
+from core.trading_config import is_kis_domestic_enabled, is_kis_rest_api_enabled
 from kis.kis_api import kis_auth as ka
 from kis.kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_balance
 from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import (
@@ -67,6 +67,18 @@ class KisPortfolioSourceAdapter:
     @classmethod
     def _fetch_kis_account_data(cls) -> Dict[str, Any]:
         """Fetch both domestic and overseas balances from KIS."""
+        if not is_kis_rest_api_enabled():
+            return {
+                "domestic_stocks": [],
+                "overseas_stocks": [],
+                "domestic_asset": {},
+                "overseas_asset": {},
+                "exchange_rate": 0.0,
+                "krw_orderable": 0,
+                "usd_orderable": None,
+                "error": "KIS REST API is disabled",
+            }
+
         trenv = ka.getTREnv()
         cano = trenv.my_acct
         prod = trenv.my_prod

@@ -54,6 +54,9 @@ def _get_order_overseas_stock():
 
 def get_orderable_usd(symbol: str, order_price: float) -> float:
     """Return KIS overseas buying power for a representative USD buy."""
+    if not trading_config.is_kis_rest_api_enabled():
+        raise RuntimeError("KIS REST API is disabled")
+
     stock_info = trading_config.get_stock_info(symbol)
     market = stock_info.get("market", "NASD")
     ovrs_excg_cd = EXCHANGE_CODE_MAP.get(market, market)
@@ -74,6 +77,9 @@ def get_orderable_usd(symbol: str, order_price: float) -> float:
 
 def place_overseas_order(order: StrategyOrder) -> Tuple[bool, str]:
     """Place a single overseas stock order through KIS."""
+    if not trading_config.is_kis_rest_api_enabled():
+        return False, "KIS REST API is disabled"
+
     try:
         trenv = _get_kis_auth().getTREnv()
         ord_dv = "buy" if order.side == OrderSide.BUY else "sell"

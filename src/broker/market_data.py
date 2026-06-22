@@ -15,6 +15,9 @@ def _get_price_module():
 
 def fetch_price(ticker: str, exchange: Optional[str] = None) -> float:
     """Fetch the latest REST price for a ticker through the KIS price API."""
+    if not trading_config.is_kis_rest_api_enabled():
+        return 0.0
+
     if not exchange:
         exchange = trading_config.get_kis_exchange_code(ticker)
     try:

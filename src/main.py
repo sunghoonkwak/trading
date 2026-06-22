@@ -87,14 +87,17 @@ class TradingSystem:
             time.sleep(0.5)
 
             # REST & WS Auth
-            auth_id = request_kis_auth()
-            auth_response = wait_for_response(auth_id, timeout=30.0)
-            if not auth_response or not auth_response.success:
-                error = auth_response.error if auth_response else "timeout"
-                logging.error(f"[Startup] REST API authentication failed: {error}")
-                print("[Startup] ✗ REST API authentication failed")
-                return False
-            print("[Startup] ✓ REST API authenticated")
+            if trading_config.is_kis_rest_api_enabled():
+                auth_id = request_kis_auth()
+                auth_response = wait_for_response(auth_id, timeout=30.0)
+                if not auth_response or not auth_response.success:
+                    error = auth_response.error if auth_response else "timeout"
+                    logging.error(f"[Startup] REST API authentication failed: {error}")
+                    print("[Startup] ✗ REST API authentication failed")
+                    return False
+                print("[Startup] ✓ REST API authenticated")
+            else:
+                print("[Startup] - REST API disabled; skipping REST authentication")
 
             ws_auth_id = request_kis_ws_auth()
             ws_auth_response = wait_for_response(ws_auth_id, timeout=30.0)

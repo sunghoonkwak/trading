@@ -11,6 +11,7 @@ services:
       - ENV_MODE=docker
       - HOME=/app
       - TZ=Asia/Seoul
+      - KIS_ENABLE_REST_API=true
       - KIS_ENABLE_DOMESTIC=false
       - WEB_ENABLE_ORDER_CANCEL=true
       - WEB_ENABLE_MANUAL_REPORT_TRIGGERS=false

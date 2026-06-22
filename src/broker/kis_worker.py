@@ -17,6 +17,7 @@ from core.thread_comm import (
 from state.system_state import ThreadStatus, update_kis_state
 from broker.kis_rest_client import RESTClient
 from broker.kis_ws_manager import WSManager
+from core.trading_config import is_kis_rest_api_enabled
 
 
 _kis_thread: Optional[threading.Thread] = None
@@ -29,6 +30,12 @@ def _handle_request(request: ThreadRequest) -> ThreadResponse:
     try:
         result = None
         if request.request_type == RequestType.KIS_AUTH:
+            if not is_kis_rest_api_enabled():
+                return ThreadResponse(
+                    request.request_id,
+                    success=False,
+                    error="KIS REST API is disabled",
+                )
             result = RESTClient.authenticate()
         elif request.request_type == RequestType.KIS_WS_AUTH:
             result = RESTClient.authenticate_ws()

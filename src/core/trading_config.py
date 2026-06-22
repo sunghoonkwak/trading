@@ -2,6 +2,16 @@ import os
 import json
 
 
+def is_kis_rest_api_enabled() -> bool:
+    """Return whether KIS REST API surfaces are enabled."""
+    return os.getenv("KIS_ENABLE_REST_API", "").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
 def is_kis_domestic_enabled() -> bool:
     """Return whether KIS domestic-stock account/order surfaces are enabled."""
     return os.getenv("KIS_ENABLE_DOMESTIC", "").strip().lower() in {
