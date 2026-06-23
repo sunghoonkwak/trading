@@ -32,7 +32,14 @@ def get_us_market_calendar(
 ) -> dict[str, object]:
     query = f"?{parse.urlencode({'date': date})}" if date else ""
     url = f"{base_url.rstrip('/')}/api/v1/market-calendar/US{query}"
-    return _get_result_object(url=url, access_token=access_token, timeout=timeout, urlopen=urlopen, name="US market-calendar")
+    return _get_result_object(
+        url=url,
+        access_token=access_token,
+        timeout=timeout,
+        urlopen=urlopen,
+        name="US market-calendar",
+        group="MARKET_INFO",
+    )
 
 
 def main() -> None:

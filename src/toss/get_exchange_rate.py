@@ -11,12 +11,13 @@ import json
 import sys
 from pathlib import Path
 from typing import Callable
-from urllib import error, parse, request
+from urllib import parse, request
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
+from toss.client import request_json
 from toss.auth import load_access_token
 
 
@@ -38,7 +39,14 @@ def get_exchange_rate(
         params["dateTime"] = date_time
 
     url = f"{base_url.rstrip('/')}/api/v1/exchange-rate?{parse.urlencode(params)}"
-    return _get_result_object(url=url, access_token=access_token, timeout=timeout, urlopen=urlopen, name="exchange-rate")
+    return _get_result_object(
+        url=url,
+        access_token=access_token,
+        timeout=timeout,
+        urlopen=urlopen,
+        name="exchange-rate",
+        group="MARKET_INFO",
+    )
 
 
 def _get_result_object(
@@ -48,6 +56,7 @@ def _get_result_object(
     timeout: float,
     urlopen: Callable[..., object],
     name: str,
+    group: str,
 ) -> dict[str, object]:
     api_request = request.Request(
         url,
@@ -55,14 +64,13 @@ def _get_result_object(
         method="GET",
     )
 
-    try:
-        with urlopen(api_request, timeout=timeout) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        details = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Toss {name} request failed: HTTP {exc.code} {details}") from exc
-    except error.URLError as exc:
-        raise RuntimeError(f"Toss {name} request failed: {exc.reason}") from exc
+    payload = request_json(
+        api_request,
+        group=group,
+        action_name=name,
+        timeout=timeout,
+        urlopen=urlopen,
+    )
 
     result = payload.get("result")
     if not isinstance(result, dict):

@@ -671,6 +671,50 @@ class TossRateLimitTest(unittest.TestCase):
         self.assertIn("Toss API query failed", notifications[0])
         self.assertIn("network down", notifications[0])
 
+    def test_market_helpers_share_default_request_interval(self):
+        from toss.get_exchange_rate import get_exchange_rate
+        from toss.get_orderbook import get_orderbook
+        from toss.rate_limit import DEFAULT_RATE_LIMIT_MANAGER
+
+        clock = FakeClock()
+        manager = DEFAULT_RATE_LIMIT_MANAGER
+        original_sleep = manager._sleep
+        original_monotonic = manager._monotonic
+        original_buckets = manager._buckets
+        original_next_request_at = manager._next_request_at
+        try:
+            manager._sleep = clock.sleep
+            manager._monotonic = clock.monotonic
+            manager._buckets = {}
+            manager._next_request_at = 0.0
+
+            request_times = []
+
+            def fake_urlopen(api_request, timeout):
+                request_times.append(clock.monotonic())
+                return _response({"result": {"ok": True}})
+
+            get_orderbook(
+                symbol="AAPL",
+                access_token="access-token",
+                base_url="https://example.test",
+                urlopen=fake_urlopen,
+            )
+            get_exchange_rate(
+                base_currency="USD",
+                quote_currency="KRW",
+                access_token="access-token",
+                base_url="https://example.test",
+                urlopen=fake_urlopen,
+            )
+        finally:
+            manager._sleep = original_sleep
+            manager._monotonic = original_monotonic
+            manager._buckets = original_buckets
+            manager._next_request_at = original_next_request_at
+
+        self.assertEqual(request_times, [0.0, 1.0])
+
 
 class FakeClock:
     def __init__(self):

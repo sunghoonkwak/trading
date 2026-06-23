@@ -44,6 +44,7 @@ def get_trades(
         urlopen=urlopen,
         result_type=list,
         name="trades",
+        group="MARKET_DATA",
     )
 
 

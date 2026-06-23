@@ -38,6 +38,7 @@ def get_price_limit(
         urlopen=urlopen,
         result_type=dict,
         name="price-limits",
+        group="MARKET_DATA",
     )
 
 

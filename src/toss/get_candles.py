@@ -55,6 +55,7 @@ def get_candles(
         urlopen=urlopen,
         result_type=dict,
         name="candles",
+        group="MARKET_DATA_CHART",
     )
 
 

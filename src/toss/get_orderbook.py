@@ -11,12 +11,13 @@ import json
 import sys
 from pathlib import Path
 from typing import Callable
-from urllib import error, parse, request
+from urllib import parse, request
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
+from toss.client import request_json
 from toss.auth import load_access_token
 
 
@@ -28,20 +29,20 @@ def _get_payload(
     urlopen: Callable[..., object],
     result_type: type,
     name: str,
+    group: str,
 ) -> object:
     api_request = request.Request(
         url,
         headers={"Authorization": f"Bearer {access_token}"},
         method="GET",
     )
-    try:
-        with urlopen(api_request, timeout=timeout) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        details = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Toss {name} request failed: HTTP {exc.code} {details}") from exc
-    except error.URLError as exc:
-        raise RuntimeError(f"Toss {name} request failed: {exc.reason}") from exc
+    payload = request_json(
+        api_request,
+        group=group,
+        action_name=name,
+        timeout=timeout,
+        urlopen=urlopen,
+    )
 
     result = payload.get("result")
     if not isinstance(result, result_type):
@@ -66,6 +67,7 @@ def get_orderbook(
         urlopen=urlopen,
         result_type=dict,
         name="orderbook",
+        group="MARKET_DATA",
     )
 
 
