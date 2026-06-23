@@ -1,8 +1,8 @@
-# KIS Real-Time Trading System
+# KIS/Toss Real-Time Trading System
 
-Korea Investment Securities(KIS) API 기반의 실시간 자동매매 시스템입니다.
-Docker 컨테이너 안에서 KIS REST/WebSocket, 전략 실행, 스케줄러, Telegram
-봇, FastAPI 웹 대시보드를 함께 구동합니다.
+Korea Investment Securities(KIS)와 Toss Invest API 기반의 실시간 자동매매
+시스템입니다. Docker 컨테이너 안에서 KIS REST/WebSocket, Toss REST helper,
+전략 실행, 스케줄러, Telegram 봇, FastAPI 웹 대시보드를 함께 구동합니다.
 
 이 프로젝트는 개인 실거래 운영을 염두에 둔 도구입니다. 처음 실행하거나
 전략 설정을 바꿀 때는 반드시 모의투자 또는 충분히 작은 규모로 검증하세요.
@@ -11,6 +11,8 @@ Docker 컨테이너 안에서 KIS REST/WebSocket, 전략 실행, 스케줄러, T
 
 - KIS REST API 인증, 잔고 조회, 미체결 주문 조회/취소, 국내/해외 주문 실행
 - KIS WebSocket 기반 체결/호가 이벤트 수신 및 실시간 상태 캐시
+- Toss Invest 토큰 초기화, 포트폴리오/매수가능금액/현재가/미체결 주문 조회
+- `strategy_broker` 설정에 따른 KIS 또는 Toss 전략 주문 실행
 - RAOEO, Value Averaging, Rebalancing 전략 계산 및 실행
 - 매일 포트폴리오/전략 리포트 생성 및 Telegram 전송
 - 미국장 시간대 주기적 리밸런싱 점검
@@ -40,7 +42,9 @@ trading/
 ├── src/
 │   ├── main.py                  # Docker 런타임 엔트리포인트
 │   ├── core/                    # 상수, 설정, 웹 서버, 락, 표시 상태
-│   ├── kis/                     # KIS REST/WebSocket, 주문/포트폴리오 래퍼
+│   ├── kis/                     # KIS REST/WebSocket, 공식 API 래퍼
+│   ├── toss/                    # Toss Invest Open API helper
+│   ├── broker/                  # KIS/Toss facade와 전략 broker 선택
 │   ├── strategy/                # RAOEO, VA, 리밸런싱, 실행 서비스
 │   ├── scheduler/               # 정기 리포트와 주기적 리밸런싱 작업
 │   ├── telegram_bot/            # Telegram 명령어와 알림
@@ -76,7 +80,7 @@ volumes:
 | 파일 | 용도 | 비고 |
 | --- | --- | --- |
 | `kis_devlp.yaml` | KIS 계좌, 도메인, product code 등 기본 설정 | `templates/kis_devlp.yaml` 참고 |
-| `credentials.enc` | KIS app key, app secret, HTS ID 암호화 파일 | `password.txt`로 복호화 |
+| `credentials.enc` | KIS app key/secret, HTS ID, 선택적 Toss client id/secret 암호화 파일 | `password.txt`로 복호화 |
 | `password.txt` | `credentials.enc` 복호화 비밀번호 | 절대 커밋 금지 |
 | `telegram.txt` | Telegram bot token, chat id | `token,chat_id` 형식 |
 | `strategy_config.json` | RAOEO, VA, 리밸런싱 전략 설정 | `scripts/validate_config.py`로 검증 |
@@ -85,10 +89,12 @@ volumes:
 | `memo.json` | Telegram/web 메모 저장소 | 없으면 기본값으로 시작 가능 |
 | `portfolio.json` | 최근 포트폴리오 캐시 | 런타임 생성 |
 | `strategy_history.json` | 전략 실행 이력 | 런타임 생성 |
+| `TOSSYYYYMMDD_HHMMSS.json` | Toss access token 캐시 | 런타임 생성 |
 
 KIS 인증 코드는 `kis_devlp.yaml`을 읽은 뒤 `credentials.enc`에서 app key,
-app secret, HTS ID를 복호화합니다. 예시 YAML의 app key 값만 채우는 방식이
-아니라 암호화 파일도 필요합니다.
+app secret, HTS ID를 복호화합니다. Toss 기능을 사용하려면 같은
+`credentials.enc`에 Toss client id와 client secret도 포함되어야 합니다.
+예시 YAML의 app key 값만 채우는 방식이 아니라 암호화 파일도 필요합니다.
 
 ## 빠른 시작
 
@@ -107,6 +113,8 @@ cp templates/portfolio_weights.json ~/KIS_config/portfolio_weights.json
 ```
 
 3. `telegram.txt`, `password.txt`, `credentials.enc`를 준비합니다.
+   Toss를 활성화한 현재 런타임은 시작 시 Toss 토큰 초기화에도 성공해야
+   스케줄러와 웹 서버를 시작합니다.
 
 4. 전략 설정을 검증합니다.
 
@@ -146,13 +154,14 @@ https://localhost:8080
 4. Telegram 봇 초기화
 5. KIS REST 인증과 WebSocket approval key 발급
 6. KIS WebSocket 및 이벤트 파이프 초기화
-7. 미체결 주문 동기화
-8. 스케줄러 시작
-9. 웹 대시보드 시작
+7. 미체결 주문 동기화(KIS/Toss)
+8. Toss access token 준비
+9. 스케줄러 시작
+10. 웹 대시보드 시작
 
-KIS 초기화가 실패하면 스케줄러와 웹 서버를 시작하지 않고 종료합니다. 이는
-인증이나 시장 데이터가 불완전한 상태에서 자동 실행이 진행되는 것을 막기
-위한 fail-closed 동작입니다.
+KIS 또는 Toss 초기화가 실패하면 스케줄러와 웹 서버를 시작하지 않고
+종료합니다. 이는 인증이나 시장 데이터가 불완전한 상태에서 자동 실행이
+진행되는 것을 막기 위한 fail-closed 동작입니다.
 
 ## 웹 대시보드
 
@@ -231,13 +240,16 @@ RAOEO 등 다른 전략에 필요한 예약 현금을 고려해 주문 규모를
 
 ## 데이터 흐름
 
-포트폴리오 데이터는 KIS 잔고와 Google Sheets 데이터를 병합해 사용합니다.
-KIS 계좌 데이터는 실제 주문/전략 실행에 필요한 기준 데이터이고, Google
-Sheets는 전체 자산 관리와 외부 계좌/현금성 자산을 함께 보기 위한 보조
-데이터입니다.
+포트폴리오 데이터는 KIS API, Toss API, Google Sheets 데이터를 scope별로
+조회하고 병합해 사용합니다. `scope="all"`은 전체 자산 확인용으로
+KIS/GSheet/Toss를 통합하며, Toss API 실패 시 Google Sheets의 `토스`
+계정 데이터를 fallback으로 유지합니다. 전략 실행은 `strategy_config.json`의
+`strategy_broker` 값에 따라 `kis` 또는 `toss` scope만 조회해 주문 판단에
+불필요한 원천을 섞지 않습니다.
 
-가격 데이터는 우선 WebSocket 기반 `state.market_state` 캐시를 사용하고,
-필요할 때 REST 가격 조회로 보완합니다.
+가격 데이터는 우선 WebSocket 기반 `state.market_state` 캐시와 보유 잔고의
+`cur_price`를 사용하고, 필요한 종목은 Toss 다건 현재가 조회 후 누락분만
+KIS REST 가격 조회로 보완합니다.
 
 ## 테스트와 검증
 
@@ -273,8 +285,9 @@ venv/bin/python scripts/backtest/raoeo/batch_backtest.py
 
 ## 보안 주의
 
-- API key, app secret, HTS ID, 계좌번호, Telegram token, Google service
-  account, `credentials.enc`, `password.txt`, 로그 파일은 커밋하지 마세요.
+- API key, app secret, HTS ID, Toss client id/secret, 계좌번호, Telegram
+  token, Google service account, `credentials.enc`, `password.txt`, 로그
+  파일은 커밋하지 마세요.
 - 웹 주문 취소와 수동 리포트 실행 API는 기본 비활성 상태로 유지하세요.
 - 설정 변경 후에는 `scripts/validate_config.py`, 단위 테스트, 모의투자 또는
   소액 운용으로 검증하세요.
