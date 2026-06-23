@@ -96,7 +96,6 @@ share/python-wheels/
 .spyderproject
 # Spyder project settings
 .spyproject
-stock_data.json
 target/
 .tox/
 # Translations

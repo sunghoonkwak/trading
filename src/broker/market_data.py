@@ -78,12 +78,9 @@ def _to_positive_float(value) -> float:
     return price if price > 0 else 0.0
 
 
-def _get_market_manager():
-    from state.market_state import get_market_manager
-
-    return get_market_manager()
-
-
 def get_current_price(ticker: str) -> float:
-    """Return the current cached WebSocket price for a ticker."""
-    return _get_market_manager().get_price(ticker)
+    """Return the current Toss-first price for a ticker."""
+    symbol = str(ticker).strip().upper()
+    if not symbol:
+        return 0.0
+    return fetch_prices([symbol]).get(symbol, 0.0)

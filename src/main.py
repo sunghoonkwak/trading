@@ -34,7 +34,6 @@ except ImportError:
 
 # Import Core Modules
 from core import trading_config
-import state.market_state as trading_state
 from core import display
 from utils.logger import LogManager
 from core import event_pipe

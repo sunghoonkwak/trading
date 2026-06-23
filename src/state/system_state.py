@@ -8,7 +8,7 @@ import threading
 from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import Optional, Dict
+from typing import Optional
 
 class ThreadStatus(Enum):
     NOT_STARTED = "not_started"
@@ -82,37 +82,14 @@ class SystemStateManager:
         with self._lock:
             return self._telegram
 
-    def get_summary(self) -> Dict:
-        with self._lock:
-            return {
-                "kis": {
-                    "thread": self._kis.thread_status.value,
-                    "auth": self._kis.auth_status.value,
-                    "ws": self._kis.ws_status.value,
-                    "error": self._kis.last_error
-                },
-                "telegram": {
-                    "thread": self._telegram.thread_status.value,
-                    "connected": self._telegram.bot_connected,
-                    "error": self._telegram.last_error
-                }
-            }
-
 # =============================================================================
-# Global Convenience Functions (To replace thread_state.py)
+# Runtime State Helpers
 # =============================================================================
 _manager = SystemStateManager()
 
 def update_kis_state(**kwargs): _manager.update_kis(**kwargs)
 def update_telegram_state(**kwargs): _manager.update_telegram(**kwargs)
-def get_kis_state(): return _manager.get_kis()
-def get_telegram_state(): return _manager.get_telegram()
-def get_status_summary(): return _manager.get_summary()
 
 def is_kis_ready() -> bool:
     s = _manager.get_kis()
     return s.thread_status == ThreadStatus.RUNNING and s.auth_status == AuthStatus.AUTHENTICATED
-
-def is_telegram_ready() -> bool:
-    s = _manager.get_telegram()
-    return s.thread_status == ThreadStatus.RUNNING and s.bot_connected

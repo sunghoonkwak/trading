@@ -649,15 +649,17 @@ def test_batch_price_fallback_respects_kis_rest_api_disabled(monkeypatch):
     assert market_data.fetch_prices(["QQQ"]) == {}
 
 
-def test_websocket_price_cache_stays_available_when_kis_rest_api_disabled(monkeypatch):
-    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
+def test_current_price_uses_toss_batch_prices(monkeypatch):
+    calls = []
+
     monkeypatch.setattr(
         market_data,
-        "_get_market_manager",
-        lambda: SimpleNamespace(get_price=lambda ticker: 123.45),
+        "fetch_prices",
+        lambda tickers: calls.append(list(tickers)) or {"QQQ": 123.45},
     )
 
     assert market_data.get_current_price("QQQ") == 123.45
+    assert calls == [["QQQ"]]
 
 
 def test_kis_worker_blocks_rest_auth_when_rest_api_disabled(monkeypatch):

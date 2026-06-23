@@ -8,8 +8,6 @@ import pandas as pd
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from state import market_state
-
 
 def _load_event_handler(monkeypatch):
     fake_kis = types.ModuleType("kis")
@@ -43,20 +41,20 @@ def _load_event_handler(monkeypatch):
     return module
 
 
-def test_domestic_tick_updates_market_state_manager(monkeypatch):
+def test_domestic_tick_logs_from_websocket_row(monkeypatch):
     event_handler = _load_event_handler(monkeypatch)
-    manager = market_state.get_market_manager()
-    manager._data.clear()
-    manager._first_data_received = False
-    manager._persistence_running = False
+    messages = []
 
-    started = {}
-
-    def fake_start_periodic_save():
-        started["called"] = True
-
-    monkeypatch.setattr(manager, "_start_periodic_save", fake_start_periodic_save)
-    monkeypatch.setattr(event_handler.trading_config, "get_stock_info", lambda code: None)
+    monkeypatch.setattr(
+        event_handler.trading_config,
+        "get_stock_info",
+        lambda code: {"name": "Samsung"} if code == "005930" else None,
+    )
+    monkeypatch.setattr(
+        event_handler,
+        "print_viewer",
+        lambda category, level, message: messages.append((category, level, message)),
+    )
 
     row = pd.Series(
         {
@@ -72,13 +70,11 @@ def test_domestic_tick_updates_market_state_manager(monkeypatch):
 
     assert event_handler._handle_domestic_market("H0UNCNT0", row) is True
 
-    ticker = manager.get_ticker("005930")
-    assert ticker["price"] == 70000
-    assert ticker["change"] == 100
-    assert ticker["rate"] == 0.14
-    assert ticker["vol"] == 12
-    assert ticker["time"] == "091500"
-    assert started == {"called": True}
+    assert len(messages) == 1
+    assert messages[0][0] == "MKT"
+    assert messages[0][1] == "INFO"
+    assert "005930" in messages[0][2]
+    assert "70,000" in messages[0][2]
 
 
 import logging

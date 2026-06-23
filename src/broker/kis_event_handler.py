@@ -7,7 +7,6 @@ import logging
 import pandas as pd
 from datetime import datetime
 
-import state.market_state as trading_state
 from core import trading_config
 from core.trading_config import strip_market_prefix
 from core import event_pipe
@@ -32,19 +31,23 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
         )
         return True  # Skip corrupted data
 
-    state = trading_state.get_ticker_data(code) or {}
+    state = {
+        'price': 0,
+        'ask': 0,
+        'bid': 0,
+        'change': 0,
+        'rate': 0.0,
+        'vol': 0,
+        'time': '000000',
+    }
     level = "DEBUG"
 
     if tr_id == "H0UNASP0":
         try:
-            new_ask = int(float(row['ASKP1']))
-            new_bid = int(float(row['BID_PRC1'] if 'BID_PRC1' in row else row['BIDP1']))
-            if state.get('ask') == new_ask and state.get('bid') == new_bid:
-                return True  # Skip unchanged
-            trading_state.update_ticker(code, {
+            state.update({
                 'time': row['BSOP_HOUR'],
-                'ask': new_ask,
-                'bid': new_bid,
+                'ask': int(float(row['ASKP1'])),
+                'bid': int(float(row['BID_PRC1'] if 'BID_PRC1' in row else row['BIDP1'])),
             })
         except:
             return True
@@ -52,7 +55,7 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
     elif tr_id == "H0UNCNT0":
         try:
             sign = row['PRDY_VRSS_SIGN']
-            trading_state.update_ticker(code, {
+            state.update({
                 'time': row['STCK_CNTG_HOUR'],
                 'price': int(float(row['STCK_PRPR'])),
                 'vol': int(float(row['CNTG_VOL'])),
@@ -63,8 +66,6 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
             level = "INFO"
         except:
             return True
-
-    state = trading_state.get_ticker_data(code) or {}
 
     time_v = str(state.get('time', '000000')).strip()
     time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}" if len(time_v) == 6 else time_v.zfill(6)
@@ -106,12 +107,20 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
         )
         return True
 
-    state = trading_state.get_ticker_data(code) or {}
+    state = {
+        'price': 0.0,
+        'ask': 0.0,
+        'bid': 0.0,
+        'change': 0.0,
+        'rate': 0.0,
+        'vol': 0.0,
+        'time': '000000',
+    }
     level = "DEBUG"
 
     if tr_id == "HDFSASP0":
         try:
-            trading_state.update_ticker(code, {
+            state.update({
                 'time': row.get('xhms', '000000'),
                 'ask': float(row['pask1']),
                 'bid': float(row['pbid1']),
@@ -134,12 +143,10 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
                 update['ask'] = float(row['PASK'])
             sign = row.get('SIGN', '3')
             update['sign_str'] = "+" if sign in ['1', '2'] else "-" if sign in ['4', '5'] else " "
-            trading_state.update_ticker(code, update)
+            state.update(update)
             level = "INFO"
         except:
             return True
-
-    state = trading_state.get_ticker_data(code) or {}
 
     time_v = str(state.get('time', '000000')).strip()
     time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}" if len(time_v) >= 6 else time_v.zfill(6)
