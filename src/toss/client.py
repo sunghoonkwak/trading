@@ -120,7 +120,7 @@ def _send_failure_notification(
 
 def _log_request(api_request, group: str, action_name: str, attempt: int) -> None:
     body = getattr(api_request, "data", None)
-    logging.info(
+    logging.debug(
         "[TossAPI] request group=%s action=%s attempt=%s method=%s url=%s headers=%s body=%s",
         group,
         action_name,
@@ -139,7 +139,7 @@ def _log_response(
     headers: Mapping[str, object],
     payload: object,
 ) -> None:
-    logging.info(
+    logging.debug(
         "[TossAPI] response group=%s action=%s status=%s rate_limit=%s body=%s",
         group,
         action_name,

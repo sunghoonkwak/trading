@@ -44,5 +44,4 @@ schema에서 다음 항목을 확인합니다.
 - `toss.client.request_json()`은 최종 Toss API query 실패를 RuntimeError로
   올리기 전에 Telegram 알림을 전송합니다. 429 재시도 중간 실패는 알림을
   보내지 않고, 재시도 후에도 실패한 경우에만 알림을 보냅니다.
-- shared Toss request helper는 연동 초기 안정화 기간 동안 요청/응답을 INFO
-  로그로 남깁니다. 런타임이 안정화되면 `toss.client`에서 DEBUG로 낮춥니다.
+- shared Toss request helper는 요청/응답 덤프를 DEBUG 로그로 남깁니다.

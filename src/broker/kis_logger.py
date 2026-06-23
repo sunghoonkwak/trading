@@ -101,7 +101,7 @@ def _is_kis_url(url: str) -> bool:
 
 
 def _log_http_response(method: str, url: str, kwargs: Mapping[str, object], response) -> None:
-    logging.info(
+    logging.debug(
         "[KISAPI] response method=%s url=%s status=%s headers=%s request=%s body=%s",
         method,
         url,

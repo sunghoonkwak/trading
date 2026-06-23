@@ -102,7 +102,7 @@ def test_kis_logger_logs_response_headers_and_body(caplog):
 
     wrapped = wrap_http_request_for_kis_logging(fake_request)
 
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG):
         response = wrapped(
             "GET",
             "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/trading/inquire-balance",
@@ -135,7 +135,7 @@ def test_kis_logger_masks_json_string_payloads(caplog):
 
     wrapped = wrap_http_request_for_kis_logging(fake_request)
 
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.DEBUG):
         wrapped(
             "POST",
             "https://openapi.koreainvestment.com:9443/oauth2/Approval",
