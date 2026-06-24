@@ -67,8 +67,6 @@ def run_periodic_rebalancing():
     if not ("09:40" <= cur_time <= "15:40"):
         return
 
-    logging.info(f"[Scheduler] Running periodic rebalancing at {cur_time} ET ({us_date})")
-
     # First scheduled call of this US trading day?
     is_first_call = (us_date != _last_first_notify_date)
 
@@ -84,6 +82,12 @@ def run_periodic_rebalancing():
         # strategy actually acted or surfaced an error.
 
         status = reb_res.get('status')
+
+        if status == StrategyStatus.DISABLED:
+            _last_first_notify_date = us_date
+            return
+
+        logging.info(f"[Scheduler] Running periodic rebalancing at {cur_time} ET ({us_date})")
 
         if is_first_call:
             should_notify = True
