@@ -142,6 +142,25 @@ def _get_rebalancing_orderable_usd(
 
 def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
     """Execute a single strategy order via the configured strategy broker."""
+    broker_name = strategy_broker.get_strategy_broker_name()
+    estimated_amount = (
+        f"{order.quantity * order.price:.2f}"
+        if order.price > 0
+        else "unknown"
+    )
+    price_text = f"{order.price:.2f}" if order.price > 0 else "MARKET"
+    logging.info(
+        "[OrderAudit] Preparing strategy order: broker=%s symbol=%s side=%s "
+        "quantity=%s price=%s estimated_amount=%s order_type=%s reason=%s",
+        broker_name,
+        order.symbol,
+        order.side.name,
+        order.quantity,
+        price_text,
+        estimated_amount,
+        order.order_type,
+        order.reason,
+    )
     return strategy_broker.place_order(order)
 
 

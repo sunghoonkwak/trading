@@ -7,32 +7,39 @@ KIS/Toss 자동매매 시스템의 진입점(Entry Point)입니다.
 
 1. **로깅 및 환경 설정**: `LogManager`와 `core.trading_config`를 통해 로그 설정 및 종목 데이터를 로드합니다.
 2. **시스템 기동 (`run`)**: 다음 순서로 각 서브시스템을 초기화합니다.
-   - **텔레그램 봇**: 원격 제어 및 상태 보고용 독립 스레드.
+   - **텔레그램 봇**: 원격 제어 및 상태 보고용 독립 스레드. 초기화에
+     실패하면 거래 런타임을 시작하지 않습니다.
    - **KIS 엔진**: `broker.kis_worker`를 통한 REST 인증 및 실시간 WebSocket 파이프라인 구축.
      `KIS_ENABLE_REST_API=false`이면 REST 인증은 건너뛰고 WebSocket 인증과
      구독 초기화만 수행합니다.
    - **Toss API**: `toss.auth.ensure_daily_token()`으로 당일 Toss access
      token을 준비합니다. KIS 초기화 뒤, 스케줄러와 웹 대시보드 시작 전에
-     수행되며 실패하면 자동 실행 표면을 시작하지 않습니다.
+     수행되며 실패하면 Telegram 알림을 시도한 뒤 자동 실행 표면을
+     시작하지 않습니다.
    - **백그라운드 스케줄러**: `scheduler` 패키지를 통한 정기적 매매 업무 실행.
    - **웹 대시보드**: `core.web_server`를 통한 실시간 이벤트 뷰어 제공.
 3. **데몬 모드**: 시스템이 종료되지 않도록 메인 스레드에서 무한 대기하며, 종료 시 모든 리소스를 안전하게 해제(`shutdown`)합니다.
 
 ## Key Functions (주요 함수)
 
-## Global Timeout Monkey-Patch
-`requests` 모듈의 기본 호출 로직을 전향적으로 오버라이드(Monkey-Patching)하여 외부 API 통신 지연으로 인해 스케줄러나 메인 스레드가 무한 대기에 빠지는 현상을 완전히 방지합니다. 기본적으로 30초의 타임아웃을 강제 적용합니다.
+## HTTP Timeout Defaults
+`core.http_defaults.install_requests_default_timeout()`을 시작 시 호출하여
+`requests` 기반 외부 API 호출에 30초 기본 timeout을 적용합니다. 호출자가
+개별 요청에 `timeout`을 명시하면 그 값이 우선합니다. 이 설정은 KIS, Toss,
+Telegram 등 런타임 프로세스 안의 `requests` 호출이 무기한 대기하는 것을
+막기 위한 의도적인 전역 기본값입니다.
 
 ### `TradingSystem.run`
-시스템의 전체 시작 프로세스를 실행합니다. KIS와 Toss 초기화가 모두
-성공한 뒤 스케줄러와 웹 대시보드를 기동합니다.
+시스템의 전체 시작 프로세스를 실행합니다. Telegram, KIS, Toss 초기화가
+모두 성공한 뒤 스케줄러와 웹 대시보드를 기동합니다. KIS 또는 Toss
+초기화 실패 시 Telegram 알림을 시도하고 fail-closed로 종료합니다.
 
 ### `TradingSystem.initialize_kis`
 KIS worker thread를 시작하고, 설정에 따라 REST 인증을 수행한 뒤 WebSocket
 approval key와 실시간 이벤트 파이프라인을 초기화합니다.
 `KIS_ENABLE_REST_API=false`이면 REST 인증은 건너뛰지만 WebSocket 인증과
 구독 초기화는 계속 수행합니다. KIS 초기화가 실패하면 이후 Toss,
-스케줄러, 웹 대시보드 단계로 진행하지 않습니다.
+스케줄러, 웹 대시보드 단계로 진행하지 않고 Telegram 알림을 시도합니다.
 
 ### `TradingSystem.initialize_toss`
 Toss 토큰 파일을 확인하고, 당일 유효 토큰이 없거나 만료 safety margin 안에

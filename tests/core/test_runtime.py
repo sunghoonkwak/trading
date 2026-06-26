@@ -453,26 +453,55 @@ def test_initialize_kis_fails_closed_when_ws_auth_fails(monkeypatch):
 def test_run_exits_before_scheduler_and_web_when_kis_init_fails(monkeypatch):
     main = _load_main(monkeypatch)
     calls = []
+    notifications = []
     system = main.TradingSystem()
 
     monkeypatch.setenv("ENV_MODE", "docker")
     monkeypatch.setattr(main.lock_manager, "acquire_lock", lambda _base_dir: True)
     monkeypatch.setattr(system, "setup_logging", lambda: calls.append("setup_logging"))
-    monkeypatch.setattr(system, "initialize_telegram", lambda: calls.append("telegram"))
+    monkeypatch.setattr(system, "initialize_telegram", lambda: calls.append("telegram") or True)
     monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
     monkeypatch.setattr(system, "initialize_kis", lambda: False)
     monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
     monkeypatch.setattr(system, "start_web_server", lambda: calls.append("web"))
     monkeypatch.setattr(system, "shutdown", lambda: calls.append("shutdown"))
+    monkeypatch.setattr(system, "_notify_startup_failure", lambda component: notifications.append(component))
 
     with pytest.raises(SystemExit) as exc_info:
         system.run()
 
     assert exc_info.value.code == 1
     assert calls == ["setup_logging", "telegram", "gsheet", "shutdown"]
+    assert notifications == ["KIS"]
 
 
 def test_run_exits_before_scheduler_and_web_when_toss_init_fails(monkeypatch):
+    main = _load_main(monkeypatch)
+    calls = []
+    notifications = []
+    system = main.TradingSystem()
+
+    monkeypatch.setenv("ENV_MODE", "docker")
+    monkeypatch.setattr(main.lock_manager, "acquire_lock", lambda _base_dir: True)
+    monkeypatch.setattr(system, "setup_logging", lambda: calls.append("setup_logging"))
+    monkeypatch.setattr(system, "initialize_telegram", lambda: calls.append("telegram") or True)
+    monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
+    monkeypatch.setattr(system, "initialize_kis", lambda: True)
+    monkeypatch.setattr(system, "initialize_toss", lambda: False)
+    monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
+    monkeypatch.setattr(system, "start_web_server", lambda: calls.append("web"))
+    monkeypatch.setattr(system, "shutdown", lambda: calls.append("shutdown"))
+    monkeypatch.setattr(system, "_notify_startup_failure", lambda component: notifications.append(component))
+
+    with pytest.raises(SystemExit) as exc_info:
+        system.run()
+
+    assert exc_info.value.code == 1
+    assert calls == ["setup_logging", "telegram", "gsheet", "shutdown"]
+    assert notifications == ["Toss"]
+
+
+def test_run_exits_before_dependencies_when_telegram_init_fails(monkeypatch):
     main = _load_main(monkeypatch)
     calls = []
     system = main.TradingSystem()
@@ -480,10 +509,10 @@ def test_run_exits_before_scheduler_and_web_when_toss_init_fails(monkeypatch):
     monkeypatch.setenv("ENV_MODE", "docker")
     monkeypatch.setattr(main.lock_manager, "acquire_lock", lambda _base_dir: True)
     monkeypatch.setattr(system, "setup_logging", lambda: calls.append("setup_logging"))
-    monkeypatch.setattr(system, "initialize_telegram", lambda: calls.append("telegram"))
+    monkeypatch.setattr(system, "initialize_telegram", lambda: calls.append("telegram") or False)
     monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
-    monkeypatch.setattr(system, "initialize_kis", lambda: True)
-    monkeypatch.setattr(system, "initialize_toss", lambda: False)
+    monkeypatch.setattr(system, "initialize_kis", lambda: calls.append("kis") or True)
+    monkeypatch.setattr(system, "initialize_toss", lambda: calls.append("toss") or True)
     monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
     monkeypatch.setattr(system, "start_web_server", lambda: calls.append("web"))
     monkeypatch.setattr(system, "shutdown", lambda: calls.append("shutdown"))
@@ -492,4 +521,18 @@ def test_run_exits_before_scheduler_and_web_when_toss_init_fails(monkeypatch):
         system.run()
 
     assert exc_info.value.code == 1
-    assert calls == ["setup_logging", "telegram", "gsheet", "shutdown"]
+    assert calls == ["setup_logging", "telegram", "shutdown"]
+
+
+def test_notify_startup_failure_sends_telegram_alert(monkeypatch):
+    main = _load_main(monkeypatch)
+    messages = []
+    fake_telegram_utils = types.ModuleType("telegram_bot.telegram_utils")
+    fake_telegram_utils.send_notification = lambda message: messages.append(message)
+    monkeypatch.setitem(sys.modules, "telegram_bot.telegram_utils", fake_telegram_utils)
+
+    main.TradingSystem()._notify_startup_failure("Toss")
+
+    assert len(messages) == 1
+    assert "Startup failure" in messages[0]
+    assert "Toss" in messages[0]

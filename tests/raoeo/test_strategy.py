@@ -494,6 +494,42 @@ def test_execute_cash_funding_does_not_submit_strategy_orders_on_failure(monkeyp
     assert slept == []
 
 
+def test_execute_single_order_logs_audit_before_broker_submission(monkeypatch, caplog):
+    order = StrategyOrder(
+        symbol="SOXL",
+        side=OrderSide.BUY,
+        quantity=3,
+        price=12.5,
+        order_type=ORDER_TYPE_LOC,
+        reason="Buy Normal",
+    )
+    calls = []
+
+    monkeypatch.setattr(
+        execution_service.strategy_broker,
+        "get_strategy_broker_name",
+        lambda: "toss",
+    )
+
+    def place_order(submitted_order):
+        calls.append(("place_order", submitted_order))
+        assert "Preparing strategy order" in caplog.text
+        assert "broker=toss" in caplog.text
+        assert "symbol=SOXL" in caplog.text
+        assert "side=BUY" in caplog.text
+        assert "quantity=3" in caplog.text
+        assert "price=12.50" in caplog.text
+        assert "estimated_amount=37.50" in caplog.text
+        return True, "Success"
+
+    monkeypatch.setattr(execution_service.strategy_broker, "place_order", place_order)
+
+    caplog.set_level("INFO")
+
+    assert execution_service.execute_single_order(order) == (True, "Success")
+    assert calls == [("place_order", order)]
+
+
 def test_execute_orders_runs_strategy_sells_before_buys(monkeypatch):
     buy_one = StrategyOrder("TQQQ", OrderSide.BUY, 1, 100.0, "buy one")
     sell_one = StrategyOrder("SOXL", OrderSide.SELL, 2, 50.0, "sell one")

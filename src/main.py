@@ -9,20 +9,10 @@ import sys
 import time
 import threading
 import logging
-import requests
 
-# Global monkey-patch to enforce a 30-second timeout on all requests
-_original_request = requests.api.request
-def _request_with_timeout(method, url, **kwargs):
-    kwargs.setdefault('timeout', 30.0)
-    return _original_request(method, url, **kwargs)
-requests.api.request = _request_with_timeout
+from core.http_defaults import install_requests_default_timeout
 
-_original_session_request = requests.Session.request
-def _session_request_with_timeout(self, method, url, **kwargs):
-    kwargs.setdefault('timeout', 30.0)
-    return _original_session_request(self, method, url, **kwargs)
-requests.Session.request = _session_request_with_timeout
+install_requests_default_timeout()
 
 # Force-disable any global requests-cache to prevent SQLite multi-thread errors
 try:
@@ -62,9 +52,12 @@ class TradingSystem:
             update_telegram_state(thread_status=ThreadStatus.RUNNING, bot_connected=True)
             logging.info("[Startup] Telegram Bot initialized")
             print("[Startup] ✓ Telegram Bot initialized")
+            return True
         else:
             update_telegram_state(thread_status=ThreadStatus.ERROR, last_error="Failed")
-            print("[Startup] ✗ Telegram init failed (continuing...)")
+            logging.critical("[Startup] Telegram initialization failed")
+            print("[Startup] ✗ Telegram init failed")
+            return False
 
     def initialize_gsheet_cache(self):
         """Warms the Google Sheets source cache once during startup."""
@@ -187,6 +180,19 @@ class TradingSystem:
         except Exception:
             logging.exception("[Startup] Web server failed to start")
 
+    def _notify_startup_failure(self, component: str):
+        """Send a best-effort Telegram alert for fail-closed startup errors."""
+        try:
+            from telegram_bot.telegram_utils import send_notification
+
+            send_notification(
+                "🚨 <b>Startup failure</b>\n"
+                f"Component: {component}\n"
+                "Trading bot stopped before scheduler/web startup."
+            )
+        except Exception as e:
+            logging.error("[Startup] Failed to send startup failure alert: %s", e)
+
     def shutdown(self):
         """Gracefully shuts down all systems."""
         print("\n[System] Shutting down...")
@@ -220,17 +226,23 @@ class TradingSystem:
             print("Please stop the existing process (or Docker container) before starting a new one.\n")
             sys.exit(1)
 
-        self.initialize_telegram()
+        if not self.initialize_telegram():
+            logging.critical("[Startup] Telegram initialization failed; refusing to start trading runtime")
+            print("\n[ERROR] Telegram initialization failed. Trading runtime will not start.")
+            self.shutdown()
+            sys.exit(1)
         self.initialize_gsheet_cache()
         time.sleep(0.5)
         if not self.initialize_kis():
             logging.critical("[Startup] KIS initialization failed; refusing to start scheduler/web services")
+            self._notify_startup_failure("KIS")
             print("\n[ERROR] KIS initialization failed. Scheduler and web services will not start.")
             self.shutdown()
             sys.exit(1)
         time.sleep(0.5)
         if not self.initialize_toss():
             logging.critical("[Startup] Toss initialization failed; refusing to start scheduler/web services")
+            self._notify_startup_failure("Toss")
             print("\n[ERROR] Toss initialization failed. Scheduler and web services will not start.")
             self.shutdown()
             sys.exit(1)

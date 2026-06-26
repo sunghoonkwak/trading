@@ -13,11 +13,11 @@ services:
       - TZ=Asia/Seoul
       - KIS_ENABLE_REST_API=true
       - KIS_ENABLE_DOMESTIC=false
-      - WEB_ENABLE_ORDER_CANCEL=true
+      - WEB_ENABLE_ORDER_CANCEL=false
       - WEB_ENABLE_MANUAL_REPORT_TRIGGERS=false
     # env_file:
     #  - .env
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - .:/app  # 코드를 수정하면 바로 반영되도록 연결
-      - /home/sunghoon/KIS_config:/app/KIS_config  # KIS 설정 파일 (private, git 미포함)
+      - ${HOME}/KIS_config:/app/KIS_config  # KIS 설정 파일 (private, git 미포함)
