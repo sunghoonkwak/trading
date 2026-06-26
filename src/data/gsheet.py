@@ -45,7 +45,7 @@ def parse_worksheet_data(worksheet, currency: str) -> dict:
     - Col D: avg_price (평균 단가)
     - Col E: investment (투자금) - calculated, not used
     - Col F: account (계좌)
-    - Col G: current_price (현재가)
+    - Col G: current_price (현재가) - ignored; live prices come from Toss
 
     Returns:
         dict with 'holdings', 'accounts', 'asset_info', 'cash_holdings'
@@ -67,7 +67,6 @@ def parse_worksheet_data(worksheet, currency: str) -> dict:
         qty_str = row[2].strip().replace(',', '')  # Col C: qty
         avg_price_str = row[3].strip().replace(',', '').replace('$', '').replace('₩', '').replace('\\', '')  # Col D: avg_price
         raw_account_name = row[5].strip() if len(row) > 5 else ""  # Col F: account
-        cur_price_str = row[6].strip().replace(',', '').replace('$', '').replace('₩', '').replace('\\', '') if len(row) > 6 else ""  # Col G: current_price
 
         # Skip empty rows
         if not ticker or not raw_account_name:
@@ -78,7 +77,6 @@ def parse_worksheet_data(worksheet, currency: str) -> dict:
         try:
             qty = float(qty_str) if qty_str else 0.0
             avg_price = float(avg_price_str) if avg_price_str else 0.0
-            cur_price = float(cur_price_str) if cur_price_str else avg_price
         except ValueError:
             continue
 
@@ -115,14 +113,13 @@ def parse_worksheet_data(worksheet, currency: str) -> dict:
                 "currency": currency
             }
 
-        # Add holding with name and current_price fields
+        # Add holding without sheet current price; integration fills it from Toss.
         holdings.append({
             "account_key": account_key,
             "ticker": ticker,
             "name": stock_name if stock_name else ticker,
             "qty": qty,
-            "avg_price": avg_price,
-            "cur_price": cur_price
+            "avg_price": avg_price
         })
 
     return {

@@ -19,6 +19,8 @@ worksheet 행 데이터를 표준 포트폴리오 조각으로 파싱합니다.
 - **출력 (Output)**: `dict` (`holdings`, `accounts`, `asset_info`, `cash_holdings`)
 - 계좌는 계좌명 자체로 구분합니다. 예를 들어 `토스`와 `토스 별도`는
   서로 다른 account로 처리됩니다.
+- 시트의 현재가 열은 읽지 않습니다. GSheet 보유 종목의 `cur_price`는
+  `data.portfolio_integration`에서 Toss 현재가 조회로 채웁니다.
 
 ## Configuration (`service-account.json`)
 Google Cloud 서비스 계정 인증 파일이 필요합니다.

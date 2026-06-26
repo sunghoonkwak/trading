@@ -224,6 +224,11 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
         "fetch_toss_source",
         lambda: (_ for _ in ()).throw(RuntimeError("Toss unavailable")),
     )
+    monkeypatch.setattr(
+        portfolio_integration,
+        "fetch_toss_prices",
+        lambda tickers: {"005930": 72000.0},
+    )
 
     result = portfolio_integration.get_integrated_portfolio()
 
@@ -235,8 +240,87 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
         "QQQM",
         "005930",
     }
+    assert {
+        holding["ticker"]: holding["cur_price"]
+        for holding in result["holdings"]
+    }["005930"] == 72000.0
     assert {cash["account_id"] for cash in result["cash_holdings"]} == {"acc_01"}
     assert result["metadata"]["toss_error"] == "Toss unavailable"
+
+
+def test_data_integration_sets_missing_gsheet_prices_to_zero_and_notifies(monkeypatch):
+    from broker import portfolio
+    from data import portfolio_integration
+
+    notifications = []
+
+    monkeypatch.setattr(
+        portfolio,
+        "fetch_kis_source",
+        lambda: (
+            {
+                "holdings": [],
+                "cash_holdings": [],
+                "asset_info": {},
+                "accounts": {},
+            },
+            {"exchange_rate": 1375.0, "error": None},
+        ),
+    )
+    monkeypatch.setattr(
+        portfolio_integration,
+        "fetch_gsheet_portfolio",
+        lambda: (
+            {
+                "holdings": [
+                    {
+                        "account_key": "ISA",
+                        "ticker": "005930",
+                        "name": "Samsung Electronics",
+                        "qty": 1,
+                        "avg_price": 70000,
+                    }
+                ],
+                "cash_holdings": [],
+                "asset_info": {
+                    "005930": {
+                        "name": "Samsung Electronics",
+                        "market": "KR",
+                        "asset_type": "Stock",
+                        "currency": "KRW",
+                    }
+                },
+                "accounts": {"ISA": {"name": "ISA"}},
+            },
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        portfolio,
+        "fetch_toss_source",
+        lambda: (
+            {
+                "holdings": [],
+                "cash_holdings": [],
+                "asset_info": {},
+                "accounts": {"토스": {"name": "토스"}},
+            },
+            None,
+        ),
+    )
+    monkeypatch.setattr(portfolio_integration, "fetch_toss_prices", lambda tickers: {})
+    monkeypatch.setattr(
+        portfolio_integration,
+        "send_telegram_warning",
+        lambda message: notifications.append(message),
+    )
+
+    result = portfolio_integration.get_integrated_portfolio()
+
+    assert result["holdings"][0]["cur_price"] == 0.0
+    assert notifications == [
+        "[Portfolio] Toss current price missing for 005930; cur_price set to 0"
+    ]
 
 
 def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
@@ -347,6 +431,11 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
             None,
         ),
     )
+    monkeypatch.setattr(
+        portfolio_integration,
+        "fetch_toss_prices",
+        lambda tickers: {"005930": 72000.0},
+    )
 
     result = portfolio_integration.get_integrated_portfolio()
 
@@ -420,10 +509,16 @@ def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
         "fetch_toss_source",
         lambda: (_ for _ in ()).throw(RuntimeError("Toss unavailable")),
     )
+    monkeypatch.setattr(
+        portfolio_integration,
+        "fetch_toss_prices",
+        lambda tickers: {"QQQM": 123.45},
+    )
 
     result = portfolio_integration.get_integrated_portfolio()
 
     assert [holding["ticker"] for holding in result["holdings"]] == ["QQQM"]
+    assert result["holdings"][0]["cur_price"] == 123.45
     assert result["cash_holdings"][0]["amount"] == 50.0
     assert result["metadata"]["toss_error"] == "Toss unavailable"
 
@@ -684,4 +779,24 @@ def test_cash_only_gsheet_accounts_get_account_ids():
             "amount": 1028394.0,
             "currency": "KRW",
         },
+    ]
+
+
+def test_gsheet_parser_ignores_sheet_current_price_column():
+    worksheet = FakeWorksheet([
+        ["ticker", "name", "qty", "avg_price", "investment", "account", "cur_price"],
+        ["", "", "", "", "", "", ""],
+        ["005930", "Samsung Electronics", "1", "70000", "", "ISA", "999999"],
+    ])
+
+    parsed = parse_worksheet_data(worksheet, "KRW")
+
+    assert parsed["holdings"] == [
+        {
+            "account_key": "ISA",
+            "ticker": "005930",
+            "name": "Samsung Electronics",
+            "qty": 1.0,
+            "avg_price": 70000.0,
+        }
     ]

@@ -11,10 +11,13 @@
 3. **Toss 원천 대체**: `scope="all"`에서 Toss 조회가 실패하면 GSheet의
    `토스` 데이터를 fallback으로 유지하고 `metadata.toss_error`를
    남깁니다.
-4. **통합 raw 포트폴리오 생성**: KIS, GSheet, Toss의 `accounts`,
+4. **GSheet 가격 보강**: GSheet에서 읽은 현재가는 버리고, Toss 보유조회
+   가격이 없는 보유 종목만 Toss `/api/v1/prices` 현재가로 채웁니다.
+   가격을 못 받은 종목은 `cur_price=0`으로 두고 Telegram 경고를 보냅니다.
+5. **통합 raw 포트폴리오 생성**: KIS, GSheet, Toss의 `accounts`,
    `holdings`, `cash_holdings`, `asset_info`를 병합하고 `account_id`를
    부여합니다.
-5. **Broker별 최적화**: `scope="kis"`는 KIS만, `scope="toss"`는 Toss만
+6. **Broker별 최적화**: `scope="kis"`는 KIS만, `scope="toss"`는 Toss만
    조회합니다. 전략 실행은 `strategy_broker` 설정값을 `kis` 또는 `toss`
    scope로 직접 전달하며, GSheet fallback은 전체 확인용 `scope="all"`에만
    허용됩니다.
@@ -34,7 +37,19 @@
 
 ### `fetch_gsheet_portfolio`
 
-USD/KRW Google Sheets 워크시트를 표준 source 포맷으로 읽습니다.
+USD/KRW Google Sheets 워크시트를 표준 source 포맷으로 읽습니다. 시트의
+현재가 열은 포트폴리오 평가에 사용하지 않습니다.
+
+### `fetch_toss_prices`
+
+Toss market data `/api/v1/prices`로 현재가를 다건 조회합니다. GSheet
+보유분 가격 보강에서는 KIS fallback을 사용하지 않습니다.
+
+### `fill_missing_current_prices_from_toss`
+
+broker 원천 가격이 없는 holding에 Toss 현재가를 채웁니다. Toss 가격이
+누락되면 해당 holding의 `cur_price`를 `0.0`으로 설정하고 Telegram 경고를
+보냅니다.
 
 ### `replace_account_source`
 

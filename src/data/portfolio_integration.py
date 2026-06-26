@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Portfolio source integration owned by the data layer."""
 
+import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 from data.portfolio_scope import (
     PORTFOLIO_SCOPE_ALL,
@@ -55,6 +56,94 @@ def fetch_toss_exchange_rate() -> Tuple[Optional[float], Optional[str]]:
         return float(str(result.get("rate", "")).replace(",", "")), None
     except Exception as e:
         return None, str(e)
+
+
+def _to_positive_float(value: Any) -> float:
+    try:
+        price = float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return 0.0
+    return price if price > 0 else 0.0
+
+
+def fetch_toss_prices(tickers: Iterable[str]) -> Dict[str, float]:
+    """Fetch current prices from Toss market data without KIS fallback."""
+    symbols = sorted(
+        {
+            str(ticker).strip().upper()
+            for ticker in tickers
+            if str(ticker).strip()
+        }
+    )
+    if not symbols:
+        return {}
+
+    try:
+        from toss.auth import load_access_token
+        from toss.get_prices import get_prices
+
+        access_token = load_access_token()
+        prices: Dict[str, float] = {}
+        for start in range(0, len(symbols), 200):
+            batch = symbols[start:start + 200]
+            for item in get_prices(batch, access_token=access_token):
+                symbol = str(item.get("symbol", "")).strip().upper()
+                price = _to_positive_float(item.get("lastPrice"))
+                if symbol and price > 0:
+                    prices[symbol] = price
+        return prices
+    except Exception as e:
+        logging.warning("[Portfolio] Toss current price fetch failed: %s", e)
+        return {}
+
+
+def send_telegram_warning(message: str) -> None:
+    """Send a portfolio warning to Telegram and the local alert stream."""
+    from core.display import add_alert
+
+    add_alert(message, "WARNING")
+    try:
+        from telegram_bot.telegram_utils import send_notification
+
+        send_notification(message)
+    except Exception as e:
+        logging.warning("[Portfolio] Telegram warning failed: %s", e)
+
+
+def discard_source_current_prices(source: Dict[str, Any]) -> None:
+    """Remove GSheet current prices so live Toss prices are authoritative."""
+    for holding in source.get("holdings", []):
+        holding.pop("cur_price", None)
+
+
+def fill_missing_current_prices_from_toss(source: Dict[str, Any]) -> None:
+    """Fill holdings that do not already have broker current prices."""
+    holdings = [
+        holding
+        for holding in source.get("holdings", [])
+        if _to_positive_float(holding.get("cur_price")) <= 0
+    ]
+    if not holdings:
+        return
+
+    prices = fetch_toss_prices(holding.get("ticker", "") for holding in holdings)
+    missing = []
+    for holding in holdings:
+        ticker = str(holding.get("ticker", "")).strip()
+        symbol = ticker.upper()
+        price = prices.get(symbol, 0.0)
+        if price > 0:
+            holding["cur_price"] = price
+        else:
+            holding["cur_price"] = 0.0
+            if symbol:
+                missing.append(symbol)
+
+    if missing:
+        symbols = ", ".join(sorted(set(missing)))
+        send_telegram_warning(
+            f"[Portfolio] Toss current price missing for {symbols}; cur_price set to 0"
+        )
 
 
 def replace_account_source(
@@ -210,6 +299,7 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
 
         add_alert("[Data] Fetching GSheet data...", "INFO")
         gsheet_data, gsheet_error = fetch_gsheet_portfolio()
+        discard_source_current_prices(gsheet_data)
         if gsheet_error:
             add_alert(f"GSheet Warning: {gsheet_error}", "WARN")
         try:
@@ -230,6 +320,8 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
         except Exception as e:
             toss_error = str(e)
             add_alert(f"Toss Warning: {toss_error}", "WARN")
+
+        fill_missing_current_prices_from_toss(gsheet_data)
 
     return merge_portfolio_sources(
         kis_portfolio,
