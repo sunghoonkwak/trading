@@ -13,8 +13,6 @@ from state.system_state import is_kis_ready
 from core.display import add_alert
 from data.config_manager import ConfigFile, load_json, save_json
 from data.portfolio_processing import (
-    PortfolioCache,
-    PortfolioCacheManager,
     PortfolioProcessor,
 )
 from data.portfolio_scope import (
@@ -37,16 +35,9 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     """
     scope = normalize_portfolio_scope(scope)
 
-    # 1. Return cached portfolio data when it is still valid.
-    cached = PortfolioCacheManager.get(force_refresh)
-    if cached:
-        logging.info("[DataService] Using cached portfolio data")
-        add_alert("[Data] Using cached portfolio", "DEBUG")
-        return _apply_scope_filter(cached, scope)
+    logging.info("[DataService] Fetching fresh portfolio data")
 
-    logging.info("[DataService] Fetching fresh portfolio data (cache missed/force)")
-
-    # 2. Fetch fresh portfolio data from the KIS worker.
+    # 1. Fetch fresh portfolio data from the KIS worker.
     if not is_kis_ready():
         return {"error": "KIS Thread not ready"}
 
@@ -60,7 +51,7 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     raw_portfolio = response.result
     save_json(ConfigFile.PORTFOLIO, raw_portfolio)
 
-    # 3. Merge holdings and calculate portfolio statistics.
+    # 2. Merge holdings and calculate portfolio statistics.
     processor = PortfolioProcessor()
     merged_data, total_usd = processor.merge_holdings(raw_portfolio)
     stats = processor.calculate_stats(raw_portfolio)
@@ -77,7 +68,7 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
         "metadata": raw_portfolio.get("metadata", {})
     }
 
-    # 4. Calculate current and target weights.
+    # 3. Calculate current and target weights.
     try:
         from data.calculate_weights import calculate_target_weights
         weights_cfg = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
@@ -88,10 +79,8 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
         logging.error(f"Weight calc error: {e}")
         result["targets"] = {}
 
-    # 5. Cache complete data only when upstream sources succeeded.
+    # 4. Report whether the freshly loaded data is complete.
     if not (result["metadata"].get("gsheet_error") or result["metadata"].get("kis_error")):
-        if scope == PORTFOLIO_SCOPE_ALL:
-            PortfolioCacheManager.set(result)
         add_alert("[Data] Portfolio loaded", "SUCCESS")
     else:
         add_alert("[Data] Portfolio loaded (partial)", "WARN")
@@ -236,4 +225,6 @@ def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
     return diffs, total_usd, {"current": current_cash/total_usd if total_usd > 0 else 0, "target": target_cash}
 
 def invalidate_cache():
-    PortfolioCacheManager.invalidate()
+    from data.portfolio_integration import invalidate_gsheet_cache
+
+    invalidate_gsheet_cache()

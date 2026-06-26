@@ -275,6 +275,56 @@ def test_portfolio_weight_command_uses_valid_portfolio_scope(monkeypatch):
     assert replies
 
 
+def test_gsheet_command_refreshes_only_gsheet_cache(monkeypatch):
+    replies = []
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append(text)
+
+    class ImmediateResult:
+        def __init__(self, value):
+            self.value = value
+
+        def __await__(self):
+            yield
+            return self.value
+
+    class FakeLoop:
+        def run_in_executor(self, executor, func, *args):
+            return ImmediateResult(func(*args))
+
+    monkeypatch.setattr(
+        telegram_portfolio.asyncio,
+        "get_running_loop",
+        lambda: FakeLoop(),
+    )
+    monkeypatch.setattr(telegram_portfolio, "wrap_reply", fake_reply)
+    monkeypatch.setattr(
+        telegram_portfolio,
+        "refresh_gsheet_cache",
+        lambda: {
+            "success": True,
+            "holdings_count": 3,
+            "cash_count": 1,
+            "accounts_count": 2,
+            "error": None,
+            "last_updated": "2026-06-26T01:02:03+00:00",
+        },
+    )
+
+    class Update:
+        pass
+
+    class Context:
+        user_data = {}
+
+    asyncio.run(telegram_portfolio.cmd_gsheet(Update(), Context()))
+
+    assert len(replies) == 1
+    assert "GSheet cache updated" in replies[0]
+    assert "Holdings: 3" in replies[0]
+
+
 def test_format_weight_diffs_shows_group_total_and_main_ticker(monkeypatch):
     monkeypatch.setattr(
         telegram_portfolio,

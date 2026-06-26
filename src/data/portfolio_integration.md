@@ -7,7 +7,9 @@
 
 1. **Broker 원천 조회 위임**: `broker.portfolio`가 KIS/Toss API 데이터를
    표준 source 포맷으로 변환해 제공합니다.
-2. **GSheet 원천 조회**: `data.gsheet`을 통해 수동/외부 자산을 읽습니다.
+2. **GSheet 원천 캐시**: `data.gsheet`을 통해 읽은 수동/외부 자산 source를
+   메모리에 보관합니다. 최초 사용 또는 startup warmup 때 한 번 읽고,
+   이후에는 Telegram `/gsheet` 명령으로 갱신합니다.
 3. **Toss 원천 대체**: `scope="all"`에서 Toss 조회가 실패하면 GSheet의
    `토스` 데이터를 fallback으로 유지하고 `metadata.toss_error`를
    남깁니다.
@@ -39,6 +41,18 @@
 
 USD/KRW Google Sheets 워크시트를 표준 source 포맷으로 읽습니다. 시트의
 현재가 열은 포트폴리오 평가에 사용하지 않습니다.
+
+### `get_cached_gsheet_portfolio`
+
+메모리에 저장된 GSheet source를 반환합니다. 캐시가 비어 있으면 한 번
+`fetch_gsheet_portfolio`를 호출해 초기화합니다. 반환값은 복사본이라
+가격 보강 과정에서 캐시 원본이 변경되지 않습니다.
+
+### `refresh_gsheet_cache`
+
+Google Sheets를 다시 읽어 GSheet source 캐시를 교체합니다. Telegram
+`/gsheet` 명령과 startup warmup에서 사용하며, 보유 종목/현금/계정 수와
+성공 또는 경고 상태를 반환합니다.
 
 ### `fetch_toss_prices`
 

@@ -34,13 +34,13 @@ assert "kis.kis_api.kis_auth" not in sys.modules
     assert result.returncode == 0, result.stderr
 
 
-def test_data_portfolio_cache_export_stays_lightweight(tmp_path):
+def test_data_package_does_not_export_portfolio_cache(tmp_path):
     result = _run_import_check(
         tmp_path,
         """
 import sys
-from data import PortfolioCache
-assert PortfolioCache.__name__ == "PortfolioCache"
+import data
+assert not hasattr(data, "PortfolioCache")
 assert "data.data_service" not in sys.modules
 assert "kis.kis_api.kis_auth" not in sys.modules
 """,

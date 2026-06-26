@@ -459,6 +459,7 @@ def test_run_exits_before_scheduler_and_web_when_kis_init_fails(monkeypatch):
     monkeypatch.setattr(main.lock_manager, "acquire_lock", lambda _base_dir: True)
     monkeypatch.setattr(system, "setup_logging", lambda: calls.append("setup_logging"))
     monkeypatch.setattr(system, "initialize_telegram", lambda: calls.append("telegram"))
+    monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
     monkeypatch.setattr(system, "initialize_kis", lambda: False)
     monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
     monkeypatch.setattr(system, "start_web_server", lambda: calls.append("web"))
@@ -468,7 +469,7 @@ def test_run_exits_before_scheduler_and_web_when_kis_init_fails(monkeypatch):
         system.run()
 
     assert exc_info.value.code == 1
-    assert calls == ["setup_logging", "telegram", "shutdown"]
+    assert calls == ["setup_logging", "telegram", "gsheet", "shutdown"]
 
 
 def test_run_exits_before_scheduler_and_web_when_toss_init_fails(monkeypatch):
@@ -480,6 +481,7 @@ def test_run_exits_before_scheduler_and_web_when_toss_init_fails(monkeypatch):
     monkeypatch.setattr(main.lock_manager, "acquire_lock", lambda _base_dir: True)
     monkeypatch.setattr(system, "setup_logging", lambda: calls.append("setup_logging"))
     monkeypatch.setattr(system, "initialize_telegram", lambda: calls.append("telegram"))
+    monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
     monkeypatch.setattr(system, "initialize_kis", lambda: True)
     monkeypatch.setattr(system, "initialize_toss", lambda: False)
     monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
@@ -490,4 +492,4 @@ def test_run_exits_before_scheduler_and_web_when_toss_init_fails(monkeypatch):
         system.run()
 
     assert exc_info.value.code == 1
-    assert calls == ["setup_logging", "telegram", "shutdown"]
+    assert calls == ["setup_logging", "telegram", "gsheet", "shutdown"]

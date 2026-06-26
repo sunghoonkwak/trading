@@ -66,6 +66,30 @@ class TradingSystem:
             update_telegram_state(thread_status=ThreadStatus.ERROR, last_error="Failed")
             print("[Startup] ✗ Telegram init failed (continuing...)")
 
+    def initialize_gsheet_cache(self):
+        """Warms the Google Sheets source cache once during startup."""
+        print("[Startup] Step 1b: Loading GSheet cache...")
+        try:
+            from data.portfolio_integration import refresh_gsheet_cache
+
+            result = refresh_gsheet_cache()
+            if result["success"]:
+                logging.info(
+                    "[Startup] GSheet cache loaded: %s holdings, %s cash rows",
+                    result["holdings_count"],
+                    result["cash_count"],
+                )
+                print("[Startup] ✓ GSheet cache loaded")
+            else:
+                logging.warning(
+                    "[Startup] GSheet cache loaded with warnings: %s",
+                    result["error"],
+                )
+                print("[Startup] ⚠ GSheet cache loaded with warnings")
+        except Exception as e:
+            logging.error(f"[Startup] GSheet cache initialization failed: {e}")
+            print("[Startup] ✗ GSheet cache init failed (continuing...)")
+
     def initialize_kis(self):
         """Initializes KIS API and WebSocket connection."""
         print("[Startup] Step 2: Initializing KIS API...")
@@ -197,6 +221,7 @@ class TradingSystem:
             sys.exit(1)
 
         self.initialize_telegram()
+        self.initialize_gsheet_cache()
         time.sleep(0.5)
         if not self.initialize_kis():
             logging.critical("[Startup] KIS initialization failed; refusing to start scheduler/web services")

@@ -23,6 +23,7 @@ from datetime import datetime
 from broker import market_data, order_admin
 from data.data_service import get_weight_diffs
 from data.data_service import get_portfolio_data
+from data.portfolio_integration import refresh_gsheet_cache
 
 # Conversation states
 SELECT_TICKER = 0
@@ -671,6 +672,38 @@ async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYP
         logging.error(f"[TG] cmd_portfolio_weight failed: {e}")
 
 
+async def cmd_gsheet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Command handler for /gsheet - refresh cached GSheet source data."""
+    logging.info(f"[TG] /gsheet from user")
+    try:
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, refresh_gsheet_cache)
+        status = (
+            "✅ <b>GSheet cache updated</b>"
+            if result["success"]
+            else "⚠️ <b>GSheet cache updated with warnings</b>"
+        )
+        lines = [
+            status,
+            "",
+            f"Holdings: {result['holdings_count']}",
+            f"Cash rows: {result['cash_count']}",
+            f"Accounts: {result['accounts_count']}",
+        ]
+        if result.get("last_updated"):
+            lines.append(f"Updated: <code>{result['last_updated']}</code>")
+        if result.get("error"):
+            lines.extend(["", f"Warning: <code>{result['error']}</code>"])
+        await wrap_reply(update, "\n".join(lines), parse_mode='HTML')
+    except Exception as e:
+        logging.error(f"[TG] cmd_gsheet failed: {e}")
+        await wrap_reply(
+            update,
+            f"⚠️ <b>GSheet refresh failed:</b> <code>{e}</code>",
+            parse_mode='HTML',
+        )
+
+
 def register_portfolio_handlers(app: Application):
     """Register Portfolio command handlers."""
     # ConversationHandler for /portfolio
@@ -691,6 +724,7 @@ def register_portfolio_handlers(app: Application):
     )
 
     app.add_handler(conv_handler)
+    app.add_handler(CommandHandler("gsheet", cmd_gsheet))
     app.add_handler(CommandHandler("portfolio_weight", cmd_portfolio_weight))
     app.add_handler(CommandHandler("placed_orders", cmd_placed_orders))
 
@@ -699,6 +733,7 @@ def get_portfolio_commands_desc() -> str:
     """Return Portfolio command descriptions for init message."""
     return (
         "/portfolio - Portfolio check (interactive)\n"
+        "/gsheet - Refresh cached GSheet data\n"
         "/portfolio_weight - Rebalancing suggestions\n"
         "/placed_orders - Show open orders"
     )

@@ -1,39 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Portfolio cache and transformation helpers."""
+"""Portfolio transformation helpers."""
 
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Dict, Optional, Tuple
-
-from core.constants import PORTFOLIO_CACHE_EXPIRE
-
-
-@dataclass
-class PortfolioCache:
-    data: Dict
-    timestamp: datetime
-    expire_seconds: int = PORTFOLIO_CACHE_EXPIRE
-
-    def is_expired(self) -> bool:
-        return (datetime.now() - self.timestamp).total_seconds() > self.expire_seconds
-
-
-class PortfolioCacheManager:
-    _cache: Optional[PortfolioCache] = None
-
-    @classmethod
-    def get(cls, force_refresh: bool = False) -> Optional[Dict]:
-        if force_refresh or cls._cache is None or cls._cache.is_expired():
-            return None
-        return cls._cache.data
-
-    @classmethod
-    def set(cls, data: Dict):
-        cls._cache = PortfolioCache(data=data, timestamp=datetime.now())
-
-    @classmethod
-    def invalidate(cls):
-        cls._cache = None
+from typing import Dict, Tuple
 
 
 class PortfolioProcessor:

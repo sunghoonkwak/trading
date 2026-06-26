@@ -4,14 +4,10 @@ Public data-service helpers are loaded lazily so importing ``data`` does not
 initialize KIS-backed services.
 """
 
-__all__ = ["get_portfolio_data", "invalidate_cache", "PortfolioCache"]
+__all__ = ["get_portfolio_data", "invalidate_cache"]
 
 
 def __getattr__(name):
-    if name == "PortfolioCache":
-        from .portfolio_processing import PortfolioCache
-
-        return PortfolioCache
     if name in __all__:
         from . import data_service
 

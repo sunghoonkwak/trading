@@ -6,7 +6,6 @@ KIS thread, Telegram, display alert, 파일 저장 같은 runtime IO에
 
 ## Responsibilities
 
-- `PortfolioCache`와 `PortfolioCacheManager`로 메모리 캐시 상태를 관리합니다.
 - `PortfolioProcessor.merge_holdings`로 계좌별 원천 잔고를 ticker 기준
   보유/현금 pseudo-ticker 구조로 병합합니다.
 - `PortfolioProcessor.calculate_stats`로 USD/KRW 주식, 현금, 전체 합계와
