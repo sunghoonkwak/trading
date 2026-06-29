@@ -311,6 +311,45 @@ class TossAuthTest(unittest.TestCase):
 
 
 class TossOrderApiTest(unittest.TestCase):
+    def test_create_order_preserves_fractional_market_sell_quantity(self):
+        from toss.create_order import create_order
+
+        captured = {}
+
+        def fake_urlopen(request, timeout):
+            captured["url"] = request.full_url
+            captured["headers"] = dict(request.header_items())
+            captured["body"] = json.loads(request.data.decode("utf-8"))
+            captured["timeout"] = timeout
+            return _response({"result": {"orderId": "order-1"}})
+
+        result = create_order(
+            account_seq=1,
+            access_token="access-token",
+            symbol="AAPL",
+            side="SELL",
+            order_type="MARKET",
+            quantity="0.500001",
+            base_url="https://example.test",
+            urlopen=fake_urlopen,
+        )
+
+        self.assertEqual(captured["url"], "https://example.test/api/v1/orders")
+        self.assertEqual(captured["headers"]["Authorization"], "Bearer access-token")
+        self.assertEqual(captured["headers"]["X-tossinvest-account"], "1")
+        self.assertEqual(captured["headers"]["Content-type"], "application/json")
+        self.assertEqual(
+            captured["body"],
+            {
+                "symbol": "AAPL",
+                "side": "SELL",
+                "orderType": "MARKET",
+                "quantity": "0.500001",
+            },
+        )
+        self.assertEqual(captured["timeout"], 10.0)
+        self.assertEqual(result["orderId"], "order-1")
+
     def test_toss_broker_reads_usd_buying_power(self):
         from broker import toss_broker
 

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "토스증권 Open API",
-    "version": "1.1.1"
+    "version": "1.1.5"
   },
   "servers": [
     {
@@ -2456,7 +2456,7 @@
           "Order"
         ],
         "summary": "주문 생성",
-        "description": "매수 또는 매도 주문을 생성합니다.\n\n**수량 지정 방식** — `quantity`, `orderAmount` 중 정확히 하나를 사용:\n- `quantity`: 주문 수량 (주 단위). 지정한 수량만큼 주문\n- `orderAmount`: 주문 금액 (달러). 지정한 금액만큼 주문하며, 체결 수량은 시장가에 따라 결정. US MARKET 전용\n\n**금액 주문 (`orderAmount`)**: 정규장 시간에만 가능합니다. 정규장 외 시간에 호출 시 `422 amount-order-outside-regular-hours` 를 반환합니다.\n\n**Rate Limits Group**: `ORDER`\n",
+        "description": "매수 또는 매도 주문을 생성합니다.\n\n**수량 지정 방식** — `quantity`, `orderAmount` 중 정확히 하나를 사용:\n- `quantity`: 주문 수량 (주 단위). 지정한 수량만큼 주문. 소수점 수량은 미국 주식 시장가 매도(`MARKET`+`SELL`)에만 허용 (그 외는 정수만)\n- `orderAmount`: 주문 금액 (달러). 지정한 금액만큼 주문하며, 체결 수량은 시장가에 따라 결정. US MARKET 전용\n\n**금액 주문 (`orderAmount`)**: 정규장 시간에만 가능합니다. 정규장 외 시간에 호출 시 `422 amount-order-outside-regular-hours` 를 반환합니다.\n\n**Rate Limits Group**: `ORDER`\n",
         "operationId": "createOrder",
         "security": [
           {
@@ -2494,6 +2494,15 @@
                     "side": "BUY",
                     "orderType": "MARKET",
                     "orderAmount": "100.5"
+                  }
+                },
+                "usMarketSellFractionalQuantity": {
+                  "summary": "해외주식 소수점 시장가 매도 (수량)",
+                  "value": {
+                    "symbol": "AAPL",
+                    "side": "SELL",
+                    "orderType": "MARKET",
+                    "quantity": "0.5"
                   }
                 },
                 "usLocBuy": {
@@ -2710,18 +2719,35 @@
                       }
                     }
                   },
-                  "fractionalQuantityUsMarketOnly": {
-                    "summary": "소수점 수량은 US 시장가에만 허용",
+                  "fractionalQuantityUsSellOnly": {
+                    "summary": "소수점 수량은 US 시장가 매도에만 허용",
                     "value": {
                       "error": {
                         "requestId": "01HXYZABCDEFG123456789",
                         "code": "invalid-request",
-                        "message": "소수점 수량 주문은 미국 주식 시장가 주문에만 사용할 수 있습니다.",
+                        "message": "소수점 수량 주문은 미국 주식 시장가 매도 주문에만 사용할 수 있습니다. 소수점 매수는 orderAmount(금액) 주문을 사용해 주세요.",
                         "data": {
                           "field": "quantity",
                           "allowedConditions": {
                             "marketCountry": "US",
-                            "orderType": "MARKET"
+                            "orderType": "MARKET",
+                            "side": "SELL"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "fractionalQuantityScaleExceeded": {
+                    "summary": "소수점 수량 6자리 초과",
+                    "value": {
+                      "error": {
+                        "requestId": "01HXYZABCDEFG123456789",
+                        "code": "invalid-request",
+                        "message": "소수점 수량은 소수점 6자리까지 지원합니다.",
+                        "data": {
+                          "field": "quantity",
+                          "constraint": {
+                            "maxScale": 6
                           }
                         }
                       }
@@ -2876,6 +2902,23 @@
                         "message": "미국 주식 금액 주문은 정규장 시간에만 접수할 수 있습니다.",
                         "data": {
                           "field": "orderAmount",
+                          "regularHours": {
+                            "start": "2026-03-30T09:30:00-04:00",
+                            "end": "2026-03-30T16:00:00-04:00"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "fractionalQuantityOutsideRegularHours": {
+                    "summary": "정규장 외 시간 소수점 수량 주문 불가",
+                    "value": {
+                      "error": {
+                        "requestId": "01HXYZABCDEFG123456789",
+                        "code": "fractional-quantity-outside-regular-hours",
+                        "message": "미국 주식 소수점 수량 주문은 정규장 시간에만 접수할 수 있습니다.",
+                        "data": {
+                          "field": "quantity",
                           "regularHours": {
                             "start": "2026-03-30T09:30:00-04:00",
                             "end": "2026-03-30T16:00:00-04:00"
@@ -5959,9 +6002,9 @@
               "quantity": {
                 "type": "string",
                 "format": "decimal",
-                "pattern": "^\\d+$",
+                "pattern": "^\\d+(\\.\\d+)?$",
                 "maxLength": 30,
-                "description": "주문 수량 (주 단위). 지정한 수량만큼 주문합니다.\n정수만 가능합니다. (소수점 불가능. 소수점 주문 시 Amount-based variant 의 `orderAmount` 를 사용해야 합니다.)\n",
+                "description": "주문 수량 (주 단위). 지정한 수량만큼 주문합니다.\n- 기본: 양의 정수만 가능합니다.\n- 소수점 수량: 미국 주식 시장가 매도(`orderType=MARKET` + `side=SELL`) 주문에만 허용됩니다.\n  그 외(매수/지정가/국내) 소수점 수량은 `400 invalid-request` 를 반환합니다.\n  소수점 매수는 `orderAmount` 를 사용하세요.\n  소수점 수량 매도는 정규장 시간에만 접수 가능하며, 정규장 외 요청 시 `422 fractional-quantity-outside-regular-hours` 를 반환합니다.\n  소수점 수량은 소수점 6자리까지 지원하며, 초과 시 `400 invalid-request` (`fractional-quantity-scale-exceeded`) 를 반환합니다.\n",
                 "example": "10"
               },
               "price": {

@@ -57,7 +57,7 @@ container over temporary runtime logging or a service restart.
 ## Toss API Reference
 
 For Toss Invest Open API work, consult the checked-in OpenAPI reference first:
-`docs/reference/toss-openapi-v1.1.1.json`. It is a public-style API schema with
+`docs/reference/toss-openapi.json`. It is a public-style API schema with
 dummy examples only; runtime credentials and account data still belong only in
 `KIS_config/` or external mounts.
 

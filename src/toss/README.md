@@ -6,12 +6,12 @@
 ## Reference
 
 Toss 요청 코드를 변경하기 전에는 먼저 체크인된 OpenAPI schema
-`docs/reference/toss-openapi-v1.1.1.json`를 확인합니다.
+`docs/reference/toss-openapi.json`를 확인합니다.
 
 자주 쓰는 검색 패턴:
 
 ```bash
-rg -n '"/api/v1/orders|operationId|cancelOrder|modifyOrder' docs/reference/toss-openapi-v1.1.1.json
+rg -n '"/api/v1/orders|operationId|cancelOrder|modifyOrder' docs/reference/toss-openapi.json
 ```
 
 schema에서 다음 항목을 확인합니다.
@@ -20,6 +20,10 @@ schema에서 다음 항목을 확인합니다.
 - 요청 `Content-Type`과 body 형태
 - `X-Tossinvest-Account` header 필요 여부
 - `orderId`, `orders`, `nextCursor` 같은 응답 field 이름
+- 주문 생성의 수량 계약: `quantity`는 기본적으로 정수 주식 수량이며,
+  소수점 수량은 미국 주식 `MARKET` + `SELL` 주문에만 허용됩니다. 소수점
+  매수는 `orderAmount` 금액 주문을 사용하고, 소수점 수량은 최대 6자리까지
+  지원됩니다.
 
 ## Runtime Notes
 
