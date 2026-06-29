@@ -21,8 +21,8 @@
 - `EXECUTED`: 모든 주문 성공
 - `PARTIAL`: 일부 주문 실패 (재실행 필요)
 - `SKIPPED`: 조건 미달로 주문 없음
-- `HOLIDAY`: 휴장일로 실행 안 함
-- `NON_MARKET_TIME`: 장 운영 시간이 아님
+- `HOLIDAY`: 휴장일로 실행 안 함 (이전 히스토리 호환용)
+- `NON_MARKET_TIME`: 시장이 열려 있지 않아 실행 안 함
 - `DISABLED`: 전략 비활성화 상태
 - `ERROR`: 실행 중 오류 발생
 - `ALREADY_DONE`: 이미 실행 완료 (중복 실행 방지용)

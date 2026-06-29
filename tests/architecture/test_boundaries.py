@@ -136,3 +136,19 @@ assert "kis.kis_thread" not in sys.modules
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_market_utils_status_api_uses_market_open_contract(tmp_path):
+    result = _run_import_check(
+        tmp_path,
+        """
+import utils.market_utils as market_utils
+assert not hasattr(market_utils, "is_market_holiday")
+status = market_utils.get_us_market_status("2026-07-04")
+assert set(status) == {"is_market_open", "message"}
+assert status["is_market_open"] is False
+assert "closed" in status["message"].lower()
+""",
+    )
+
+    assert result.returncode == 0, result.stderr

@@ -247,6 +247,65 @@ from strategy import execution_service
 from strategy.base import OrderSide, StrategyOrder
 
 
+def _open_market(monkeypatch):
+    monkeypatch.setattr(
+        execution_service,
+        "get_us_market_status",
+        lambda date=None: {
+            "is_market_open": True,
+            "message": "",
+        },
+    )
+
+
+def test_execution_service_uses_market_utils_status_directly():
+    assert not hasattr(execution_service, "_get_market_status")
+
+
+def test_run_raoeo_stops_before_market_data_on_weekend(monkeypatch):
+    class FrozenDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            return tz.localize(dt.datetime(2026, 7, 4, 8, 12, 4))
+
+    config = {
+        "raoeo": {
+            "enabled": True,
+            "targets": {
+                "TQQQ": {
+                    "enabled": True,
+                    "seed": 1000,
+                    "duration": 1,
+                    "phase": [{
+                        "name": "initial",
+                        "threshold": 1.0,
+                        "buy": [{"type": "normal", "ratio": 1.0}],
+                        "sell": [],
+                    }],
+                },
+            },
+        },
+    }
+    monkeypatch.setattr(execution_service, "datetime", FrozenDateTime)
+    monkeypatch.setattr(execution_service, "_load_history", lambda: [])
+    monkeypatch.setattr(
+        execution_service,
+        "load_json",
+        lambda file_type, default=None: config,
+    )
+    monkeypatch.setattr(
+        execution_service,
+        "get_market_data",
+        lambda force_refresh=False: (_ for _ in ()).throw(
+            AssertionError("weekend run must not fetch market data")
+        ),
+    )
+
+    report = execution_service.run_raoeo_strategy(execute=False)
+
+    assert report["status"] == StrategyStatus.NON_MARKET_TIME
+
+
 def _buy_order():
     return StrategyOrder(
         symbol="TQQQ",
@@ -628,11 +687,7 @@ def test_run_raoeo_persists_skipped_buy_budget_history(monkeypatch):
             },
         }
     }
-    monkeypatch.setattr(
-        execution_service,
-        "_get_market_status",
-        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
-    )
+    _open_market(monkeypatch)
     monkeypatch.setattr(
         execution_service.strategy_broker,
         "get_strategy_broker_name",
@@ -679,11 +734,7 @@ def test_run_va_with_all_targets_disabled_stops_before_history(monkeypatch):
             },
         },
     }
-    monkeypatch.setattr(
-        execution_service,
-        "_get_market_status",
-        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
-    )
+    _open_market(monkeypatch)
     monkeypatch.setattr(
         execution_service,
         "load_json",
@@ -733,11 +784,7 @@ def test_run_va_reuses_empty_order_history_without_fetching_data(monkeypatch):
             },
         }]
     monkeypatch.setattr(execution_service, "datetime", FrozenDateTime)
-    monkeypatch.setattr(
-        execution_service,
-        "_get_market_status",
-        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
-    )
+    _open_market(monkeypatch)
     monkeypatch.setattr(
         execution_service,
         "load_json",
@@ -815,11 +862,7 @@ def test_run_raoeo_does_not_automatically_query_or_sell_cash_ticker(monkeypatch)
             },
         },
     }
-    monkeypatch.setattr(
-        execution_service,
-        "_get_market_status",
-        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
-    )
+    _open_market(monkeypatch)
     monkeypatch.setattr(execution_service, "_load_history", lambda: [])
     monkeypatch.setattr(
         execution_service,
@@ -860,11 +903,7 @@ def test_run_rebalancing_passes_api_orderable_usd_to_calculation(monkeypatch):
         },
     }
     received = {}
-    monkeypatch.setattr(
-        execution_service,
-        "_get_market_status",
-        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
-    )
+    _open_market(monkeypatch)
     monkeypatch.setattr(execution_service, "_load_history", lambda: [])
     monkeypatch.setattr(
         execution_service,
@@ -905,11 +944,7 @@ def test_run_va_strategy_can_reuse_market_snapshot(monkeypatch):
         },
     }
     received = {}
-    monkeypatch.setattr(
-        execution_service,
-        "_get_market_status",
-        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
-    )
+    _open_market(monkeypatch)
     monkeypatch.setattr(execution_service, "_load_history", lambda: [])
     monkeypatch.setattr(
         execution_service,
@@ -973,11 +1008,7 @@ def test_run_strategy_suite_reuses_context_for_raoeo_and_va(monkeypatch):
     }
     portfolio_calls = []
     va_received = {}
-    monkeypatch.setattr(
-        execution_service,
-        "_get_market_status",
-        lambda today: {"is_market_open": True, "is_holiday": False, "message": ""},
-    )
+    _open_market(monkeypatch)
     monkeypatch.setattr(execution_service, "_load_history", lambda: [])
     monkeypatch.setattr(
         execution_service,

@@ -20,7 +20,7 @@ from strategy import raoeo, value_averaging, rebalancing
 from strategy.base import StrategyOrder, StrategyStatus, OrderSide
 from strategy.constants import ORDER_TYPE_LIMIT
 from data.config_manager import ConfigFile, load_json, save_json
-from utils.market_utils import get_us_market_status, is_market_holiday
+from utils.market_utils import get_us_market_status
 from utils.price_utils import resolve_current_price
 
 # Timezone constant
@@ -162,19 +162,6 @@ def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
         order.reason,
     )
     return strategy_broker.place_order(order)
-
-
-def _get_market_status(today_str: str) -> Dict:
-    """
-    Centralized market status determination.
-    Returns: { "is_market_open": bool, "is_holiday": bool, "message": str }
-    """
-    is_holiday = is_market_holiday("NYSE", today_str)
-    if is_holiday:
-        return {"is_market_open": False, "is_holiday": True, "message": "Market closed (Holiday)"}
-
-    is_allowed, market_msg = get_us_market_status()
-    return {"is_market_open": is_allowed, "is_holiday": False, "message": market_msg}
 
 
 def _build_base_report(today_str: str, market_status: Dict) -> Dict:
@@ -686,7 +673,7 @@ def run_raoeo_strategy(
     Run RAOEO strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = _get_market_status(today_str)
+    market_status = get_us_market_status(today_str)
     report = _build_base_report(today_str, market_status)
 
     try:
@@ -726,9 +713,9 @@ def run_raoeo_strategy(
             )
             return report
 
-        # Step 5: No history — calculate
-        if market_status["is_holiday"]:
-            report["status"] = StrategyStatus.HOLIDAY
+        # Step 5: No history — calculate only when the market is open
+        if not market_status["is_market_open"]:
+            report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
         run_context = context or StrategyRunContext()
@@ -798,7 +785,7 @@ def run_va_strategy(
     Run Value Averaging strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = _get_market_status(today_str)
+    market_status = get_us_market_status(today_str)
     report = _build_base_report(today_str, market_status)
 
     try:
@@ -837,9 +824,9 @@ def run_va_strategy(
             )
             return report
 
-        # Step 5: No history — calculate
-        if market_status["is_holiday"]:
-            report["status"] = StrategyStatus.HOLIDAY
+        # Step 5: No history — calculate only when the market is open
+        if not market_status["is_market_open"]:
+            report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
         if market_snapshot is not None:
@@ -918,7 +905,7 @@ def run_rebalancing_strategy(
     Run Rebalancing strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = _get_market_status(today_str)
+    market_status = get_us_market_status(today_str)
     report = _build_base_report(today_str, market_status)
 
     try:
@@ -941,9 +928,9 @@ def run_rebalancing_strategy(
             _handle_rebalancing_history(report, reb_hist)
             return report
 
-        # Step 5: No history — calculate
-        if market_status["is_holiday"]:
-            report["status"] = StrategyStatus.HOLIDAY
+        # Step 5: No history — calculate only when the market is open
+        if not market_status["is_market_open"]:
+            report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
         # Load market data (portfolio + prices)

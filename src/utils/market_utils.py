@@ -2,12 +2,12 @@
 """
 Market Utilities Module
 
-Provides helper functions for market indicators (Fear & Greed) and calendar (holidays).
+Provides helper functions for market indicators and market calendar status.
 """
 import time
 import logging
 from datetime import datetime, time as dt_time
-from typing import Optional, Tuple
+from typing import Dict, Optional, Union
 import pytz
 
 # Optional external dependencies
@@ -26,30 +26,53 @@ except ImportError:
 # Internal cache for Fear & Greed Index
 _fg_cache = {"value": 50.0, "last_update": 0.0}
 
-def get_us_market_status() -> Tuple[bool, str]:
+def get_us_market_status(date: Optional[Union[str, datetime]] = None) -> Dict:
     """
     Checks if current time is within allowed US trading hours (05:00 - 16:00 ET).
-    Returns (is_allowed, message)
+    Returns { "is_market_open": bool, "message": str }.
     """
     tz_et = pytz.timezone('US/Eastern')
     now_et = datetime.now(tz_et)
-    
-    # Check weekend
-    if now_et.weekday() >= 5:
-        return False, "Market closed (Weekend)"
+    check_date = date or now_et
+    if isinstance(check_date, str):
+        for fmt in ("%Y%m%d", "%Y-%m-%d"):
+            try:
+                parsed = datetime.strptime(check_date, fmt)
+                check_date = tz_et.localize(parsed.replace(
+                    hour=now_et.hour,
+                    minute=now_et.minute,
+                    second=now_et.second,
+                ))
+                break
+            except ValueError:
+                continue
 
-    # Check holiday
-    if is_market_holiday("NYSE", now_et):
-        return False, "Market closed (Holiday)"
+    # Check weekend
+    if check_date.weekday() >= 5:
+        return {
+            "is_market_open": False,
+            "message": "Market closed (Weekend)",
+        }
+
+    if not _has_market_session("NYSE", check_date):
+        return {
+            "is_market_open": False,
+            "message": "Market closed (Holiday)",
+        }
 
     current_time = now_et.time()
     start_time = dt_time(5, 0)  # 05:00 ET
     end_time = dt_time(16, 0)    # 16:00 ET
 
     if start_time <= current_time <= end_time:
-        return True, "Trading Allowed"
-    else:
-        return False, f"Trading not allowed (Current ET: {now_et.strftime('%H:%M')})"
+        return {
+            "is_market_open": True,
+            "message": "Trading Allowed",
+        }
+    return {
+        "is_market_open": False,
+        "message": f"Trading not allowed (Current ET: {now_et.strftime('%H:%M')})",
+    }
 
 def get_fear_and_greed() -> float:
     """
@@ -71,13 +94,13 @@ def get_fear_and_greed() -> float:
 
     return _fg_cache["value"]
 
-def is_market_holiday(name: str = "NYSE", date: Optional[datetime] = None) -> bool:
+def _has_market_session(name: str = "NYSE", date: Optional[datetime] = None) -> bool:
     """
-    Check if the specified market is on holiday on the given date.
+    Check if the specified market has a trading session on the given date.
     """
     if mcal is None:
-        logging.warning("[MarketUtils] pandas_market_calendars not found. Holiday check disabled.")
-        return False
+        logging.warning("[MarketUtils] pandas_market_calendars not found. Market session check disabled.")
+        return True
 
     if date is None:
         date = datetime.utcnow()
@@ -90,12 +113,12 @@ def is_market_holiday(name: str = "NYSE", date: Optional[datetime] = None) -> bo
                 continue
         if isinstance(date, str):
             # Failed to parse
-            return False
+            return True
 
     try:
         cal = mcal.get_calendar(name)
         schedule = cal.schedule(start_date=date, end_date=date)
-        return schedule.empty
+        return not schedule.empty
     except Exception as e:
-        logging.error(f"[MarketUtils] Error checking {name} holiday: {e}")
-        return False
+        logging.error(f"[MarketUtils] Error checking {name} market session: {e}")
+        return True

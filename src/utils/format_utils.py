@@ -19,13 +19,6 @@ def get_fixed_width(text: str, width: int = 8) -> str:
         current_width += w
     return result + (" " * (width - current_width))
 
-def safe_cast(val: Any, to_type: type, default: Any = None) -> Any:
-    """Safely cast a value to a specific type."""
-    try:
-        return to_type(val)
-    except (ValueError, TypeError):
-        return default
-
 def format_number(val: Any, default: str = "0") -> str:
     """Format a numeric value with thousands separators."""
     price_str = str(val).strip()
