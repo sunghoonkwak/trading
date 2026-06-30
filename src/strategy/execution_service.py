@@ -13,18 +13,19 @@ import time
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 
-import pytz
-
 from broker import market_data, strategy_broker
 from strategy import raoeo, value_averaging, rebalancing
 from strategy.base import StrategyOrder, StrategyStatus, OrderSide
-from strategy.constants import ORDER_TYPE_LIMIT
+from strategy.constants import (
+    ORDER_TYPE_LIMIT,
+    STRATEGY_HISTORY_COMPACT_DATE_RE,
+    STRATEGY_HISTORY_DATE_RE,
+    TZ_ET,
+)
 from data.config_manager import ConfigFile, load_json, save_json
 from utils.market_utils import get_us_market_status
 from utils.price_utils import resolve_current_price
 
-# Timezone constant
-TZ_ET = pytz.timezone('US/Eastern')
 _orderable_usd_cache: Dict[str, float] = {}
 
 
@@ -194,9 +195,18 @@ def normalize_strategy_history_date(raw: str = "") -> str:
         return datetime.now(TZ_ET).strftime("%Y-%m-%d")
 
     raw = raw.strip()
-    if len(raw) == 8 and raw.isdigit():
-        return f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
-    return raw
+    if STRATEGY_HISTORY_COMPACT_DATE_RE.match(raw):
+        normalized = f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+    elif STRATEGY_HISTORY_DATE_RE.match(raw):
+        normalized = raw
+    else:
+        raise ValueError("Date must be YYYY-MM-DD or YYYYMMDD.")
+
+    try:
+        datetime.strptime(normalized, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("Date must be a valid calendar date.") from exc
+    return normalized
 
 
 def clear_strategy_history_for_date(target_date: str = "") -> Dict[str, Any]:

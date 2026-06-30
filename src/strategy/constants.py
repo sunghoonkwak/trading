@@ -1,10 +1,18 @@
 # -*- coding: utf-8 -*-
 """Strategy policy defaults shared by strategy modules."""
+import re
+
+import pytz
 
 DEFAULT_FEAR_GREED = 50.0
 DEFAULT_VA_THRESHOLD = 0.15
 DEFAULT_RAOEO_PROFIT = 0.10
 DEFAULT_REBALANCE_THRESHOLD = 0.05
+
+TZ_ET = pytz.timezone('US/Eastern')
+
+STRATEGY_HISTORY_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+STRATEGY_HISTORY_COMPACT_DATE_RE = re.compile(r"^\d{8}$")
 
 # Broker-neutral order intents used by strategies.
 ORDER_TYPE_LIMIT = "LIMIT"

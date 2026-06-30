@@ -5,6 +5,7 @@ Telegram Strategy Module (Refactored)
 Handles the /strategy command to view and execute all active strategies.
 """
 import logging
+from html import escape
 from typing import Dict, List, Optional
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -12,8 +13,8 @@ from telegram.ext import (
     ConversationHandler, CallbackQueryHandler, TypeHandler
 )
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
+from strategy.constants import TZ_ET
 from strategy.execution_service import (
-    TZ_ET,
     clear_strategy_history_for_date,
     execute_raoeo_cash_funding,
     normalize_strategy_history_date,
@@ -101,7 +102,18 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_clear_strategy_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    target_date = normalize_strategy_history_date(context.args[0] if context.args else "")
+    raw_date = context.args[0] if context.args else ""
+    try:
+        target_date = normalize_strategy_history_date(raw_date)
+    except ValueError as e:
+        escaped_date = escape(raw_date)
+        await wrap_reply(
+            update,
+            f"⚠️ Invalid date: <code>{escaped_date}</code>\n"
+            f"{escape(str(e))}",
+            parse_mode='HTML',
+        )
+        return
     logging.info("[TG] /clear_strategy_history date=%s", target_date)
 
     keyboard = InlineKeyboardMarkup([

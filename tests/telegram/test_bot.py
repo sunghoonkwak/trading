@@ -226,6 +226,80 @@ def test_execute_without_cash_sale_skips_funding_and_runs_strategies(monkeypatch
     assert len(formatted) == 1
 
 
+def test_clear_strategy_history_accepts_compact_date(monkeypatch):
+    replies = []
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append((text, kwargs))
+
+    monkeypatch.setattr(telegram_strategy, "wrap_reply", fake_reply)
+
+    class Update:
+        pass
+
+    class Context:
+        args = ["20260630"]
+
+    asyncio.run(telegram_strategy.cmd_clear_strategy_history(Update(), Context()))
+
+    text, kwargs = replies[0]
+    assert "2026-06-30" in text
+    keyboard = kwargs["reply_markup"].inline_keyboard
+    assert keyboard[0][0].callback_data == "clear_strategy_history_yes:2026-06-30"
+    assert len(keyboard[0][0].callback_data.encode("utf-8")) <= 64
+
+
+def test_clear_strategy_history_rejects_invalid_date(monkeypatch):
+    replies = []
+    cleared = []
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append((text, kwargs))
+
+    monkeypatch.setattr(telegram_strategy, "wrap_reply", fake_reply)
+    monkeypatch.setattr(
+        telegram_strategy,
+        "clear_strategy_history_for_date",
+        lambda target_date: cleared.append(target_date),
+    )
+
+    class Update:
+        pass
+
+    class Context:
+        args = ["<bad&date>" * 20]
+
+    asyncio.run(telegram_strategy.cmd_clear_strategy_history(Update(), Context()))
+
+    text, kwargs = replies[0]
+    assert "Invalid date" in text
+    assert "&lt;bad&amp;date&gt;" in text
+    assert "reply_markup" not in kwargs
+    assert cleared == []
+
+
+def test_clear_strategy_history_rejects_impossible_date(monkeypatch):
+    replies = []
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append((text, kwargs))
+
+    monkeypatch.setattr(telegram_strategy, "wrap_reply", fake_reply)
+
+    class Update:
+        pass
+
+    class Context:
+        args = ["2026-99-99"]
+
+    asyncio.run(telegram_strategy.cmd_clear_strategy_history(Update(), Context()))
+
+    text, kwargs = replies[0]
+    assert "Invalid date" in text
+    assert "2026-99-99" in text
+    assert "reply_markup" not in kwargs
+
+
 def test_portfolio_weight_command_uses_valid_portfolio_scope(monkeypatch):
     captured = {}
 
