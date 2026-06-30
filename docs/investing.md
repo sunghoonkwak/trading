@@ -118,6 +118,12 @@ $$ \text{매수/매도액} = \text{목표 가치} - \text{현재 평가액} $$
         - **로직**: 매일 정해진 만큼 분할 매수하다가, 목표 수익률(예: 10%)에 도달하면 전량 매도하여 수익을 확정합니다(Cash Out).
         - **효과**: 등락을 반복하는 횡보장이나 변동성 장세에서 짧은 주기로 수익을 반복 실현합니다.
         - **리스크 관리**: 한 종목에 시드가 묶이는 것을 방지하기 위해 상관관계가 낮은 여러 종목(기술주 vs 금융주 등)을 동시에 운용합니다.
+        - **보조 전략: TLTW Cash Sweep**
+            - RAOEO는 변동성을 반복 매매 수익으로 치환하는 전략이며, 수익 실현이 잦을수록 양도소득세 이벤트도 함께 발생합니다.
+            - 동시에 RAOEO는 다음 매수 기회를 위해 일정한 달러 자산을 대기시켜야 합니다. 이 자금을 단순 예수금으로만 두면 기회비용이 발생합니다.
+            - 그래서 RAOEO의 Working Cash 일부를 `TLTW`에 파킹합니다. TLTW는 TLT를 기초자산으로 하는 커버드콜 ETF로, 채권 가격이 크게 상승할 때의 upside는 제한되지만 횡보하거나 하락하는 구간에서는 옵션 프리미엄을 월배당 형태로 받을 수 있습니다.
+            - 구조적으로 TLTW의 NAV가 우하향할 수 있지만, RAOEO의 양도차익과 TLTW 매매손실이 상계될 수 있고, 일부 수익이 배당소득으로 이전되어 세후 효율을 높일 수 있습니다.
+            - 따라서 TLTW cash sweep은 현금 비중 원칙을 버리는 것이 아니라, RAOEO용 대기 달러를 세금과 현금흐름 관점에서 더 효율적으로 운용하는 하위 전략입니다.
 
     2. **리밸런싱 (Rebalancing)**
         - **개념**: 서로 성격이 다른 두 자산의 비중 차이를 이용한 'Threshold Triggering' 전략입니다.
@@ -157,6 +163,14 @@ $$ \text{매수/매도액} = \text{목표 가치} - \text{현재 평가액} $$
 3. **주식 총량 설정**: $\text{Stock Total} = 100\\% - \text{cash weight} - \text{leverage total}$
 4. **종목별 타겟 비중**: $\text{Target Weight} = \frac{\text{Stock Score}}{\sum \text{Stock Scores}} \times \text{Stock Total}$
 
+#### Cash vs Cash Substitute
+이 문서에서 말하는 현금 비중은 계좌 전체의 방어력과 매수 여력을 관리하기 위한 기준입니다. 다만 RAOEO처럼 전략 자체가 대기 달러를 요구하는 경우, 그 일부는 순수 USD 예수금이 아니라 `cash_ticker` 형태의 현금 대체 자산으로 운용할 수 있습니다.
+
+- **순수 현금(USD cash)**: 가격 변동은 없지만 수익도 거의 없으며, 즉시 주문 가능성이 가장 높습니다.
+- **현금 대체 자산(TLTW 등)**: 월배당과 세후 효율을 기대할 수 있지만, 금리 급등, 채권 가격 하락, NAV 우하향, 배당소득 종합과세, 슬리피지 리스크가 있습니다.
+- **운용 원칙**: cash sweep은 자동 수익률 추구가 아니라 RAOEO의 Working Cash 효율화입니다. 필요 시 매도해 전략 매수 재원으로 쓰되, 실패하거나 조달이 불가능하면 전략 실행을 멈추는 것이 원칙입니다.
+- **리스크 한계**: TLTW는 예수금이 아니므로, 전체 포트폴리오의 방어 현금과 은퇴/생활 안정성을 훼손할 정도로 확대하지 않습니다.
+
 ### C. 그룹 관리 및 이격도 제어 (Group Handling)
 - **Group Target**: 메인 티커(Main Ticker)가 그룹 전체의 타겟 점수를 보유하며, 구성 종목들이 이를 갉아먹지 않도록 설계합니다.
 - **Holding Calculation**: 메인 티커의 보유량과 구성 종목들의 보유 합계를 실시간으로 비교하여 매매 여부를 결정합니다.
@@ -168,4 +182,6 @@ $$ \text{매수/매도액} = \text{목표 가치} - \text{현재 평가액} $$
 - **Yearly**: 세액 공제 혜택 점검 및 투자 원칙의 유효성 재검토
 
 ---
+**Version 1.2.0** (2026-06-30): Add TLTW cash sweep as a tax-aware RAOEO working-cash sub-strategy and clarify cash substitute risk boundaries
+
 **Version 1.1.0** (2026-02-19): Update: F&G thresholds 20/80, Cash 10%/20%/30%, and Leverage 10% for Extreme Fear state
