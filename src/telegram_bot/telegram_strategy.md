@@ -18,6 +18,14 @@
      리포트에 표시합니다.
    - 조달 매도는 버튼 승인 시 현재 정보로 새로 계산하며, 접수 실패 또는 조달 불가이면 RAOEO와 Value Averaging을 모두 실행하지 않습니다.
 
+3. **Strategy History Reset (전략 이력 초기화)**:
+   - `/clear_strategy_history [date]` 명령은 `strategy_history.json`에서 지정 날짜
+     항목 전체를 삭제합니다. 날짜를 생략하면 오늘 ET 날짜를 사용합니다.
+   - 삭제 전 Inline 확인/취소 버튼을 전송하고, 확인 버튼을 누른 경우에만
+     삭제하여 실수 실행을 방지합니다.
+   - 실패 주문 재테스트 시 PC 접속 없이 텔레그램에서 당일 전략 실행 이력을
+     제거할 수 있습니다.
+
 ## Key Functions (주요 함수)
 
 ### `cmd_strategy`
@@ -30,6 +38,12 @@
 - `cash_ticker` 매도 후 실행을 고르면 매도 접수 성공 후 5초를 기다린 뒤 전략을 실행하며, 조달 결과는 RAOEO 이력에 별도로 저장됩니다.
 - 실행 후에는 히스토리가 업데이트되므로 중복 실행되지 않습니다.
 
+### `cmd_clear_strategy_history`
+`/clear_strategy_history [date]` 명령어 입력 시 호출됩니다.
+- 삭제 대상 날짜를 보여주고 확인/취소 버튼을 전송합니다.
+- 확인 시 해당 날짜의 전략 이력 전체를 삭제하여 `/strategy` 및 다른 전략
+  재실행이 가능하게 합니다.
+
 ## Configuration (None)
 별도의 설정 파일이 없습니다.
 
@@ -38,6 +52,7 @@
 **Telegram 채팅방**:
 ```
 /strategy
+/clear_strategy_history
 ```
 **Bot 응답**:
 ```

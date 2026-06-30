@@ -188,6 +188,38 @@ def _load_history() -> list:
     return load_json(ConfigFile.STRATEGY_HISTORY, default=[])
 
 
+def normalize_strategy_history_date(raw: str = "") -> str:
+    """Return a strategy history date string, defaulting to today in ET."""
+    if not raw:
+        return datetime.now(TZ_ET).strftime("%Y-%m-%d")
+
+    raw = raw.strip()
+    if len(raw) == 8 and raw.isdigit():
+        return f"{raw[:4]}-{raw[4:6]}-{raw[6:]}"
+    return raw
+
+
+def clear_strategy_history_for_date(target_date: str = "") -> Dict[str, Any]:
+    """Remove the full strategy history entry for a date."""
+    target_date = normalize_strategy_history_date(target_date)
+    hist_data = _load_history()
+    if not isinstance(hist_data, list):
+        raise ValueError("strategy_history.json must contain a list.")
+
+    updated = []
+    removed = False
+    for entry in hist_data:
+        if isinstance(entry, dict) and entry.get("date") == target_date:
+            removed = True
+            continue
+        updated.append(entry)
+
+    if removed and not save_json(ConfigFile.STRATEGY_HISTORY, updated):
+        raise RuntimeError("Failed to save strategy_history.json.")
+
+    return {"date": target_date, "removed": removed}
+
+
 def _get_today_entry(hist_data: list, today_str: str) -> Dict:
     """Find or create today's entry in history."""
     for entry in hist_data:

@@ -162,6 +162,7 @@ def initialize_telegram():
                     "Commands:\n"
                     f"{port_desc}\n\n"
                     "/strategy - RAOEO & VA Strategies\n"
+                    "/clear_strategy_history [date] - Clear strategy history for retest\n"
                     "/rebalance - TQQQ+SCHD Rebalancing\n\n"
                     "/daily_report [date] - View past reports\n"
                     f"{memo_desc}"

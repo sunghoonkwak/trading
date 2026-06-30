@@ -14,7 +14,9 @@ from telegram.ext import (
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 from strategy.execution_service import (
     TZ_ET,
+    clear_strategy_history_for_date,
     execute_raoeo_cash_funding,
+    normalize_strategy_history_date,
     prepare_raoeo_cash_funding,
     run_strategy_suite,
     save_raoeo_cash_funding_result,
@@ -96,6 +98,65 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['strategy_msg_id'] = sent_msg.message_id
 
     return STRATEGY_CONFIRM if has_orders else ConversationHandler.END
+
+
+async def cmd_clear_strategy_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target_date = normalize_strategy_history_date(context.args[0] if context.args else "")
+    logging.info("[TG] /clear_strategy_history date=%s", target_date)
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "🧹 Clear Strategy History",
+                callback_data=f"clear_strategy_history_yes:{target_date}",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "❌ Cancel",
+                callback_data="clear_strategy_history_no",
+            )
+        ],
+    ])
+    await wrap_reply(
+        update,
+        f"⚠️ Clear all strategy history for <b>{target_date}</b>?\n"
+        "This deletes RAOEO, VA, and rebalancing history for that date so they can run again.",
+        parse_mode='HTML',
+        reply_markup=keyboard,
+    )
+
+
+async def handle_clear_strategy_history_callback(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data == "clear_strategy_history_no":
+        await wrap_edit(update, "❌ <b>Cancelled.</b>", parse_mode='HTML')
+        return
+
+    if not data.startswith("clear_strategy_history_yes:"):
+        return
+
+    target_date = data.split(":", 1)[1]
+    try:
+        result = clear_strategy_history_for_date(target_date)
+        if result["removed"]:
+            message = f"✅ Cleared all strategy history for {result['date']}."
+        else:
+            message = f"ℹ️ No strategy history found for {result['date']}."
+        await wrap_edit(update, message, parse_mode='HTML')
+    except Exception as e:
+        logging.error("[TG] clear strategy history failed: %s", e, exc_info=True)
+        await wrap_edit(
+            update,
+            f"❌ <b>Failed to clear strategy history.</b>\n{e}",
+            parse_mode='HTML',
+        )
 
 async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -183,3 +244,8 @@ def register_strategy_handlers(app: Application):
         conversation_timeout=60
     )
     app.add_handler(conv_handler)
+    app.add_handler(CommandHandler("clear_strategy_history", cmd_clear_strategy_history))
+    app.add_handler(CallbackQueryHandler(
+        handle_clear_strategy_history_callback,
+        pattern=r'^clear_strategy_history_',
+    ))
