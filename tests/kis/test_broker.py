@@ -20,6 +20,38 @@ class _FakeTREnv:
     my_prod = "01"
 
 
+def _sync_order(monkeypatch, order_row):
+    from broker import order_admin
+
+    captured = {}
+
+    monkeypatch.setattr(order_admin, "clear_order_states", lambda: None)
+    monkeypatch.setattr(order_admin, "add_alert", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        order_admin.trading_config,
+        "update_stock_name",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        order_admin.trading_config,
+        "get_stock_info",
+        lambda _ticker: {"name": "DIREXION SEMICONDUCTOR"},
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "fetch_open_orders",
+        lambda: (pd.DataFrame([order_row]), 0, 0, 1),
+    )
+
+    def fake_update_order_state(*args, **kwargs):
+        captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(order_admin, "update_order_state", fake_update_order_state)
+
+    assert order_admin.sync_open_orders() is True
+    return captured
+
+
 def test_get_orderable_usd_reads_overseas_orderable_amount(monkeypatch):
     calls = {}
 
@@ -286,55 +318,47 @@ def test_order_admin_fetches_open_orders_from_toss(monkeypatch):
     assert df.iloc[0]["orderId"] == "toss-1"
 
 
-def test_order_admin_sync_uses_toss_ordered_at_time(monkeypatch):
+def test_toss_order_time(monkeypatch):
+    captured = _sync_order(
+        monkeypatch,
+        {
+            "_market": "TOSS",
+            "orderId": "toss-1",
+            "symbol": "SOXL",
+            "side": "BUY",
+            "orderType": "LIMIT",
+            "timeInForce": "CLS",
+            "price": "297.43",
+            "quantity": "3",
+            "orderedAt": "2026-07-01T19:51:05.425+09:00",
+        },
+    )
+
+    assert captured["kwargs"]["time_str"] == "19:51:05"
+
+
+def test_kis_order_time():
     from broker import order_admin
 
-    captured = {}
-
-    monkeypatch.setattr(order_admin, "clear_order_states", lambda: None)
-    monkeypatch.setattr(order_admin, "add_alert", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        order_admin.trading_config,
-        "update_stock_name",
-        lambda *args, **kwargs: None,
-    )
-    monkeypatch.setattr(
-        order_admin.trading_config,
-        "get_stock_info",
-        lambda _ticker: {"name": "DIREXION SEMICONDUCTOR"},
-    )
-    monkeypatch.setattr(
-        order_admin,
-        "fetch_open_orders",
-        lambda: (
-            pd.DataFrame(
-                [
-                    {
-                        "_market": "TOSS",
-                        "orderId": "toss-1",
-                        "symbol": "SOXL",
-                        "side": "BUY",
-                        "orderType": "LIMIT",
-                        "timeInForce": "CLS",
-                        "price": "297.43",
-                        "quantity": "3",
-                        "orderedAt": "2026-07-01T19:51:05.425+09:00",
-                    }
-                ]
-            ),
-            0,
-            0,
-            1,
-        ),
-    )
-
-    def fake_update_order_state(*args, **kwargs):
-        captured["kwargs"] = kwargs
-
-    monkeypatch.setattr(order_admin, "update_order_state", fake_update_order_state)
-
-    assert order_admin.sync_open_orders() is True
-    assert captured["kwargs"]["time_str"] == "19:51:05"
+    assert order_admin._format_order_for_display(
+        "US",
+        {
+            "ord_tmd": "195306",
+            "sll_buy_dvsn_cd_name": "",
+            "sll_buy_dvsn_cd": "02",
+            "ft_ord_unpr3": "299.94",
+            "nccs_qty": "16",
+        },
+    ) == ("Buy", "299.94", "16", "19:53:06")
+    assert order_admin._format_order_for_display(
+        "KR",
+        {
+            "ord_tmd": "091500",
+            "sll_buy_dvsn_cd": "01",
+            "ord_unpr": "50000",
+            "psbl_qty": "3",
+        },
+    ) == ("Sell", "50000", "3", "09:15:00")
 
 
 def test_order_admin_executes_toss_cancel_through_toss_endpoint(monkeypatch):
@@ -402,6 +426,55 @@ def test_order_admin_executes_overseas_cancel_through_kis_endpoint(monkeypatch):
     assert calls["order"]["orgn_odno"] == "1"
     assert calls["order"]["rvse_cncl_dvsn_cd"] == "02"
     assert calls["order"]["ord_qty"] == "3"
+    assert calls["order"]["env_dv"] == "real"
+
+
+def test_order_admin_executes_domestic_cancel_through_kis_endpoint(monkeypatch):
+    from broker import order_admin
+
+    calls = {}
+
+    monkeypatch.setenv("KIS_ENABLE_DOMESTIC", "true")
+    monkeypatch.setattr(
+        order_admin,
+        "_get_trenv",
+        lambda: _FakeTREnv(),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_get_overseas_order_endpoints",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("overseas order endpoints are not needed for KR cancel")
+        ),
+    )
+
+    def fake_order_rvsecncl(**kwargs):
+        calls["order"] = kwargs
+        return pd.DataFrame([{"result": "ok"}]), "ok"
+
+    monkeypatch.setattr(
+        order_admin,
+        "_get_domestic_order_endpoints",
+        lambda: (lambda **kwargs: None, fake_order_rvsecncl),
+    )
+
+    result, message = order_admin.execute_manage_action(
+        "KR",
+        "2",
+        {
+            "odno": "2",
+            "ord_gno_brno": "001",
+            "ord_dvsn_cd": "00",
+            "psbl_qty": "5",
+        },
+    )
+
+    assert result.iloc[0]["result"] == "ok"
+    assert message == "ok"
+    assert calls["order"]["orgn_odno"] == "2"
+    assert calls["order"]["rvse_cncl_dvsn_cd"] == "02"
+    assert calls["order"]["ord_qty"] == "5"
+    assert calls["order"]["ord_unpr"] == "0"
     assert calls["order"]["env_dv"] == "real"
 
 

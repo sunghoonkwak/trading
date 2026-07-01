@@ -17,6 +17,23 @@
 - 주문 취소(`2`)와 정정(`1`) 요청을 공식 KIS endpoint wrapper 인자로
   변환합니다.
 - `sync_open_orders()`는 조회 결과를 display state에 반영합니다.
+  Event Viewer의 주문 시간은 조회 시각이 아니라 브로커 응답의 주문
+  입력 시각을 사용합니다. KIS는 `ord_tmd`, Toss는 `orderedAt`을
+  `HH:MM:SS`로 변환합니다.
+
+## Market-Specific Behavior
+
+- `_market="TOSS"`: Toss OPEN 주문입니다. Toss 정정은 지원하지 않고
+  취소만 Toss cancel endpoint로 보냅니다.
+- `_market="KR"`: KIS 국내 주문입니다. `KIS_ENABLE_DOMESTIC=true`일
+  때만 조회/관리하며 국내 KIS 정정/취소 endpoint 인자로 변환합니다.
+- 그 외 `_market` 값은 KIS 해외 주문으로 취급합니다. 현재 조회 경로는
+  해외 KIS 미체결 주문에 `_market="US"`를 부여합니다.
+
+화면 표시용 주문 값(`side`, `price`, `qty`, `time_str`)과 주문 관리
+액션은 공통 진입 함수에서 `market`으로 분기한 뒤 Toss, KIS 국내,
+KIS 해외 helper에서 각각 변환합니다. Toss는 국내/해외 시장 구분이
+아니라 Toss 브로커 주문으로 다룹니다.
 
 ## Import Boundary
 
