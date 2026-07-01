@@ -2,6 +2,7 @@
 """Application-owned runtime for open-order administration."""
 
 import logging
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional, Tuple
 
@@ -111,6 +112,23 @@ def _mask_order_id(value):
     if len(value) <= 12:
         return value
     return f"{value[:6]}...{value[-6:]}"
+
+
+def _format_iso_order_time(value) -> Optional[str]:
+    if value is None or pd.isna(value):
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    try:
+        return datetime.fromisoformat(text).strftime("%H:%M:%S")
+    except ValueError:
+        if "T" in text:
+            time_part = text.split("T", 1)[1]
+            return time_part[:8] if len(time_part) >= 8 else None
+        return None
 
 
 def fetch_open_orders() -> Tuple[pd.DataFrame, int, int, int]:
@@ -383,14 +401,17 @@ def _sync_display_open_orders():
                     )
                     qty = str(int(float(q_val)))
 
-                raw_time = row_l.get('ord_tmd', '')
-                time_str = None
-                if raw_time is not None and not pd.isna(raw_time):
-                    raw_time = str(raw_time)
+                if market == "TOSS":
+                    time_str = _format_iso_order_time(row_l.get('orderedat'))
                 else:
-                    raw_time = ''
-                if raw_time and len(raw_time) == 6:
-                    time_str = f"{raw_time[:2]}:{raw_time[2:4]}:{raw_time[4:]}"
+                    raw_time = row_l.get('ord_tmd', '')
+                    time_str = None
+                    if raw_time is not None and not pd.isna(raw_time):
+                        raw_time = str(raw_time)
+                    else:
+                        raw_time = ''
+                    if raw_time and len(raw_time) == 6:
+                        time_str = f"{raw_time[:2]}:{raw_time[2:4]}:{raw_time[4:]}"
 
                 display_name = _first_present(stock_info.get('name'), api_name, default=pdno)
 

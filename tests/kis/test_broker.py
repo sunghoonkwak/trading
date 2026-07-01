@@ -286,6 +286,57 @@ def test_order_admin_fetches_open_orders_from_toss(monkeypatch):
     assert df.iloc[0]["orderId"] == "toss-1"
 
 
+def test_order_admin_sync_uses_toss_ordered_at_time(monkeypatch):
+    from broker import order_admin
+
+    captured = {}
+
+    monkeypatch.setattr(order_admin, "clear_order_states", lambda: None)
+    monkeypatch.setattr(order_admin, "add_alert", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        order_admin.trading_config,
+        "update_stock_name",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        order_admin.trading_config,
+        "get_stock_info",
+        lambda _ticker: {"name": "DIREXION SEMICONDUCTOR"},
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "fetch_open_orders",
+        lambda: (
+            pd.DataFrame(
+                [
+                    {
+                        "_market": "TOSS",
+                        "orderId": "toss-1",
+                        "symbol": "SOXL",
+                        "side": "BUY",
+                        "orderType": "LIMIT",
+                        "timeInForce": "CLS",
+                        "price": "297.43",
+                        "quantity": "3",
+                        "orderedAt": "2026-07-01T19:51:05.425+09:00",
+                    }
+                ]
+            ),
+            0,
+            0,
+            1,
+        ),
+    )
+
+    def fake_update_order_state(*args, **kwargs):
+        captured["kwargs"] = kwargs
+
+    monkeypatch.setattr(order_admin, "update_order_state", fake_update_order_state)
+
+    assert order_admin.sync_open_orders() is True
+    assert captured["kwargs"]["time_str"] == "19:51:05"
+
+
 def test_order_admin_executes_toss_cancel_through_toss_endpoint(monkeypatch):
     from broker import order_admin
 
