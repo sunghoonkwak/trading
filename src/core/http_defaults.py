@@ -4,10 +4,12 @@
 from functools import wraps
 from typing import Any
 
+from core.constants import API_TIMEOUT_SHORT
+
 
 def install_requests_default_timeout(
     requests_module: Any = None,
-    default_timeout: float = 30.0,
+    default_timeout: float = API_TIMEOUT_SHORT,
 ) -> None:
     """Install a process-wide default timeout for requests calls.
 

@@ -8,6 +8,8 @@ import queue
 import time
 import os
 import socket
+from contextlib import suppress
+from typing import Optional
 
 
 # Linux Unix Domain Socket
@@ -62,8 +64,7 @@ def create_pipe_server():
     if _socket_server is not None:
         return True
     try:
-        # Remove existing socket file
-        if os.path.exists(SOCKET_PATH):
+        with suppress(FileNotFoundError):
             os.unlink(SOCKET_PATH)
 
         _socket_server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -251,16 +252,12 @@ def reset_pipe_server():
     logging.info("[Pipe] Resetting pipe server for reconnection...")
 
     if _client_socket:
-        try:
+        with suppress(Exception):
             _client_socket.close()
-        except:
-            pass
         _client_socket = None
     if _socket_server:
-        try:
+        with suppress(Exception):
             _socket_server.close()
-        except:
-            pass
         _socket_server = None
     _pipe_connected = False
 
@@ -278,22 +275,15 @@ def close_pipe_server():
     global _pipe_connected, _socket_server, _client_socket
 
     if _client_socket:
-        try:
+        with suppress(Exception):
             _client_socket.close()
-        except:
-            pass
         _client_socket = None
     if _socket_server:
-        try:
+        with suppress(Exception):
             _socket_server.close()
-        except:
-            pass
         _socket_server = None
-    if os.path.exists(SOCKET_PATH):
-        try:
-            os.unlink(SOCKET_PATH)
-        except:
-            pass
+    with suppress(OSError):
+        os.unlink(SOCKET_PATH)
     _pipe_connected = False
 
 
@@ -318,7 +308,8 @@ def connect_pipe_client():
 # Receive buffer for incomplete messages
 _receive_buffer = ""
 
-def receive_log(handle) -> str:
+
+def receive_log(handle) -> Optional[str]:
     """Receive log message from socket. Blocking call."""
     global _receive_buffer
 
@@ -335,12 +326,11 @@ def receive_log(handle) -> str:
         if "\n" in _receive_buffer:
             line, _receive_buffer = _receive_buffer.split("\n", 1)
             return line.strip()
-        else:
-            if _receive_buffer.strip():
-                msg = _receive_buffer.strip()
-                _receive_buffer = ""
-                return msg
-            return None
+        if _receive_buffer.strip():
+            msg = _receive_buffer.strip()
+            _receive_buffer = ""
+            return msg
+        return None
     except Exception as e:
         logging.error(f"[Pipe] Receive failed: {e}")
         return None
@@ -349,7 +339,5 @@ def receive_log(handle) -> str:
 def close_pipe_client(handle):
     """Close socket client."""
     if handle:
-        try:
+        with suppress(Exception):
             handle.close()
-        except:
-            pass

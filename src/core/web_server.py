@@ -5,6 +5,7 @@ Only provides WebSocket for real-time event streaming, no REST API control.
 import os
 import sys
 import asyncio
+import json
 import logging
 from datetime import datetime
 from typing import Set, Optional
@@ -14,8 +15,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
-import json
 from pydantic import BaseModel
+
+from core.constants import ENV_TRUE_VALUES
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -70,7 +72,15 @@ def _env_flag(name: str, default: bool = False) -> bool:
     value = os.environ.get(name)
     if value is None:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    return value.strip().lower() in ENV_TRUE_VALUES
+
+
+def _event_message_json(msg_type: str, message: str, time_str: str = None) -> str:
+    event_time = time_str or datetime.now().strftime("%H:%M:%S")
+    return json.dumps(
+        {"type": msg_type, "data": message, "time": event_time},
+        ensure_ascii=False,
+    )
 
 
 def _broadcast_callback(msg_type: str, message: str, time_str: str = None):
@@ -80,8 +90,7 @@ def _broadcast_callback(msg_type: str, message: str, time_str: str = None):
         logging.error("[WebServer] Cannot broadcast: _event_loop is None")
         return
     try:
-        final_time = time_str if time_str else datetime.now().strftime("%H:%M:%S")
-        data = f'{{"type":"{msg_type}","data":"{message.replace(chr(34), chr(39))}","time":"{final_time}"}}'
+        data = _event_message_json(msg_type, message, time_str)
         asyncio.run_coroutine_threadsafe(manager.broadcast(data), _event_loop)
     except Exception as e:
         logging.error(f"[WebServer] Broadcast error: {e}")

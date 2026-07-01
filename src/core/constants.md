@@ -4,8 +4,9 @@
 
 ## Core Logic (핵심 로직)
 
-1. **앱 공통 기본값**: 설정 루트, 웹 서버 기본값, API 타임아웃, 캐시 주기처럼 여러 패키지가 공유하는 값을 정의합니다.
-2. **도메인 경계 유지**: KIS 주문/거래소 코드는 `src/kis/constants.py`, 전략 정책 기본값은 `src/strategy/constants.py`에서 관리합니다.
+1. **앱 공통 기본값**: 설정 루트, 웹 서버 기본값, API 타임아웃처럼 여러 패키지가 공유하는 값을 정의합니다.
+2. **환경 플래그 판정값**: 여러 모듈에서 같은 방식으로 `true`/`false` 계열 환경변수를 해석하도록 공통 값을 제공합니다.
+3. **도메인 경계 유지**: KIS 주문/거래소 코드는 `src/kis/constants.py`, 전략 정책 기본값은 `src/strategy/constants.py`에서 관리합니다.
 
 ## Key Constants (주요 상수)
 
@@ -13,9 +14,8 @@
 - **`DEFAULT_WEB_PORT`**: 웹 이벤트 뷰어의 기본 포트 (8080).
 - **`DEFAULT_USD_KRW_EXCHANGE_RATE`**: 저장된 포트폴리오 이력에 환율이
   없을 때 쓰는 USD/KRW 임시 기준값.
-- **`API_TIMEOUT_SHORT` / `API_TIMEOUT_LONG`**: KIS REST 호출 등에 쓰는 기본 타임아웃.
-- **`PORTFOLIO_CACHE_EXPIRE`**: 포트폴리오 캐시 만료 시간.
-- **`MARKET_STATE_SAVE_INTERVAL`**: 실시간 시세 데이터의 자동 저장 주기 (60초).
+- **`API_TIMEOUT_SHORT`**: 별도 timeout이 없는 `requests` 호출에 적용하는 기본 타임아웃.
+- **`ENV_TRUE_VALUES` / `ENV_FALSE_VALUES`**: 환경변수 feature flag를 해석할 때 쓰는 공통 문자열 집합.
 
 ## Usage Example (사용 예시)
 

@@ -3,12 +3,12 @@
 ## Overview
 
 런타임 프로세스 안의 `requests` 기반 외부 API 호출에 공통 기본값을
-설치합니다. 현재는 명시적 timeout이 없는 요청에 30초 기본 timeout을
-적용합니다.
+설치합니다. 현재는 명시적 timeout이 없는 요청에 `API_TIMEOUT_SHORT`
+기본 timeout을 적용합니다.
 
 ## Key Functions
 
-### `install_requests_default_timeout(requests_module=None, default_timeout=30.0)`
+### `install_requests_default_timeout(requests_module=None, default_timeout=API_TIMEOUT_SHORT)`
 
 `requests.api.request`와 `requests.Session.request`에 기본 timeout wrapper를
 설치합니다.
