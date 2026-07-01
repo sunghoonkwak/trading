@@ -21,7 +21,7 @@
 
 ## Import Boundary
 
-`broker.portfolio`는 이 모듈을 lazy-load한 뒤 표준 source 데이터를
-data 계층에 제공합니다. KIS raw API 조회와 KIS raw 응답 필드 처리는
-broker 계층에 두고, 공식 KIS endpoint wrapper는 `src/kis/kis_api/`
-경계를 그대로 사용합니다. 전체 자산 병합 정책은 data 계층에 둡니다.
+`data.portfolio_integration`은 이 모듈을 lazy-load한 뒤 표준 source
+데이터를 병합합니다. KIS raw API 조회와 KIS raw 응답 필드 처리는 broker
+계층에 두고, 공식 KIS endpoint wrapper는 `src/kis/kis_api/` 경계를 그대로
+사용합니다. 전체 자산 병합 정책은 data 계층에 둡니다.

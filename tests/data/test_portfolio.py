@@ -17,12 +17,12 @@ def reset_gsheet_cache():
 
 
 def test_data_integration_skips_gsheet_and_toss_for_kis_scope(monkeypatch):
-    from broker import portfolio
+    from broker import kis_portfolio, toss_portfolio
     from data import portfolio_integration
 
     monkeypatch.setattr(
-        portfolio,
-        "fetch_kis_source",
+        kis_portfolio,
+        "fetch_kis_portfolio",
         lambda: (
             {
                 "holdings": [],
@@ -43,8 +43,8 @@ def test_data_integration_skips_gsheet_and_toss_for_kis_scope(monkeypatch):
         lambda: (_ for _ in ()).throw(AssertionError("GSheet must be skipped")),
     )
     monkeypatch.setattr(
-        portfolio,
-        "fetch_toss_source",
+        toss_portfolio,
+        "fetch_toss_portfolio",
         lambda: (_ for _ in ()).throw(AssertionError("Toss must be skipped")),
     )
 
@@ -60,12 +60,12 @@ def test_data_integration_skips_gsheet_and_toss_for_kis_scope(monkeypatch):
 
 
 def test_data_integration_fetches_only_toss_for_toss_scope(monkeypatch):
-    from broker import portfolio
+    from broker import kis_portfolio, toss_portfolio
     from data import portfolio_integration
 
     monkeypatch.setattr(
-        portfolio,
-        "fetch_kis_source",
+        kis_portfolio,
+        "fetch_kis_portfolio",
         lambda: (_ for _ in ()).throw(AssertionError("KIS must be skipped")),
     )
     monkeypatch.setattr(
@@ -74,8 +74,8 @@ def test_data_integration_fetches_only_toss_for_toss_scope(monkeypatch):
         lambda: (_ for _ in ()).throw(AssertionError("GSheet must be skipped")),
     )
     monkeypatch.setattr(
-        portfolio,
-        "fetch_toss_source",
+        toss_portfolio,
+        "fetch_toss_portfolio",
         lambda: (
             {
                 "holdings": [
@@ -126,12 +126,12 @@ def test_data_integration_fetches_only_toss_for_toss_scope(monkeypatch):
 
 
 def test_data_integration_does_not_use_gsheet_fallback_for_toss_scope(monkeypatch):
-    from broker import portfolio
+    from broker import kis_portfolio, toss_portfolio
     from data import portfolio_integration
 
     monkeypatch.setattr(
-        portfolio,
-        "fetch_kis_source",
+        kis_portfolio,
+        "fetch_kis_portfolio",
         lambda: (_ for _ in ()).throw(AssertionError("KIS must be skipped")),
     )
     monkeypatch.setattr(
@@ -140,8 +140,8 @@ def test_data_integration_does_not_use_gsheet_fallback_for_toss_scope(monkeypatc
         lambda: (_ for _ in ()).throw(AssertionError("GSheet must be skipped")),
     )
     monkeypatch.setattr(
-        portfolio,
-        "fetch_toss_source",
+        toss_portfolio,
+        "fetch_toss_portfolio",
         lambda: (_ for _ in ()).throw(RuntimeError("Toss unavailable")),
     )
 
@@ -154,15 +154,15 @@ def test_data_integration_does_not_use_gsheet_fallback_for_toss_scope(monkeypatc
 
 
 def test_data_integration_reuses_cached_gsheet_source(monkeypatch):
-    from broker import portfolio
+    from broker import kis_portfolio, toss_portfolio
     from data import portfolio_integration
 
     portfolio_integration.invalidate_gsheet_cache()
     calls = []
 
     monkeypatch.setattr(
-        portfolio,
-        "fetch_kis_source",
+        kis_portfolio,
+        "fetch_kis_portfolio",
         lambda: (
             {
                 "holdings": [],
@@ -207,7 +207,7 @@ def test_data_integration_reuses_cached_gsheet_source(monkeypatch):
         )
 
     monkeypatch.setattr(portfolio_integration, "fetch_gsheet_portfolio", fake_fetch_gsheet)
-    monkeypatch.setattr(portfolio, "fetch_toss_source", lambda: ({}, "offline"))
+    monkeypatch.setattr(toss_portfolio, "fetch_toss_portfolio", lambda: ({}, "offline"))
     monkeypatch.setattr(portfolio_integration, "fetch_toss_prices", lambda tickers: {})
     monkeypatch.setattr(portfolio_integration, "send_telegram_warning", lambda message: None)
 
@@ -284,12 +284,12 @@ def test_cached_gsheet_source_reports_initial_refresh_exception(monkeypatch):
 
 
 def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
-    from broker import portfolio
+    from broker import kis_portfolio, toss_portfolio
     from data import portfolio_integration
 
     monkeypatch.setattr(
-        portfolio,
-        "fetch_kis_source",
+        kis_portfolio,
+        "fetch_kis_portfolio",
         lambda: (
             {
                 "holdings": [
@@ -361,8 +361,8 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        portfolio,
-        "fetch_toss_source",
+        toss_portfolio,
+        "fetch_toss_portfolio",
         lambda: (_ for _ in ()).throw(RuntimeError("Toss unavailable")),
     )
     monkeypatch.setattr(
@@ -390,14 +390,14 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
 
 
 def test_data_integration_sets_missing_gsheet_prices_to_zero_and_notifies(monkeypatch):
-    from broker import portfolio
+    from broker import kis_portfolio, toss_portfolio
     from data import portfolio_integration
 
     notifications = []
 
     monkeypatch.setattr(
-        portfolio,
-        "fetch_kis_source",
+        kis_portfolio,
+        "fetch_kis_portfolio",
         lambda: (
             {
                 "holdings": [],
@@ -437,8 +437,8 @@ def test_data_integration_sets_missing_gsheet_prices_to_zero_and_notifies(monkey
         ),
     )
     monkeypatch.setattr(
-        portfolio,
-        "fetch_toss_source",
+        toss_portfolio,
+        "fetch_toss_portfolio",
         lambda: (
             {
                 "holdings": [],
@@ -465,12 +465,12 @@ def test_data_integration_sets_missing_gsheet_prices_to_zero_and_notifies(monkey
 
 
 def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
-    from broker import portfolio
+    from broker import kis_portfolio, toss_portfolio
     from data import portfolio_integration
 
     monkeypatch.setattr(
-        portfolio,
-        "fetch_kis_source",
+        kis_portfolio,
+        "fetch_kis_portfolio",
         lambda: (
             {
                 "holdings": [],
@@ -535,8 +535,8 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        portfolio,
-        "fetch_toss_source",
+        toss_portfolio,
+        "fetch_toss_portfolio",
         lambda: (
             {
                 "holdings": [
@@ -591,12 +591,12 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
 
 
 def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
-    from broker import portfolio
+    from broker import kis_portfolio, toss_portfolio
     from data import portfolio_integration
 
     monkeypatch.setattr(
-        portfolio,
-        "fetch_kis_source",
+        kis_portfolio,
+        "fetch_kis_portfolio",
         lambda: (
             {
                 "holdings": [],
@@ -646,8 +646,8 @@ def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        portfolio,
-        "fetch_toss_source",
+        toss_portfolio,
+        "fetch_toss_portfolio",
         lambda: (_ for _ in ()).throw(RuntimeError("Toss unavailable")),
     )
     monkeypatch.setattr(

@@ -333,9 +333,9 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
     kis_portfolio = _empty_source()
     kis_raw_data = {"exchange_rate": None, "error": None}
     if scope in {PORTFOLIO_SCOPE_ALL, PORTFOLIO_SCOPE_KIS}:
-        from broker.portfolio import fetch_kis_source
+        from broker.kis_portfolio import fetch_kis_portfolio
 
-        kis_portfolio, kis_raw_data = fetch_kis_source()
+        kis_portfolio, kis_raw_data = fetch_kis_portfolio()
 
     gsheet_data = _empty_source()
     gsheet_error = None
@@ -343,11 +343,11 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
     exchange_rate = kis_raw_data.get("exchange_rate")
 
     if scope == PORTFOLIO_SCOPE_TOSS:
-        from broker.portfolio import fetch_toss_source
+        from broker.toss_portfolio import fetch_toss_portfolio
 
         try:
             add_alert("[Toss] Fetching Toss API data...", "INFO")
-            gsheet_data, toss_error = fetch_toss_source()
+            gsheet_data, toss_error = fetch_toss_portfolio()
             if toss_error:
                 add_alert(f"Toss Warning: {toss_error}", "WARN")
             else:
@@ -366,7 +366,7 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
                 add_alert(f"Toss Exchange Warning: {exchange_error}", "WARN")
 
     elif scope == PORTFOLIO_SCOPE_ALL:
-        from broker.portfolio import TOSS_ACCOUNT_KEY, fetch_toss_source
+        from broker.toss_portfolio import TOSS_ACCOUNT_KEY, fetch_toss_portfolio
 
         add_alert("[Data] Loading cached GSheet data...", "INFO")
         gsheet_data, gsheet_error = get_cached_gsheet_portfolio()
@@ -375,7 +375,7 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
             add_alert(f"GSheet Warning: {gsheet_error}", "WARN")
         try:
             add_alert("[Toss] Fetching Toss API data...", "INFO")
-            toss_data, toss_error = fetch_toss_source()
+            toss_data, toss_error = fetch_toss_portfolio()
             if toss_error:
                 add_alert(f"Toss Warning: {toss_error}", "WARN")
             else:
