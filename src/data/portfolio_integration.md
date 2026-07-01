@@ -60,6 +60,11 @@ Google Sheets를 다시 읽어 GSheet source 캐시를 교체합니다. Telegram
 Toss market data `/api/v1/prices`로 현재가를 다건 조회합니다. GSheet
 보유분 가격 보강에서는 KIS fallback을 사용하지 않습니다.
 
+### `fetch_toss_portfolio_source`
+
+Toss broker source를 조회하고 성공/경고 alert 처리를 한 곳에서 수행합니다.
+`scope="toss"`와 `scope="all"`이 같은 조회/에러 처리 경로를 공유합니다.
+
 ### `fill_missing_current_prices_from_toss`
 
 broker 원천 가격이 없는 holding에 Toss 현재가를 채웁니다. Toss 가격이

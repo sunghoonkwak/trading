@@ -129,6 +129,28 @@ def fetch_toss_exchange_rate() -> Tuple[Optional[float], Optional[str]]:
         return None, str(e)
 
 
+def fetch_toss_portfolio_source() -> Tuple[Dict[str, Any], Optional[str]]:
+    """Fetch Toss source data and emit portfolio alerts."""
+    from core.display import add_alert
+    from broker.toss_portfolio import fetch_toss_portfolio
+
+    try:
+        add_alert("[Toss] Fetching Toss API data...", "INFO")
+        toss_data, toss_error = fetch_toss_portfolio()
+        if toss_error:
+            add_alert(f"Toss Warning: {toss_error}", "WARN")
+        else:
+            add_alert(
+                f"[Toss] {len(toss_data.get('holdings', []))} holdings loaded",
+                "SUCCESS",
+            )
+        return toss_data, toss_error
+    except Exception as e:
+        toss_error = str(e)
+        add_alert(f"Toss Warning: {toss_error}", "WARN")
+        return _empty_source(), toss_error
+
+
 def _to_positive_float(value: Any) -> float:
     try:
         price = float(str(value).replace(",", ""))
@@ -343,21 +365,7 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
     exchange_rate = kis_raw_data.get("exchange_rate")
 
     if scope == PORTFOLIO_SCOPE_TOSS:
-        from broker.toss_portfolio import fetch_toss_portfolio
-
-        try:
-            add_alert("[Toss] Fetching Toss API data...", "INFO")
-            gsheet_data, toss_error = fetch_toss_portfolio()
-            if toss_error:
-                add_alert(f"Toss Warning: {toss_error}", "WARN")
-            else:
-                add_alert(
-                    f"[Toss] {len(gsheet_data.get('holdings', []))} holdings loaded",
-                    "SUCCESS",
-                )
-        except Exception as e:
-            toss_error = str(e)
-            add_alert(f"Toss Warning: {toss_error}", "WARN")
+        gsheet_data, toss_error = fetch_toss_portfolio_source()
 
         if not toss_error:
             exchange_rate, exchange_error = fetch_toss_exchange_rate()
@@ -366,31 +374,20 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
                 add_alert(f"Toss Exchange Warning: {exchange_error}", "WARN")
 
     elif scope == PORTFOLIO_SCOPE_ALL:
-        from broker.toss_portfolio import TOSS_ACCOUNT_KEY, fetch_toss_portfolio
+        from broker.toss_portfolio import TOSS_ACCOUNT_KEY
 
         add_alert("[Data] Loading cached GSheet data...", "INFO")
         gsheet_data, gsheet_error = get_cached_gsheet_portfolio()
         discard_source_current_prices(gsheet_data)
         if gsheet_error:
             add_alert(f"GSheet Warning: {gsheet_error}", "WARN")
-        try:
-            add_alert("[Toss] Fetching Toss API data...", "INFO")
-            toss_data, toss_error = fetch_toss_portfolio()
-            if toss_error:
-                add_alert(f"Toss Warning: {toss_error}", "WARN")
-            else:
-                gsheet_data = replace_account_source(
-                    gsheet_data,
-                    toss_data,
-                    TOSS_ACCOUNT_KEY,
-                )
-                add_alert(
-                    f"[Toss] {len(toss_data.get('holdings', []))} holdings loaded",
-                    "SUCCESS",
-                )
-        except Exception as e:
-            toss_error = str(e)
-            add_alert(f"Toss Warning: {toss_error}", "WARN")
+        toss_data, toss_error = fetch_toss_portfolio_source()
+        if not toss_error:
+            gsheet_data = replace_account_source(
+                gsheet_data,
+                toss_data,
+                TOSS_ACCOUNT_KEY,
+            )
 
         fill_missing_current_prices_from_toss(gsheet_data)
 
