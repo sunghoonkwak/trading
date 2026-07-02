@@ -429,3 +429,48 @@ def test_format_weight_diffs_shows_group_total_and_main_ticker(monkeypatch):
     assert "<b>Nasdaq100</b> [QQQM]" in text
     assert "$4.0K → $6.0K" in text
     assert "Qty: +10 QQQM" in text
+
+
+def test_ticker_detail_hides_current_price_source(monkeypatch):
+    monkeypatch.setattr(
+        telegram_portfolio.market_data,
+        "get_current_price",
+        lambda ticker: 100.0,
+    )
+
+    text = telegram_portfolio.format_ticker_detail(
+        "AAPL",
+        {
+            "qty": 2,
+            "total_investment": 150.0,
+            "currency": "USD",
+            "name": "Apple",
+            "cur_price": 0,
+        },
+        {
+            "current_weights": {"AAPL": 0.1},
+            "targets": {"AAPL": 0.2},
+        },
+    )
+
+    assert "<b>Cur Price:</b> $100.00" in text
+    assert "(WS)" not in text
+    assert "(API)" not in text
+    assert "(Avg)" not in text
+
+
+def test_ticker_not_in_portfolio_hides_current_price_source(monkeypatch):
+    monkeypatch.setattr(
+        telegram_portfolio.market_data,
+        "get_current_price",
+        lambda ticker: 7460.0,
+    )
+
+    text = telegram_portfolio.format_ticker_not_in_portfolio(
+        "453850",
+        {"targets": {"453850": 0}},
+    )
+
+    assert "<b>Cur Price:</b> $7,460.00" in text
+    assert "(WebSocket)" not in text
+    assert "(API)" not in text

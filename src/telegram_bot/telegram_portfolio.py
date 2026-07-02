@@ -165,25 +165,18 @@ def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
     # Calculate avg_price
     avg_price = total_investment / qty if qty > 0 else 0
 
-    # Get cur_price - priority: merged_data (KIS balance API) -> WebSocket -> KIS price API
+    # Get cur_price - priority: merged_data (broker API) -> market data API
     cur_price = data.get("cur_price", 0)
-    price_source = ""
 
-    # Only try WebSocket/API fallback if merged_data doesn't have valid price
+    # Only try API fallback if merged_data doesn't have valid price
     if cur_price <= 0 and currency == "USD":
-        # Try WebSocket
         cur_price = market_data.get_current_price(ticker)
-        if cur_price > 0:
-            price_source = "WS"
-        else:
-            # Fallback to KIS API (fetch_price handles exchange internally)
+        if cur_price <= 0:
             cur_price = market_data.fetch_price(ticker)
-            price_source = "API" if cur_price > 0 else ""
 
     # Final fallback to avg_price if still 0
     if cur_price <= 0:
         cur_price = avg_price
-        price_source = "Avg"
 
     # Calculate P&L
     current_value = qty * cur_price
@@ -204,8 +197,6 @@ def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
     if currency == "USD":
         avg_str = f"{sym}{avg_price:,.2f}"
         cur_str = f"{sym}{cur_price:,.2f}"
-        if price_source:
-            cur_str += f" <i>({price_source})</i>"
         pnl_str = f"{sym}{pnl:+,.2f}"
     else:
         avg_str = f"{sym}{avg_price:,.0f}"
@@ -237,7 +228,7 @@ def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
 def format_ticker_not_in_portfolio(ticker: str, portfolio_data: dict) -> str:
     """
     Format info for a ticker not currently in portfolio.
-    Shows current price (from WebSocket or KIS API fallback) and target weight.
+    Shows current price and target weight.
 
     Args:
         ticker: Stock ticker symbol
@@ -249,14 +240,10 @@ def format_ticker_not_in_portfolio(ticker: str, portfolio_data: dict) -> str:
     targets = portfolio_data.get("targets", {})
     tgt_weight = targets.get(ticker, 0) * 100
 
-    # Try WebSocket first
     cur_price = market_data.get_current_price(ticker)
-    price_source = "WebSocket"
 
-    # Fallback to KIS API if WebSocket has no data
     if cur_price <= 0:
         cur_price = market_data.fetch_price(ticker)
-        price_source = "API" if cur_price > 0 else ""
 
     lines = [
         f"📊 <b>{ticker}</b>",
@@ -266,7 +253,7 @@ def format_ticker_not_in_portfolio(ticker: str, portfolio_data: dict) -> str:
     ]
 
     if cur_price > 0:
-        lines.append(f"<b>Cur Price:</b> ${cur_price:,.2f} <i>({price_source})</i>")
+        lines.append(f"<b>Cur Price:</b> ${cur_price:,.2f}")
     else:
         lines.append("<b>Cur Price:</b> <i>N/A</i>")
 
