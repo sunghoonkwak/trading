@@ -18,8 +18,9 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 from .telegram_strategy import register_strategy_handlers
 from .telegram_rebalancing import register_rebalancing_handlers
-from .telegram_portfolio import register_portfolio_handlers, get_portfolio_commands_desc
-from .telegram_memo import register_memo_handler, get_memo_commands_desc
+from .telegram_portfolio import register_portfolio_handlers
+from .telegram_memo import register_memo_handler
+from .telegram_system import get_initial_control_guide, register_system_handlers
 from .telegram_utils import wrap_send, set_telegram_bot, wrap_reply
 from core import display
 from core.constants import CONFIG_ROOT
@@ -142,6 +143,7 @@ def initialize_telegram():
 
             # Register Handlers
             set_telegram_bot(_app.bot, _chat_id)
+            register_system_handlers(_app)
             register_portfolio_handlers(_app)
             register_strategy_handlers(_app)
             register_rebalancing_handlers(_app)
@@ -155,17 +157,10 @@ def initialize_telegram():
 
             # Send Init Message
             try:
-                port_desc = get_portfolio_commands_desc().strip()
-                memo_desc = get_memo_commands_desc().strip()
                 init_text = (
                     f"🤖 <b>Trading Bot Initialized</b> (Session: <code>{_session_id}</code>)\n\n"
-                    "Commands:\n"
-                    f"{port_desc}\n\n"
-                    "/strategy - RAOEO & VA Strategies\n"
-                    "/clear_strategy_history [date] - Clear strategy history for retest\n"
-                    "/rebalance - TQQQ+SCHD Rebalancing\n\n"
-                    "/daily_report [date] - View past reports\n"
-                    f"{memo_desc}"
+                    "Trading runtime is <b>OFF</b>.\n\n"
+                    f"{get_initial_control_guide()}"
                 )
                 await wrap_send(init_text, parse_mode='HTML')
             except Exception as e:

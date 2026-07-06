@@ -21,6 +21,9 @@ KIS 런타임 요청을 앱 소유 큐/스레드에서 직렬 처리하는 worke
 ### `start_kis_thread` / `stop_kis_thread`
 
 백그라운드 KIS worker 스레드를 시작하거나 안전하게 중지합니다.
+`stop_kis_thread`는 worker loop를 멈추기 전에 `WSManager.stop()`을 호출해
+WebSocket 재연결 루프도 함께 중지합니다. 이 경로는 Telegram `/system_off`
+명령에서 사용됩니다.
 
 ### `request_portfolio`
 

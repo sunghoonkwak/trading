@@ -308,6 +308,92 @@ def test_manual_report_trigger_is_disabled_by_default(monkeypatch):
     assert background_tasks.tasks == []
 
 
+def test_web_order_sync_is_blocked_when_runtime_is_off(monkeypatch):
+    from core import runtime_control
+
+    monkeypatch.setattr(runtime_control, "is_runtime_running", lambda: False)
+
+    fake_order_admin = types.ModuleType("broker.order_admin")
+
+    def fail_if_called():
+        raise AssertionError("open orders must not sync while runtime is off")
+
+    fake_order_admin.sync_open_orders = fail_if_called
+    monkeypatch.setitem(sys.modules, "broker.order_admin", fake_order_admin)
+
+    result = asyncio.run(web_server._sync_orders_for_client())
+
+    assert result == {
+        "success": False,
+        "error": "Trading runtime is OFF",
+    }
+
+
+def test_web_cancel_order_is_blocked_when_runtime_is_off(monkeypatch):
+    from core import runtime_control
+
+    monkeypatch.setenv("WEB_ENABLE_ORDER_CANCEL", "true")
+    monkeypatch.setattr(runtime_control, "is_runtime_running", lambda: False)
+
+    calls = []
+
+    def fake_cancel(order_id):
+        calls.append(order_id)
+        return {"success": True}
+
+    monkeypatch.setattr(web_server, "_cancel_order_sync", fake_cancel)
+
+    result = asyncio.run(web_server.cancel_order("12345"))
+
+    assert result == {
+        "success": False,
+        "error": "Trading runtime is OFF",
+    }
+    assert calls == []
+
+
+def test_web_manual_triggers_are_blocked_when_runtime_is_off(monkeypatch):
+    from core import runtime_control
+
+    monkeypatch.setenv("WEB_ENABLE_MANUAL_REPORT_TRIGGERS", "true")
+    monkeypatch.setattr(runtime_control, "is_runtime_running", lambda: False)
+    background_tasks = BackgroundTasks()
+
+    portfolio_result = asyncio.run(web_server.trigger_portfolio_report(background_tasks))
+    order_result = asyncio.run(web_server.trigger_order_report(background_tasks))
+
+    assert portfolio_result == {
+        "success": False,
+        "error": "Trading runtime is OFF",
+    }
+    assert order_result == {
+        "success": False,
+        "error": "Trading runtime is OFF",
+    }
+    assert background_tasks.tasks == []
+
+
+def test_web_holdings_lookup_is_blocked_when_runtime_is_off(monkeypatch):
+    from core import runtime_control
+
+    monkeypatch.setattr(runtime_control, "is_runtime_running", lambda: False)
+
+    fake_data_service = types.ModuleType("data.data_service")
+
+    def fail_if_called():
+        raise AssertionError("portfolio data must not load while runtime is off")
+
+    fake_data_service.get_portfolio_data = fail_if_called
+    monkeypatch.setitem(sys.modules, "data.data_service", fake_data_service)
+
+    result = asyncio.run(web_server.get_holdings_data("SOXL"))
+
+    assert result == {
+        "success": False,
+        "error": "Trading runtime is OFF",
+    }
+
+
 import sys
 import types
 from pathlib import Path
@@ -450,10 +536,9 @@ def test_initialize_kis_fails_closed_when_ws_auth_fails(monkeypatch):
     assert "sync_open_orders" not in calls
 
 
-def test_run_exits_before_scheduler_and_web_when_kis_init_fails(monkeypatch):
+def test_run_starts_control_plane_and_waits_for_runtime_command(monkeypatch):
     main = _load_main(monkeypatch)
     calls = []
-    notifications = []
     system = main.TradingSystem()
 
     monkeypatch.setenv("ENV_MODE", "docker")
@@ -461,24 +546,100 @@ def test_run_exits_before_scheduler_and_web_when_kis_init_fails(monkeypatch):
     monkeypatch.setattr(system, "setup_logging", lambda: calls.append("setup_logging"))
     monkeypatch.setattr(system, "initialize_telegram", lambda: calls.append("telegram") or True)
     monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
-    monkeypatch.setattr(system, "initialize_kis", lambda: False)
+    monkeypatch.setattr(system, "initialize_kis", lambda: calls.append("kis") or True)
+    monkeypatch.setattr(system, "initialize_toss", lambda: calls.append("toss") or True)
     monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
     monkeypatch.setattr(system, "start_web_server", lambda: calls.append("web"))
     monkeypatch.setattr(system, "shutdown", lambda: calls.append("shutdown"))
+    sleeps = []
+
+    def fake_sleep(_seconds):
+        sleeps.append(_seconds)
+        system.shutdown_event.set()
+
+    monkeypatch.setattr(main.time, "sleep", fake_sleep)
+
+    system.run()
+
+    assert calls == ["setup_logging", "telegram", "web", "shutdown"]
+    assert sleeps == [1]
+
+
+def test_runtime_on_starts_trading_dependencies(monkeypatch):
+    main = _load_main(monkeypatch)
+    calls = []
+    system = main.TradingSystem()
+
+    monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
+    monkeypatch.setattr(system, "initialize_kis", lambda: calls.append("kis") or True)
+    monkeypatch.setattr(system, "initialize_toss", lambda: calls.append("toss") or True)
+    monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
+
+    result = system.start_trading_runtime()
+
+    assert result.success is True
+    assert result.already_in_state is False
+    assert system.is_trading_runtime_running() is True
+    assert calls == ["gsheet", "kis", "toss", "scheduler"]
+
+
+def test_runtime_on_failure_keeps_process_alive_and_off(monkeypatch):
+    main = _load_main(monkeypatch)
+    calls = []
+    notifications = []
+    system = main.TradingSystem()
+
+    monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
+    monkeypatch.setattr(system, "initialize_kis", lambda: calls.append("kis") or False)
+    monkeypatch.setattr(system, "initialize_toss", lambda: calls.append("toss") or True)
+    monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
+    monkeypatch.setattr(system, "start_web_server", lambda: calls.append("web"))
     monkeypatch.setattr(system, "_notify_startup_failure", lambda component: notifications.append(component))
 
-    with pytest.raises(SystemExit) as exc_info:
-        system.run()
+    result = system.start_trading_runtime()
 
-    assert exc_info.value.code == 1
-    assert calls == ["setup_logging", "telegram", "gsheet", "shutdown"]
+    assert result.success is False
+    assert result.component == "KIS"
+    assert system.is_trading_runtime_running() is False
+    assert calls == ["gsheet", "kis"]
     assert notifications == ["KIS"]
 
 
-def test_run_exits_before_scheduler_and_web_when_toss_init_fails(monkeypatch):
+def test_runtime_off_stops_scheduler_and_kis_but_keeps_telegram(monkeypatch):
     main = _load_main(monkeypatch)
     calls = []
-    notifications = []
+    system = main.TradingSystem()
+    system._runtime_running = True
+
+    fake_scheduler = types.ModuleType("scheduler.scheduler")
+    fake_scheduler.stop_scheduler = lambda: calls.append("stop_scheduler")
+    fake_kis_worker = types.ModuleType("broker.kis_worker")
+    fake_kis_worker.stop_kis_thread = lambda: calls.append("stop_kis_thread")
+    monkeypatch.setitem(sys.modules, "scheduler.scheduler", fake_scheduler)
+    monkeypatch.setitem(sys.modules, "broker.kis_worker", fake_kis_worker)
+
+    result = system.stop_trading_runtime()
+
+    assert result.success is True
+    assert result.already_in_state is False
+    assert system.is_trading_runtime_running() is False
+    assert calls == ["stop_scheduler", "stop_kis_thread"]
+
+
+def test_runtime_off_is_idempotent(monkeypatch):
+    main = _load_main(monkeypatch)
+    system = main.TradingSystem()
+
+    result = system.stop_trading_runtime()
+
+    assert result.success is True
+    assert result.already_in_state is True
+    assert system.is_trading_runtime_running() is False
+
+
+def test_previous_startup_failures_are_deferred_to_runtime_on(monkeypatch):
+    main = _load_main(monkeypatch)
+    calls = []
     system = main.TradingSystem()
 
     monkeypatch.setenv("ENV_MODE", "docker")
@@ -486,19 +647,18 @@ def test_run_exits_before_scheduler_and_web_when_toss_init_fails(monkeypatch):
     monkeypatch.setattr(system, "setup_logging", lambda: calls.append("setup_logging"))
     monkeypatch.setattr(system, "initialize_telegram", lambda: calls.append("telegram") or True)
     monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
-    monkeypatch.setattr(system, "initialize_kis", lambda: True)
-    monkeypatch.setattr(system, "initialize_toss", lambda: False)
-    monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
+    monkeypatch.setattr(system, "initialize_kis", lambda: calls.append("kis") or False)
     monkeypatch.setattr(system, "start_web_server", lambda: calls.append("web"))
     monkeypatch.setattr(system, "shutdown", lambda: calls.append("shutdown"))
-    monkeypatch.setattr(system, "_notify_startup_failure", lambda component: notifications.append(component))
 
-    with pytest.raises(SystemExit) as exc_info:
-        system.run()
+    def fake_sleep(_seconds):
+        system.shutdown_event.set()
 
-    assert exc_info.value.code == 1
-    assert calls == ["setup_logging", "telegram", "gsheet", "shutdown"]
-    assert notifications == ["Toss"]
+    monkeypatch.setattr(main.time, "sleep", fake_sleep)
+
+    system.run()
+
+    assert calls == ["setup_logging", "telegram", "web", "shutdown"]
 
 
 def test_run_exits_before_dependencies_when_telegram_init_fails(monkeypatch):

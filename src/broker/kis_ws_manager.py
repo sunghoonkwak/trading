@@ -22,6 +22,13 @@ class WSManager:
     def initialize(self) -> bool:
         """Initialize WebSocket subscriptions and start the connection thread."""
         try:
+            if self.is_alive():
+                logging.info("[WSManager] WebSocket already running")
+                return True
+
+            if hasattr(ka, "open_map"):
+                ka.open_map.clear()
+
             # Import specific subscription handlers
             from kis.kis_api.overseas_stock.asking_price.asking_price import asking_price
             from kis.kis_api.overseas_stock.ccnl_notice.ccnl_notice import ccnl_notice as ccnl_notice_us
@@ -102,3 +109,19 @@ class WSManager:
 
     def is_alive(self) -> bool:
         return self._ws_thread is not None and self._ws_thread.is_alive()
+
+    def stop(self):
+        """Request WebSocket shutdown and wait briefly for the thread."""
+        if self._ws_instance and hasattr(self._ws_instance, "stop"):
+            self._ws_instance.stop()
+        if self._ws_thread and self._ws_thread.is_alive():
+            self._ws_thread.join(timeout=5.0)
+            if self._ws_thread.is_alive():
+                logging.warning("[WSManager] WebSocket thread did not stop within timeout")
+                add_alert("[KIS] WebSocket stop requested; thread still running", "WARNING")
+                return
+
+        self._ws_instance = None
+        self._ws_thread = None
+        update_kis_state(ws_status=WebSocketStatus.DISCONNECTED)
+        add_alert("[KIS] WebSocket stopped", "INFO")

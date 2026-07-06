@@ -309,3 +309,39 @@ def test_build_schema_drift_alert_has_summary_without_raw_record():
     assert "TR: H0GSCNI0" in alert
     assert "fields=24 columns=25" in alert
     assert "record=" not in alert
+
+
+def test_ws_manager_keeps_thread_reference_when_stop_times_out(monkeypatch):
+    from broker.kis_ws_manager import WSManager
+
+    class FakeThread:
+        join_timeout = None
+
+        def is_alive(self):
+            return True
+
+        def join(self, timeout=None):
+            self.join_timeout = timeout
+
+    class FakeWS:
+        stopped = False
+
+        def stop(self):
+            self.stopped = True
+
+    monkeypatch.setattr("broker.kis_ws_manager.add_alert", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "broker.kis_ws_manager.update_kis_state",
+        lambda **kwargs: None,
+    )
+
+    manager = WSManager()
+    manager._ws_instance = FakeWS()
+    manager._ws_thread = FakeThread()
+
+    manager.stop()
+
+    assert manager._ws_instance is not None
+    assert manager._ws_thread is not None
+    assert manager._ws_instance.stopped is True
+    assert manager._ws_thread.join_timeout == 5.0

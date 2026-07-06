@@ -17,11 +17,19 @@ KIS 국내 시세와 국내 체결통보 구독은 기본 비활성화되어 있
 
 ### `initialize`
 WebSocket 인스턴스를 생성하고, 모든 종목 구독을 마친 뒤 연결 스레드를 시작합니다.
+이미 WebSocket 스레드가 살아 있으면 중복 시작하지 않습니다. Runtime을
+다시 켤 때 이전 구독 목록이 누적되지 않도록 KIS open map을 비운 뒤
+현재 설정 기준으로 다시 구독합니다.
 
 - **출력 (Output)**: `bool` (성공 여부)
 
 ### `is_alive`
 WebSocket 스레드가 정상적으로 실행 중인지 확인합니다.
+
+### `stop`
+WebSocket 인스턴스에 stop 요청을 보내고 스레드 종료를 짧게 기다립니다.
+KIS 서버 점검처럼 재연결 sleep 중인 상태에서도 `/system_off`가 재연결 루프를
+멈출 수 있도록 사용됩니다.
 
 ## Configuration (`trading_config.json`)
 관심 종목(KR/US 섹션) 목록을 참조하여 실시간 시세 구독 대상을 결정합니다.

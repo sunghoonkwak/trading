@@ -12,6 +12,11 @@ from telegram.ext import (
     Application, CommandHandler, ContextTypes,
     ConversationHandler, CallbackQueryHandler, TypeHandler
 )
+from .telegram_system import (
+    clear_runtime_confirmation_pending,
+    get_pending_confirmation_warning,
+    mark_runtime_confirmation_pending,
+)
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 from strategy.constants import TZ_ET
 from strategy.execution_service import (
@@ -93,6 +98,9 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     report_text = format_strategy_report(raoeo_rep, va_rep)
     keyboard = build_confirm_keyboard(has_orders, cash_funding_required)
+    if has_orders:
+        report_text += get_pending_confirmation_warning()
+        mark_runtime_confirmation_pending(context, "strategy")
 
     sent_msg = await wrap_reply(update, report_text, parse_mode='HTML', reply_markup=keyboard)
     if sent_msg:
@@ -133,10 +141,12 @@ async def cmd_clear_strategy_history(update: Update, context: ContextTypes.DEFAU
     await wrap_reply(
         update,
         f"⚠️ Clear all strategy history for <b>{target_date}</b>?\n"
-        "This deletes RAOEO, VA, and rebalancing history for that date so they can run again.",
+        "This deletes RAOEO, VA, and rebalancing history for that date so they can run again."
+        f"{get_pending_confirmation_warning()}",
         parse_mode='HTML',
         reply_markup=keyboard,
     )
+    mark_runtime_confirmation_pending(context, "clear_strategy_history")
 
 
 async def handle_clear_strategy_history_callback(
@@ -149,6 +159,7 @@ async def handle_clear_strategy_history_callback(
 
     if data == "clear_strategy_history_no":
         await wrap_edit(update, "❌ <b>Cancelled.</b>", parse_mode='HTML')
+        clear_runtime_confirmation_pending(context)
         return
 
     if not data.startswith("clear_strategy_history_yes:"):
@@ -169,6 +180,8 @@ async def handle_clear_strategy_history_callback(
             f"❌ <b>Failed to clear strategy history.</b>\n{e}",
             parse_mode='HTML',
         )
+    finally:
+        clear_runtime_confirmation_pending(context)
 
 async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -179,6 +192,7 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
         await wrap_edit(update, "❌ <b>Cancelled.</b>", parse_mode='HTML')
         context.user_data.pop('strategy_raoeo', None)
         context.user_data.pop('strategy_va', None)
+        clear_runtime_confirmation_pending(context)
         return ConversationHandler.END
 
     if data in ("strategy_with_cash_sale", "strategy_without_cash_sale"):
@@ -211,6 +225,7 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
                     )
                     context.user_data.pop('strategy_raoeo', None)
                     context.user_data.pop('strategy_va', None)
+                    clear_runtime_confirmation_pending(context)
                     return ConversationHandler.END
 
             raoeo_res, va_res = run_strategy_suite(execute=True)
@@ -226,6 +241,7 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
 
         context.user_data.pop('strategy_raoeo', None)
         context.user_data.pop('strategy_va', None)
+        clear_runtime_confirmation_pending(context)
         return ConversationHandler.END
 
 async def strategy_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -243,6 +259,7 @@ async def strategy_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     context.user_data.pop('strategy_raoeo', None)
     context.user_data.pop('strategy_va', None)
+    clear_runtime_confirmation_pending(context)
     return ConversationHandler.END
 
 def register_strategy_handlers(app: Application):

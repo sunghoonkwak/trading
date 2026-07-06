@@ -11,6 +11,11 @@ from telegram.ext import (
     Application, CommandHandler, ContextTypes,
     ConversationHandler, CallbackQueryHandler, TypeHandler
 )
+from .telegram_system import (
+    clear_runtime_confirmation_pending,
+    get_pending_confirmation_warning,
+    mark_runtime_confirmation_pending,
+)
 from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
 from strategy.execution_service import run_rebalancing_strategy
 from strategy.report_formatter import format_rebalancing_report
@@ -52,6 +57,9 @@ async def cmd_rebalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_orders = bool(reb_rep.get('pending_orders')) and not is_blocked(reb_rep)
 
     keyboard = build_confirm_keyboard(has_orders)
+    if has_orders:
+        report_text += get_pending_confirmation_warning()
+        mark_runtime_confirmation_pending(context, "rebalance")
 
     sent_msg = await wrap_reply(update, report_text, parse_mode='HTML', reply_markup=keyboard)
     if sent_msg:
@@ -67,6 +75,7 @@ async def handle_reb_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     if data == "reb_no":
         await wrap_edit(update, "❌ <b>Cancelled.</b>", parse_mode='HTML')
         context.user_data.pop('strategy_reb', None)
+        clear_runtime_confirmation_pending(context)
         return ConversationHandler.END
 
     if data == "reb_yes":
@@ -82,6 +91,7 @@ async def handle_reb_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             await wrap_edit(update, f"❌ Execution Failed: {e}", parse_mode='HTML')
 
         context.user_data.pop('strategy_reb', None)
+        clear_runtime_confirmation_pending(context)
         return ConversationHandler.END
 
 async def reb_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -98,6 +108,7 @@ async def reb_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
     context.user_data.pop('strategy_reb', None)
+    clear_runtime_confirmation_pending(context)
     return ConversationHandler.END
 
 def register_rebalancing_handlers(app: Application):

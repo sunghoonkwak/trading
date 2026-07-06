@@ -732,6 +732,9 @@ class KISWebSocket:
     def __init__(self, api_url: str, max_retries: int = 3):
         self.api_url = api_url
         self.max_retries = max_retries
+        self._stop_requested = False
+        self._active_ws = None
+        self._runner_loop = None
 
     # private
     async def __subscriber(self, ws: websockets.ClientConnection):
@@ -915,7 +918,7 @@ class KISWebSocket:
         url = f"{getTREnv().my_url_ws}{self.api_url}"
         was_connected = False  # Track if we were previously connected
 
-        while True:
+        while not self._stop_requested:
             try:
                 # Log approval key time remaining before connect attempt
                 if _approval_received_time is not None:
@@ -925,6 +928,7 @@ class KISWebSocket:
                 else:
                     logging.info(f"Connecting to WebSocket: {url}")
                 async with websockets.connect(url, ping_interval=60, ping_timeout=120) as ws:
+                    self._active_ws = ws
                     # Notify only after repeated failures were already reported.
                     if should_notify_reconnection_success(self.retry_count):
                         self._send_telegram_notification(
@@ -964,6 +968,9 @@ class KISWebSocket:
                     self._send_telegram_notification(
                         build_reconnection_failure_message(attempt_number, e)
                     )
+
+            if self._stop_requested:
+                break
 
             self.retry_count += 1
 
@@ -1009,7 +1016,12 @@ class KISWebSocket:
             wait_time = self.WAIT_TIMES[max(0, wait_idx)]
             logging.info(f"Reconnecting in {wait_time} seconds (Attempt {self.retry_count})...")
 
-            await asyncio.sleep(wait_time)
+            slept = 0
+            while slept < wait_time and not self._stop_requested:
+                await asyncio.sleep(min(1, wait_time - slept))
+                slept += 1
+
+        self._update_ws_status("disconnected")
 
     # func
     @classmethod
@@ -1085,7 +1097,31 @@ class KISWebSocket:
     ):
         self.on_result = on_result
         self.result_all_data = result_all_data
+        self._stop_requested = False
         try:
-            asyncio.run(self.__runner())
+            self._runner_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._runner_loop)
+            self._runner_loop.run_until_complete(self.__runner())
         except KeyboardInterrupt:
             print("Closing by KeyboardInterrupt")
+        finally:
+            loop = self._runner_loop
+            self._active_ws = None
+            self._runner_loop = None
+            try:
+                if loop is not None:
+                    loop.close()
+            except Exception:
+                pass
+
+    def stop(self):
+        """Request the reconnect loop to stop."""
+        self._stop_requested = True
+        if self._active_ws is not None and self._runner_loop is not None:
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    self._active_ws.close(),
+                    self._runner_loop,
+                )
+            except Exception:
+                pass

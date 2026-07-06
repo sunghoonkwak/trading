@@ -95,6 +95,7 @@ def start_kis_thread() -> bool:
 
 def stop_kis_thread():
     """Gracefully stop the KIS worker thread."""
+    _ws_manager.stop()
     _stop_event.set()
     if _kis_thread:
         _kis_thread.join(timeout=5.0)

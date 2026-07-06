@@ -32,6 +32,13 @@ def _get_event_pipe():
     _pipe_import_attempted = True
     return None
 
+
+def _send_pipe_log(msg_type: str, message: str, time_str: str = None):
+    pipe = _get_event_pipe()
+    send_log = getattr(pipe, "send_log", None) if pipe else None
+    if send_log:
+        send_log(msg_type, message, time_str)
+
 # Colors (still useful for terminal output)
 COLOR_RESET = "\033[0m"
 COLOR_RED = "\033[91m"
@@ -58,9 +65,7 @@ def add_alert(message: str, level: str = "INFO", time_str: str = None):
     print(f"alert:[{timestamp}] {color}{message}{COLOR_RESET}")
 
     # Also send to web dashboard via event_pipe if available
-    pipe = _get_event_pipe()
-    if pipe:
-        pipe.send_log("ALT", f"[{level}] {message}", time_str)
+    _send_pipe_log("ALT", f"[{level}] {message}", time_str)
 
 def update_order_state(order_id: str, ticker: str, name: str, side: str,
                        price: str, qty: str, state: str, notify: bool = True,
@@ -69,12 +74,10 @@ def update_order_state(order_id: str, ticker: str, name: str, side: str,
 
     Format: ODR|name|ticker|side|qty|broker|price|state|order_id
     """
-    pipe = _get_event_pipe()
-    if pipe:
-        # Include name for display in viewer
-        fixed_name = get_fixed_width(name, 20)
-        order_msg = f"{fixed_name}|{ticker}|{side}|{qty}|{broker}|{price}|{state}|{order_id}"
-        pipe.send_log("ODR", order_msg, time_str)
+    # Include name for display in viewer
+    fixed_name = get_fixed_width(name, 20)
+    order_msg = f"{fixed_name}|{ticker}|{side}|{qty}|{broker}|{price}|{state}|{order_id}"
+    _send_pipe_log("ODR", order_msg, time_str)
 
     if notify:
         add_alert(f"{side} {ticker} {qty} @ {price} [{state}]", "INFO", time_str)
@@ -82,21 +85,15 @@ def update_order_state(order_id: str, ticker: str, name: str, side: str,
 
 def remove_order_state(order_id: str):
     """Remove order (send REMOVED state to viewer)."""
-    pipe = _get_event_pipe()
-    if pipe:
-        pipe.send_log("ODR", f"REMOVED|{order_id}")
+    _send_pipe_log("ODR", f"REMOVED|{order_id}")
 
 def clear_order_states():
     """Clear all orders in Event Viewer."""
-    pipe = _get_event_pipe()
-    if pipe:
-        pipe.send_log("CLR", "ORDERS")
+    _send_pipe_log("CLR", "ORDERS")
 
 def clear_quotes():
     """Clear all quotes in Event Viewer."""
-    pipe = _get_event_pipe()
-    if pipe:
-        pipe.send_log("CLR", "QUOTES")
+    _send_pipe_log("CLR", "QUOTES")
 
 
 def show_in_result_area(lines):

@@ -18,6 +18,8 @@ pip install schedule pytz
 
 ### `start_scheduler`
 스케줄러를 초기화하고 백그라운드 스레드에서 `run_scheduler_loop`를 시작합니다.
+재시작 가능한 runtime component이므로 시작 시 기존 `schedule` job을 비우고
+중복 등록을 방지합니다. 이미 실행 중이면 추가 스레드를 만들지 않습니다.
 다음의 작업들을 예약합니다:
 - **07:00 KST**: 포트폴리오 리포트 (`run_daily_portfolio_report`) — KST 고정
 - **07:00 ET → KST 동적 계산**: 주문 리포트 (`run_daily_order_report`) — EST: 21:00 KST / EDT: 20:00 KST
@@ -25,7 +27,14 @@ pip install schedule pytz
 - **00:05 KST**: DST 변경 감지 및 자동 재스케줄 (`_reschedule_if_dst_changed`)
 
 ### `run_scheduler_loop`
-백그라운드 데몬 스레드에서 실행되며, 1분마다 `schedule.run_pending()`을 호출하여 예약된 작업이 있는지 확인하고 실행합니다.
+백그라운드 데몬 스레드에서 실행되며, 1분마다 `schedule.run_pending()`을
+호출하여 예약된 작업이 있는지 확인하고 실행합니다. `/system_off`에서
+설정하는 stop event를 받으면 루프를 종료합니다.
+
+### `stop_scheduler`
+스케줄러 stop event를 설정하고 등록된 job을 비운 뒤 백그라운드 스레드가
+종료되기를 짧게 기다립니다. Telegram control plane은 이 함수로 중지되지
+않습니다.
 
 ## DST (섬머타임) 대응
 

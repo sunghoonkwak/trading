@@ -20,6 +20,8 @@ ORDER_REPORT_ET = (7, 0)  # 07:00 ET
 
 # Track current DST-adjusted KST schedule time
 _current_order_kst = ""
+_scheduler_thread = None
+_stop_event = threading.Event()
 
 
 def _et_to_kst(hour: int, minute: int = 0) -> str:
@@ -54,17 +56,24 @@ def _reschedule_if_dst_changed():
 
 def run_scheduler_loop():
     """Background thread loop."""
-    while True:
+    while not _stop_event.is_set():
         try:
             schedule.run_pending()
         except Exception as e:
             logging.error(f"[Scheduler] Error in run_pending: {e}")
-        time.sleep(60)
+        _stop_event.wait(60)
 
 
 def start_scheduler():
     """Initialize and start the scheduler."""
-    global _current_order_kst
+    global _current_order_kst, _scheduler_thread
+
+    if _scheduler_thread and _scheduler_thread.is_alive():
+        logging.info("[Scheduler] Scheduler already running.")
+        return
+
+    _stop_event.clear()
+    schedule.clear()
 
     # Portfolio Report — KST fixed (Korean morning report)
     schedule.every().day.at("07:00").do(run_daily_portfolio_report)
@@ -91,5 +100,20 @@ def start_scheduler():
     )
     logging.info(" - Every 5m : Periodic Rebalancing (09:40-15:40 ET)")
 
-    t = threading.Thread(target=run_scheduler_loop, daemon=True)
-    t.start()
+    _scheduler_thread = threading.Thread(
+        target=run_scheduler_loop,
+        daemon=True,
+        name="SchedulerThread",
+    )
+    _scheduler_thread.start()
+
+
+def stop_scheduler():
+    """Stop scheduler loop and clear registered jobs."""
+    global _scheduler_thread
+    _stop_event.set()
+    schedule.clear()
+    if _scheduler_thread and _scheduler_thread.is_alive():
+        _scheduler_thread.join(timeout=5.0)
+    _scheduler_thread = None
+    logging.info("[Scheduler] Scheduler stopped.")

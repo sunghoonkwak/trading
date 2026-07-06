@@ -72,6 +72,143 @@ def test_strategy_command_shows_cash_funding_summary(monkeypatch):
     assert "Est. proceeds: $297.00" in replies[0]
 
 
+def test_system_guides_split_off_initial_and_on_runtime_commands():
+    from telegram_bot import telegram_system
+
+    initial = telegram_system.get_initial_control_guide()
+    runtime = telegram_system.get_runtime_on_guide()
+
+    assert "/system_on" in initial
+    assert "/memo" in initial
+    assert "/system_off" not in initial
+    assert "/system_off" in runtime
+    assert "/strategy" in runtime
+    assert "/rebalance" in runtime
+
+
+def test_strategy_confirmation_guides_before_system_off(monkeypatch):
+    buy_order = StrategyOrder("SOXL", OrderSide.BUY, 1, 250.0, "Buy Normal")
+    raoeo_report = {
+        "date": "2026-05-28",
+        "status": StrategyStatus.SKIPPED,
+        "orders": [buy_order],
+        "pending_orders": [buy_order],
+        "info": {"ticker_info": {}},
+    }
+    va_report = {
+        "date": "2026-05-28",
+        "status": StrategyStatus.SKIPPED,
+        "orders": [],
+        "pending_orders": [],
+        "info": {},
+    }
+    monkeypatch.setattr(
+        telegram_strategy,
+        "run_strategy_suite",
+        lambda execute=False: (raoeo_report, va_report),
+    )
+    monkeypatch.setattr(
+        telegram_strategy,
+        "prepare_raoeo_cash_funding",
+        lambda report: (None, {"required": False, "error": None}),
+    )
+    replies = []
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append(text)
+
+        class Message:
+            message_id = 1
+
+        return Message()
+
+    monkeypatch.setattr(telegram_strategy, "wrap_reply", fake_reply)
+
+    class Update:
+        pass
+
+    class Context:
+        user_data = {}
+
+    result = asyncio.run(telegram_strategy.cmd_strategy(Update(), Context()))
+
+    assert result == telegram_strategy.STRATEGY_CONFIRM
+    assert "/system_off" in replies[0]
+    assert "취소" in replies[0]
+    assert Context.user_data["runtime_confirmation_pending"] == "strategy"
+
+
+def test_system_off_is_blocked_while_confirmation_is_pending(monkeypatch):
+    from core.runtime_control import RuntimeCommandResult
+    from telegram_bot import telegram_system
+
+    stop_calls = []
+    replies = []
+    monkeypatch.setattr(
+        telegram_system.runtime_control,
+        "stop_runtime",
+        lambda: stop_calls.append("stop") or RuntimeCommandResult(True, "OFF"),
+    )
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append(text)
+
+    monkeypatch.setattr(telegram_system, "wrap_reply", fake_reply)
+
+    class Update:
+        message = object()
+        callback_query = None
+
+    class Context:
+        user_data = {"runtime_confirmation_pending": "strategy"}
+
+    asyncio.run(telegram_system.cmd_system_off(Update(), Context()))
+
+    assert stop_calls == []
+    assert "/system_off" in replies[0]
+    assert "확인" in replies[0]
+
+
+def test_runtime_callback_is_blocked_when_runtime_is_off(monkeypatch):
+    from telegram.ext import ApplicationHandlerStop
+    from telegram_bot import telegram_system
+
+    replies = []
+    monkeypatch.setattr(
+        telegram_system.runtime_control,
+        "is_runtime_running",
+        lambda: False,
+    )
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append(text)
+
+    monkeypatch.setattr(telegram_system, "wrap_reply", fake_reply)
+
+    class Query:
+        data = "strategy_without_cash_sale"
+
+        async def answer(self):
+            return None
+
+    class Update:
+        callback_query = Query()
+        effective_message = object()
+
+    class Context:
+        user_data = {}
+
+    try:
+        asyncio.run(telegram_system.block_runtime_callbacks_when_off(Update(), Context()))
+    except ApplicationHandlerStop:
+        stopped = True
+    else:
+        stopped = False
+
+    assert stopped is True
+    assert "OFF" in replies[0]
+
+
 def test_failed_cash_funding_stops_all_strategy_execution(monkeypatch):
     funding_result = {
         "order": StrategyOrder("BIL", OrderSide.SELL, 10, 99.0, "funding"),

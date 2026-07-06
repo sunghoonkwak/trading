@@ -75,6 +75,16 @@ def _env_flag(name: str, default: bool = False) -> bool:
     return value.strip().lower() in ENV_TRUE_VALUES
 
 
+def _runtime_off_response():
+    return {"success": False, "error": "Trading runtime is OFF"}
+
+
+def _is_runtime_running() -> bool:
+    from core import runtime_control
+
+    return runtime_control.is_runtime_running()
+
+
 def _event_message_json(msg_type: str, message: str, time_str: str = None) -> str:
     event_time = time_str or datetime.now().strftime("%H:%M:%S")
     return json.dumps(
@@ -194,6 +204,10 @@ async def delete_memo(request: MemoDeleteRequest):
 @app.get("/api/holdings/{ticker}")
 async def get_holdings_data(ticker: str):
     """Fetch holdings data for a specific ticker from portfolio.json."""
+    if not _is_runtime_running():
+        logging.info("[WebServer] Ignoring holdings lookup because trading runtime is OFF")
+        return _runtime_off_response()
+
     try:
         # Use data_service to get portfolio data (handles caching and freshness)
         from data.data_service import get_portfolio_data
@@ -276,10 +290,7 @@ async def websocket_endpoint(websocket: WebSocket):
             if data == "ping":
                 await websocket.send_text('{"type":"SYS","data":"pong"}')
             elif data == "sync_orders":
-                # Sync open orders on client request
-                from broker.order_admin import sync_open_orders
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, sync_open_orders)
+                await _sync_orders_for_client()
     except WebSocketDisconnect:
         await manager.disconnect(websocket)
     except Exception as e:
@@ -287,11 +298,28 @@ async def websocket_endpoint(websocket: WebSocket):
         await manager.disconnect(websocket)
 
 
+async def _sync_orders_for_client():
+    """Sync open orders only while the trading runtime is ON."""
+    if not _is_runtime_running():
+        logging.info("[WebServer] Ignoring order sync because trading runtime is OFF")
+        return _runtime_off_response()
+
+    from broker.order_admin import sync_open_orders
+
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, sync_open_orders)
+    return {"success": True}
+
+
 @app.post("/api/orders/{order_id}/cancel")
 async def cancel_order(order_id: str):
     """Cancel an open order by its order ID."""
     if not _env_flag("WEB_ENABLE_ORDER_CANCEL"):
         return {"success": False, "error": "Order cancel endpoint is disabled"}
+
+    if not _is_runtime_running():
+        logging.info("[WebServer] Ignoring cancel order because trading runtime is OFF")
+        return _runtime_off_response()
 
     try:
         loop = asyncio.get_running_loop()
@@ -308,6 +336,10 @@ async def trigger_portfolio_report(background_tasks: BackgroundTasks):
     if not _env_flag("WEB_ENABLE_MANUAL_REPORT_TRIGGERS"):
         return {"success": False, "error": "Manual report trigger endpoint is disabled"}
 
+    if not _is_runtime_running():
+        logging.info("[WebServer] Ignoring portfolio trigger because trading runtime is OFF")
+        return _runtime_off_response()
+
     try:
         from scheduler.scheduler_portfolio import run_daily_portfolio_report
         # Run in background to not block response
@@ -323,6 +355,10 @@ async def trigger_order_report(background_tasks: BackgroundTasks):
     """Trigger daily order report manually."""
     if not _env_flag("WEB_ENABLE_MANUAL_REPORT_TRIGGERS"):
         return {"success": False, "error": "Manual report trigger endpoint is disabled"}
+
+    if not _is_runtime_running():
+        logging.info("[WebServer] Ignoring order trigger because trading runtime is OFF")
+        return _runtime_off_response()
 
     try:
         from scheduler.scheduler_order import run_daily_order_report

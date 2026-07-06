@@ -28,6 +28,7 @@ from core import display
 from utils.logger import LogManager
 from core import event_pipe
 from core import lock_manager
+from core.runtime_control import RuntimeCommandResult, register_runtime_hooks
 
 class TradingSystem:
     """Main application class for the KIS Trading System."""
@@ -35,6 +36,9 @@ class TradingSystem:
     def __init__(self):
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.shutdown_event = threading.Event()
+        self._runtime_lock = threading.Lock()
+        self._runtime_running = False
+        self._web_server_started = False
 
     def setup_logging(self):
         """Configures system-wide logging via LogManager."""
@@ -171,11 +175,15 @@ class TradingSystem:
 
     def start_web_server(self):
         """Starts the Web Event Viewer dashboard."""
+        if self._web_server_started:
+            print("[Startup] - Web Event Viewer already started")
+            return
         print("[Startup] Step 5: Starting Web Event Viewer...")
         from core.constants import DEFAULT_WEB_PORT, DEFAULT_HOST
         try:
             from core.web_server import start_web_server
             threading.Thread(target=start_web_server, kwargs={"host": DEFAULT_HOST, "port": DEFAULT_WEB_PORT}, daemon=True).start()
+            self._web_server_started = True
             print("[Startup] ✓ Web Event Viewer started in background")
         except Exception:
             logging.exception("[Startup] Web server failed to start")
@@ -196,15 +204,88 @@ class TradingSystem:
     def shutdown(self):
         """Gracefully shuts down all systems."""
         print("\n[System] Shutting down...")
-        try:
-            from broker.kis_worker import stop_kis_thread
-            stop_kis_thread()
-        except: pass
+        self.stop_trading_runtime()
         try:
             from telegram_bot.telegram_bot import shutdown_telegram
             shutdown_telegram()
         except: pass
         print("[System] Goodbye!")
+
+    def is_trading_runtime_running(self) -> bool:
+        return self._runtime_running
+
+    def start_trading_runtime(self) -> RuntimeCommandResult:
+        """Start trading services while keeping Telegram as the control plane."""
+        with self._runtime_lock:
+            if self._runtime_running:
+                return RuntimeCommandResult(
+                    success=True,
+                    message="Trading runtime is already ON.",
+                    already_in_state=True,
+                )
+
+            logging.info("[Runtime] Starting trading runtime by operator command")
+            self.initialize_gsheet_cache()
+            time.sleep(0.5)
+            if not self.initialize_kis():
+                logging.critical("[Runtime] KIS initialization failed; runtime remains OFF")
+                self._notify_startup_failure("KIS")
+                self._stop_runtime_dependencies()
+                return RuntimeCommandResult(
+                    success=False,
+                    component="KIS",
+                    message="KIS initialization failed. Trading runtime remains OFF.",
+                )
+
+            time.sleep(0.5)
+            if not self.initialize_toss():
+                logging.critical("[Runtime] Toss initialization failed; runtime remains OFF")
+                self._notify_startup_failure("Toss")
+                self._stop_runtime_dependencies()
+                return RuntimeCommandResult(
+                    success=False,
+                    component="Toss",
+                    message="Toss initialization failed. Trading runtime remains OFF.",
+                )
+
+            time.sleep(0.5)
+            self.start_scheduler()
+            self._runtime_running = True
+            logging.info("[Runtime] Trading runtime is ON")
+            return RuntimeCommandResult(
+                success=True,
+                message="Trading runtime is ON.",
+            )
+
+    def _stop_runtime_dependencies(self):
+        try:
+            from scheduler.scheduler import stop_scheduler
+            stop_scheduler()
+        except Exception as e:
+            logging.warning("[Runtime] Scheduler stop skipped or failed: %s", e)
+        try:
+            from broker.kis_worker import stop_kis_thread
+            stop_kis_thread()
+        except Exception as e:
+            logging.warning("[Runtime] KIS worker stop skipped or failed: %s", e)
+
+    def stop_trading_runtime(self) -> RuntimeCommandResult:
+        """Stop trading services without stopping Telegram."""
+        with self._runtime_lock:
+            if not self._runtime_running:
+                return RuntimeCommandResult(
+                    success=True,
+                    message="Trading runtime is already OFF.",
+                    already_in_state=True,
+                )
+
+            logging.info("[Runtime] Stopping trading runtime by operator command")
+            self._stop_runtime_dependencies()
+            self._runtime_running = False
+            return RuntimeCommandResult(
+                success=True,
+                message="Trading runtime is OFF. Telegram control remains available.",
+            )
 
     def run(self):
         """Main execution loop."""
@@ -231,26 +312,14 @@ class TradingSystem:
             print("\n[ERROR] Telegram initialization failed. Trading runtime will not start.")
             self.shutdown()
             sys.exit(1)
-        self.initialize_gsheet_cache()
-        time.sleep(0.5)
-        if not self.initialize_kis():
-            logging.critical("[Startup] KIS initialization failed; refusing to start scheduler/web services")
-            self._notify_startup_failure("KIS")
-            print("\n[ERROR] KIS initialization failed. Scheduler and web services will not start.")
-            self.shutdown()
-            sys.exit(1)
-        time.sleep(0.5)
-        if not self.initialize_toss():
-            logging.critical("[Startup] Toss initialization failed; refusing to start scheduler/web services")
-            self._notify_startup_failure("Toss")
-            print("\n[ERROR] Toss initialization failed. Scheduler and web services will not start.")
-            self.shutdown()
-            sys.exit(1)
-        time.sleep(0.5)
-        self.start_scheduler()
+        register_runtime_hooks(
+            self.start_trading_runtime,
+            self.stop_trading_runtime,
+            self.is_trading_runtime_running,
+        )
         self.start_web_server()
 
-        print("\n[Startup] Step 6: System is ready. Running in daemon mode.")
+        print("\n[Startup] Control plane is ready. Trading runtime is OFF.")
         try:
             while not self.shutdown_event.is_set():
                 time.sleep(1)
