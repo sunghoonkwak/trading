@@ -1,0 +1,23 @@
+{
+  "normal": {
+    "result": {
+      "items": [
+        {
+          "symbol": "DUMMY",
+          "name": "Dummy Holding",
+          "quantity": "3"
+        }
+      ]
+    }
+  },
+  "empty": {
+    "result": {
+      "items": []
+    }
+  },
+  "null_items": {
+    "result": {
+      "items": null
+    }
+  }
+}

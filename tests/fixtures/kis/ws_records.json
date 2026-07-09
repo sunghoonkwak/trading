@@ -1,0 +1,24 @@
+{
+  "columns": [
+    "SYMBOL",
+    "PRICE",
+    "QUANTITY"
+  ],
+  "records": {
+    "normal": [
+      "DUMMY",
+      "100.00",
+      "3"
+    ],
+    "missing": [
+      "DUMMY",
+      "100.00"
+    ],
+    "extended": [
+      "DUMMY",
+      "100.00",
+      "3",
+      "IGNORED"
+    ]
+  }
+}
