@@ -4,8 +4,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from strategy import raoeo
-from strategy.base import OrderSide, StrategyStatus
+from strategy import execution_service, raoeo, rebalancing
+from strategy.base import OrderSide, StrategyOrder, StrategyStatus
 from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 
 
@@ -236,16 +236,6 @@ def test_skipped_buy_budget_returns_to_next_day_budget_pool():
     ]
     assert buy_orders[0].target_budget == 250.0
     assert info["ticker_info"]["FAS"]["budget_carryover"] == 83.33
-
-
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-
-from strategy import execution_service
-from strategy.base import StrategyOrder
-
 
 def _open_market(monkeypatch):
     monkeypatch.setattr(
@@ -805,15 +795,6 @@ def test_run_va_reuses_empty_order_history_without_fetching_data(monkeypatch):
     assert report["orders"] == []
     assert report["pending_orders"] == []
     assert report["info"]["targets_context"] == {"QLD": {"day_count": 3}}
-
-
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-
-from strategy import rebalancing
-
 
 def test_rebalancing_uses_orderable_usd_instead_of_portfolio_cash():
     config = {

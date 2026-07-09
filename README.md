@@ -52,8 +52,9 @@ Ruff는 코드 오류와 import 등을 검사하고, mypy는 `pyproject.toml`에
 애플리케이션 코드의 타입을 정적으로 검사합니다. pytest는 코드를 실제로
 실행해 기존 동작을 검증하고 coverage 결과를 함께 출력합니다. `pip-audit`은
 런타임 의존성의 알려진 취약점을 검사합니다. GitHub Actions에서는 Ruff,
-mypy, pytest/coverage 실행, `pip-audit` 결과가 차단 조건입니다. 초기에는
-coverage 백분율과 mutation score 자체는 진단 지표이며 차단 조건이 아닙니다.
+mypy, pytest/coverage 실행, `pip-audit` 결과가 차단 조건입니다. 전체
+coverage는 60% 이상이어야 하며, mutation score 자체는 진단 지표로만
+사용합니다.
 
 Ruff의 안전한 자동 수정은 다음 명령으로 적용할 수 있습니다. 자동 수정
 후에는 반드시 diff와 테스트 결과를 확인하세요.
