@@ -7,9 +7,10 @@ Saves arbitrary text messages to memo.json for later review.
 import html
 import logging
 from datetime import datetime, timedelta
+from typing import cast
 from zoneinfo import ZoneInfo
 
-from telegram import Update
+from telegram import Message, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from core import display
@@ -20,7 +21,8 @@ from .telegram_utils import wrap_reply
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle non-command text messages and save to memo.json."""
-    text = update.message.text.strip()
+    message = cast(Message, update.message)
+    text = cast(str, message.text).strip()
     if not text:
         return
 

@@ -3,6 +3,7 @@
 
 import asyncio
 import logging
+from typing import Any, cast
 
 from telegram import Update
 from telegram.ext import (
@@ -166,7 +167,8 @@ async def cmd_system_on(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_system_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("[TG] /system_off from user")
-    if context.user_data.get(PENDING_CONFIRMATION_KEY):
+    user_data = cast(dict[Any, Any], context.user_data)
+    if user_data.get(PENDING_CONFIRMATION_KEY):
         await wrap_reply(
             update,
             "⚠️ <b>확인 버튼이 아직 활성화되어 있습니다.</b>\n"

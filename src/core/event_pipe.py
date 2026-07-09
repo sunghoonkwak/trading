@@ -25,10 +25,10 @@ _pipe_connected = False
 _pipe_lock = threading.Lock()
 
 # Async write queue
-_write_queue = queue.Queue(maxsize=WRITE_QUEUE_SIZE)
+_write_queue: queue.Queue[tuple[str, str]] = queue.Queue(maxsize=WRITE_QUEUE_SIZE)
 _writer_thread = None
 _writer_running = False
-_last_write_warning = 0  # Timestamp of last warning to avoid spam
+_last_write_warning = 0.0  # Timestamp of last warning to avoid spam
 _consecutive_failures = 0  # Track consecutive write failures
 
 # Web broadcast callback (for web_server.py)
@@ -97,7 +97,7 @@ def wait_for_client():
         return False
 
 
-def send_log(msg_type: str, message: str, time_str: str = None) -> bool:
+def send_log(msg_type: str, message: str, time_str: Optional[str] = None) -> bool:
     """Send log message through socket. Non-blocking via queue."""
     global _last_write_warning
 

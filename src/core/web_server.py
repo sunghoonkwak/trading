@@ -85,7 +85,11 @@ def _is_runtime_running() -> bool:
     return runtime_control.is_runtime_running()
 
 
-def _event_message_json(msg_type: str, message: str, time_str: str = None) -> str:
+def _event_message_json(
+    msg_type: str,
+    message: str,
+    time_str: Optional[str] = None,
+) -> str:
     event_time = time_str or datetime.now().strftime("%H:%M:%S")
     return json.dumps(
         {"type": msg_type, "data": message, "time": event_time},
@@ -93,7 +97,11 @@ def _event_message_json(msg_type: str, message: str, time_str: str = None) -> st
     )
 
 
-def _broadcast_callback(msg_type: str, message: str, time_str: str = None):
+def _broadcast_callback(
+    msg_type: str,
+    message: str,
+    time_str: Optional[str] = None,
+):
     """Callback for event_pipe to broadcast messages to web clients."""
     global _event_loop
     if _event_loop is None:

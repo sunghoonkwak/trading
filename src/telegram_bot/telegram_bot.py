@@ -10,12 +10,12 @@ import logging
 import os
 import threading
 import uuid
-from typing import Optional
+from typing import Optional, cast
 
 # Telegram imports
 import requests
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes, Updater
 
 from core import display
 from core.constants import CONFIG_ROOT
@@ -169,7 +169,8 @@ def initialize_telegram():
 
             # Polling
             logging.info("[Telegram] Starting polling...")
-            await _app.updater.start_polling(
+            updater = cast(Updater, _app.updater)
+            await updater.start_polling(
                 allowed_updates=Update.ALL_TYPES,
                 drop_pending_updates=True
             )

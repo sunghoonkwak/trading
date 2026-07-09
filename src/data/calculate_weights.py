@@ -140,7 +140,7 @@ def calculate_target_weights(
     if total_score == 0:
         return {}, 0, cash_weight
 
-    target_weights = {}
+    target_weights: dict[str, float] = {}
 
     # 5. Assign target weights for core and satellite items.
     for item in core_items:

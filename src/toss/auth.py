@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Any, Callable, Mapping, cast
 from urllib import parse, request
 
 from core.constants import CONFIG_ROOT
@@ -141,7 +141,7 @@ def token_expires_at(token_payload: Mapping[str, object]) -> datetime | None:
         parsed_issued_at = datetime.fromisoformat(issued_at.replace("Z", "+00:00"))
         if parsed_issued_at.tzinfo is None:
             parsed_issued_at = parsed_issued_at.astimezone()
-        return parsed_issued_at + timedelta(seconds=int(expires_in))
+        return parsed_issued_at + timedelta(seconds=int(cast(Any, expires_in)))
 
     return None
 

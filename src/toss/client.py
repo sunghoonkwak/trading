@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Callable, Mapping
+from typing import Any, Callable, ContextManager, Mapping, cast
 from urllib import error
 
 from toss.rate_limit import DEFAULT_RATE_LIMIT_MANAGER, TossRateLimitManager
@@ -25,7 +25,11 @@ def request_json(
         rate_limiter.wait(group)
         _log_request(api_request, group, action_name, attempt)
         try:
-            with urlopen(api_request, timeout=timeout) as response:
+            response_context = cast(
+                ContextManager[Any],
+                urlopen(api_request, timeout=timeout),
+            )
+            with response_context as response:
                 raw_body = response.read().decode("utf-8")
                 payload = json.loads(raw_body)
                 headers = getattr(response, "headers", {})
@@ -150,7 +154,7 @@ def _log_response(
 
 
 def _sanitize_headers(headers: Mapping[str, object]) -> dict[str, object]:
-    sanitized = {}
+    sanitized: dict[str, object] = {}
     for key, value in headers.items():
         lowered = key.lower()
         if lowered == "authorization":

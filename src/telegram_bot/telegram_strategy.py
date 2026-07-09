@@ -7,9 +7,9 @@ Handles the /strategy command to view and execute all active strategies.
 import logging
 from datetime import datetime
 from html import escape
-from typing import Optional
+from typing import Any, Optional, cast
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -69,6 +69,7 @@ def build_confirm_keyboard(
 async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /strategy command."""
     logging.info("[TG] /strategy from user")
+    user_data = cast(dict[Any, Any], context.user_data)
 
     try:
         raoeo_rep, va_rep = run_strategy_suite(execute=False)
@@ -100,8 +101,8 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await wrap_reply(update, f"⚠️ Error calculating cash funding: {e}")
             return ConversationHandler.END
 
-    context.user_data['strategy_raoeo'] = raoeo_rep
-    context.user_data['strategy_va'] = va_rep
+    user_data['strategy_raoeo'] = raoeo_rep
+    user_data['strategy_va'] = va_rep
 
     report_text = format_strategy_report(raoeo_rep, va_rep)
     keyboard = build_confirm_keyboard(has_orders, cash_funding_required)
@@ -111,7 +112,7 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     sent_msg = await wrap_reply(update, report_text, parse_mode='HTML', reply_markup=keyboard)
     if sent_msg:
-        context.user_data['strategy_msg_id'] = sent_msg.message_id
+        user_data['strategy_msg_id'] = sent_msg.message_id
 
     return STRATEGY_CONFIRM if has_orders else ConversationHandler.END
 
@@ -160,9 +161,9 @@ async def handle_clear_strategy_history_callback(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    query = update.callback_query
+    query = cast(CallbackQuery, update.callback_query)
     await query.answer()
-    data = query.data
+    data = cast(str, query.data)
 
     if data == "clear_strategy_history_no":
         await wrap_edit(update, "❌ <b>Cancelled.</b>", parse_mode='HTML')
@@ -191,14 +192,15 @@ async def handle_clear_strategy_history_callback(
         clear_runtime_confirmation_pending(context)
 
 async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
+    query = cast(CallbackQuery, update.callback_query)
+    user_data = cast(dict[Any, Any], context.user_data)
     await query.answer()
-    data = query.data
+    data = cast(str, query.data)
 
     if data == "strategy_no":
         await wrap_edit(update, "❌ <b>Cancelled.</b>", parse_mode='HTML')
-        context.user_data.pop('strategy_raoeo', None)
-        context.user_data.pop('strategy_va', None)
+        user_data.pop('strategy_raoeo', None)
+        user_data.pop('strategy_va', None)
         clear_runtime_confirmation_pending(context)
         return ConversationHandler.END
 
@@ -208,7 +210,7 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
         try:
             funding_result = None
             if data == "strategy_with_cash_sale":
-                stored_raoeo_report = context.user_data.get('strategy_raoeo')
+                stored_raoeo_report = user_data.get('strategy_raoeo')
                 funding_result, funding_info = execute_raoeo_cash_funding(
                     stored_raoeo_report
                 )
@@ -217,7 +219,7 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
                     and (funding_result is None or not funding_result["success"])
                 )
                 if funding_result is not None:
-                    report_date = context.user_data.get(
+                    report_date = user_data.get(
                         'strategy_raoeo', {}
                     ).get('date', datetime.now(TZ_ET).strftime("%Y-%m-%d"))
                     save_raoeo_cash_funding_result(report_date, funding_result)
@@ -230,8 +232,8 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
                         f"❌ <b>Cash funding failed.</b>\n{reason or 'Funding sale unavailable.'}",
                         parse_mode='HTML',
                     )
-                    context.user_data.pop('strategy_raoeo', None)
-                    context.user_data.pop('strategy_va', None)
+                    user_data.pop('strategy_raoeo', None)
+                    user_data.pop('strategy_va', None)
                     clear_runtime_confirmation_pending(context)
                     return ConversationHandler.END
 
@@ -246,26 +248,27 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
             logging.error(f"Strategy Exec Error: {e}", exc_info=True)
             await wrap_edit(update, f"❌ Execution Failed: {e}", parse_mode='HTML')
 
-        context.user_data.pop('strategy_raoeo', None)
-        context.user_data.pop('strategy_va', None)
+        user_data.pop('strategy_raoeo', None)
+        user_data.pop('strategy_va', None)
         clear_runtime_confirmation_pending(context)
         return ConversationHandler.END
 
 async def strategy_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if 'strategy_msg_id' in context.user_data:
+    user_data = cast(dict[Any, Any], context.user_data)
+    if 'strategy_msg_id' in user_data:
         try:
             from .telegram_bot import _chat_id
             if _chat_id:
                 await wrap_edit_message(
                     chat_id=_chat_id,
-                    message_id=context.user_data['strategy_msg_id'],
+                    message_id=user_data['strategy_msg_id'],
                     text="⏱️ <i>Session expired.</i>",
                     parse_mode='HTML'
                 )
         except:
             pass
-    context.user_data.pop('strategy_raoeo', None)
-    context.user_data.pop('strategy_va', None)
+    user_data.pop('strategy_raoeo', None)
+    user_data.pop('strategy_va', None)
     clear_runtime_confirmation_pending(context)
     return ConversationHandler.END
 
@@ -274,7 +277,7 @@ def register_strategy_handlers(app: Application):
         entry_points=[CommandHandler("strategy", cmd_strategy)],
         states={
             STRATEGY_CONFIRM: [CallbackQueryHandler(handle_strategy_callback, pattern=r'^strategy_')],
-            ConversationHandler.TIMEOUT: [TypeHandler(object, strategy_timeout)]
+            ConversationHandler.TIMEOUT: [TypeHandler(Update, strategy_timeout)]
         },
         fallbacks=[],
         conversation_timeout=60

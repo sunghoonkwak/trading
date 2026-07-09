@@ -245,7 +245,7 @@ def replace_account_source(
     account_key: str,
 ) -> Dict[str, Any]:
     """Replace one account's standardized source records inside a source."""
-    result = {
+    result: Dict[str, Any] = {
         "accounts": dict(base.get("accounts", {})),
         "holdings": [
             holding
@@ -279,7 +279,7 @@ def replace_account_source(
 def merge_portfolio_sources(
     kis: Dict[str, Any],
     gsheet: Dict[str, Any],
-    exchange_rate: float,
+    exchange_rate: Optional[float],
     kis_error: Optional[str],
     gsheet_error: Optional[str],
     toss_error: Optional[str] = None,

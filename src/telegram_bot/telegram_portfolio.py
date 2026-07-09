@@ -13,8 +13,15 @@ from telegram.warnings import PTBUserWarning
 
 warnings.filterwarnings("ignore", category=PTBUserWarning)
 import asyncio
+from typing import Any, cast
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    Update,
+)
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -330,11 +337,12 @@ async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio - Entry point for ConversationHandler."""
 
     logging.info("[TG] /portfolio from user")
+    user_data = cast(dict[Any, Any], context.user_data)
     try:
         # Get portfolio data and cache in user_data
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(None, get_portfolio_data)
-        context.user_data['portfolio_data'] = data
+        user_data['portfolio_data'] = data
 
         # Format summary message
         msg = format_portfolio_summary(data)
@@ -344,28 +352,29 @@ async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         sent_msg = await wrap_reply(update, msg, parse_mode='HTML', reply_markup=keyboard)
         if sent_msg:
-            context.user_data['last_port_msg_id'] = sent_msg.message_id
+            user_data['last_port_msg_id'] = sent_msg.message_id
 
         return SELECT_TICKER
     except Exception as e:
         logging.error(f"[TG] cmd_portfolio failed: {e}")
-        context.user_data.pop('portfolio_data', None)
+        user_data.pop('portfolio_data', None)
         return ConversationHandler.END
 
 
 async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle InlineKeyboard button clicks for ticker selection."""
+    user_data = cast(dict[Any, Any], context.user_data)
     try:
-        query = update.callback_query
+        query = cast(CallbackQuery, update.callback_query)
         await query.answer()
 
-        callback_data = query.data
+        callback_data = cast(str, query.data)
         logging.info(f"[TG] Callback: {callback_data}")
 
         # Handle cancel
         if callback_data == "port_cancel":
             await wrap_edit(update, "👋 Portfolio session closed.", parse_mode='HTML')
-            context.user_data.pop('portfolio_data', None)
+            user_data.pop('portfolio_data', None)
             return ConversationHandler.END
 
         # Extract ticker from callback_data (format: port_TICKER)
@@ -375,7 +384,7 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
         ticker = callback_data[5:]  # Remove "port_" prefix
 
         # Get cached portfolio data
-        portfolio_data = context.user_data.get('portfolio_data', {})
+        portfolio_data = user_data.get('portfolio_data', {})
         merged_data = portfolio_data.get("merged_data", {})
 
         # Find ticker (case-insensitive)
@@ -400,7 +409,7 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
         keyboard = build_ticker_keyboard(portfolio_data)
         sent_msg = await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
         if sent_msg:
-            context.user_data['last_port_msg_id'] = sent_msg.message_id
+            user_data['last_port_msg_id'] = sent_msg.message_id
 
         return SELECT_TICKER
     except Exception as e:
@@ -410,11 +419,13 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input for ticker selection."""
+    user_data = cast(dict[Any, Any], context.user_data)
     try:
-        ticker_input = update.message.text.strip().upper()
+        message = cast(Message, update.message)
+        ticker_input = cast(str, message.text).strip().upper()
 
         # Get cached portfolio data
-        portfolio_data = context.user_data.get('portfolio_data', {})
+        portfolio_data = user_data.get('portfolio_data', {})
         merged_data = portfolio_data.get("merged_data", {})
 
         # Find ticker (case-insensitive)
@@ -430,7 +441,7 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
             keyboard = build_ticker_keyboard(portfolio_data)
             sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
             if sent_msg:
-                context.user_data['last_port_msg_id'] = sent_msg.message_id
+                user_data['last_port_msg_id'] = sent_msg.message_id
             return SELECT_TICKER
 
         # Format and send ticker detail
@@ -440,7 +451,7 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         keyboard = build_ticker_keyboard(portfolio_data)
         sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
         if sent_msg:
-            context.user_data['last_port_msg_id'] = sent_msg.message_id
+            user_data['last_port_msg_id'] = sent_msg.message_id
 
         return SELECT_TICKER
     except Exception as e:
@@ -451,7 +462,8 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /cancel command to exit conversation."""
     logging.info("[TG] /cancel from user")
-    context.user_data.pop('portfolio_data', None)
+    user_data = cast(dict[Any, Any], context.user_data)
+    user_data.pop('portfolio_data', None)
     try:
         await wrap_reply(update, "👋 Portfolio session closed.", parse_mode='HTML')
     except Exception as e:
@@ -462,10 +474,11 @@ async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle conversation timeout."""
     logging.info("[TG] Portfolio session timed out")
+    user_data = cast(dict[Any, Any], context.user_data)
 
     try:
-        context.user_data.pop('portfolio_data', None)
-        last_msg_id = context.user_data.pop('last_port_msg_id', None)
+        user_data.pop('portfolio_data', None)
+        last_msg_id = user_data.pop('last_port_msg_id', None)
         if last_msg_id:
             from .telegram_bot import _chat_id
             if _chat_id:
@@ -606,7 +619,7 @@ def format_placed_orders(df, num_us: int, num_kr: int, num_toss: int | None = No
                         lines.append(f"  {order['qty']} @ {order['price']}")
 
     def grouped_by_ticker(orders_for_broker):
-        grouped = {}
+        grouped: dict[str, Any] = {}
         for order in orders_for_broker:
             grouped.setdefault(
                 order["ticker"],
@@ -708,7 +721,7 @@ def register_portfolio_handlers(app: Application):
                 CallbackQueryHandler(handle_ticker_callback, pattern=r'^port_'),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ticker_text)
             ],
-            ConversationHandler.TIMEOUT: [TypeHandler(object, timeout_handler)]
+            ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_handler)]
         },
         fallbacks=[
             CommandHandler("cancel", cancel_handler)

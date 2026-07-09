@@ -40,7 +40,7 @@ def create_order(
     timeout: float = DEFAULT_TIMEOUT,
     urlopen: Callable[..., object] = request.urlopen,
 ) -> dict[str, object]:
-    body = {
+    body: dict[str, object] = {
         "symbol": symbol,
         "side": side.upper(),
         "orderType": order_type.upper(),

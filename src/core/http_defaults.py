@@ -2,7 +2,7 @@
 """Process-wide HTTP defaults for third-party request clients."""
 
 from functools import wraps
-from typing import Any
+from typing import Any, cast
 
 from core.constants import API_TIMEOUT_SHORT
 
@@ -26,7 +26,7 @@ def install_requests_default_timeout(
             kwargs.setdefault("timeout", default_timeout)
             return original_request(method, url, **kwargs)
 
-        request_with_timeout._trading_default_timeout = True
+        cast(Any, request_with_timeout)._trading_default_timeout = True
         requests_module.api.request = request_with_timeout
 
     original_session_request = requests_module.Session.request
@@ -37,5 +37,5 @@ def install_requests_default_timeout(
             kwargs.setdefault("timeout", default_timeout)
             return original_session_request(self, method, url, **kwargs)
 
-        session_request_with_timeout._trading_default_timeout = True
+        cast(Any, session_request_with_timeout)._trading_default_timeout = True
         requests_module.Session.request = session_request_with_timeout

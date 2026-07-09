@@ -6,6 +6,7 @@ Orders are sent to Event Viewer via Unix domain socket IPC.
 import logging
 import sys
 from datetime import datetime
+from typing import Optional
 
 # Try to import event_pipe for order forwarding
 # Lazy loaded event_pipe
@@ -33,7 +34,7 @@ def _get_event_pipe():
     return None
 
 
-def _send_pipe_log(msg_type: str, message: str, time_str: str = None):
+def _send_pipe_log(msg_type: str, message: str, time_str: Optional[str] = None):
     pipe = _get_event_pipe()
     send_log = getattr(pipe, "send_log", None) if pipe else None
     if send_log:
@@ -50,7 +51,7 @@ COLOR_GRAY = "\033[90m"
 from utils.format_utils import get_fixed_width
 
 
-def add_alert(message: str, level: str = "INFO", time_str: str = None):
+def add_alert(message: str, level: str = "INFO", time_str: Optional[str] = None):
     """Print alert to terminal (simple scroll-based)."""
     timestamp = time_str if time_str else datetime.now().strftime("%H:%M:%S")
 
@@ -70,7 +71,7 @@ def add_alert(message: str, level: str = "INFO", time_str: str = None):
 
 def update_order_state(order_id: str, ticker: str, name: str, side: str,
                        price: str, qty: str, state: str, notify: bool = True,
-                       time_str: str = None, broker: str = "KIS"):
+                       time_str: Optional[str] = None, broker: str = "KIS"):
     """Send order update to Event Viewer via IPC.
 
     Format: ODR|name|ticker|side|qty|broker|price|state|order_id

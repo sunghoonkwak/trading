@@ -5,9 +5,9 @@ Telegram Rebalancing Module
 Handles the /rebalance command to view and execute the rebalancing strategy.
 """
 import logging
-from typing import Optional
+from typing import Any, Optional, cast
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -42,6 +42,7 @@ def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
 async def cmd_rebalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /rebalance command."""
     logging.info("[TG] /rebalance from user")
+    user_data = cast(dict[Any, Any], context.user_data)
 
     try:
         reb_rep = run_rebalancing_strategy(execute=False)
@@ -50,7 +51,7 @@ async def cmd_rebalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await wrap_reply(update, f"⚠️ Error calculating rebalancing: {e}")
         return ConversationHandler.END
 
-    context.user_data['strategy_reb'] = reb_rep
+    user_data['strategy_reb'] = reb_rep
 
     report_text = format_rebalancing_report(reb_rep)
 
@@ -70,18 +71,19 @@ async def cmd_rebalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     sent_msg = await wrap_reply(update, report_text, parse_mode='HTML', reply_markup=keyboard)
     if sent_msg:
-        context.user_data['reb_msg_id'] = sent_msg.message_id
+        user_data['reb_msg_id'] = sent_msg.message_id
 
     return REB_CONFIRM if has_orders else ConversationHandler.END
 
 async def handle_reb_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
+    query = cast(CallbackQuery, update.callback_query)
+    user_data = cast(dict[Any, Any], context.user_data)
     await query.answer()
-    data = query.data
+    data = cast(str, query.data)
 
     if data == "reb_no":
         await wrap_edit(update, "❌ <b>Cancelled.</b>", parse_mode='HTML')
-        context.user_data.pop('strategy_reb', None)
+        user_data.pop('strategy_reb', None)
         clear_runtime_confirmation_pending(context)
         return ConversationHandler.END
 
@@ -97,24 +99,25 @@ async def handle_reb_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             logging.error(f"Rebalancing Exec Error: {e}", exc_info=True)
             await wrap_edit(update, f"❌ Execution Failed: {e}", parse_mode='HTML')
 
-        context.user_data.pop('strategy_reb', None)
+        user_data.pop('strategy_reb', None)
         clear_runtime_confirmation_pending(context)
         return ConversationHandler.END
 
 async def reb_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if 'reb_msg_id' in context.user_data:
+    user_data = cast(dict[Any, Any], context.user_data)
+    if 'reb_msg_id' in user_data:
         try:
             from .telegram_bot import _chat_id
             if _chat_id:
                 await wrap_edit_message(
                     chat_id=_chat_id,
-                    message_id=context.user_data['reb_msg_id'],
+                    message_id=user_data['reb_msg_id'],
                     text="⏱️ <i>Session expired.</i>",
                     parse_mode='HTML'
                 )
         except:
             pass
-    context.user_data.pop('strategy_reb', None)
+    user_data.pop('strategy_reb', None)
     clear_runtime_confirmation_pending(context)
     return ConversationHandler.END
 
@@ -123,7 +126,7 @@ def register_rebalancing_handlers(app: Application):
         entry_points=[CommandHandler("rebalance", cmd_rebalance)],
         states={
             REB_CONFIRM: [CallbackQueryHandler(handle_reb_callback, pattern=r'^reb_')],
-            ConversationHandler.TIMEOUT: [TypeHandler(object, reb_timeout)]
+            ConversationHandler.TIMEOUT: [TypeHandler(Update, reb_timeout)]
         },
         fallbacks=[],
         conversation_timeout=60

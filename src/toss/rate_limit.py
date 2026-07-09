@@ -4,7 +4,7 @@ import random
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable, Mapping
+from typing import Any, Callable, Mapping, cast
 
 DEFAULT_GROUP_LIMITS: dict[str, int] = {
     "AUTH": 5,
@@ -126,7 +126,7 @@ def _non_negative_float(value: object) -> float | None:
     if value is None:
         return None
     try:
-        parsed = float(value)
+        parsed = float(cast(Any, value))
     except (TypeError, ValueError):
         return None
     if parsed < 0:

@@ -10,7 +10,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import Callable, cast
 from urllib import parse, request
 
 if __package__ in {None, ""}:
@@ -59,14 +59,17 @@ def get_orderbook(
 ) -> dict[str, object]:
     query = parse.urlencode({"symbol": symbol.strip()})
     url = f"{base_url.rstrip('/')}/api/v1/orderbook?{query}"
-    return _get_payload(
-        url=url,
-        access_token=access_token,
-        timeout=timeout,
-        urlopen=urlopen,
-        result_type=dict,
-        name="orderbook",
-        group="MARKET_DATA",
+    return cast(
+        dict[str, object],
+        _get_payload(
+            url=url,
+            access_token=access_token,
+            timeout=timeout,
+            urlopen=urlopen,
+            result_type=dict,
+            name="orderbook",
+            group="MARKET_DATA",
+        ),
     )
 
 

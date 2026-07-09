@@ -4,8 +4,9 @@ Telegram Utilities
 """
 import asyncio
 import logging
+from typing import Optional, cast
 
-from telegram import Update
+from telegram import Bot, Message, Update
 from telegram.error import NetworkError, TimedOut
 
 from core import display
@@ -30,7 +31,8 @@ async def wrap_reply(update: Update, text: str, **kwargs):
                 return await update.message.reply_text(text, **kwargs)
             elif update.callback_query:
                 # Fallback for callback queries if someone calls wrap_reply by mistake
-                return await update.callback_query.message.reply_text(text, **kwargs)
+                message = cast(Message, update.callback_query.message)
+                return await message.reply_text(text, **kwargs)
             return None
         except (TimedOut, NetworkError) as e:
             if attempt < MAX_RETRIES:
@@ -66,11 +68,9 @@ async def wrap_edit(update: Update, text: str, **kwargs):
                 raise
 
 # Global reference for wrap_send
-from telegram import Bot
-
-_bot: Bot = None
-_chat_id: str = None
-_main_loop: asyncio.AbstractEventLoop = None
+_bot: Optional[Bot] = None
+_chat_id: Optional[str] = None
+_main_loop: Optional[asyncio.AbstractEventLoop] = None
 
 def set_telegram_bot(bot: Bot, chat_id: str):
     """Set the global bot and chat_id for utility functions."""

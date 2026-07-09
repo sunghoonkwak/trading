@@ -8,7 +8,7 @@ import logging
 import time
 from datetime import datetime
 from datetime import time as dt_time
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, cast
 
 import pytz
 
@@ -37,9 +37,10 @@ def get_us_market_status(date: Optional[Union[str, datetime]] = None) -> Dict:
     now_et = datetime.now(tz_et)
     check_date = date or now_et
     if isinstance(check_date, str):
+        date_text = check_date
         for fmt in ("%Y%m%d", "%Y-%m-%d"):
             try:
-                parsed = datetime.strptime(check_date, fmt)
+                parsed = datetime.strptime(date_text, fmt)
                 check_date = tz_et.localize(parsed.replace(
                     hour=now_et.hour,
                     minute=now_et.minute,
@@ -48,15 +49,16 @@ def get_us_market_status(date: Optional[Union[str, datetime]] = None) -> Dict:
                 break
             except ValueError:
                 continue
+    check_datetime = cast(datetime, check_date)
 
     # Check weekend
-    if check_date.weekday() >= 5:
+    if check_datetime.weekday() >= 5:
         return {
             "is_market_open": False,
             "message": "Market closed (Weekend)",
         }
 
-    if not _has_market_session("NYSE", check_date):
+    if not _has_market_session("NYSE", check_datetime):
         return {
             "is_market_open": False,
             "message": "Market closed (Holiday)",
