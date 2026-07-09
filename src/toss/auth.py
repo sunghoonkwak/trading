@@ -18,7 +18,6 @@ from core.constants import CONFIG_ROOT
 from core.credentials import load_credentials
 from toss.client import request_json
 
-
 DEFAULT_BASE_URL = "https://openapi.tossinvest.com"
 DEFAULT_TIMEOUT = 10.0
 CONFIG_ROOT_PATH = Path(CONFIG_ROOT)

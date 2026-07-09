@@ -16,10 +16,9 @@ from urllib import parse, request
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
-from toss.create_order import _post_order_action
 from toss.account_cache import get_default_account_seq
-from toss.auth import load_access_token
+from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT, load_access_token
+from toss.create_order import _post_order_action
 
 
 def cancel_order(

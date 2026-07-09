@@ -131,8 +131,8 @@ def fetch_toss_exchange_rate() -> Tuple[Optional[float], Optional[str]]:
 
 def fetch_toss_portfolio_source() -> Tuple[Dict[str, Any], Optional[str]]:
     """Fetch Toss source data and emit portfolio alerts."""
-    from core.display import add_alert
     from broker.toss_portfolio import fetch_toss_portfolio
+    from core.display import add_alert
 
     try:
         add_alert("[Toss] Fetching Toss API data...", "INFO")

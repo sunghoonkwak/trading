@@ -244,7 +244,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from strategy import execution_service
-from strategy.base import OrderSide, StrategyOrder
+from strategy.base import StrategyOrder
 
 
 def _open_market(monkeypatch):
@@ -812,8 +812,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from strategy import execution_service, rebalancing
-from strategy.base import OrderSide
+from strategy import rebalancing
 
 
 def test_rebalancing_uses_orderable_usd_instead_of_portfolio_cash():

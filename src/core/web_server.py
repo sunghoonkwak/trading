@@ -2,19 +2,19 @@
 Web Server Module - Simplified Event Viewer for trading system.
 Only provides WebSocket for real-time event streaming, no REST API control.
 """
-import os
-import sys
 import asyncio
 import json
 import logging
-from datetime import datetime
-from typing import Set, Optional
+import os
+import sys
 from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Optional, Set
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 import uvicorn
+from fastapi import BackgroundTasks, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from core.constants import ENV_TRUE_VALUES

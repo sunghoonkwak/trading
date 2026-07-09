@@ -5,10 +5,11 @@ System State Management Module
 Tracks the lifecycle and authentication status of various system threads.
 """
 import threading
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from dataclasses import dataclass, field
 from typing import Optional
+
 
 class ThreadStatus(Enum):
     NOT_STARTED = "not_started"
@@ -49,8 +50,10 @@ class TelegramState:
 
 class SystemStateManager:
     """Singleton manager for system-wide thread states."""
-    _instance = None
+    _instance: Optional["SystemStateManager"] = None
     _lock = threading.Lock()
+    _kis: KISState
+    _telegram: TelegramState
 
     def __new__(cls):
         with cls._lock:

@@ -5,10 +5,11 @@ Telegram Integration Module
 This module provides Telegram bot functionality for remote access to
 trading commands and notifications.
 """
-import os
-import logging
 import asyncio
+import logging
+import os
 import threading
+import uuid
 from typing import Optional
 
 # Telegram imports
@@ -16,16 +17,15 @@ import requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from .telegram_strategy import register_strategy_handlers
-from .telegram_rebalancing import register_rebalancing_handlers
-from .telegram_portfolio import register_portfolio_handlers
-from .telegram_memo import register_memo_handler
-from .telegram_system import get_initial_control_guide, register_system_handlers
-from .telegram_utils import wrap_send, set_telegram_bot, wrap_reply
 from core import display
 from core.constants import CONFIG_ROOT
 
-import uuid
+from .telegram_memo import register_memo_handler
+from .telegram_portfolio import register_portfolio_handlers
+from .telegram_rebalancing import register_rebalancing_handlers
+from .telegram_strategy import register_strategy_handlers
+from .telegram_system import get_initial_control_guide, register_system_handlers
+from .telegram_utils import set_telegram_bot, wrap_reply, wrap_send
 
 # Module state
 _app: Optional[Application] = None
@@ -54,7 +54,7 @@ def load_telegram_credentials() -> tuple[Optional[str], Optional[str]]:
 
 async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /daily_report [YYYYMMDD]"""
-    logging.info(f"[TG] /daily_report from user")
+    logging.info("[TG] /daily_report from user")
     args = context.args
     target_date = ""
 
@@ -62,8 +62,9 @@ async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target_date = args[0].replace("-", "")
     else:
         try:
-            from scheduler.scheduler_portfolio import REPORTS_DIR
             import glob
+
+            from scheduler.scheduler_portfolio import REPORTS_DIR
             list_of_files = glob.glob(os.path.join(REPORTS_DIR, "report_*.txt"))
             if list_of_files:
                 latest_file = max(list_of_files, key=os.path.getctime)

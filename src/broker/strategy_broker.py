@@ -6,7 +6,6 @@ from typing import Tuple
 from data.config_manager import ConfigFile, load_json
 from strategy.base import StrategyOrder
 
-
 KIS_BROKER = "kis"
 TOSS_BROKER = "toss"
 _ACCOUNT_NAMES = {

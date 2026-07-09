@@ -7,11 +7,10 @@ It dynamically parses the "phase" array rules provided in the configuration.
 It is a pure calculation module without direct API dependencies.
 """
 import logging
-from typing import Dict, List, NamedTuple, Optional, Tuple
-from datetime import datetime
 import math
+from typing import Dict, List, NamedTuple, Optional, Tuple
 
-from strategy.base import StrategyOrder, OrderSide
+from strategy.base import OrderSide, StrategyOrder
 from strategy.constants import MAX_BUY_PRICE_RATIO, ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 from utils.price_utils import resolve_current_price
 

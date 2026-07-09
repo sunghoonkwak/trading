@@ -4,11 +4,11 @@ Main Trading System Entry Point
 
 Initializes and orchestrates all sub-systems (KIS, Telegram, Scheduler, Web).
 """
+import logging
 import os
 import sys
-import time
 import threading
-import logging
+import time
 
 from core.http_defaults import install_requests_default_timeout
 
@@ -23,12 +23,10 @@ except ImportError:
     pass
 
 # Import Core Modules
-from core import trading_config
-from core import display
-from utils.logger import LogManager
-from core import event_pipe
-from core import lock_manager
+from core import display, event_pipe, lock_manager, trading_config
 from core.runtime_control import RuntimeCommandResult, register_runtime_hooks
+from utils.logger import LogManager
+
 
 class TradingSystem:
     """Main application class for the KIS Trading System."""
@@ -92,9 +90,12 @@ class TradingSystem:
         print("[Startup] Step 2: Initializing KIS API...")
         try:
             from broker.kis_worker import (
-                start_kis_thread, is_kis_thread_running,
-                request_kis_auth, request_kis_ws_auth, wait_for_response,
-                initialize_websocket_and_pipe
+                initialize_websocket_and_pipe,
+                is_kis_thread_running,
+                request_kis_auth,
+                request_kis_ws_auth,
+                start_kis_thread,
+                wait_for_response,
             )
 
             if not is_kis_thread_running():
@@ -179,7 +180,7 @@ class TradingSystem:
             print("[Startup] - Web Event Viewer already started")
             return
         print("[Startup] Step 5: Starting Web Event Viewer...")
-        from core.constants import DEFAULT_WEB_PORT, DEFAULT_HOST
+        from core.constants import DEFAULT_HOST, DEFAULT_WEB_PORT
         try:
             from core.web_server import start_web_server
             threading.Thread(target=start_web_server, kwargs={"host": DEFAULT_HOST, "port": DEFAULT_WEB_PORT}, daemon=True).start()

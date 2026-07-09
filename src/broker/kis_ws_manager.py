@@ -6,11 +6,13 @@ Handles WebSocket connection, subscriptions, and event loop.
 """
 import logging
 import threading
-from typing import Optional, List
-from kis.kis_api import kis_auth as ka
-from state.system_state import update_kis_state, WebSocketStatus
+from typing import Optional
+
 from core import trading_config
 from core.display import add_alert
+from kis.kis_api import kis_auth as ka
+from state.system_state import WebSocketStatus, update_kis_state
+
 
 class WSManager:
     """Manages KIS WebSocket life cycle and subscriptions."""
@@ -30,10 +32,12 @@ class WSManager:
                 ka.open_map.clear()
 
             # Import specific subscription handlers
-            from kis.kis_api.overseas_stock.asking_price.asking_price import asking_price
-            from kis.kis_api.overseas_stock.ccnl_notice.ccnl_notice import ccnl_notice as ccnl_notice_us
-            from kis.kis_api.overseas_stock.delayed_ccnl.delayed_ccnl import delayed_ccnl
             from broker.kis_event_handler import on_result
+            from kis.kis_api.overseas_stock.asking_price.asking_price import asking_price
+            from kis.kis_api.overseas_stock.ccnl_notice.ccnl_notice import (
+                ccnl_notice as ccnl_notice_us,
+            )
+            from kis.kis_api.overseas_stock.delayed_ccnl.delayed_ccnl import delayed_ccnl
 
             logging.info("[WSManager] Initializing WebSocket...")
             self._ws_instance = ka.KISWebSocket(api_url="")

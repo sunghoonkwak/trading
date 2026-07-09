@@ -2,15 +2,14 @@
 Unix domain socket IPC module for WebSocket log communication between main process and viewer.
 Uses async write queue to prevent blocking when Event Viewer is unresponsive.
 """
-import threading
 import logging
-import queue
-import time
 import os
+import queue
 import socket
+import threading
+import time
 from contextlib import suppress
 from typing import Optional
-
 
 # Linux Unix Domain Socket
 SOCKET_PATH = '/tmp/kis_websocket_log.sock'

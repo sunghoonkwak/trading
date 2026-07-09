@@ -1,7 +1,7 @@
+import importlib.util
 import sys
 import types
 from pathlib import Path
-import importlib.util
 
 import pandas as pd
 
@@ -80,7 +80,6 @@ def test_domestic_tick_logs_from_websocket_row(monkeypatch):
 import logging
 import sys
 from pathlib import Path
-
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -219,8 +218,8 @@ from kis.ws_parser import (
     mask_dict_for_log,
     mask_record_for_log,
     normalize_record,
-    should_send_schema_drift_alert,
     should_log_normalization,
+    should_send_schema_drift_alert,
     split_records,
 )
 

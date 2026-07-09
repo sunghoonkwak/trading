@@ -4,10 +4,12 @@ Market Utilities Module
 
 Provides helper functions for market indicators and market calendar status.
 """
-import time
 import logging
-from datetime import datetime, time as dt_time
+import time
+from datetime import datetime
+from datetime import time as dt_time
 from typing import Dict, Optional, Union
+
 import pytz
 
 # Optional external dependencies

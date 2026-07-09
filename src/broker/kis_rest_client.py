@@ -6,11 +6,12 @@ Handles REST API requests with retry logic, error handling, and timeout manageme
 """
 import logging
 import time
-from typing import Dict, Any, Callable
 from functools import wraps
+from typing import Any, Callable, Dict
 
 from kis.kis_api import kis_auth as ka
-from state.system_state import update_kis_state, AuthStatus
+from state.system_state import AuthStatus, update_kis_state
+
 
 class KISAPIError(Exception):
     """Base exception for KIS API errors."""
@@ -55,9 +56,9 @@ class RESTClient:
             update_kis_state(auth_status=AuthStatus.AUTHENTICATED)
             logging.info("[RESTClient] REST API authentication successful")
             return {"status": "authenticated"}
-        except Exception as e:
-            update_kis_state(auth_status=AuthStatus.FAILED, last_error=str(e))
-            raise KISAuthError(f"REST Auth failed: {e}")
+        except Exception as exc:
+            update_kis_state(auth_status=AuthStatus.FAILED, last_error=str(exc))
+            raise KISAuthError(f"REST Auth failed: {exc}") from exc
 
     @staticmethod
     @retry_on_exception(max_retries=3, delay=2.0)
@@ -69,6 +70,6 @@ class RESTClient:
             update_kis_state(ws_auth_status=AuthStatus.AUTHENTICATED)
             logging.info("[RESTClient] WebSocket authentication successful")
             return {"status": "ws_authenticated"}
-        except Exception as e:
-            update_kis_state(ws_auth_status=AuthStatus.FAILED, last_error=str(e))
-            raise KISAuthError(f"WS Auth failed: {e}")
+        except Exception as exc:
+            update_kis_state(ws_auth_status=AuthStatus.FAILED, last_error=str(exc))
+            raise KISAuthError(f"WS Auth failed: {exc}") from exc

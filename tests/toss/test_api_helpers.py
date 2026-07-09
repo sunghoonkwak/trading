@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib import error, request
 
-
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
@@ -118,8 +117,9 @@ class TossPortfolioApiTest(unittest.TestCase):
 
 class TossAuthTest(unittest.TestCase):
     def test_load_config_reads_credentials_file(self):
-        from core.credentials import generate_key_from_password
         from cryptography.fernet import Fernet
+
+        from core.credentials import generate_key_from_password
         from toss.auth import load_config
 
         config_root = ROOT / "tests" / ".tmp-toss-config"
@@ -257,8 +257,7 @@ class TossAuthTest(unittest.TestCase):
         )
 
     def test_load_access_token_renews_expired_token(self):
-        from toss.auth import TossAuthConfig, TossToken
-        from toss.auth import load_access_token
+        from toss.auth import TossAuthConfig, TossToken, load_access_token
 
         token_dir = ROOT / "tests" / ".tmp-expired-load-token"
         self.addCleanup(lambda: self._remove_tree(token_dir))

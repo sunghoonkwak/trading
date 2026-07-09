@@ -6,7 +6,6 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Mapping
 
-
 DEFAULT_GROUP_LIMITS: dict[str, int] = {
     "AUTH": 5,
     "ACCOUNT": 1,

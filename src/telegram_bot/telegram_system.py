@@ -16,8 +16,8 @@ from telegram.ext import (
 )
 
 from core import runtime_control
-from .telegram_utils import wrap_reply
 
+from .telegram_utils import wrap_reply
 
 RUNTIME_COMMANDS = {"system_on", "system_off", "system_status"}
 RUNTIME_REQUIRED_COMMANDS = {

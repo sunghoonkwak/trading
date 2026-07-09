@@ -7,7 +7,8 @@ It calculates orders to bring assets back to their target weights.
 """
 import logging
 from typing import Dict, List, Optional, Tuple
-from strategy.base import StrategyOrder, OrderSide
+
+from strategy.base import OrderSide, StrategyOrder
 from strategy.constants import DEFAULT_REBALANCE_THRESHOLD, ORDER_TYPE_LIMIT
 from utils.price_utils import resolve_current_price
 

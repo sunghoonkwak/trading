@@ -3,7 +3,6 @@
 
 from typing import Any, Dict, Optional, Tuple
 
-
 TOSS_ACCOUNT_NAME = "토스"
 TOSS_ACCOUNT_KEY = TOSS_ACCOUNT_NAME
 TOSS_DEFAULT_ACCOUNT_SEQ = 1
@@ -35,9 +34,9 @@ def fetch_toss_portfolio(
     account_seq: int = TOSS_DEFAULT_ACCOUNT_SEQ,
 ) -> Tuple[Dict[str, Any], Optional[str]]:
     """Fetch Toss holdings and buying power in the standard source format."""
+    from toss.auth import load_access_token
     from toss.get_buying_power import get_buying_power
     from toss.get_holdings import get_holdings
-    from toss.auth import load_access_token
 
     access_token = load_access_token()
     holdings_result = get_holdings(

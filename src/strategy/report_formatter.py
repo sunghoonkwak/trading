@@ -6,7 +6,8 @@ Provides standardized formatting for strategy reports (Telegram message).
 Uses the unified report structure with StrategyStatus enum.
 """
 from typing import Dict, List
-from strategy.base import StrategyOrder, StrategyStatus, OrderSide
+
+from strategy.base import StrategyStatus
 from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 
 
@@ -106,7 +107,6 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
     else:
         orders = raoeo_report.get('orders', [])
         succeeded = raoeo_report.get('succeeded_orders', [])
-        pending = raoeo_report.get('pending_orders', [])
         info = raoeo_report.get('info', {})
         ticker_info = info.get('ticker_info', {})
 
@@ -116,8 +116,6 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
         orders_by_ticker = {}
         for o in orders:
             orders_by_ticker.setdefault(o.symbol, []).append(o)
-
-        succeeded_symbols = {o.symbol for o in succeeded}
 
         if orders:
             for ticker, t_orders in orders_by_ticker.items():
@@ -258,7 +256,6 @@ def format_rebalancing_report(reb_report: Dict) -> str:
         lines.append("  <b>Current KIS Holdings & Weights:</b>")
         for ticker, data in asset_status.items():
             cur_w = data.get('cur_w', 0)
-            tgt_w = data.get('target_w', 0)
             diff_w = data.get('diff_w', 0)
             qty = data.get('qty', 0)
             val = data.get('cur_val', 0)

@@ -2,10 +2,12 @@
 """
 Telegram Utilities
 """
-import logging
 import asyncio
+import logging
+
 from telegram import Update
-from telegram.error import TimedOut, NetworkError
+from telegram.error import NetworkError, TimedOut
+
 from core import display
 
 MAX_RETRIES = 2
@@ -65,6 +67,7 @@ async def wrap_edit(update: Update, text: str, **kwargs):
 
 # Global reference for wrap_send
 from telegram import Bot
+
 _bot: Bot = None
 _chat_id: str = None
 _main_loop: asyncio.AbstractEventLoop = None
@@ -186,7 +189,7 @@ def send_notification(text: str, parse_mode: str = 'HTML'):
     # Different thread or no loop -> Schedule on main loop safely
     try:
         if _main_loop and not _main_loop.is_closed():
-             future = asyncio.run_coroutine_threadsafe(_send(), _main_loop)
+             asyncio.run_coroutine_threadsafe(_send(), _main_loop)
         else:
              logging.error("[TG] Main loop is closed or missing, cannot send notification")
     except Exception as e:

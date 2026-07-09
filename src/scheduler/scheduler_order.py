@@ -6,9 +6,11 @@ Executes daily strategy routines automatically and sends reports to Telegram.
 Reuses the same execution and reporting logic as the Telegram bot.
 """
 import logging
-from telegram_bot.telegram_utils import send_notification
-from strategy.execution_service import run_strategy_suite, run_rebalancing_strategy
+
+from strategy.execution_service import run_rebalancing_strategy, run_strategy_suite
 from strategy.report_formatter import format_strategy_report
+from telegram_bot.telegram_utils import send_notification
+
 
 def run_daily_order_report():
     """
@@ -56,6 +58,7 @@ def run_periodic_rebalancing():
     """
     global _last_first_notify_date
     from datetime import datetime
+
     import pytz
 
     tz = pytz.timezone('US/Eastern')
@@ -100,7 +103,7 @@ def run_periodic_rebalancing():
 
         if should_notify:
             if status == StrategyStatus.ERROR and reb_res.get("error") == "API Timeout":
-                send_notification(f"⚠️ [네트워크 타임아웃] KIS API 무응답 (Periodic Rebalancing)")
+                send_notification("⚠️ [네트워크 타임아웃] KIS API 무응답 (Periodic Rebalancing)")
             else:
                 from strategy.report_formatter import format_rebalancing_report
                 header = "🚀 <b>First Rebalancing Check</b>" if is_first_call else "🔄 <b>Periodic Rebalancing</b>"
@@ -108,7 +111,7 @@ def run_periodic_rebalancing():
                 send_notification(f"{header}\n\n{report_text}")
                 logging.info(f"[Scheduler] Rebalancing notification sent (FirstCall: {is_first_call})")
         else:
-            logging.info(f"[Scheduler] Rebalancing checked: No action needed.")
+            logging.info("[Scheduler] Rebalancing checked: No action needed.")
 
         # Mark this date as notified (whether we sent or not, the day is checked)
         _last_first_notify_date = us_date

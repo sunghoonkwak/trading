@@ -2,7 +2,6 @@
 
 from html import escape
 
-
 SENSITIVE_COLUMNS = {
     "CUST_ID",
     "ACNT_NO",

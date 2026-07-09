@@ -5,9 +5,9 @@ Lock Manager using fcntl
 Ensures only one instance of the application runs at a time by acquiring
 an exclusive lock on a file.
 """
-import os
 import fcntl
 import logging
+import os
 
 LOCK_FILE = ".app.lock"
 _lock_file_handle = None

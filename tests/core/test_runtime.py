@@ -4,7 +4,6 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet
 
-
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
@@ -394,10 +393,10 @@ def test_web_holdings_lookup_is_blocked_when_runtime_is_off(monkeypatch):
     }
 
 
+import importlib.util
 import sys
 import types
 from pathlib import Path
-import importlib.util
 
 import pytest
 

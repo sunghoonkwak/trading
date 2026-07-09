@@ -5,19 +5,21 @@ Telegram Strategy Module (Refactored)
 Handles the /strategy command to view and execute all active strategies.
 """
 import logging
+from datetime import datetime
 from html import escape
-from typing import Dict, List, Optional
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from typing import Optional
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
-    Application, CommandHandler, ContextTypes,
-    ConversationHandler, CallbackQueryHandler, TypeHandler
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    TypeHandler,
 )
-from .telegram_system import (
-    clear_runtime_confirmation_pending,
-    get_pending_confirmation_warning,
-    mark_runtime_confirmation_pending,
-)
-from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
+
+from strategy.base import StrategyStatus
 from strategy.constants import TZ_ET
 from strategy.execution_service import (
     clear_strategy_history_for_date,
@@ -28,8 +30,13 @@ from strategy.execution_service import (
     save_raoeo_cash_funding_result,
 )
 from strategy.report_formatter import format_strategy_report
-from strategy.base import StrategyOrder, StrategyStatus, OrderSide
-from datetime import datetime
+
+from .telegram_system import (
+    clear_runtime_confirmation_pending,
+    get_pending_confirmation_warning,
+    mark_runtime_confirmation_pending,
+)
+from .telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
 
 STRATEGY_CONFIRM = 0
 
@@ -61,7 +68,7 @@ def build_confirm_keyboard(
 
 async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /strategy command."""
-    logging.info(f"[TG] /strategy from user")
+    logging.info("[TG] /strategy from user")
 
     try:
         raoeo_rep, va_rep = run_strategy_suite(execute=False)

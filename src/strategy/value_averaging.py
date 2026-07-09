@@ -7,7 +7,8 @@ It is now a pure calculation module without direct API dependencies.
 """
 import logging
 from typing import Dict, List, Optional, Tuple
-from strategy.base import StrategyOrder, OrderSide
+
+from strategy.base import OrderSide, StrategyOrder
 from strategy.constants import DEFAULT_VA_THRESHOLD, ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 from utils.price_utils import resolve_current_price
 

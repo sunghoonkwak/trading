@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 import requests
 
-
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
@@ -651,14 +650,12 @@ def test_strategy_broker_rejects_unknown_broker(monkeypatch):
 import sys
 from pathlib import Path
 
-import pandas as pd
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from broker import market_data
 from broker.kis_portfolio import KisPortfolioSourceAdapter
-from kis.kis_api.overseas_stock.price import price as price_module
 from kis.kis_api import kis_auth as ka
+from kis.kis_api.overseas_stock.price import price as price_module
 
 
 class _FakeTREnv:
@@ -808,13 +805,9 @@ def test_kis_worker_blocks_rest_auth_when_rest_api_disabled(monkeypatch):
 import sys
 from pathlib import Path
 
-import pandas as pd
-import pytest
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from data.data_service import PortfolioProcessor
-from broker.kis_portfolio import KisPortfolioSourceAdapter
 from kis.kis_api.overseas_stock.inquire_present_balance import (
     inquire_present_balance as inquire_present_balance_module,
 )

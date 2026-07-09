@@ -6,12 +6,12 @@ This module defines the communication infrastructure between threads:
 - Request/Response dataclasses for inter-thread messaging
 - Queue definitions for KIS, Telegram, and data flow
 """
-from queue import Queue
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Optional
-from datetime import datetime
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from queue import Queue
+from typing import Any, Optional
 
 
 class RequestType(Enum):

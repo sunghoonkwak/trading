@@ -4,13 +4,14 @@ Configuration Manager Module
 
 Handles loading and saving of JSON configuration and history files.
 """
-import os
 import json
 import logging
+import os
 from enum import Enum
 from typing import Any, Dict, Union
 
 from core.constants import CONFIG_ROOT
+
 
 class ConfigFile(Enum):
     """

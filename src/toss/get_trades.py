@@ -16,9 +16,8 @@ from urllib import parse, request
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
+from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT, load_access_token
 from toss.get_orderbook import _get_payload
-from toss.auth import load_access_token
 
 
 def get_trades(

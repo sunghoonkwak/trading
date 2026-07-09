@@ -4,18 +4,18 @@ Packet handling event logic for KIS WebSocket.
 Moves on_result logic out of main.py to solve circular dependencies.
 """
 import logging
-import pandas as pd
 from datetime import datetime
 
-from core import trading_config
-from core.trading_config import strip_market_prefix
-from core import event_pipe
-from core.event_pipe import print_viewer
-from kis.ws_parser import mask_dict_for_log
-from core.display import add_alert, remove_order_state
-from utils.format_utils import get_fixed_width, format_number
+import pandas as pd
+
 from broker.order_admin import sync_open_orders
+from core import trading_config
+from core.display import add_alert, remove_order_state
+from core.event_pipe import print_viewer
+from core.trading_config import strip_market_prefix
+from kis.ws_parser import mask_dict_for_log
 from telegram_bot.telegram_utils import send_notification
+from utils.format_utils import format_number, get_fixed_width
 
 
 def _handle_domestic_market(tr_id: str, row) -> bool:
@@ -66,9 +66,6 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
             level = "INFO"
         except:
             return True
-
-    time_v = str(state.get('time', '000000')).strip()
-    time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}" if len(time_v) == 6 else time_v.zfill(6)
 
     cfg = trading_config.get_stock_info(code)
     if not cfg:
@@ -147,9 +144,6 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
             level = "INFO"
         except:
             return True
-
-    time_v = str(state.get('time', '000000')).strip()
-    time_s = f"{time_v[:2]}:{time_v[2:4]}:{time_v[4:6]}" if len(time_v) >= 6 else time_v.zfill(6)
 
     cfg = trading_config.get_stock_info(code)
     if not cfg:

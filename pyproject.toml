@@ -1,0 +1,24 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["src/kis/kis_api"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B"]
+ignore = ["E402", "E701", "E722", "E731"]
+
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "src/strategy/base.py",
+    "src/strategy/rebalancing.py",
+    "src/strategy/value_averaging.py",
+    "src/broker/strategy_broker.py",
+    "src/state/system_state.py",
+]
+check_untyped_defs = true
+ignore_missing_imports = true
+show_error_codes = true
+pretty = true
+explicit_package_bases = true
+exclude = ["^src/kis/kis_api/"]

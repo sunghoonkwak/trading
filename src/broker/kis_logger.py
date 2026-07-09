@@ -7,7 +7,6 @@ from typing import Callable, Mapping
 
 import requests
 
-
 KIS_HOST_MARKERS = (
     "koreainvestment.com",
     "openapi.koreainvestment.com",

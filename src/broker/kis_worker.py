@@ -7,18 +7,17 @@ import time
 from queue import Empty
 from typing import Optional
 
-from core.thread_comm import (
-    kis_request_queue,
-    kis_response_queue,
-    ThreadRequest,
-    ThreadResponse,
-    RequestType,
-)
-from state.system_state import ThreadStatus, update_kis_state
 from broker.kis_rest_client import RESTClient
 from broker.kis_ws_manager import WSManager
+from core.thread_comm import (
+    RequestType,
+    ThreadRequest,
+    ThreadResponse,
+    kis_request_queue,
+    kis_response_queue,
+)
 from core.trading_config import is_kis_rest_api_enabled
-
+from state.system_state import ThreadStatus, update_kis_state
 
 _kis_thread: Optional[threading.Thread] = None
 _stop_event = threading.Event()

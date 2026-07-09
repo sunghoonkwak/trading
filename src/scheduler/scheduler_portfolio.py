@@ -3,18 +3,18 @@
 Portfolio Report Service
 Handles daily portfolio summary and reporting logic (typically for 7 AM).
 """
+import glob
+import json
 import logging
 import os
-import json
-import glob
 import re
 from datetime import datetime, timedelta
 from typing import Optional
 
 from core.constants import CONFIG_ROOT, DEFAULT_USD_KRW_EXCHANGE_RATE
+from data.data_service import get_portfolio_data
 from telegram_bot.telegram_portfolio import format_portfolio_summary
 from telegram_bot.telegram_utils import send_notification
-from data.data_service import get_portfolio_data
 
 # Configuration
 HISTORY_DIR = os.path.join(CONFIG_ROOT, "portfolio_history")
@@ -83,8 +83,6 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
 
     # Read the current raw holdings and cash snapshots.
     curr_holdings = current_data.get('holdings', [])
-    curr_cash = current_data.get('cash_holdings', [])
-
     # Saved history files can be raw or processed, so calculate totals from the
     # richest available fields and fall back to holdings plus cash.
 
@@ -240,7 +238,7 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
             if movers:
                 comparison_lines.append("")
                 comparison_lines.append("🚀 <b>Top Movers</b>")
-                for t, pct, name in movers[:3]: # Top 3
+                for _ticker, pct, name in movers[:3]: # Top 3
                      icon = "🔥" if pct > 0 else "💧"
                      comparison_lines.append(f"{icon} <b>{name}</b>: {pct:+.1f}%")
 
@@ -284,7 +282,7 @@ def run_daily_portfolio_report():
                 logging.info(f"[Scheduler] Monday - Loaded Friday's data from {latest_file}")
             except Exception as e:
                 logging.error(f"[Scheduler] Failed to load Friday's data: {e}")
-                send_notification(f"⚠️ Monday report failed: Could not load Friday's data")
+                send_notification("⚠️ Monday report failed: Could not load Friday's data")
                 return
         else:
             logging.warning("[Scheduler] Monday - No history files found")

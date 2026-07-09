@@ -8,22 +8,29 @@ for interactive ticker selection.
 import logging
 import warnings
 from decimal import Decimal, InvalidOperation
+
 from telegram.warnings import PTBUserWarning
+
 warnings.filterwarnings("ignore", category=PTBUserWarning)
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application, CommandHandler, ContextTypes,
-    ConversationHandler, CallbackQueryHandler, MessageHandler, TypeHandler, filters
-)
 import asyncio
-from core import display
-from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
-from datetime import datetime
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    TypeHandler,
+    filters,
+)
 
 from broker import market_data, order_admin
-from data.data_service import get_weight_diffs
-from data.data_service import get_portfolio_data
+from data.data_service import get_portfolio_data, get_weight_diffs
 from data.portfolio_integration import refresh_gsheet_cache
+
+from .telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
 
 # Conversation states
 SELECT_TICKER = 0
@@ -322,7 +329,7 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
 async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio - Entry point for ConversationHandler."""
 
-    logging.info(f"[TG] /portfolio from user")
+    logging.info("[TG] /portfolio from user")
     try:
         # Get portfolio data and cache in user_data
         loop = asyncio.get_running_loop()
@@ -443,7 +450,7 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /cancel command to exit conversation."""
-    logging.info(f"[TG] /cancel from user")
+    logging.info("[TG] /cancel from user")
     context.user_data.pop('portfolio_data', None)
     try:
         await wrap_reply(update, "👋 Portfolio session closed.", parse_mode='HTML')
@@ -637,7 +644,7 @@ def format_placed_orders(df, num_us: int, num_kr: int, num_toss: int | None = No
 
 async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /placed_orders - Show open orders."""
-    logging.info(f"[TG] /placed_orders from user")
+    logging.info("[TG] /placed_orders from user")
     try:
         loop = asyncio.get_running_loop()
         df, num_us, num_kr, num_toss = await loop.run_in_executor(None, order_admin.fetch_open_orders)
@@ -649,7 +656,7 @@ async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /portfolio_weight."""
-    logging.info(f"[TG] /portfolio_weight from user")
+    logging.info("[TG] /portfolio_weight from user")
     try:
         loop = asyncio.get_running_loop()
         diffs, total_usd, cash_info = await loop.run_in_executor(None, get_weight_diffs, "all")
@@ -661,7 +668,7 @@ async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def cmd_gsheet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /gsheet - refresh cached GSheet source data."""
-    logging.info(f"[TG] /gsheet from user")
+    logging.info("[TG] /gsheet from user")
     try:
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, refresh_gsheet_cache)

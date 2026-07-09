@@ -6,10 +6,10 @@ This module provides centralized data access for the application.
 It separates data fetching, caching, and transformation logic.
 """
 import logging
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple
 
+from broker import market_data
 from broker.kis_worker import request_portfolio, wait_for_response
-from state.system_state import is_kis_ready
 from core.display import add_alert
 from data.config_manager import ConfigFile, load_json, save_json
 from data.portfolio_processing import (
@@ -21,9 +21,8 @@ from data.portfolio_scope import (
     PORTFOLIO_SCOPE_TOSS,
     normalize_portfolio_scope,
 )
-from broker import market_data
+from state.system_state import is_kis_ready
 from utils.market_utils import get_fear_and_greed
-from core.trading_config import get_stock_info
 
 # =============================================================================
 # Main Service Functions

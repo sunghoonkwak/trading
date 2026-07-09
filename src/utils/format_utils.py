@@ -7,6 +7,7 @@ Helper functions for text and number formatting.
 import unicodedata
 from typing import Any
 
+
 def get_fixed_width(text: str, width: int = 8) -> str:
     """Get fixed-width display text for CJK characters."""
     current_width = 0

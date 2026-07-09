@@ -1,11 +1,11 @@
-import sys
 import asyncio
+import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from telegram_bot import telegram_portfolio, telegram_strategy
 from strategy.base import OrderSide, StrategyOrder, StrategyStatus
+from telegram_bot import telegram_portfolio, telegram_strategy
 
 
 def test_strategy_command_shows_cash_funding_summary(monkeypatch):
@@ -171,6 +171,7 @@ def test_system_off_is_blocked_while_confirmation_is_pending(monkeypatch):
 
 def test_runtime_callback_is_blocked_when_runtime_is_off(monkeypatch):
     from telegram.ext import ApplicationHandlerStop
+
     from telegram_bot import telegram_system
 
     replies = []

@@ -8,12 +8,15 @@ import html
 import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from data.config_manager import ConfigFile, load_json, save_json
 
 from telegram import Update
-from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
-from .telegram_utils import wrap_reply
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+
 from core import display
+from data.config_manager import ConfigFile, load_json, save_json
+
+from .telegram_utils import wrap_reply
+
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle non-command text messages and save to memo.json."""
@@ -51,7 +54,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def cmd_memo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /memo - show recent 7 days of messages."""
-    logging.info(f"[TG] /memo from user")
+    logging.info("[TG] /memo from user")
     messages = load_json(ConfigFile.MEMO, default={})
     if not messages:
         await wrap_reply(update, "📭 No saved messages.")

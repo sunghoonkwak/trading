@@ -4,16 +4,16 @@ Scheduler Main Service
 Orchestrates all scheduled tasks by importing specific job modules.
 """
 import logging
-import time
 import threading
 from datetime import datetime
 
 import pytz
 import schedule
 
+from scheduler.scheduler_order import run_daily_order_report, run_periodic_rebalancing
+
 # Import jobs from sub-modules
 from scheduler.scheduler_portfolio import run_daily_portfolio_report
-from scheduler.scheduler_order import run_daily_order_report, run_periodic_rebalancing
 
 # Target times in US/Eastern (hour, minute)
 ORDER_REPORT_ET = (7, 0)  # 07:00 ET

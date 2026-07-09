@@ -147,7 +147,7 @@ def calculate_target_weights(
         item_target = (item['score'] / total_score) * stock_total
         _add_item_target(target_weights, item, item_target)
 
-    for item, score in zip(satellite_items, satellite_scores):
+    for item, score in zip(satellite_items, satellite_scores, strict=True):
         item_target = (score / total_score) * stock_total
         _add_item_target(target_weights, item, item_target)
 
@@ -239,7 +239,6 @@ def calculate_rebalancing(
 
 
 if __name__ == "__main__":
-    import unicodedata
 
     config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
 
@@ -268,8 +267,8 @@ if __name__ == "__main__":
         print(f"Total Score: {score:.2f}")
 
         # Load stock names for display
-        import os
         import json
+        import os
         script_dir = os.path.dirname(os.path.abspath(__file__))
         stock_config_file = os.path.join(script_dir, "stock_configuration.json")
         ticker_map = {}

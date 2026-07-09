@@ -9,7 +9,6 @@ from urllib import request
 from toss.auth import DEFAULT_BASE_URL, DEFAULT_TIMEOUT
 from toss.get_accounts import get_accounts
 
-
 _DEFAULT_ACCOUNT_CACHE: dict[tuple[str, str], int] = {}
 _CACHE_LOCK = Lock()
 

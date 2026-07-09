@@ -32,6 +32,29 @@ venv/bin/python
 venv/bin/pytest
 ```
 
+### 코드 품질 검사
+
+개발 도구를 설치한 뒤 Ruff, mypy, pytest를 순서대로 실행합니다.
+
+```bash
+venv/bin/pip install -r requirements-dev.txt
+venv/bin/ruff check src tests
+venv/bin/mypy
+venv/bin/pytest tests
+```
+
+Ruff는 코드 오류와 import 등을 검사하고, mypy는 `pyproject.toml`에 지정된
+애플리케이션 코드의 타입을 정적으로 검사합니다. pytest는 코드를 실제로
+실행해 기존 동작을 검증합니다. GitHub Actions도 push와 pull request마다
+동일한 검사를 실행하며 하나라도 실패하면 CI가 실패합니다.
+
+Ruff의 안전한 자동 수정은 다음 명령으로 적용할 수 있습니다. 자동 수정
+후에는 반드시 diff와 테스트 결과를 확인하세요.
+
+```bash
+venv/bin/ruff check src tests --fix
+```
+
 운영 설정과 비밀값은 저장소 밖의 `~/KIS_config`에 둡니다. 이 저장소의
 `templates/`는 예시 파일만 제공합니다.
 

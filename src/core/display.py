@@ -3,8 +3,8 @@ Simplified display module - scroll-based terminal output.
 All ANSI cursor control removed for reliable log visibility.
 Orders are sent to Event Viewer via Unix domain socket IPC.
 """
-import sys
 import logging
+import sys
 from datetime import datetime
 
 # Try to import event_pipe for order forwarding
@@ -48,6 +48,7 @@ COLOR_CYAN = "\033[96m"
 COLOR_GRAY = "\033[90m"
 
 from utils.format_utils import get_fixed_width
+
 
 def add_alert(message: str, level: str = "INFO", time_str: str = None):
     """Print alert to terminal (simple scroll-based)."""

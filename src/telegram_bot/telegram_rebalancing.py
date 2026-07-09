@@ -5,21 +5,28 @@ Telegram Rebalancing Module
 Handles the /rebalance command to view and execute the rebalancing strategy.
 """
 import logging
-from typing import Dict, List, Optional
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from typing import Optional
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
-    Application, CommandHandler, ContextTypes,
-    ConversationHandler, CallbackQueryHandler, TypeHandler
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    ConversationHandler,
+    TypeHandler,
 )
+
+from strategy.base import StrategyStatus
+from strategy.execution_service import run_rebalancing_strategy
+from strategy.report_formatter import format_rebalancing_report
+
 from .telegram_system import (
     clear_runtime_confirmation_pending,
     get_pending_confirmation_warning,
     mark_runtime_confirmation_pending,
 )
-from .telegram_utils import wrap_reply, wrap_edit, wrap_edit_message
-from strategy.execution_service import run_rebalancing_strategy
-from strategy.report_formatter import format_rebalancing_report
-from strategy.base import StrategyStatus
+from .telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
 
 REB_CONFIRM = 0
 
@@ -34,7 +41,7 @@ def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
 
 async def cmd_rebalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /rebalance command."""
-    logging.info(f"[TG] /rebalance from user")
+    logging.info("[TG] /rebalance from user")
 
     try:
         reb_rep = run_rebalancing_strategy(execute=False)
