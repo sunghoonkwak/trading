@@ -1,3 +1,4 @@
+import math
 import sys
 from pathlib import Path
 
@@ -47,10 +48,18 @@ def test_cash_funding_sale_never_exceeds_holding(
     )
     assert info["shortfall"] == expected_shortfall
     assert info["required"] is (expected_shortfall > 0)
-    if cash_sale is not None:
-        assert expected_shortfall > 0
-        assert cash_sale.side == OrderSide.SELL
-        assert 0 < cash_sale.quantity <= cash_holding
+    if expected_shortfall == 0:
+        assert cash_sale is None
+    else:
+        required_quantity = math.ceil(expected_shortfall / 99.0)
+        if cash_holding >= required_quantity:
+            assert cash_sale is not None
+            assert cash_sale.side == OrderSide.SELL
+            assert cash_sale.quantity == required_quantity
+            assert 0 < cash_sale.quantity <= cash_holding
+        else:
+            assert cash_sale is None
+            assert "Insufficient" in info["error"]
 
 
 @st.composite
@@ -82,14 +91,12 @@ def valid_rebalance_inputs(draw):
 
     asset_data = {
         f"ASSET{index}": {
-            "target_weight": weight / weight_total,
-            "current_value": quantity * (price_cents / 100),
-            "qty": quantity,
-            "cur_price": price_cents / 100,
+            "target_weight": weights[index] / weight_total,
+            "current_value": quantities[index] * (prices[index] / 100),
+            "qty": quantities[index],
+            "cur_price": prices[index] / 100,
         }
-        for index, (weight, price_cents, quantity) in enumerate(
-            (weights[index], prices[index], quantities[index]) for index in range(asset_count)
-        )
+        for index in range(asset_count)
     }
     return asset_data, target_base
 
@@ -108,6 +115,18 @@ def test_rebalance_orders_have_positive_quantities(rebalance_input):
         order.quantity * order.price for order in orders if order.side == OrderSide.BUY
     )
     assert total_buy_required == pytest.approx(expected_buy_required)
-    for order in orders:
-        if order.side == OrderSide.SELL:
-            assert order.quantity <= asset_data[order.symbol]["qty"]
+
+    expected_orders = {}
+    for symbol, data in asset_data.items():
+        difference = target_base * data["target_weight"] - data["current_value"]
+        if difference < 0:
+            quantity = int(abs(difference) / data["cur_price"])
+            side = OrderSide.SELL
+        else:
+            quantity = int(difference / (data["cur_price"] + 0.01))
+            side = OrderSide.BUY
+        if quantity > 0:
+            expected_orders[symbol] = (side, quantity)
+
+    actual_orders = {order.symbol: (order.side, order.quantity) for order in orders}
+    assert actual_orders == expected_orders
