@@ -104,6 +104,7 @@ target/
 var/
 .venv
 venv/
+.worktrees/
 # virtualenv
 .vscode/
 # VS Code
