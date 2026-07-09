@@ -34,19 +34,26 @@ venv/bin/pytest
 
 ### 코드 품질 검사
 
-개발 도구를 설치한 뒤 Ruff, mypy, pytest를 순서대로 실행합니다.
+운영 및 개발의 최소 Python 버전은 3.11입니다. Docker와 CI도 Python 3.11을
+사용하며, Python 3.9는 지원 종료(EOL) 상태이므로 지원하지 않습니다.
+
+개발 도구를 설치한 뒤 Ruff, mypy, pytest/coverage, 의존성 보안 감사를
+실행합니다.
 
 ```bash
 venv/bin/pip install -r requirements-dev.txt
 venv/bin/ruff check src tests
 venv/bin/mypy
-venv/bin/pytest tests
+venv/bin/pytest --cov=src --cov-report=term-missing tests
+venv/bin/pip-audit -r requirements.txt
 ```
 
 Ruff는 코드 오류와 import 등을 검사하고, mypy는 `pyproject.toml`에 지정된
 애플리케이션 코드의 타입을 정적으로 검사합니다. pytest는 코드를 실제로
-실행해 기존 동작을 검증합니다. GitHub Actions도 push와 pull request마다
-동일한 검사를 실행하며 하나라도 실패하면 CI가 실패합니다.
+실행해 기존 동작을 검증하고 coverage 결과를 함께 출력합니다. `pip-audit`은
+런타임 의존성의 알려진 취약점을 검사합니다. GitHub Actions에서는 Ruff,
+mypy, pytest/coverage 실행, `pip-audit` 결과가 차단 조건입니다. 초기에는
+coverage 백분율과 mutation score 자체는 진단 지표이며 차단 조건이 아닙니다.
 
 Ruff의 안전한 자동 수정은 다음 명령으로 적용할 수 있습니다. 자동 수정
 후에는 반드시 diff와 테스트 결과를 확인하세요.
@@ -281,13 +288,42 @@ KIS REST 가격 조회로 보완합니다.
 호스트 개발 환경에서는 가상환경을 먼저 사용합니다.
 
 ```bash
-venv/bin/pytest tests
+venv/bin/pytest --cov=src --cov-report=term-missing tests
+```
+
+Hypothesis 기반 전략 속성 테스트만 빠르게 실행하려면 다음 명령을 사용합니다.
+
+```bash
+venv/bin/pytest tests/raoeo/test_properties.py
+```
+
+런타임 의존성 보안 감사:
+
+```bash
+venv/bin/pip-audit -r requirements.txt
+```
+
+mutation test는 `pyproject.toml`에 지정된 `src/strategy/`와 `src/broker/`만
+대상으로 하며, 공식 KIS 배포 코드인 `src/kis/kis_api/`는 포함하지 않습니다.
+이 검사는 현재 진단용이며 CI 차단 조건이 아닙니다. 전체 실행에는 시간이 오래
+걸릴 수 있습니다.
+
+```bash
+venv/bin/mutmut run --max-children 1
+venv/bin/mutmut results
 ```
 
 컨테이너 안에서 검증하려면 다음 명령을 사용합니다.
 
 ```bash
 docker compose exec trading-bot python -m pytest tests
+```
+
+CI와 같은 test 이미지 smoke test:
+
+```bash
+docker build --target test -t trading-bot:test .
+docker run --rm --user 1000:1000 -e HOME=/app --entrypoint python trading-bot:test -m pytest tests
 ```
 
 전략 설정 검증:
@@ -322,8 +358,8 @@ venv/bin/python scripts/backtest/raoeo/batch_backtest.py
 
 ## 알려진 특이점
 
-- Docker 런타임은 Python 3.11 이미지를 사용합니다. 호스트 개발 환경은
-  저장소의 `venv/`를 기준으로 합니다.
+- Docker 런타임과 CI의 운영 기준 및 최소 지원 버전은 Python 3.11입니다.
+  호스트 개발 환경은 저장소의 `venv/`를 기준으로 합니다.
 - KIS 포트폴리오/가격 조회 래퍼는 일부 테스트에서 paper flag가 켜져 있어도
   `env_dv="real"`을 사용하도록 검증합니다. 실전/모의 전환 정책을 바꿀 때는
   이 동작을 먼저 확인해야 합니다.
