@@ -113,4 +113,14 @@ skip_covered = true
 
 [tool.mutmut]
 source_paths = ["src/strategy/", "src/broker/"]
+also_copy = [
+    "src/core/",
+    "src/data/",
+    "src/kis/",
+    "src/state/",
+    "src/telegram_bot/",
+    "src/toss/",
+    "src/utils/",
+]
+pytest_add_cli_args = ["-o", "pythonpath=src"]
 pytest_add_cli_args_test_selection = ["tests/raoeo/", "tests/kis/"]
