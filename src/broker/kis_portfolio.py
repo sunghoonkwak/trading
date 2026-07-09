@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Application-owned facade for KIS portfolio retrieval."""
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional, TypedDict
 
 import pandas as pd
 
@@ -14,6 +14,21 @@ from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance 
 from kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import (
     inquire_psamount,
 )
+
+
+class _DomesticAccountResult(TypedDict):
+    stocks: List[Dict[str, Any]]
+    asset: Dict[str, Any]
+    krw_orderable: int
+    error: Optional[str]
+
+
+class _OverseasAccountResult(TypedDict):
+    stocks: List[Dict[str, Any]]
+    asset: Dict[str, Any]
+    exchange_rate: float
+    usd_orderable: Optional[float]
+    error: Optional[str]
 
 
 class KisPortfolioSourceAdapter:
@@ -84,7 +99,12 @@ class KisPortfolioSourceAdapter:
         prod = trenv.my_prod
         env_dv = "real"
 
-        kr_res = {"stocks": [], "asset": {}, "krw_orderable": 0, "error": None}
+        kr_res: _DomesticAccountResult = {
+            "stocks": [],
+            "asset": {},
+            "krw_orderable": 0,
+            "error": None,
+        }
         if is_kis_domestic_enabled():
             try:
                 df1, df2 = inquire_balance(
@@ -132,7 +152,7 @@ class KisPortfolioSourceAdapter:
             except Exception as e:
                 kr_res["error"] = str(e)
 
-        us_res = {
+        us_res: _OverseasAccountResult = {
             "stocks": [],
             "asset": {},
             "exchange_rate": 0.0,

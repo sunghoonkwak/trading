@@ -231,7 +231,7 @@ def clear_strategy_history_for_date(target_date: str = "") -> Dict[str, Any]:
     return {"date": target_date, "removed": removed}
 
 
-def _get_today_entry(hist_data: list, today_str: str) -> Dict:
+def _get_today_entry(hist_data: list, today_str: str) -> Optional[Dict]:
     """Find or create today's entry in history."""
     for entry in hist_data:
         if entry.get("date") == today_str:
@@ -350,7 +350,7 @@ def _retry_failed_history_orders(
     today_str: str,
     succeeded: List[StrategyOrder],
     failed: List[StrategyOrder],
-    extra_fields: Dict = None,
+    extra_fields: Optional[Dict] = None,
     sell_first: bool = False,
     sell_wait_seconds: int = 0,
 ) -> None:
@@ -401,7 +401,7 @@ def _save_strategy_to_history(
 def _build_strategy_history_data(
     report: Dict,
     strategy_key: str,
-    extra_fields: Dict = None
+    extra_fields: Optional[Dict] = None
 ) -> Dict:
     """Build the history data dict for a strategy from its report."""
     now_et = datetime.now(TZ_ET)
@@ -441,8 +441,8 @@ def _build_strategy_history_data(
 
 
 def prepare_raoeo_cash_funding(
-    raoeo_report: Dict = None,
-    context: StrategyRunContext = None,
+    raoeo_report: Optional[Dict] = None,
+    context: Optional[StrategyRunContext] = None,
 ) -> Tuple[Any, Dict]:
     """Calculate a manual cash-ticker funding order for pending RAOEO buys."""
     if raoeo_report is None:
@@ -496,8 +496,8 @@ def _report_orderable_usd(report_info: Dict) -> Any:
 
 
 def execute_raoeo_cash_funding(
-    raoeo_report: Dict = None,
-    context: StrategyRunContext = None,
+    raoeo_report: Optional[Dict] = None,
+    context: Optional[StrategyRunContext] = None,
 ) -> Tuple[Any, Dict]:
     """Execute approved funding first; callers must stop if it fails."""
     if context is None:
@@ -710,7 +710,7 @@ def _rebalancing_history_context(calc_info: Dict) -> Dict:
 
 def run_raoeo_strategy(
     execute: bool = False,
-    context: StrategyRunContext = None,
+    context: Optional[StrategyRunContext] = None,
 ) -> Dict[str, Any]:
     """
     Run RAOEO strategy with unified 6-step flow.
@@ -780,8 +780,8 @@ def run_raoeo_strategy(
         if not orders:
             report["status"] = StrategyStatus.SKIPPED
             if execute and report["info"].get("skipped_buy_budgets"):
-                hist_data = _build_strategy_history_data(report, "raoeo")
-                _save_strategy_to_history(today_str, "raoeo", hist_data)
+                save_data = _build_strategy_history_data(report, "raoeo")
+                _save_strategy_to_history(today_str, "raoeo", save_data)
             return report
 
         # Step 6: Execute if requested
@@ -800,8 +800,8 @@ def run_raoeo_strategy(
         _apply_execution_results(report, orders, results)
 
         # Save history
-        hist_data = _build_strategy_history_data(report, "raoeo")
-        _save_strategy_to_history(today_str, "raoeo", hist_data)
+        save_data = _build_strategy_history_data(report, "raoeo")
+        _save_strategy_to_history(today_str, "raoeo", save_data)
 
     except requests.exceptions.Timeout as e:
         logging.error(f"[API Timeout] RAOEO Service Timeout Error: {e}", exc_info=True)
@@ -821,8 +821,8 @@ def run_raoeo_strategy(
 
 def run_va_strategy(
     execute: bool = False,
-    market_snapshot: Tuple[Dict, Dict] = None,
-    context: StrategyRunContext = None,
+    market_snapshot: Optional[Tuple[Dict, Dict]] = None,
+    context: Optional[StrategyRunContext] = None,
 ) -> Dict[str, Any]:
     """
     Run Value Averaging strategy with unified 6-step flow.
@@ -927,7 +927,7 @@ def run_va_strategy(
 
 def run_strategy_suite(
     execute: bool = False,
-    context: StrategyRunContext = None,
+    context: Optional[StrategyRunContext] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Run RAOEO and Value Averaging with shared market data."""
     run_context = context or StrategyRunContext()

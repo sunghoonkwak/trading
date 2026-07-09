@@ -6,7 +6,7 @@ Handles WebSocket connection, subscriptions, and event loop.
 """
 import logging
 import threading
-from typing import Optional
+from typing import Optional, cast
 
 from core import trading_config
 from core.display import add_alert
@@ -104,12 +104,13 @@ class WSManager:
             return False
 
     def _set_callback(self, callback):
-        if hasattr(self._ws_instance, 'add_callback'):
-            self._ws_instance.add_callback(callback)
-        elif hasattr(self._ws_instance, 'on'):
-            self._ws_instance.on("message", callback)
+        ws_instance = cast(ka.KISWebSocket, self._ws_instance)
+        if hasattr(ws_instance, 'add_callback'):
+            ws_instance.add_callback(callback)
+        elif hasattr(ws_instance, 'on'):
+            ws_instance.on("message", callback)
         else:
-            self._ws_instance.callback = callback
+            ws_instance.callback = callback
 
     def is_alive(self) -> bool:
         return self._ws_thread is not None and self._ws_thread.is_alive()

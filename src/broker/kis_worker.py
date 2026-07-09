@@ -138,7 +138,7 @@ def request_portfolio(force_refresh: bool = False, scope: str = "all") -> str:
 def wait_for_response(request_id: str, timeout: float = 30.0) -> Optional[ThreadResponse]:
     """Poll the response queue for a matching response id."""
     start = time.time()
-    stashed = []
+    stashed: list[ThreadResponse] = []
     while (time.time() - start) < timeout:
         try:
             response = kis_response_queue.get(timeout=0.5)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 import json
 import logging
-from typing import Callable, Mapping
+from typing import Any, Callable, Mapping, Protocol, cast
 
 import requests
 
@@ -37,6 +37,12 @@ SENSITIVE_PREFIXES = (
 )
 
 
+class _LoggedRequest(Protocol):
+    _kis_logging: bool
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
 def install_kis_logging() -> None:
     """Install KIS HTTP logging while preserving the timeout patch."""
     current_request = requests.api.request
@@ -45,7 +51,9 @@ def install_kis_logging() -> None:
     requests.api.request = wrap_http_request_for_kis_logging(current_request)
 
 
-def wrap_http_request_for_kis_logging(request_func: Callable[..., object]) -> Callable[..., object]:
+def wrap_http_request_for_kis_logging(
+    request_func: Callable[..., Any],
+) -> Callable[..., Any]:
     @functools.wraps(request_func)
     def wrapper(method, url, **kwargs):
         response = request_func(method, url, **kwargs)
@@ -53,8 +61,9 @@ def wrap_http_request_for_kis_logging(request_func: Callable[..., object]) -> Ca
             _log_http_response(method, str(url), kwargs, response)
         return response
 
-    wrapper._kis_logging = True
-    return wrapper
+    logged_wrapper = cast(_LoggedRequest, wrapper)
+    logged_wrapper._kis_logging = True
+    return logged_wrapper
 
 
 def sanitize_for_log(value: object) -> object:
@@ -82,12 +91,20 @@ def log_api_resp_debug(api_response) -> None:
     logging.debug("<Header>")
     header = api_response.getHeader()
     for field in header._fields:
-        logging.debug("\t-%s: %s", field, sanitize_for_log({field: getattr(header, field)})[field])
+        sanitized = cast(
+            Mapping[object, object],
+            sanitize_for_log({field: getattr(header, field)}),
+        )
+        logging.debug("\t-%s: %s", field, sanitized[field])
 
     logging.debug("<Body>")
     body = api_response.getBody()
     for field in body._fields:
-        logging.debug("\t-%s: %s", field, sanitize_for_log({field: getattr(body, field)})[field])
+        sanitized = cast(
+            Mapping[object, object],
+            sanitize_for_log({field: getattr(body, field)}),
+        )
+        logging.debug("\t-%s: %s", field, sanitized[field])
 
 
 def log_ws_send(message: Mapping[str, object]) -> None:

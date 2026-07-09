@@ -8,7 +8,7 @@ It is a pure calculation module without direct API dependencies.
 """
 import logging
 import math
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 from strategy.base import OrderSide, StrategyOrder
 from strategy.constants import MAX_BUY_PRICE_RATIO, ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
@@ -18,7 +18,7 @@ _BUDGETED_BUY_REASONS = {"Buy Normal", "Buy Average"}
 
 
 class BuyPlan(NamedTuple):
-    index: int
+    rule_index: int
     buy_type: str
     reason: str
     price: float
@@ -212,7 +212,7 @@ def _budgeted_buy_contexts(
         buy_ratio = float(buy_rule.get("ratio", 1.0))
         alloc_budget = round(total_buy_budget * buy_ratio, 2)
         contexts.append(BuyPlan(
-            index=index,
+            rule_index=index,
             buy_type=buy_type,
             reason=buy_reason,
             price=_buy_price_for_rule(buy_rule, base_price, cur_price, min_profit),
@@ -259,7 +259,7 @@ def _build_normal_then_average_orders(
         normal_spent = round(normal_spent + spent_budget, 2)
         buy_qty += rule_qty
         orders_by_index.append((
-            plan.index,
+            plan.rule_index,
             StrategyOrder(
                 symbol=ticker, side=OrderSide.BUY, quantity=rule_qty,
                 price=plan.price, order_type=ORDER_TYPE_LOC,
@@ -286,7 +286,7 @@ def _build_normal_then_average_orders(
         )
         skipped_budget = round(skipped_budget + skipped, 2)
         if order:
-            orders_by_index.append((plan.index, order))
+            orders_by_index.append((plan.rule_index, order))
             buy_qty += rule_qty
 
     orders = [order for _, order in sorted(orders_by_index, key=lambda item: item[0])]
@@ -514,7 +514,10 @@ def calculate_orders(
             2. Info dictionary with ticker metadata.
     """
     orders: List[StrategyOrder] = []
-    info = {"ticker_info": {}, "skipped_buy_budgets": {}}
+    info: Dict[str, Dict[str, Any]] = {
+        "ticker_info": {},
+        "skipped_buy_budgets": {},
+    }
 
     if not targets_config:
         logging.warning("RAOEO: No targets configured.")

@@ -5,6 +5,7 @@ Moves on_result logic out of main.py to solve circular dependencies.
 """
 import logging
 from datetime import datetime
+from typing import NotRequired, TypedDict
 
 import pandas as pd
 
@@ -16,6 +17,28 @@ from core.trading_config import strip_market_prefix
 from kis.ws_parser import mask_dict_for_log
 from telegram_bot.telegram_utils import send_notification
 from utils.format_utils import format_number, get_fixed_width
+
+
+class _MarketState(TypedDict):
+    price: float
+    ask: float
+    bid: float
+    change: float
+    rate: float
+    vol: float
+    time: str
+    sign_str: NotRequired[str]
+
+
+class _MarketStateUpdate(TypedDict, total=False):
+    price: float
+    ask: float
+    bid: float
+    change: float
+    rate: float
+    vol: float
+    time: str
+    sign_str: str
 
 
 def _handle_domestic_market(tr_id: str, row) -> bool:
@@ -31,7 +54,7 @@ def _handle_domestic_market(tr_id: str, row) -> bool:
         )
         return True  # Skip corrupted data
 
-    state = {
+    state: _MarketState = {
         'price': 0,
         'ask': 0,
         'bid': 0,
@@ -104,7 +127,7 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
         )
         return True
 
-    state = {
+    state: _MarketState = {
         'price': 0.0,
         'ask': 0.0,
         'bid': 0.0,
@@ -127,7 +150,7 @@ def _handle_overseas_market(tr_id: str, row) -> bool:
 
     elif tr_id == "HDFSCNT0":
         try:
-            update = {
+            update: _MarketStateUpdate = {
                 'time': row.get('XHMS', '000000'),
                 'price': float(row['LAST']),
                 'change': float(row['DIFF']),

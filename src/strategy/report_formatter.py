@@ -7,7 +7,7 @@ Uses the unified report structure with StrategyStatus enum.
 """
 from typing import Dict, List
 
-from strategy.base import StrategyStatus
+from strategy.base import StrategyOrder, StrategyStatus
 from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 
 
@@ -22,7 +22,7 @@ def _format_market_status_line(report: Dict) -> str:
 
 def _format_execution_results(results: List[Dict]) -> List[str]:
     """Format execution results section."""
-    lines = []
+    lines: List[str] = []
     if not results:
         return lines
 
@@ -76,7 +76,7 @@ def _get_status_display(report: Dict) -> str:
     if isinstance(status, StrategyStatus):
         status = status.value
 
-    status_map = {
+    status_map: Dict[object, str] = {
         "executed": "✅ All executed",
         "partial": "🔄 Partial (has failed orders)",
         "skipped": "✅ No orders needed",
@@ -113,7 +113,7 @@ def format_strategy_report(raoeo_report: Dict, va_report: Dict) -> str:
         lines.extend(_format_cash_funding_summary(raoeo_report))
 
         # Group orders by ticker
-        orders_by_ticker = {}
+        orders_by_ticker: Dict[str, List[StrategyOrder]] = {}
         for o in orders:
             orders_by_ticker.setdefault(o.symbol, []).append(o)
 

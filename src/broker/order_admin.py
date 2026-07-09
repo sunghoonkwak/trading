@@ -160,7 +160,7 @@ def _format_toss_order_for_display(
 
     p_val = row_l.get("price")
     try:
-        p_float = float(p_val)
+        p_float = float(p_val) if p_val is not None else 0.0
         price = f"{p_float:.2f}" if p_float > 0 else "Market"
     except Exception:
         price = "Market"
