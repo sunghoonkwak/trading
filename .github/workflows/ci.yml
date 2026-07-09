@@ -46,12 +46,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build test image
-        run: docker build -t trading-bot:test .
+        run: docker build --target test -t trading-bot:test .
 
       - name: Run tests in image
         run: >-
-          docker run --rm --entrypoint sh trading-bot:test
-          -c "mkdir -p /root/KIS_config &&
-          cp templates/strategy_config.json /root/KIS_config/strategy_config.json &&
-          python -m pip install --no-cache-dir -r requirements-dev.txt &&
-          python -m pytest tests"
+          docker run --rm --user 1000:1000 -e HOME=/app
+          --entrypoint python trading-bot:test -m pytest tests

@@ -1,6 +1,5 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS base
 
-# 필수 패키지 설치
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -9,15 +8,20 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# 라이브러리 설치
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 코드 복사
 COPY . .
 
-# Web server port
+FROM base AS test
+
+RUN pip install --no-cache-dir -r requirements-dev.txt \
+    && mkdir -p /app/KIS_config \
+    && cp templates/strategy_config.json /app/KIS_config/strategy_config.json \
+    && chown -R 1000:1000 /app
+
+FROM base AS runtime
+
 EXPOSE 8080
 
-# 실행 명령어
 CMD ["python", "src/main.py"]
