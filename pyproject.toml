@@ -102,3 +102,15 @@ show_error_codes = true
 pretty = true
 explicit_package_bases = true
 exclude = ["^src/kis/kis_api/"]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/kis/kis_api/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.mutmut]
+source_paths = ["src/strategy/", "src/broker/"]
+pytest_add_cli_args_test_selection = ["tests/raoeo/", "tests/kis/"]
