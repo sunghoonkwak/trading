@@ -2,7 +2,7 @@
 
 ## Project Layout
 
-This is a Python 3.9+ KIS real-time trading system. Runtime entry point:
+This is a Python 3.11+ KIS real-time trading system. Runtime entry point:
 `src/main.py`.
 
 - `src/core/`: configuration and web support
