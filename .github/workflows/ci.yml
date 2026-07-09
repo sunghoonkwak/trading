@@ -49,4 +49,9 @@ jobs:
         run: docker build -t trading-bot:test .
 
       - name: Run tests in image
-        run: docker run --rm --entrypoint python trading-bot:test -m pytest tests
+        run: >-
+          docker run --rm --entrypoint sh trading-bot:test
+          -c "mkdir -p /root/KIS_config &&
+          cp templates/strategy_config.json /root/KIS_config/strategy_config.json &&
+          python -m pip install --no-cache-dir -r requirements-dev.txt &&
+          python -m pytest tests"
