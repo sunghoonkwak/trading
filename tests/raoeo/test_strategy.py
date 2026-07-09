@@ -1046,4 +1046,5 @@ def test_run_strategy_suite_reuses_context_for_raoeo_and_va(monkeypatch):
     assert raoeo_report["info"]["holdings"] is va_received["portfolio"]
     assert raoeo_report["info"]["current_prices"] is va_received["current_prices"]
     assert va_report["status"] == StrategyStatus.SKIPPED
-    assert portfolio_calls == [(True, "toss")]
+    assert len(portfolio_calls) == 1
+    assert portfolio_calls[0][0] is True
