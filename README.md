@@ -305,12 +305,21 @@ venv/bin/pip-audit -r requirements.txt
 
 mutation test는 `pyproject.toml`에 지정된 `src/strategy/`와 `src/broker/`만
 대상으로 하며, 공식 KIS 배포 코드인 `src/kis/kis_api/`는 포함하지 않습니다.
-이 검사는 현재 진단용이며 CI 차단 조건이 아닙니다. 전체 실행에는 시간이 오래
-걸릴 수 있습니다.
+먼저 다음의 제한된 plumbing smoke로 mutation 생성, 테스트 수집, 단일 mutant
+실행이 정상인지 확인합니다.
+
+```bash
+venv/bin/mutmut run --max-children 1 strategy.raoeo.x_calculate_cash_funding_order__mutmut_1
+venv/bin/mutmut results
+```
+
+전체 mutation 검사는 현재 진단용이며 CI 차단 조건이 아닙니다. 현재 생성
+baseline은 약 7,966개이고 직렬 실행에는 여러 시간이 걸릴 수 있으므로 overnight
+진단으로 실행합니다. `--max-children`은 동시 실행 수만 제한하며 mutant 수를
+제한하지 않습니다.
 
 ```bash
 venv/bin/mutmut run --max-children 1
-venv/bin/mutmut results
 ```
 
 컨테이너 안에서 검증하려면 다음 명령을 사용합니다.
@@ -325,6 +334,9 @@ CI와 같은 test 이미지 smoke test:
 docker build --target test -t trading-bot:test .
 docker run --rm --user 1000:1000 -e HOME=/app --entrypoint python trading-bot:test -m pytest tests
 ```
+
+`.dockerignore`는 로컬 TLS 인증서와 개인 키 파일을 제외합니다. 독립형 HTTPS
+배포에서는 인증서를 런타임에 마운트해야 합니다.
 
 전략 설정 검증:
 
