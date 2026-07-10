@@ -1,0 +1,108 @@
+# Test Suite Audit
+
+**Status:** U1 inventory complete — no test code changed.
+
+**Scope:** All 26 `tests/**/test_*.py` modules present on 2026-07-10.
+The assessment is static: it reads test contracts, seams, and matching
+application-owned code. It does not treat line count, assertion count, or
+coverage lines as a reason to remove a test.
+
+## Decision Rules
+
+| Rule | Decision outcome |
+| --- | --- |
+| A test covers a distinct user-visible, safety, ordering, import, or failure contract. | Retain; setup may still be simplified. |
+| Tests have the same input class, failure mode, and observable outcome. | Merge through parameterization or leave one representative. |
+| A test only asserts a private name or removed implementation symbol. | Remove unless an explicit public/boundary contract requires it. |
+| A test recreates the production formula. | Prefer independent examples or invariants. |
+| A test touches files, credentials, network, broker, or order seams. | Keep all inputs injected and sanitized; static audit blocks any live route. |
+
+## Static Safety Check
+
+No reviewed test is intended to start `src/main.py`, authenticate, submit an
+order, or use real credentials. The suite relies on injected `urlopen`/request
+seams, fakes, and `monkeypatch`. The subprocess checks in
+`tests/architecture/test_boundaries.py` execute local imports only. U4 must
+confirm this with the full offline suite and Docker test service.
+
+## Module Inventory
+
+`Action` describes the next audit action, not an already-approved source or
+test change. “Retain” means no overlap was found at module level; individual
+tests can still be simplified in U2.
+
+| Test module | Protected contract / matching area | Setup or overlap observation | Action |
+| --- | --- | --- | --- |
+| `tests/architecture/test_boundaries.py` | Importing app packages does not initialize KIS configuration, runtime modules, Telegram bot modules, or prohibited legacy dependencies; market status uses the public contract. | Ten subprocess/import checks cover different forbidden side effects and already share `_run_import_check`. | Retain. Do not merge solely for shared subprocess setup. |
+| `tests/core/test_event_pipe.py` | Unix-socket log forwarding handles queue limits, disconnects, reset scheduling, send/receive buffering, and socket failures. | Autouse module-state reset is justified by module globals; fake socket centralizes I/O behavior. | Retain; review only whether reset fields track current state. |
+| `tests/core/test_http_defaults.py` | Default HTTP timeout is supplied without overwriting an explicit caller timeout for module and session requests. | One focused fake-request contract. | Retain. |
+| `tests/core/test_runtime.py` | Credentials parse current and legacy values; config validation fails safely; web actions are gated; KIS/runtime lifecycle fails closed and remains controllable. | Two credential tests manually manage fixed `tests/.tmp-*` paths; lifecycle tests cover separate transitions. | Simplify temporary-path setup; retain lifecycle branches. |
+| `tests/core/test_system_state.py` | KIS readiness requires both worker and auth state. | `test_unused_public_state_helpers_are_removed` asserts deleted names rather than behavior. | **Delete candidate C1**; retain readiness state test. |
+| `tests/core/test_trading_config.py` | Market-prefix mapping and JSON event escaping preserve public configuration/web contracts. | Independent small contracts. | Retain. |
+| `tests/data/test_data_service_scope.py` | Toss scope filters account data and scope reaches the portfolio worker. | Different filter and orchestration boundaries. | Retain; compare with direct scope-normalization gap. |
+| `tests/data/test_gsheet.py` | Worksheet parser preserves cash-only accounts and ignores sheet current-price values. | Small fake worksheet, no duplicate found. | Retain. |
+| `tests/data/test_kis_portfolio.py` | KIS portfolio adapter returns an empty standardized source when upstream fetch reports an error. | One fail-safe adapter test. | Retain; add normal/malformed conversion only if U3 gap ranking selects it. |
+| `tests/data/test_portfolio.py` | KIS/Toss/GSheet scope selection, cache refresh/failure, source merge, price fallback, and Toss fallback preserve portfolio policy. | Ten tests use repeated source patches but cover different scopes, cache states, and fallback outcomes. | Retain; extract local source payload/patch helpers only if they reduce repetition without hiding policy. |
+| `tests/data/test_toss_portfolio.py` | Toss holdings and buying power convert into standardized portfolio data. | One rich response fake checks cross-currency conversion. | Retain; malformed buying-power boundary is a risk-gap candidate. |
+| `tests/data/test_weights.py` | Core/satellite grouping, leverage, group valuation, and weight diffs lead to intended allocation/trade quantities. | Cases cover distinct portfolio policy rules. | Retain. |
+| `tests/kis/test_broker.py` | KIS/Toss broker choice, REST-disabled fail-closed behavior, order/cancel routing, price/portfolio retrieval, cash semantics, and holdings merge policy. | Several REST-disabled tests share setup but block distinct side effects (orders, cancel, portfolio, prices, worker auth). | Retain behavior tests; consider local disabled-auth helper only. |
+| `tests/kis/test_kis_replay.py` | Sanitized websocket fixture records normalize to configured field width. | Single offline replay seam. | Retain; extended parser/error cases are covered in realtime/logging suite. |
+| `tests/kis/test_realtime_and_logging.py` | Websocket tick logging, KIS log sanitization, record normalization, schema-drift warning limits, and worker-stop handling avoid sensitive/invalid output. | Parser and logger branches have distinct safety effects. | Retain; U3 may add event payload state/idempotency tests outside this module. |
+| `tests/scheduler/test_portfolio_report.py` | Portfolio-report comparison uses configured exchange-rate fallback. | One filesystem/config seam. | Retain. |
+| `tests/scheduler/test_scheduler_order.py` | Daily order report runs suite once; disabled periodic rebalancing remains quiet. | Separate scheduling and disabled behavior. | Retain. |
+| `tests/strategy/test_raoeo_properties.py` | Cash funding never sells more than holdings; rebalancing emits positive quantities. | Rebalance property test mirrors portions of calculation policy and needs invariant-focused review. | Simplify candidate S1; preserve independent quantity/budget/holding invariants. |
+| `tests/strategy/test_report_formatter.py` | Strategy and rebalancing reports show status, orders, funding, and error states. | Each fixture covers a distinct presentation state. | Retain. |
+| `tests/strategy/test_strategy_workflows.py` | RAOEO/VA/rebalancing calculate, fund, execute, audit, order, reuse snapshots, and persist strategy history correctly. | Large shared helpers and many patches are orchestration seams; tests generally cover distinct ordering/failure policies. One test only checks that `_get_market_status` is absent. | **Delete candidate C2** for internal-name assertion; retain and later simplify shared setup selectively. |
+| `tests/strategy/test_value_averaging.py` | Disabled/empty targets, KRW sales, thresholds, daily cap, history, and sub-share conditions create valid value-averaging orders. | Parameterized boundaries are already compact. | Retain; rank invalid/zero-price and fractional/negative data gaps in U3. |
+| `tests/telegram/test_bot.py` | Telegram command confirmation, runtime gates, strategy funding, history validation, portfolio scope, cache refresh, and display privacy behave safely. | Async command flows cover separate user interactions; mocks are appropriate at Telegram boundary. | Retain; no consolidation before a flow-level overlap is shown. |
+| `tests/telegram/test_utils.py` | Reply/edit/send wrappers retry, handle missing state, schedule notifications, and avoid sending when unconfigured. | Module reset and fakes isolate async globals. | Retain. |
+| `tests/toss/test_api_helpers.py` | Toss account/header requests, token lifecycle, order mapping, cancel/list behavior, rate limiting, HTTP/transport failure handling, and request sanitization remain offline. | `unittest` setup manually removes fixed temporary directories; rate-limit tests cover interval, 429, final HTTP, transport, and sanitization branches. `test_get_holdings_does_not_expose_default_account_resolver` is structural only. | **Delete candidate C3**; simplify temporary paths; retain rate-limit contracts and add only uncovered malformed-header/boundary cases. |
+| `tests/toss/test_query_helpers.py` | Query validation/encoding and required response validation for candles, calendar, trades, orders, commissions, and quantities. | Parameterization is already used for validation families. | Retain; add only unrepresented endpoint/error contract selected in U3. |
+| `tests/toss/test_toss_replay.py` | Sanitized Toss holdings normal/empty/null responses replay through injected HTTP. | Three distinct response shapes, no generic replay abstraction. | Retain. |
+
+## Approved-For-Review Candidate List
+
+These are the only removal/consolidation candidates identified by U1. They
+are **not yet approved for modification**; U2 must use this list as its
+boundary.
+
+| ID | Candidate | Unique observable contract? | Proposed action | Representative coverage retained |
+| --- | --- | --- | --- | --- |
+| C1 | `test_unused_public_state_helpers_are_removed` in `tests/core/test_system_state.py` | No. It asserts absence of historical helper names, not readiness behavior. | Delete. | `test_kis_ready_reflects_worker_and_auth_state` remains the state contract. |
+| C2 | `test_execution_service_uses_market_utils_status_directly` in `tests/strategy/test_strategy_workflows.py` | No. It asserts absence of `_get_market_status`; weekend/runtime workflow tests exercise market-status behavior. | Delete. | `test_run_raoeo_stops_before_market_data_on_weekend` and workflow execution tests retain observable behavior. |
+| C3 | `test_get_holdings_does_not_expose_default_account_resolver` in `tests/toss/test_api_helpers.py` | No. It asserts a private helper is not exported. | Delete. | Account sequence cache and holdings request/header tests retain supported behavior. |
+| S1 | Rebalance property expectation in `tests/strategy/test_raoeo_properties.py` | Partly. Positive quantity is valuable; full expected-order reconstruction may mirror the production formula. | Inspect and reduce to independent invariants only, if formula duplication is confirmed. | Positive quantity, sell ≤ holdings, and buy ≤ orderable/budget invariants. |
+| S2 | Fixed temporary directories in `tests/core/test_runtime.py` and `tests/toss/test_api_helpers.py` | Yes, but setup is over-specified. | Replace manual cleanup with `tmp_path` while preserving credential/token branches. | Current-format and legacy credential parsing; token issue/renewal behavior. |
+| S3 | Repeated KIS-disabled and portfolio-source patch setup | Yes, each protected branch is distinct. | Extract only local helper/fake payloads where diagnostics remain explicit. | Existing per-entry-point tests; none are deleted solely for sharing setup. |
+
+## Ranked Risk-Gap Map
+
+New tests are additions only after the listed source behavior and existing
+tests are read together during U3. A gap means “no direct contract located in
+the current suite,” not “production behavior is known faulty.”
+
+| Priority | Risk boundary | Current evidence | Candidate offline regression contract | Likely test location |
+| --- | --- | --- | --- | --- |
+| P0 | Portfolio scope normalization | `src/data/portfolio_scope.py` has no matching direct test module; scope tests enter later at data service/integration. | Invalid and alias scope must normalize or reject before any broker fetch. | New `tests/data/test_portfolio_scope.py`. |
+| P0 | Rebalancing buy/cash safety | Property suite asserts positive quantities, while workflows pass orderable cash into calculation. | Zero/missing price cannot create executable orders; buy total does not exceed orderable cash; sell quantity never exceeds holding. | New `tests/strategy/test_rebalancing.py` or strengthened property suite. |
+| P0 | KIS event handling idempotency | No direct `kis_event_handler` test module; current realtime suite focuses on logs/parser normalization. | Malformed, duplicate, or out-of-order event payload cannot create a duplicate state/audit effect. | New `tests/kis/test_event_handler.py`. |
+| P1 | Toss rate-limit header parsing | Existing API helper suite covers interval and 429 retry. | Malformed `Retry-After`, retry bound, and independent API-group behavior remain safe. | New `tests/toss/test_rate_limit.py` only if moving rate tests improves cohesion; otherwise extend API helper suite. |
+| P1 | Broker error and payload boundaries | KIS broker tests cover key orderable cash failures; direct `order_admin`/`toss_broker` malformed payload paths are thin. | Empty/invalid buying power, unsupported order type, pagination/modify failure preserve safe error/audit behavior. | Extend `tests/kis/test_broker.py` or create focused broker test only after source seam review. |
+| P2 | Runtime/web concurrent transition edges | Runtime suite covers on/off and permission blocks; lock/control modules lack direct focused tests. | Repeated or conflicting runtime commands remain fail-closed and idempotent. | Extend `tests/core/test_runtime.py` if deterministic seam exists. |
+| P2 | Value-averaging numeric boundaries | Core target/history cases exist; invalid price and negative/fractional holdings are not explicitly named. | Invalid/zero price and non-executable quantity create no order while preserving safe context. | Extend `tests/strategy/test_value_averaging.py`. |
+
+## U1 Completion Evidence
+
+- All 26 discovered `test_*.py` modules are represented in the inventory.
+- C1–C3 have a named surviving behavior contract; no other deletion candidate
+  is proposed.
+- Large KIS broker, strategy workflow, portfolio integration, architecture,
+  and Telegram tests are explicitly retained pending setup-only review.
+- Static safety review found no intended live credential, network, runtime, or
+  order path. Runtime verification is deferred to U4.
+
+## Required Decision Before U2
+
+Approve or revise the candidate list C1–C3, S1–S3. U2 will make no other test
+deletions or behavior changes. U3 will select additions from the ranked map,
+starting with P0 boundaries, only after U2 is complete.
