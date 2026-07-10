@@ -26,7 +26,7 @@ host; it is guarded to prevent conflicts with the managed container.
 - `docker compose up -d --build`: build and start the bot on port `8080`.
 - `docker compose restart trading-bot`: restart after source changes.
 - `docker logs -f my-trading-bot`: follow startup and live logs.
-- `docker compose exec trading-bot python -m pytest tests`: run tests in Docker.
+- `docker compose run --rm test`: run tests in Docker.
 - `venv/bin/pytest tests`: run safe host-side tests first when appropriate.
 - `venv/bin/python scripts/validate_config.py`: validate configuration.
 - `venv/bin/python scripts/backtest/raoeo/backtest_raoeo.py`: run backtests.
@@ -107,7 +107,7 @@ files before shipping. Do not rely on `tests/tmp/` for permanent coverage.
 
 Strategy, formatter, and state tests should avoid live KIS, Telegram, or market
 calls. For strategy changes, run the relevant tests and backtest scripts; before
-shipping, run `docker compose exec trading-bot python -m pytest tests`.
+shipping, run `docker compose run --rm test`.
 
 ## Commits And Pull Requests
 

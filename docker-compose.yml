@@ -21,3 +21,13 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - .:/app  # 코드를 수정하면 바로 반영되도록 연결
       - ${HOME}/KIS_config:/app/KIS_config  # KIS 설정 파일 (private, git 미포함)
+
+  test:
+    build:
+      context: .
+      target: test
+    user: "1000:1000"
+    environment:
+      - HOME=/app
+    entrypoint: ["python", "-m", "pytest"]
+    command: ["tests"]
