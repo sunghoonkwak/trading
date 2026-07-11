@@ -20,10 +20,10 @@ from telegram.ext import Application, CommandHandler, ContextTypes, Updater
 from core import display
 from core.constants import CONFIG_ROOT
 from interfaces.telegram.rebalancing import register_rebalancing_handlers
+from interfaces.telegram.strategy import register_strategy_handlers
 
 from .telegram_memo import register_memo_handler
 from .telegram_portfolio import register_portfolio_handlers
-from .telegram_strategy import register_strategy_handlers
 from .telegram_system import get_initial_control_guide, register_system_handlers
 from .telegram_utils import set_telegram_bot, wrap_reply, wrap_send
 
