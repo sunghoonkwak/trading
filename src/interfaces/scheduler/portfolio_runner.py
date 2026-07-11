@@ -13,7 +13,7 @@ from typing import Optional
 
 from application.ports import PortfolioReader
 from core.constants import CONFIG_ROOT, DEFAULT_USD_KRW_EXCHANGE_RATE
-from telegram_bot.telegram_portfolio import format_portfolio_summary
+from interfaces.telegram.portfolio_formatter import format_portfolio_summary
 from telegram_bot.telegram_utils import send_notification
 
 # Configuration
