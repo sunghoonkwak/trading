@@ -1,7 +1,8 @@
 # Trading System Main (`src/main.py`)
 
 KIS/Toss 자동매매 시스템의 진입점(Entry Point)입니다.
-전체적인 시스템 초기화, `src/core/` 패키지에 포함된 핵심 서비스 기동, 그리고 안정적인 실행을 위한 메인 루프를 관리합니다.
+전체적인 시스템 초기화와 application/infrastructure/interface adapter의
+composition root 역할, 그리고 안정적인 실행을 위한 메인 루프를 관리합니다.
 
 ## Core Logic (핵심 로직)
 
@@ -18,7 +19,8 @@ KIS/Toss 자동매매 시스템의 진입점(Entry Point)입니다.
      token을 준비합니다. KIS 초기화 뒤, 스케줄러와 웹 대시보드 시작 전에
      수행되며 실패하면 Telegram 알림을 시도한 뒤 자동 실행 표면을
      시작하지 않습니다.
-   - **백그라운드 스케줄러**: `scheduler` 패키지를 통한 정기적 매매 업무 실행.
+   - **백그라운드 스케줄러**: `interfaces.scheduler` adapter를 통한 정기적
+     매매 업무 실행. portfolio use case는 `main.py`에서 주입합니다.
    - **웹 대시보드**: `core.web_server`를 통한 실시간 이벤트 뷰어 제공.
      Docker 시작 직후에도 접속 가능하지만, runtime OFF 상태에서는 외부
      API나 주문/스케줄 실행으로 이어지는 요청이 차단됩니다.

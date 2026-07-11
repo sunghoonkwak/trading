@@ -158,3 +158,11 @@ the current suite,” not “production behavior is known faulty.”
 - `venv/bin/pytest tests` passed: 272 tests.
 - `docker compose build test && docker compose run --rm test` passed: 272
   tests on Python 3.11.
+
+## Layered Architecture Follow-up Verification
+
+- `venv/bin/pytest tests` passed: 303 tests after the interface/application
+  migration slices.
+- `venv/bin/ruff check src tests` passed.
+- Architecture checks now import scheduler and Telegram adapters from
+  `src/interfaces/` and retain subprocess import-safety coverage.
