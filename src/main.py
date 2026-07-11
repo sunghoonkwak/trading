@@ -272,7 +272,7 @@ class TradingSystem:
 
     def _stop_runtime_dependencies(self):
         try:
-            from scheduler.scheduler import stop_scheduler
+            from interfaces.scheduler.runner import stop_scheduler
             stop_scheduler()
         except Exception as e:
             logging.warning("[Runtime] Scheduler stop skipped or failed: %s", e)
