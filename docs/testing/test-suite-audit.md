@@ -1,7 +1,7 @@
 # Test Suite Audit
 
-**Status:** U3 complete — deterministic scope, pricing, and malformed-event
-contracts verified; policy gaps remain deferred.
+**Status:** U4 complete — audit actions and full offline verification complete;
+policy gaps remain deferred.
 
 **Scope:** All 26 `tests/**/test_*.py` modules present on 2026-07-10.
 The assessment is static: it reads test contracts, seams, and matching
@@ -131,3 +131,11 @@ the current suite,” not “production behavior is known faulty.”
   passed: 88 tests.
 - `venv/bin/ruff check tests/data/test_portfolio_scope.py
   tests/strategy/test_rebalancing.py tests/kis/test_event_handler.py` passed.
+
+## U4 Verification
+
+- `venv/bin/pytest tests` passed: 261 tests.
+- `docker compose build test && docker compose run --rm test` passed: 261
+  tests on Python 3.11. The initial Docker run collected 254 tests because it
+  used a pre-U3 image; rebuilding the test image was required before accepting
+  the container result.
