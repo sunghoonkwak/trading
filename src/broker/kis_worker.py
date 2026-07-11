@@ -38,11 +38,6 @@ def _handle_request(request: ThreadRequest) -> ThreadResponse:
             result = RESTClient.authenticate()
         elif request.request_type == RequestType.KIS_WS_AUTH:
             result = RESTClient.authenticate_ws()
-        elif request.request_type == RequestType.GET_PORTFOLIO:
-            from data.portfolio_integration import get_integrated_portfolio
-
-            scope = request.kwargs.get("scope", "all")
-            result = get_integrated_portfolio(scope=scope)
         else:
             return ThreadResponse(
                 request.request_id,
@@ -122,15 +117,6 @@ def request_kis_auth() -> str:
 
 def request_kis_ws_auth() -> str:
     req = ThreadRequest(RequestType.KIS_WS_AUTH)
-    kis_request_queue.put(req)
-    return req.request_id
-
-
-def request_portfolio(force_refresh: bool = False, scope: str = "all") -> str:
-    req = ThreadRequest(
-        RequestType.GET_PORTFOLIO,
-        kwargs={"force_refresh": force_refresh, "scope": scope},
-    )
     kis_request_queue.put(req)
     return req.request_id
 

@@ -9,9 +9,9 @@ from typing import Dict, List, Tuple
 
 from application.portfolio_service import PortfolioService
 from broker import market_data
-from broker.kis_worker import request_portfolio, wait_for_response
 from core.display import add_alert
 from data.config_manager import ConfigFile, load_json, save_json
+from data.portfolio_integration import get_integrated_portfolio
 from state.system_state import is_kis_ready
 from utils.market_utils import get_fear_and_greed
 
@@ -24,8 +24,8 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
 
     service = PortfolioService(
         is_kis_ready=is_kis_ready,
-        request_portfolio=request_portfolio,
-        wait_for_response=wait_for_response,
+        request_portfolio=_request_integrated_portfolio,
+        wait_for_response=_as_portfolio_response,
         save_portfolio=lambda value: save_json(ConfigFile.PORTFOLIO, value),
         load_weights=lambda: load_json(ConfigFile.PORTFOLIO_WEIGHTS),
         calculate_targets=calculate_target_weights,
@@ -33,6 +33,24 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
         publish_alert=add_alert,
     )
     return service.get_portfolio_data(force_refresh=force_refresh, scope=scope)
+
+
+class _PortfolioResponse:
+    success = True
+    error = None
+
+    def __init__(self, result):
+        self.result = result
+
+
+def _request_integrated_portfolio(force_refresh: bool = False, scope: str = "all"):
+    """Compatibility request seam; source retrieval no longer uses KIS worker dispatch."""
+    return get_integrated_portfolio(scope=scope)
+
+
+def _as_portfolio_response(raw_portfolio, timeout: float = 60.0):
+    """Adapt direct source retrieval to the historical response-shaped contract."""
+    return _PortfolioResponse(raw_portfolio)
 
 def _apply_scope_filter(data: Dict, scope: str) -> Dict:
     """Compatibility seam for existing callers and monkeypatch targets."""

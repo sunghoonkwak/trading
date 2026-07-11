@@ -18,7 +18,6 @@ class RequestType(Enum):
     """Types of requests that can be sent to KIS Thread."""
     KIS_AUTH = "kis_auth"
     KIS_WS_AUTH = "kis_ws_auth"
-    GET_PORTFOLIO = "get_portfolio"
 
 
 @dataclass
@@ -78,4 +77,3 @@ data_queue: Queue[dict] = Queue()
 # Telegram Thread communication (requests go through Main)
 telegram_request_queue: Queue[ThreadRequest] = Queue()
 telegram_response_queue: Queue[ThreadResponse] = Queue()
-

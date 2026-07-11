@@ -67,31 +67,26 @@ def test_data_service_toss_scope_filters_toss_account(monkeypatch):
     assert scoped["merged_data"]["USD cash"]["qty"] == 20
 
 
-def test_data_service_passes_scope_to_portfolio_worker(monkeypatch):
+def test_data_service_passes_scope_to_portfolio_sources_without_worker_dispatch(monkeypatch):
     from data import data_service
 
     captured = {}
-
-    class Response:
-        success = False
-        error = "stop after request"
 
     monkeypatch.setattr(data_service, "is_kis_ready", lambda: True)
     monkeypatch.setattr(data_service, "add_alert", lambda message, level: None)
     monkeypatch.setattr(
         data_service,
-        "request_portfolio",
-        lambda force_refresh=False, scope="all": captured.update(
-            {"force_refresh": force_refresh, "scope": scope}
-        ) or "request-1",
-    )
-    monkeypatch.setattr(
-        data_service,
-        "wait_for_response",
-        lambda request_id, timeout=60.0: Response(),
+        "get_integrated_portfolio",
+        lambda scope="all": captured.update(
+            {"scope": scope}
+        ) or (_ for _ in ()).throw(RuntimeError("stop after request")),
     )
 
-    result = data_service.get_portfolio_data(force_refresh=True, scope="toss")
+    try:
+        data_service.get_portfolio_data(force_refresh=True, scope="toss")
+    except RuntimeError as exc:
+        assert str(exc) == "stop after request"
+    else:
+        raise AssertionError("source adapter must be called")
 
-    assert result == {"error": "stop after request"}
-    assert captured == {"force_refresh": True, "scope": "toss"}
+    assert captured == {"scope": "toss"}
