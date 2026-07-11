@@ -1,7 +1,7 @@
 # Test Suite Audit
 
-**Status:** U2 complete — approved removals and targeted simplifications
-verified with focused offline tests.
+**Status:** U3 complete — deterministic scope, pricing, and malformed-event
+contracts verified; policy gaps remain deferred.
 
 **Scope:** All 26 `tests/**/test_*.py` modules present on 2026-07-10.
 The assessment is static: it reads test contracts, seams, and matching
@@ -84,9 +84,9 @@ the current suite,” not “production behavior is known faulty.”
 
 | Priority | Risk boundary | Current evidence | Candidate offline regression contract | Likely test location |
 | --- | --- | --- | --- | --- |
-| P0 | Portfolio scope normalization | `src/data/portfolio_scope.py` has no matching direct test module; scope tests enter later at data service/integration. | Invalid and alias scope must normalize or reject before any broker fetch. | New `tests/data/test_portfolio_scope.py`. |
-| P0 | Rebalancing buy/cash safety | Property suite asserts positive quantities, while workflows pass orderable cash into calculation. | Zero/missing price cannot create executable orders; buy total does not exceed orderable cash; sell quantity never exceeds holding. | New `tests/strategy/test_rebalancing.py` or strengthened property suite. |
-| P0 | KIS event handling idempotency | No direct `kis_event_handler` test module; current realtime suite focuses on logs/parser normalization. | Malformed, duplicate, or out-of-order event payload cannot create a duplicate state/audit effect. | New `tests/kis/test_event_handler.py`. |
+| P0 | Portfolio scope normalization | `src/data/portfolio_scope.py` had no matching direct test module; scope tests entered later at data service/integration. | **Added in U3:** missing values default to `all`, supported values normalize case/whitespace, and unsupported values fail before a broker fetch. | `tests/data/test_portfolio_scope.py`. |
+| P0 | Rebalancing price safety | Property suite asserts positive quantities, while workflows pass orderable cash into calculation. | **Added in U3:** a missing asset price returns no executable orders. | `tests/strategy/test_rebalancing.py`. |
+| P0 | KIS malformed event handling | No direct `kis_event_handler` test module; current realtime suite focuses on logs/parser normalization. | **Added in U3:** empty frames and malformed domestic order rows report an error without notification or order-sync side effects. | `tests/kis/test_event_handler.py`. |
 | P1 | Toss rate-limit header parsing | Existing API helper suite covers interval and 429 retry. | Malformed `Retry-After`, retry bound, and independent API-group behavior remain safe. | New `tests/toss/test_rate_limit.py` only if moving rate tests improves cohesion; otherwise extend API helper suite. |
 | P1 | Broker error and payload boundaries | KIS broker tests cover key orderable cash failures; direct `order_admin`/`toss_broker` malformed payload paths are thin. | Empty/invalid buying power, unsupported order type, pagination/modify failure preserve safe error/audit behavior. | Extend `tests/kis/test_broker.py` or create focused broker test only after source seam review. |
 | P2 | Runtime/web concurrent transition edges | Runtime suite covers on/off and permission blocks; lock/control modules lack direct focused tests. | Repeated or conflicting runtime commands remain fail-closed and idempotent. | Extend `tests/core/test_runtime.py` if deterministic seam exists. |
@@ -109,8 +109,25 @@ the current suite,” not “production behavior is known faulty.”
   tests/strategy/test_raoeo_properties.py tests/toss/test_api_helpers.py`
   passed: 78 tests.
 
-## Required Decision Before U3
+## Deferred Policy Gaps
 
-U3 will select additions from the ranked map, starting with P0 boundaries.
-It will not make further deletions or production-code changes without a
-separate decision.
+- `rebalancing.calculate_orders()` intentionally returns reportable buy orders
+  even when `total_buy_required` exceeds `total_available`; its source states
+  that a later execution policy must block placement. A regression asserting
+  calculation-level buy capping would contradict current behavior, so the
+  execution-time guard needs a separate source-and-policy review.
+- `kis_event_handler` has no durable event identifier or deduplication state.
+  Duplicate/out-of-order notification idempotency cannot be added as a passing
+  regression contract without defining where that state belongs and how long
+  it persists. This is deferred rather than encoded as a failing test.
+
+## U3 Verification
+
+- `venv/bin/pytest tests/data/test_portfolio_scope.py
+  tests/strategy/test_rebalancing.py tests/kis/test_event_handler.py
+  tests/core/test_system_state.py tests/core/test_runtime.py
+  tests/strategy/test_strategy_workflows.py
+  tests/strategy/test_raoeo_properties.py tests/toss/test_api_helpers.py`
+  passed: 88 tests.
+- `venv/bin/ruff check tests/data/test_portfolio_scope.py
+  tests/strategy/test_rebalancing.py tests/kis/test_event_handler.py` passed.
