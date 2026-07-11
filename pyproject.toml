@@ -62,7 +62,7 @@ files = [
     "src/telegram_bot/telegram_memo.py",
     "src/telegram_bot/telegram_system.py",
     "src/telegram_bot/telegram_bot.py",
-    "src/telegram_bot/telegram_portfolio.py",
+    "src/interfaces/telegram/portfolio.py",
     "src/interfaces/telegram/rebalancing.py",
     "src/interfaces/telegram/strategy.py",
     "src/interfaces/telegram/report_formatter.py",

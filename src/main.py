@@ -49,6 +49,10 @@ class TradingSystem:
         from broker import market_data, order_admin
         from data.data_service import get_weight_diffs
         from infrastructure.portfolio import build_portfolio_service, refresh_gsheet_cache
+        from interfaces.telegram.portfolio import (
+            configure_portfolio_collaborators,
+            configure_portfolio_reader,
+        )
         from interfaces.telegram.rebalancing import configure_strategy_run_service
         from state.system_state import ThreadStatus, update_telegram_state
         from strategy.execution_service import (
@@ -56,10 +60,6 @@ class TradingSystem:
             get_strategy_run_service,
         )
         from telegram_bot.telegram_bot import initialize_telegram
-        from telegram_bot.telegram_portfolio import (
-            configure_portfolio_collaborators,
-            configure_portfolio_reader,
-        )
 
         configure_portfolio_reader(build_portfolio_service())
         configure_portfolio_collaborators(
