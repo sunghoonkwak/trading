@@ -11,7 +11,8 @@ from application.portfolio_service import PortfolioService
 from broker import market_data
 from core.display import add_alert
 from data.config_manager import ConfigFile, load_json, save_json
-from data.portfolio_integration import get_integrated_portfolio
+from domain.portfolio.processing import PortfolioProcessor  # noqa: F401 - legacy export
+from infrastructure.portfolio import IntegratedPortfolioSource
 from state.system_state import is_kis_ready
 from utils.market_utils import get_fear_and_greed
 
@@ -24,8 +25,7 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
 
     service = PortfolioService(
         is_kis_ready=is_kis_ready,
-        request_portfolio=_request_integrated_portfolio,
-        wait_for_response=_as_portfolio_response,
+        portfolio_source=IntegratedPortfolioSource(),
         save_portfolio=lambda value: save_json(ConfigFile.PORTFOLIO, value),
         load_weights=lambda: load_json(ConfigFile.PORTFOLIO_WEIGHTS),
         calculate_targets=calculate_target_weights,
@@ -34,23 +34,6 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     )
     return service.get_portfolio_data(force_refresh=force_refresh, scope=scope)
 
-
-class _PortfolioResponse:
-    success = True
-    error = None
-
-    def __init__(self, result):
-        self.result = result
-
-
-def _request_integrated_portfolio(force_refresh: bool = False, scope: str = "all"):
-    """Compatibility request seam; source retrieval no longer uses KIS worker dispatch."""
-    return get_integrated_portfolio(scope=scope)
-
-
-def _as_portfolio_response(raw_portfolio, timeout: float = 60.0):
-    """Adapt direct source retrieval to the historical response-shaped contract."""
-    return _PortfolioResponse(raw_portfolio)
 
 def _apply_scope_filter(data: Dict, scope: str) -> Dict:
     """Compatibility seam for existing callers and monkeypatch targets."""
@@ -146,6 +129,6 @@ def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
     return diffs, total_usd, {"current": current_cash/total_usd if total_usd > 0 else 0, "target": target_cash}
 
 def invalidate_cache():
-    from data.portfolio_integration import invalidate_gsheet_cache
+    from infrastructure.portfolio import invalidate_gsheet_cache
 
     invalidate_gsheet_cache()

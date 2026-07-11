@@ -65,7 +65,7 @@ class TradingSystem:
         """Warms the Google Sheets source cache once during startup."""
         print("[Startup] Step 1b: Loading GSheet cache...")
         try:
-            from data.portfolio_integration import refresh_gsheet_cache
+            from infrastructure.portfolio import refresh_gsheet_cache
 
             result = refresh_gsheet_cache()
             if result["success"]:

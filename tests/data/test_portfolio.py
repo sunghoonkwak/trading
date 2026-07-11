@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 @pytest.fixture(autouse=True)
 def reset_gsheet_cache():
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     portfolio_integration.invalidate_gsheet_cache()
     yield
@@ -17,7 +17,7 @@ def reset_gsheet_cache():
 
 def test_data_integration_skips_gsheet_and_toss_for_kis_scope(monkeypatch):
     from broker import kis_portfolio, toss_portfolio
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
         kis_portfolio,
@@ -60,7 +60,7 @@ def test_data_integration_skips_gsheet_and_toss_for_kis_scope(monkeypatch):
 
 def test_data_integration_fetches_only_toss_for_toss_scope(monkeypatch):
     from broker import kis_portfolio, toss_portfolio
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
         kis_portfolio,
@@ -126,7 +126,7 @@ def test_data_integration_fetches_only_toss_for_toss_scope(monkeypatch):
 
 def test_data_integration_does_not_use_gsheet_fallback_for_toss_scope(monkeypatch):
     from broker import kis_portfolio, toss_portfolio
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
         kis_portfolio,
@@ -154,7 +154,7 @@ def test_data_integration_does_not_use_gsheet_fallback_for_toss_scope(monkeypatc
 
 def test_data_integration_reuses_cached_gsheet_source(monkeypatch):
     from broker import kis_portfolio, toss_portfolio
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     portfolio_integration.invalidate_gsheet_cache()
     calls = []
@@ -219,7 +219,7 @@ def test_data_integration_reuses_cached_gsheet_source(monkeypatch):
 
 
 def test_refresh_gsheet_cache_replaces_cached_source(monkeypatch):
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     portfolio_integration.invalidate_gsheet_cache()
     responses = [
@@ -263,7 +263,7 @@ def test_refresh_gsheet_cache_replaces_cached_source(monkeypatch):
 
 
 def test_cached_gsheet_source_reports_initial_refresh_exception(monkeypatch):
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
         portfolio_integration,
@@ -284,7 +284,7 @@ def test_cached_gsheet_source_reports_initial_refresh_exception(monkeypatch):
 
 def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
     from broker import kis_portfolio, toss_portfolio
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
         kis_portfolio,
@@ -390,7 +390,7 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
 
 def test_data_integration_sets_missing_gsheet_prices_to_zero_and_notifies(monkeypatch):
     from broker import kis_portfolio, toss_portfolio
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     notifications = []
 
@@ -465,7 +465,7 @@ def test_data_integration_sets_missing_gsheet_prices_to_zero_and_notifies(monkey
 
 def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
     from broker import kis_portfolio, toss_portfolio
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
         kis_portfolio,
@@ -591,7 +591,7 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
 
 def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
     from broker import kis_portfolio, toss_portfolio
-    from data import portfolio_integration
+    from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
         kis_portfolio,
@@ -661,4 +661,3 @@ def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
     assert result["holdings"][0]["cur_price"] == 123.45
     assert result["cash_holdings"][0]["amount"] == 50.0
     assert result["metadata"]["toss_error"] == "Toss unavailable"
-

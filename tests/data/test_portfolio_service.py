@@ -7,7 +7,6 @@ from application.portfolio_service import PortfolioService
 
 
 class _Response:
-    success = True
     result = {
         "metadata": {"exchange_rate": 1_300.0},
         "asset_info": {"AAPL": {"currency": "USD"}},
@@ -26,12 +25,20 @@ class _Response:
     }
 
 
+class _Source:
+    def __init__(self, calls):
+        self._calls = calls
+
+    def fetch(self, *, scope):
+        self._calls.append({"scope": scope})
+        return _Response.result
+
+
 def test_portfolio_service_uses_injected_ports_and_preserves_scope_result():
     calls = []
     service = PortfolioService(
         is_kis_ready=lambda: True,
-        request_portfolio=lambda **kwargs: calls.append(kwargs) or "request-1",
-        wait_for_response=lambda *_args, **_kwargs: _Response(),
+        portfolio_source=_Source(calls),
         save_portfolio=lambda value: calls.append({"saved": value}),
         load_weights=lambda: {},
         calculate_targets=lambda *_args: ({}, None, None),
@@ -41,7 +48,7 @@ def test_portfolio_service_uses_injected_ports_and_preserves_scope_result():
 
     result = service.get_portfolio_data(force_refresh=True, scope="toss")
 
-    assert {"force_refresh": True, "scope": "toss"} in calls
+    assert {"scope": "toss"} in calls
     assert result["holdings"] == _Response.result["holdings"]
     assert result["total_value_usd"] == 240.0
     assert result["targets"] == {}
@@ -50,8 +57,11 @@ def test_portfolio_service_uses_injected_ports_and_preserves_scope_result():
 def test_portfolio_service_fails_closed_before_request_when_kis_is_not_ready():
     service = PortfolioService(
         is_kis_ready=lambda: False,
-        request_portfolio=lambda **_kwargs: (_ for _ in ()).throw(AssertionError("must not request")),
-        wait_for_response=lambda *_args, **_kwargs: None,
+        portfolio_source=type(
+            "Source",
+            (),
+            {"fetch": lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not request"))},
+        )(),
         save_portfolio=lambda _value: None,
         load_weights=lambda: {},
         calculate_targets=lambda *_args: ({}, None, None),

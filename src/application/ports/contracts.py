@@ -1,10 +1,17 @@
 """Shared, dependency-free conventions for application port contracts."""
 
 from dataclasses import dataclass
-from typing import Any, Generic, NewType, TypeVar
+from typing import Any, Generic, NewType, Protocol, TypeVar
 
 CorrelationId = NewType("CorrelationId", str)
 T = TypeVar("T")
+
+
+class PortfolioSource(Protocol):
+    """Read normalized portfolio data from infrastructure adapters."""
+
+    def fetch(self, *, scope: str) -> dict[str, Any]:
+        """Return the established raw portfolio shape for a scope."""
 
 
 @dataclass(frozen=True)

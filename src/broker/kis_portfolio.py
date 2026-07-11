@@ -356,7 +356,7 @@ def fetch_kis_portfolio():
 
 
 def _manager_get_integrated_portfolio(scope: str = "all"):
-    from data.portfolio_integration import get_integrated_portfolio
+    from infrastructure.portfolio import get_integrated_portfolio
 
     return get_integrated_portfolio(scope=scope)
 

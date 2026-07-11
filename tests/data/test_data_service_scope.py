@@ -69,13 +69,14 @@ def test_data_service_toss_scope_filters_toss_account(monkeypatch):
 
 def test_data_service_passes_scope_to_portfolio_sources_without_worker_dispatch(monkeypatch):
     from data import data_service
+    from infrastructure.portfolio import integration
 
     captured = {}
 
     monkeypatch.setattr(data_service, "is_kis_ready", lambda: True)
     monkeypatch.setattr(data_service, "add_alert", lambda message, level: None)
     monkeypatch.setattr(
-        data_service,
+        integration,
         "get_integrated_portfolio",
         lambda scope="all": captured.update(
             {"scope": scope}

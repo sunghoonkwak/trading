@@ -1,4 +1,8 @@
-# Portfolio Integration (`src/data/portfolio_integration.py`)
+# Portfolio Integration compatibility module (`src/data/portfolio_integration.py`)
+
+The implementation moved to
+`src/infrastructure/portfolio/integration.py`. This module only preserves the
+three public source/cache exports for callers that have not migrated yet.
 
 이 모듈은 애플리케이션의 원천별 포트폴리오 데이터를 통합하는 data
 계층 소유 모듈입니다.

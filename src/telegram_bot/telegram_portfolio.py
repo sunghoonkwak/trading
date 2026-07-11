@@ -35,7 +35,7 @@ from telegram.ext import (
 
 from broker import market_data, order_admin
 from data.data_service import get_portfolio_data, get_weight_diffs
-from data.portfolio_integration import refresh_gsheet_cache
+from infrastructure.portfolio import refresh_gsheet_cache
 
 from .telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
 
