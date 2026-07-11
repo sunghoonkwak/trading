@@ -5,22 +5,13 @@ Data Service Module (Refactored)
 This module provides centralized data access for the application.
 It separates data fetching, caching, and transformation logic.
 """
-import logging
 from typing import Dict, List, Tuple
 
+from application.portfolio_service import PortfolioService
 from broker import market_data
 from broker.kis_worker import request_portfolio, wait_for_response
 from core.display import add_alert
 from data.config_manager import ConfigFile, load_json, save_json
-from data.portfolio_processing import (
-    PortfolioProcessor,
-)
-from data.portfolio_scope import (
-    PORTFOLIO_SCOPE_ALL,
-    PORTFOLIO_SCOPE_KIS,
-    PORTFOLIO_SCOPE_TOSS,
-    normalize_portfolio_scope,
-)
 from state.system_state import is_kis_ready
 from utils.market_utils import get_fear_and_greed
 
@@ -29,110 +20,23 @@ from utils.market_utils import get_fear_and_greed
 # =============================================================================
 
 def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
-    """
-    Orchestrates portfolio data fetching and processing.
-    """
-    scope = normalize_portfolio_scope(scope)
+    from data.calculate_weights import calculate_target_weights
 
-    logging.info("[DataService] Fetching fresh portfolio data")
-
-    # 1. Fetch fresh portfolio data from the KIS worker.
-    if not is_kis_ready():
-        return {"error": "KIS Thread not ready"}
-
-    add_alert("[Data] Fetching portfolio...", "INFO")
-    request_id = request_portfolio(force_refresh=force_refresh, scope=scope)
-    response = wait_for_response(request_id, timeout=60.0)
-
-    if not response or not response.success:
-        return {"error": response.error if response else "Timeout"}
-
-    raw_portfolio = response.result
-    save_json(ConfigFile.PORTFOLIO, raw_portfolio)
-
-    # 2. Merge holdings and calculate portfolio statistics.
-    processor = PortfolioProcessor()
-    merged_data, total_usd = processor.merge_holdings(raw_portfolio)
-    stats = processor.calculate_stats(raw_portfolio)
-
-    result = {
-        "raw": raw_portfolio,
-        "merged_data": merged_data,
-        "total_value_usd": total_usd,
-        "stats": stats,
-        "exchange_rate": raw_portfolio.get("metadata", {}).get("exchange_rate"),
-        "price_map": {t: d["cur_price"] for t, d in merged_data.items() if d["type"] == "STOCK"},
-        "accounts": raw_portfolio.get("accounts", []),
-        "holdings": raw_portfolio.get("holdings", []),
-        "metadata": raw_portfolio.get("metadata", {})
-    }
-
-    # 3. Calculate current and target weights.
-    try:
-        from data.calculate_weights import calculate_target_weights
-        weights_cfg = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
-        cur_weights = {t: d["current_value_usd"] / total_usd for t, d in merged_data.items() if total_usd > 0}
-        result["current_weights"] = cur_weights
-        result["targets"], _, _ = calculate_target_weights(cur_weights, weights_cfg, get_fear_and_greed())
-    except Exception as e:
-        logging.error(f"Weight calc error: {e}")
-        result["targets"] = {}
-
-    # 4. Report whether the freshly loaded data is complete.
-    if not (result["metadata"].get("gsheet_error") or result["metadata"].get("kis_error")):
-        add_alert("[Data] Portfolio loaded", "SUCCESS")
-    else:
-        add_alert("[Data] Portfolio loaded (partial)", "WARN")
-
-    return _apply_scope_filter(result, scope)
+    service = PortfolioService(
+        is_kis_ready=is_kis_ready,
+        request_portfolio=request_portfolio,
+        wait_for_response=wait_for_response,
+        save_portfolio=lambda value: save_json(ConfigFile.PORTFOLIO, value),
+        load_weights=lambda: load_json(ConfigFile.PORTFOLIO_WEIGHTS),
+        calculate_targets=calculate_target_weights,
+        fear_and_greed=get_fear_and_greed,
+        publish_alert=add_alert,
+    )
+    return service.get_portfolio_data(force_refresh=force_refresh, scope=scope)
 
 def _apply_scope_filter(data: Dict, scope: str) -> Dict:
-    """Filters processed data by account scope."""
-    scope = normalize_portfolio_scope(scope)
-    if scope == PORTFOLIO_SCOPE_ALL:
-        return data
-
-    raw = data["raw"]
-    accounts = raw.get("accounts", [])
-    kis_ids = {a["id"] for a in accounts if a.get("name") == "한국투자증권"}
-
-    if scope == PORTFOLIO_SCOPE_KIS:
-        target_ids = kis_ids
-    elif scope == PORTFOLIO_SCOPE_TOSS:
-        target_ids = {
-            a["id"] for a in accounts if a.get("name") == "토스"
-        }
-    else:
-        target_ids = set()
-
-    # Log the account scope applied to this filtered view.
-    logging.info(f"[Filter] Scope: {scope}, TargetIDs: {target_ids}")
-    all_cash = raw.get("cash_holdings", [])
-
-    # Re-run processing on filtered raw data
-    target_names = {a["name"] for a in accounts if a["id"] in target_ids}
-    filtered_cash = [c for c in all_cash if (c.get("account_id") in target_ids or c.get("account_name") in target_names)]
-
-    logging.info(f"[Filter] Filtered Cash Count: {len(filtered_cash)}")
-
-    filtered_raw = {
-        "metadata": raw.get("metadata", {}),
-        "asset_info": raw.get("asset_info", {}),
-        "holdings": [h for h in raw.get("holdings", []) if h.get("account_id") in target_ids],
-        "cash_holdings": filtered_cash
-    }
-
-    processor = PortfolioProcessor()
-    merged, total = processor.merge_holdings(filtered_raw)
-    stats = processor.calculate_stats(filtered_raw)
-
-    scoped_result = dict(data)
-    scoped_result.update({
-        "merged_data": merged, "total_value_usd": total, "stats": stats,
-        "holdings": filtered_raw["holdings"],
-        "current_weights": {t: d["current_value_usd"] / total for t, d in merged.items() if total > 0}
-    })
-    return scoped_result
+    """Compatibility seam for existing callers and monkeypatch targets."""
+    return PortfolioService.apply_scope_filter(data, scope)
 
 def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
     """Calculates rebalancing differences."""
