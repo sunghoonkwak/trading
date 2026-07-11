@@ -52,6 +52,21 @@ def test_scheduler_strategy_suite_uses_the_application_facade(monkeypatch):
     assert scheduler_order.run_strategy_suite(execute=True) == ({"execute": True}, {})
 
 
+def test_scheduler_rebalancing_uses_application_facade_with_cache_key(monkeypatch):
+    from scheduler import scheduler_order
+
+    class Service:
+        def run_rebalancing(self, *, execute, orderable_cache_key):
+            return {"execute": execute, "cache_key": orderable_cache_key}
+
+    monkeypatch.setattr(scheduler_order, "get_strategy_run_service", lambda: Service())
+
+    assert scheduler_order.run_rebalancing_strategy(
+        execute=True,
+        orderable_cache_key="2026-07-11",
+    ) == {"execute": True, "cache_key": "2026-07-11"}
+
+
 def test_periodic_rebalancing_is_quiet_when_disabled(monkeypatch, caplog):
     from scheduler import scheduler_order
     from strategy.base import StrategyStatus
