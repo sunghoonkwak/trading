@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from application.ports import PortfolioReader
 from core.constants import ENV_TRUE_VALUES
 
 # Add project root to path
@@ -62,6 +63,7 @@ manager = ConnectionManager()
 
 # Event loop reference for thread-safe broadcasting
 _event_loop: Optional[asyncio.AbstractEventLoop] = None
+_portfolio_reader: Optional[PortfolioReader] = None
 
 # Base directory for assets (src folder)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -83,6 +85,25 @@ def _is_runtime_running() -> bool:
     from core import runtime_control
 
     return runtime_control.is_runtime_running()
+
+
+def set_portfolio_reader(reader: PortfolioReader) -> None:
+    """Inject the application portfolio use case for web handlers."""
+    global _portfolio_reader
+    _portfolio_reader = reader
+
+
+def _get_portfolio_reader() -> PortfolioReader:
+    if _portfolio_reader is not None:
+        return _portfolio_reader
+
+    from data.data_service import get_portfolio_data
+
+    class _LegacyPortfolioReader:
+        def get_portfolio_data(self, force_refresh: bool = False, scope: str = "all"):
+            return get_portfolio_data(force_refresh=force_refresh, scope=scope)
+
+    return _LegacyPortfolioReader()
 
 
 def _event_message_json(
@@ -217,11 +238,11 @@ async def get_holdings_data(ticker: str):
         return _runtime_off_response()
 
     try:
-        # Use data_service to get portfolio data (handles caching and freshness)
-        from data.data_service import get_portfolio_data
-
         loop = asyncio.get_running_loop()
-        data_result = await loop.run_in_executor(None, get_portfolio_data)
+        data_result = await loop.run_in_executor(
+            None,
+            _get_portfolio_reader().get_portfolio_data,
+        )
 
         if data_result.get('error'):
              logging.warning(f"[WebServer] Portfolio data error: {data_result['error']}")
