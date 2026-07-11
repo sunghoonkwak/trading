@@ -180,8 +180,8 @@ def test_app_imports_do_not_load_runtime_kis_modules(tmp_path):
         """
 import sys
 import core.web_server
-import scheduler.scheduler_order
-import telegram_bot.telegram_strategy
+import interfaces.scheduler.order_runner
+import interfaces.telegram.strategy
 assert "kis.kis_api.kis_auth" not in sys.modules
 """,
     )
@@ -189,12 +189,12 @@ assert "kis.kis_api.kis_auth" not in sys.modules
     assert result.returncode == 0, result.stderr
 
 
-def test_scheduler_portfolio_import_does_not_load_legacy_portfolio_wrapper(tmp_path):
+def test_scheduler_portfolio_interface_import_does_not_load_kis_wrapper(tmp_path):
     result = _run_import_check(
         tmp_path,
         """
 import sys
-import scheduler.scheduler_portfolio
+import interfaces.scheduler.portfolio_runner
 assert "kis.get_portfolio" not in sys.modules
 """,
     )
