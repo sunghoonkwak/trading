@@ -215,8 +215,8 @@ class TradingSystem:
         print("[Startup] Step 5: Starting Web Event Viewer...")
         from core.constants import DEFAULT_HOST, DEFAULT_WEB_PORT
         try:
-            from core.web_server import set_portfolio_reader, start_web_server
             from infrastructure.portfolio import build_portfolio_service
+            from interfaces.web import set_portfolio_reader, start_web_server
 
             set_portfolio_reader(build_portfolio_service())
             threading.Thread(target=start_web_server, kwargs={"host": DEFAULT_HOST, "port": DEFAULT_WEB_PORT}, daemon=True).start()
