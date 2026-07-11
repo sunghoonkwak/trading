@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def test_daily_order_report_runs_strategy_suite_once(monkeypatch):
-    from scheduler import scheduler_order
+    from interfaces.scheduler import order_runner as scheduler_order
 
     calls = []
     raoeo_report = {"status": "skipped", "error": None}
@@ -41,7 +41,7 @@ def test_daily_order_report_runs_strategy_suite_once(monkeypatch):
 
 
 def test_scheduler_strategy_suite_uses_the_application_facade(monkeypatch):
-    from scheduler import scheduler_order
+    from interfaces.scheduler import order_runner as scheduler_order
 
     class Service:
         def run_suite(self, *, execute):
@@ -53,7 +53,7 @@ def test_scheduler_strategy_suite_uses_the_application_facade(monkeypatch):
 
 
 def test_scheduler_rebalancing_uses_application_facade_with_cache_key(monkeypatch):
-    from scheduler import scheduler_order
+    from interfaces.scheduler import order_runner as scheduler_order
 
     class Service:
         def run_rebalancing(self, *, execute, orderable_cache_key):
@@ -68,7 +68,7 @@ def test_scheduler_rebalancing_uses_application_facade_with_cache_key(monkeypatc
 
 
 def test_periodic_rebalancing_is_quiet_when_disabled(monkeypatch, caplog):
-    from scheduler import scheduler_order
+    from interfaces.scheduler import order_runner as scheduler_order
     from strategy.base import StrategyStatus
 
     class FrozenDateTime(datetime):
