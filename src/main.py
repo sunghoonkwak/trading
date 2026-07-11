@@ -54,7 +54,9 @@ class TradingSystem:
             get_strategy_run_service,
         )
         from telegram_bot.telegram_bot import initialize_telegram
+        from telegram_bot.telegram_portfolio import configure_portfolio_reader
 
+        configure_portfolio_reader(build_portfolio_service())
         configure_portfolio_reader_factory(build_portfolio_service)
         configure_strategy_run_service(get_strategy_run_service())
         update_telegram_state(thread_status=ThreadStatus.STARTING)

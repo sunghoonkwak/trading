@@ -33,8 +33,9 @@ from telegram.ext import (
     filters,
 )
 
+from application.ports import PortfolioReader
 from broker import market_data, order_admin
-from data.data_service import get_portfolio_data, get_weight_diffs
+from data.data_service import get_weight_diffs
 from infrastructure.portfolio import refresh_gsheet_cache
 from interfaces.telegram.portfolio_formatter import format_portfolio_summary
 
@@ -42,6 +43,21 @@ from .telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
 
 # Conversation states
 SELECT_TICKER = 0
+_portfolio_reader: PortfolioReader | None = None
+
+
+def configure_portfolio_reader(reader: PortfolioReader) -> None:
+    """Inject the portfolio application use case from the composition root."""
+    global _portfolio_reader
+    _portfolio_reader = reader
+
+
+def _get_portfolio_data():
+    if _portfolio_reader is None:
+        from data.data_service import get_portfolio_data
+
+        return get_portfolio_data()
+    return _portfolio_reader.get_portfolio_data()
 
 def format_weight_diffs(diffs: list, total_usd: float, cash_info: dict) -> str:
     """
@@ -309,7 +325,7 @@ async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # Get portfolio data and cache in user_data
         loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(None, get_portfolio_data)
+        data = await loop.run_in_executor(None, _get_portfolio_data)
         user_data['portfolio_data'] = data
 
         # Format summary message
