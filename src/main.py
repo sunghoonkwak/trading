@@ -46,9 +46,12 @@ class TradingSystem:
     def initialize_telegram(self):
         """Initializes the Telegram bot thread."""
         print("[Startup] Step 1: Initializing Telegram Bot...")
+        from interfaces.telegram.rebalancing import configure_strategy_run_service
         from state.system_state import ThreadStatus, update_telegram_state
+        from strategy.execution_service import get_strategy_run_service
         from telegram_bot.telegram_bot import initialize_telegram
 
+        configure_strategy_run_service(get_strategy_run_service())
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram():
             update_telegram_state(thread_status=ThreadStatus.RUNNING, bot_connected=True)

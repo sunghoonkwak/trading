@@ -17,9 +17,9 @@ from telegram.ext import (
     TypeHandler,
 )
 
+from application.strategy_run_service import StrategyRunService
 from domain.strategy.base import StrategyStatus
 from interfaces.telegram.report_formatter import format_rebalancing_report
-from strategy.execution_service import get_strategy_run_service
 from telegram_bot.telegram_system import (
     clear_runtime_confirmation_pending,
     get_pending_confirmation_warning,
@@ -28,11 +28,20 @@ from telegram_bot.telegram_system import (
 from telegram_bot.telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
 
 REB_CONFIRM = 0
+_strategy_run_service: StrategyRunService | None = None
+
+
+def configure_strategy_run_service(service: StrategyRunService) -> None:
+    """Inject the application strategy use case from the composition root."""
+    global _strategy_run_service
+    _strategy_run_service = service
 
 
 def run_rebalancing_strategy(execute: bool = False):
     """Compatibility seam for the application rebalancing use case."""
-    return get_strategy_run_service().run_rebalancing(execute=execute)
+    if _strategy_run_service is None:
+        raise RuntimeError("StrategyRunService is not configured.")
+    return _strategy_run_service.run_rebalancing(execute=execute)
 
 def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
     if has_orders:

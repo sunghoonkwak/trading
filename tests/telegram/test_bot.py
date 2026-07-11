@@ -25,7 +25,7 @@ def test_telegram_rebalancing_uses_application_facade(monkeypatch):
         def run_rebalancing(self, *, execute):
             return {"execute": execute}
 
-    monkeypatch.setattr(telegram_rebalancing, "get_strategy_run_service", lambda: Service())
+    telegram_rebalancing.configure_strategy_run_service(Service())
 
     assert telegram_rebalancing.run_rebalancing_strategy(execute=True) == {"execute": True}
 
