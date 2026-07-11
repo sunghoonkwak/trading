@@ -56,6 +56,20 @@ def test_order_report_service_executes_sells_before_buys_and_waits_once():
     assert [result["order"] for result in results] == [sell, buy]
 
 
+def test_order_report_service_returns_retry_status_and_pending_orders():
+    first = StrategyOrder("SOXL", OrderSide.BUY, 1, 10.0)
+    second = StrategyOrder("TQQQ", OrderSide.BUY, 1, 20.0)
+    service = OrderReportService(
+        execute_order=lambda order: (order is first, "accepted" if order is first else "rejected")
+    )
+
+    result = service.retry_failed([first, second])
+
+    assert result["status"].value == "partial"
+    assert result["succeeded_orders"] == [first]
+    assert result["pending_orders"] == [second]
+
+
 def test_legacy_execution_service_exposes_application_use_case_facade(monkeypatch):
     from strategy import execution_service
 

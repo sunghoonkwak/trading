@@ -351,13 +351,14 @@ def _retry_failed_history_orders(
     sell_first: bool = False,
     sell_wait_seconds: int = 0,
 ) -> None:
-    results = _execute_orders(
+    retry_result = get_order_report_service().retry_failed(
         failed,
         sell_first=sell_first,
         sell_wait_seconds=sell_wait_seconds,
     )
+    results = retry_result["execution_results"]
     report["execution_results"] = results
-    report["status"] = _execution_status(failed, results)
+    report["status"] = retry_result["status"]
 
     save_data = _build_strategy_history_data(
         report,

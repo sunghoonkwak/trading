@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
-from domain.strategy.base import OrderSide, StrategyOrder
+from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
 
 
 class OrderReportService:
@@ -43,3 +43,25 @@ class OrderReportService:
             self._sleep(sell_wait_seconds)
         results.extend(self.execute(order) for order in buys)
         return results
+
+    def retry_failed(
+        self,
+        orders: list[StrategyOrder],
+        *,
+        sell_first: bool = False,
+        sell_wait_seconds: int = 0,
+    ) -> dict[str, Any]:
+        """Retry historical failures and return structured result data."""
+        results = self.execute_many(
+            orders,
+            sell_first=sell_first,
+            sell_wait_seconds=sell_wait_seconds,
+        )
+        succeeded = [result["order"] for result in results if result["success"]]
+        pending = [result["order"] for result in results if not result["success"]]
+        return {
+            "execution_results": results,
+            "status": StrategyStatus.EXECUTED if not pending else StrategyStatus.PARTIAL,
+            "succeeded_orders": succeeded,
+            "pending_orders": pending,
+        }
