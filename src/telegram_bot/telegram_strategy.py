@@ -19,6 +19,7 @@ from telegram.ext import (
     TypeHandler,
 )
 
+from interfaces.telegram.report_formatter import format_strategy_report
 from strategy.base import StrategyStatus
 from strategy.constants import TZ_ET
 from strategy.execution_service import (
@@ -29,7 +30,6 @@ from strategy.execution_service import (
     prepare_raoeo_cash_funding,
     save_raoeo_cash_funding_result,
 )
-from strategy.report_formatter import format_strategy_report
 
 from .telegram_system import (
     clear_runtime_confirmation_pending,

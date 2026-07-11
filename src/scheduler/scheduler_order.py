@@ -7,8 +7,8 @@ Reuses the same execution and reporting logic as the Telegram bot.
 """
 import logging
 
+from interfaces.telegram.report_formatter import format_strategy_report
 from strategy.execution_service import get_strategy_run_service
-from strategy.report_formatter import format_strategy_report
 from telegram_bot.telegram_utils import send_notification
 
 
@@ -118,7 +118,7 @@ def run_periodic_rebalancing():
             if status == StrategyStatus.ERROR and reb_res.get("error") == "API Timeout":
                 send_notification("⚠️ [네트워크 타임아웃] KIS API 무응답 (Periodic Rebalancing)")
             else:
-                from strategy.report_formatter import format_rebalancing_report
+                from interfaces.telegram.report_formatter import format_rebalancing_report
                 header = "🚀 <b>First Rebalancing Check</b>" if is_first_call else "🔄 <b>Periodic Rebalancing</b>"
                 report_text = format_rebalancing_report(reb_res)
                 send_notification(f"{header}\n\n{report_text}")
