@@ -163,7 +163,7 @@ def get_strategy_run_service() -> StrategyRunService:
 
 def get_order_report_service() -> OrderReportService:
     """Build the application order-result facade over the configured broker."""
-    return OrderReportService(execute_order=execute_single_order)
+    return OrderReportService(execute_order=execute_single_order, sleep=time.sleep)
 
 
 def _build_base_report(today_str: str, market_status: Dict) -> Dict:
@@ -554,29 +554,11 @@ def _execute_orders(
     Execute a list of orders. Optionally execute sells first with a wait.
     Returns: list of execution result dicts
     """
-    results = []
-
-    if sell_first:
-        sell_orders = [o for o in orders if o.side == OrderSide.SELL]
-        buy_orders = [o for o in orders if o.side == OrderSide.BUY]
-
-        for order in sell_orders:
-            success, msg = execute_single_order(order)
-            results.append({"order": order, "success": success, "message": msg})
-
-        if sell_orders and buy_orders and sell_wait_seconds > 0:
-            logging.info(f"Sells done. Waiting {sell_wait_seconds}s for cash update...")
-            time.sleep(sell_wait_seconds)
-
-        for order in buy_orders:
-            success, msg = execute_single_order(order)
-            results.append({"order": order, "success": success, "message": msg})
-    else:
-        for order in orders:
-            success, msg = execute_single_order(order)
-            results.append({"order": order, "success": success, "message": msg})
-
-    return results
+    return get_order_report_service().execute_many(
+        orders,
+        sell_first=sell_first,
+        sell_wait_seconds=sell_wait_seconds,
+    )
 
 
 def _handle_raoeo_history(

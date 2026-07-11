@@ -37,6 +37,21 @@ def test_order_report_service_returns_channel_neutral_execution_result():
     }
 
 
+def test_order_report_service_executes_sells_before_buys_and_waits_once():
+    sell = StrategyOrder("BIL", OrderSide.SELL, 1, 100.0)
+    buy = StrategyOrder("SOXL", OrderSide.BUY, 1, 10.0)
+    calls = []
+    service = OrderReportService(
+        execute_order=lambda order: calls.append(order.symbol) or (True, "accepted"),
+        sleep=lambda seconds: calls.append(("sleep", seconds)),
+    )
+
+    results = service.execute_many([buy, sell], sell_first=True, sell_wait_seconds=5)
+
+    assert calls == ["BIL", ("sleep", 5), "SOXL"]
+    assert [result["order"] for result in results] == [sell, buy]
+
+
 def test_legacy_execution_service_exposes_application_use_case_facade(monkeypatch):
     from strategy import execution_service
 
