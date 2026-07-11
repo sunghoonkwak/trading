@@ -166,3 +166,5 @@ the current suite,” not “production behavior is known faulty.”
 - `venv/bin/ruff check src tests` passed.
 - Architecture checks now import scheduler and Telegram adapters from
   `src/interfaces/` and retain subprocess import-safety coverage.
+- `docker compose run --rm test` passed: 303 tests on Python 3.11 after the
+  current interface/application migration slices.
