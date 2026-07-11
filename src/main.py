@@ -174,7 +174,10 @@ class TradingSystem:
         """Starts the background task scheduler."""
         print("[Startup] Step 4: Starting Scheduler Service...")
         try:
-            from scheduler.scheduler import start_scheduler
+            from data.data_service import build_portfolio_service
+            from interfaces.scheduler.runner import set_portfolio_reader, start_scheduler
+
+            set_portfolio_reader(build_portfolio_service())
             start_scheduler()
             print("[Startup] ✓ Scheduler started")
         except Exception as e:
