@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
+from application.ports import StrategyOrderExecutor
 from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
 
 
@@ -12,7 +13,7 @@ class OrderReportService:
     def __init__(
         self,
         *,
-        execute_order: Callable[[StrategyOrder], tuple[bool, str]],
+        execute_order: Callable[[StrategyOrder], tuple[bool, str]] | StrategyOrderExecutor,
         sleep: Callable[[int], None] | None = None,
     ) -> None:
         self._execute_order = execute_order
@@ -20,7 +21,10 @@ class OrderReportService:
 
     def execute(self, order: StrategyOrder) -> dict[str, Any]:
         """Return channel-neutral execution result data."""
-        success, message = self._execute_order(order)
+        if callable(self._execute_order):
+            success, message = self._execute_order(order)
+        else:
+            success, message = self._execute_order.execute(order)
         return {"order": order, "success": success, "message": message}
 
     def execute_many(

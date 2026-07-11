@@ -8,6 +8,7 @@ from application.ports import (
     OperationResult,
     PortfolioReader,
     PortfolioSource,
+    StrategyOrderExecutor,
     redact_value,
 )
 
@@ -53,3 +54,12 @@ def test_portfolio_reader_contract_accepts_the_application_service():
         "force_refresh": True,
         "scope": "toss",
     }
+
+
+def test_order_executor_contract_accepts_a_broker_adapter():
+    class Executor:
+        def execute(self, order):
+            return (order, "accepted")
+
+    executor: StrategyOrderExecutor = Executor()
+    assert executor.execute("SOXL") == ("SOXL", "accepted")

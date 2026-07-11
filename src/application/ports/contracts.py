@@ -25,6 +25,13 @@ class PortfolioReader(Protocol):
         """Return the established processed portfolio result."""
 
 
+class StrategyOrderExecutor(Protocol):
+    """Execute one domain order through the configured broker adapter."""
+
+    def execute(self, order: Any) -> tuple[bool, str]:
+        """Return the established accepted/rejected order result."""
+
+
 @dataclass(frozen=True)
 class OperationResult(Generic[T]):
     """A redaction-safe result returned by a port without raising secrets."""
