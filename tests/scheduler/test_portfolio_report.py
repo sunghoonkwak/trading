@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def test_comparison_stats_uses_configured_exchange_rate_fallback(tmp_path, monkeypatch):
-    from scheduler import scheduler_portfolio
+    from interfaces.scheduler import portfolio_runner as scheduler_portfolio
 
     monkeypatch.setattr(
         scheduler_portfolio,
