@@ -4,6 +4,7 @@ import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from urllib import error, request
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -12,11 +13,6 @@ sys.path.insert(0, str(SRC))
 
 
 class TossPortfolioApiTest(unittest.TestCase):
-    def test_get_holdings_does_not_expose_default_account_resolver(self):
-        import toss.get_holdings as get_holdings
-
-        self.assertFalse(hasattr(get_holdings, "_get_default_account_seq"))
-
     def test_default_account_seq_is_cached_per_access_token(self):
         from toss.account_cache import (
             clear_default_account_cache,
@@ -122,9 +118,7 @@ class TossAuthTest(unittest.TestCase):
         from core.credentials import generate_key_from_password
         from toss.auth import load_config
 
-        config_root = ROOT / "tests" / ".tmp-toss-config"
-        self.addCleanup(lambda: self._remove_tree(config_root))
-        config_root.mkdir(exist_ok=True)
+        config_root = self._temporary_directory()
         (config_root / "password.txt").write_text("test-password\n", encoding="utf-8")
         fernet = Fernet(generate_key_from_password("test-password"))
         (config_root / "credentials.enc").write_bytes(
@@ -181,9 +175,7 @@ class TossAuthTest(unittest.TestCase):
     def test_ensure_daily_token_issues_after_date_changes(self):
         from toss.auth import TossAuthConfig, TossToken, ensure_daily_token
 
-        token_dir = ROOT / "tests" / ".tmp-next-day-token"
-        self.addCleanup(lambda: self._remove_tree(token_dir))
-        token_dir.mkdir()
+        token_dir = self._temporary_directory()
         (token_dir / "TOSS20260611_235959.json").write_text(
             '{"access_token": "yesterday-token"}\n',
             encoding="utf-8",
@@ -216,9 +208,7 @@ class TossAuthTest(unittest.TestCase):
     def test_ensure_daily_token_reissues_expired_today_token(self):
         from toss.auth import TossAuthConfig, TossToken, ensure_daily_token
 
-        token_dir = ROOT / "tests" / ".tmp-expired-today-token"
-        self.addCleanup(lambda: self._remove_tree(token_dir))
-        token_dir.mkdir()
+        token_dir = self._temporary_directory()
         (token_dir / "TOSS20260612_000403.json").write_text(
             json.dumps(
                 {
@@ -259,9 +249,7 @@ class TossAuthTest(unittest.TestCase):
     def test_load_access_token_renews_expired_token(self):
         from toss.auth import TossAuthConfig, TossToken, load_access_token
 
-        token_dir = ROOT / "tests" / ".tmp-expired-load-token"
-        self.addCleanup(lambda: self._remove_tree(token_dir))
-        token_dir.mkdir()
+        token_dir = self._temporary_directory()
         (token_dir / "TOSS20260612_000403.json").write_text(
             json.dumps(
                 {
@@ -301,12 +289,10 @@ class TossAuthTest(unittest.TestCase):
             "renewed-token",
         )
 
-    def _remove_tree(self, path):
-        if not path.exists():
-            return
-        for child in path.iterdir():
-            child.unlink()
-        path.rmdir()
+    def _temporary_directory(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        return Path(directory.name)
 
 
 class TossOrderApiTest(unittest.TestCase):

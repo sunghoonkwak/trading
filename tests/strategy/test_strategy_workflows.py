@@ -247,11 +247,6 @@ def _open_market(monkeypatch):
         },
     )
 
-
-def test_execution_service_uses_market_utils_status_directly():
-    assert not hasattr(execution_service, "_get_market_status")
-
-
 def test_run_raoeo_stops_before_market_data_on_weekend(monkeypatch):
     class FrozenDateTime:
         @classmethod

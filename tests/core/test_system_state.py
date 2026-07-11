@@ -28,10 +28,3 @@ def test_kis_ready_reflects_worker_and_auth_state():
             thread_status=system_state.ThreadStatus.NOT_STARTED,
             auth_status=system_state.AuthStatus.NOT_AUTHENTICATED,
         )
-
-
-def test_unused_public_state_helpers_are_removed():
-    assert not hasattr(system_state, "get_kis_state")
-    assert not hasattr(system_state, "get_telegram_state")
-    assert not hasattr(system_state, "get_status_summary")
-    assert not hasattr(system_state, "is_telegram_ready")

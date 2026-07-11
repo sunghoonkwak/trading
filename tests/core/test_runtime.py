@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from cryptography.fernet import Fernet
 
@@ -16,9 +17,7 @@ class CredentialsTest(unittest.TestCase):
             load_credentials,
         )
 
-        config_root = ROOT / "tests" / ".tmp-credentials"
-        self.addCleanup(lambda: self._remove_tree(config_root))
-        config_root.mkdir(exist_ok=True)
+        config_root = self._temporary_directory()
         (config_root / "password.txt").write_text("test-password\n", encoding="utf-8")
 
         fernet = Fernet(generate_key_from_password("test-password"))
@@ -41,9 +40,7 @@ class CredentialsTest(unittest.TestCase):
             load_credentials,
         )
 
-        config_root = ROOT / "tests" / ".tmp-legacy-credentials"
-        self.addCleanup(lambda: self._remove_tree(config_root))
-        config_root.mkdir(exist_ok=True)
+        config_root = self._temporary_directory()
         (config_root / "password.txt").write_text("test-password\n", encoding="utf-8")
 
         fernet = Fernet(generate_key_from_password("test-password"))
@@ -59,12 +56,10 @@ class CredentialsTest(unittest.TestCase):
         self.assertEqual(credentials.toss_client_id, "")
         self.assertEqual(credentials.toss_client_secret, "")
 
-    def _remove_tree(self, path):
-        if not path.exists():
-            return
-        for child in path.iterdir():
-            child.unlink()
-        path.rmdir()
+    def _temporary_directory(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        return Path(directory.name)
 
 
 def test_kis_rest_api_flag_defaults_to_enabled(monkeypatch):

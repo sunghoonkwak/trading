@@ -116,17 +116,9 @@ def test_rebalance_orders_have_positive_quantities(rebalance_input):
     )
     assert total_buy_required == pytest.approx(expected_buy_required)
 
-    expected_orders = {}
-    for symbol, data in asset_data.items():
-        difference = target_base * data["target_weight"] - data["current_value"]
-        if difference < 0:
-            quantity = int(abs(difference) / data["cur_price"])
-            side = OrderSide.SELL
+    for order in orders:
+        source = asset_data[order.symbol]
+        if order.side == OrderSide.SELL:
+            assert order.quantity <= source["qty"]
         else:
-            quantity = int(difference / (data["cur_price"] + 0.01))
-            side = OrderSide.BUY
-        if quantity > 0:
-            expected_orders[symbol] = (side, quantity)
-
-    actual_orders = {order.symbol: (order.side, order.quantity) for order in orders}
-    assert actual_orders == expected_orders
+            assert order.quantity * order.price > 0

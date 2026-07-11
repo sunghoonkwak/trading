@@ -1,6 +1,7 @@
 # Test Suite Audit
 
-**Status:** U1 inventory complete — no test code changed.
+**Status:** U2 complete — approved removals and targeted simplifications
+verified with focused offline tests.
 
 **Scope:** All 26 `tests/**/test_*.py` modules present on 2026-07-10.
 The assessment is static: it reads test contracts, seams, and matching
@@ -68,12 +69,12 @@ boundary.
 
 | ID | Candidate | Unique observable contract? | Proposed action | Representative coverage retained |
 | --- | --- | --- | --- | --- |
-| C1 | `test_unused_public_state_helpers_are_removed` in `tests/core/test_system_state.py` | No. It asserts absence of historical helper names, not readiness behavior. | Delete. | `test_kis_ready_reflects_worker_and_auth_state` remains the state contract. |
-| C2 | `test_execution_service_uses_market_utils_status_directly` in `tests/strategy/test_strategy_workflows.py` | No. It asserts absence of `_get_market_status`; weekend/runtime workflow tests exercise market-status behavior. | Delete. | `test_run_raoeo_stops_before_market_data_on_weekend` and workflow execution tests retain observable behavior. |
-| C3 | `test_get_holdings_does_not_expose_default_account_resolver` in `tests/toss/test_api_helpers.py` | No. It asserts a private helper is not exported. | Delete. | Account sequence cache and holdings request/header tests retain supported behavior. |
-| S1 | Rebalance property expectation in `tests/strategy/test_raoeo_properties.py` | Partly. Positive quantity is valuable; full expected-order reconstruction may mirror the production formula. | Inspect and reduce to independent invariants only, if formula duplication is confirmed. | Positive quantity, sell ≤ holdings, and buy ≤ orderable/budget invariants. |
-| S2 | Fixed temporary directories in `tests/core/test_runtime.py` and `tests/toss/test_api_helpers.py` | Yes, but setup is over-specified. | Replace manual cleanup with `tmp_path` while preserving credential/token branches. | Current-format and legacy credential parsing; token issue/renewal behavior. |
-| S3 | Repeated KIS-disabled and portfolio-source patch setup | Yes, each protected branch is distinct. | Extract only local helper/fake payloads where diagnostics remain explicit. | Existing per-entry-point tests; none are deleted solely for sharing setup. |
+| C1 | `test_unused_public_state_helpers_are_removed` in `tests/core/test_system_state.py` | No. It asserts absence of historical helper names, not readiness behavior. | **Removed in U2.** | `test_kis_ready_reflects_worker_and_auth_state` remains the state contract. |
+| C2 | `test_execution_service_uses_market_utils_status_directly` in `tests/strategy/test_strategy_workflows.py` | No. It asserts absence of `_get_market_status`; weekend/runtime workflow tests exercise market-status behavior. | **Removed in U2.** | `test_run_raoeo_stops_before_market_data_on_weekend` and workflow execution tests retain observable behavior. |
+| C3 | `test_get_holdings_does_not_expose_default_account_resolver` in `tests/toss/test_api_helpers.py` | No. It asserts a private helper is not exported. | **Removed in U2.** | Account sequence cache and holdings request/header tests retain supported behavior. |
+| S1 | Rebalance property expectation in `tests/strategy/test_raoeo_properties.py` | Partly. Positive quantity is valuable; full expected-order reconstruction mirrored the production formula. | **Simplified in U2** to order invariants. | Positive quantity, sell ≤ holdings, and buy total matches emitted orders. |
+| S2 | Fixed temporary directories in `tests/core/test_runtime.py` and `tests/toss/test_api_helpers.py` | Yes, but setup is over-specified. | **Simplified in U2** with per-test `TemporaryDirectory` cleanup while preserving the existing `unittest` style. | Current-format and legacy credential parsing; token issue/renewal behavior. |
+| S3 | Repeated KIS-disabled and portfolio-source patch setup | Yes, each protected branch is distinct. | Retained unchanged in U2: no helper reduced setup without obscuring the protected policy branch. | Existing per-entry-point tests; none are deleted solely for sharing setup. |
 
 ## Ranked Risk-Gap Map
 
@@ -101,8 +102,15 @@ the current suite,” not “production behavior is known faulty.”
 - Static safety review found no intended live credential, network, runtime, or
   order path. Runtime verification is deferred to U4.
 
-## Required Decision Before U2
+## U2 Verification
 
-Approve or revise the candidate list C1–C3, S1–S3. U2 will make no other test
-deletions or behavior changes. U3 will select additions from the ranked map,
-starting with P0 boundaries, only after U2 is complete.
+- `venv/bin/pytest tests/core/test_system_state.py tests/core/test_runtime.py
+  tests/strategy/test_strategy_workflows.py
+  tests/strategy/test_raoeo_properties.py tests/toss/test_api_helpers.py`
+  passed: 78 tests.
+
+## Required Decision Before U3
+
+U3 will select additions from the ranked map, starting with P0 boundaries.
+It will not make further deletions or production-code changes without a
+separate decision.
