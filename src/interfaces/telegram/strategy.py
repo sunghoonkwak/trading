@@ -20,7 +20,7 @@ from telegram.ext import (
 )
 
 from interfaces.telegram.report_formatter import format_strategy_report
-from strategy.base import StrategyStatus
+from domain.strategy.base import StrategyStatus
 from strategy.constants import TZ_ET
 from strategy.execution_service import (
     clear_strategy_history_for_date,

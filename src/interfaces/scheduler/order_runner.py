@@ -92,7 +92,7 @@ def run_periodic_rebalancing():
             orderable_cache_key=us_date,
         )
 
-        from strategy.base import StrategyStatus
+        from domain.strategy.base import StrategyStatus
 
         # Notify on the first market-window check, or later only when the
         # strategy actually acted or surfaced an error.
