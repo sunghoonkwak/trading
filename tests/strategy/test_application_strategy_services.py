@@ -30,6 +30,20 @@ def test_strategy_run_service_delegates_each_use_case_to_injected_port():
     ]
 
 
+def test_strategy_run_service_delegates_the_shared_strategy_suite():
+    service = StrategyRunService(
+        run_raoeo=lambda **_kwargs: {},
+        run_value_averaging=lambda **_kwargs: {},
+        run_rebalancing=lambda **_kwargs: {},
+        run_suite=lambda **kwargs: ({"raoeo": kwargs}, {"va": kwargs}),
+    )
+
+    assert service.run_suite(execute=True) == (
+        {"raoeo": {"execute": True}},
+        {"va": {"execute": True}},
+    )
+
+
 def test_order_report_service_returns_channel_neutral_execution_result():
     order = StrategyOrder("SOXL", OrderSide.BUY, 1, 10.0)
     service = OrderReportService(execute_order=lambda received: (received is order, "accepted"))

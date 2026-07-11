@@ -13,10 +13,12 @@ class StrategyRunService:
         run_raoeo: Callable[..., dict[str, Any]],
         run_value_averaging: Callable[..., dict[str, Any]],
         run_rebalancing: Callable[..., dict[str, Any]],
+        run_suite: Callable[..., tuple[dict[str, Any], dict[str, Any]]] | None = None,
     ) -> None:
         self._run_raoeo = run_raoeo
         self._run_value_averaging = run_value_averaging
         self._run_rebalancing = run_rebalancing
+        self._run_suite = run_suite
 
     def run_raoeo(self, *, execute: bool = False, **kwargs: Any) -> dict[str, Any]:
         """Run the configured RAOEO strategy."""
@@ -29,6 +31,12 @@ class StrategyRunService:
     def run_rebalancing(self, *, execute: bool = False, **kwargs: Any) -> dict[str, Any]:
         """Run the configured rebalancing strategy."""
         return self._run_rebalancing(execute=execute, **kwargs)
+
+    def run_suite(self, *, execute: bool = False) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Run RAOEO and value averaging through their shared application use case."""
+        if self._run_suite is not None:
+            return self._run_suite(execute=execute)
+        return self.run_raoeo(execute=execute), self.run_value_averaging(execute=execute)
 
 
 class StrategyMarketDataService:

@@ -162,6 +162,7 @@ def get_strategy_run_service() -> StrategyRunService:
         run_raoeo=run_raoeo_strategy,
         run_value_averaging=run_va_strategy,
         run_rebalancing=run_rebalancing_strategy,
+        run_suite=run_strategy_suite,
     )
 
 
