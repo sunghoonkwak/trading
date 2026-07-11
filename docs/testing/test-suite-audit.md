@@ -1,7 +1,7 @@
 # Test Suite Audit
 
-**Status:** U4 complete — audit actions and full offline verification complete;
-policy gaps remain deferred.
+**Status:** Audit work complete — full offline verification complete; the
+accepted rebalancing policy and KIS duplicate-event safeguard are documented.
 
 **Scope:** All 26 `tests/**/test_*.py` modules present on 2026-07-10.
 The assessment is static: it reads test contracts, seams, and matching
@@ -109,17 +109,17 @@ the current suite,” not “production behavior is known faulty.”
   tests/strategy/test_raoeo_properties.py tests/toss/test_api_helpers.py`
   passed: 78 tests.
 
-## Deferred Policy Gaps
+## Accepted and Resolved Policy Notes
 
 - `rebalancing.calculate_orders()` intentionally returns reportable buy orders
-  even when `total_buy_required` exceeds `total_available`; its source states
-  that a later execution policy must block placement. A regression asserting
-  calculation-level buy capping would contradict current behavior, so the
-  execution-time guard needs a separate source-and-policy review.
-- `kis_event_handler` has no durable event identifier or deduplication state.
-  Duplicate/out-of-order notification idempotency cannot be added as a passing
-  regression contract without defining where that state belongs and how long
-  it persists. This is deferred rather than encoded as a failing test.
+  even when `total_buy_required` exceeds `total_available`. The accepted policy
+  is to submit that order and let the broker reject it, with the resulting
+  notification left for the user to act on; no calculation or execution cap is
+  added.
+- KIS order-notification deduplication now suppresses only exact repeated
+  in-process events. Its key includes TR ID, order number, symbol, time,
+  status, quantity, and price, preserving distinct partial fills. The cache is
+  bounded to 1,000 events and intentionally does not survive a restart.
 
 ## U3 Verification
 
@@ -134,8 +134,10 @@ the current suite,” not “production behavior is known faulty.”
 
 ## U4 Verification
 
-- `venv/bin/pytest tests` passed: 261 tests.
+- `venv/bin/pytest tests` passed: 263 tests after the duplicate-event coverage
+  was added.
 - `docker compose build test && docker compose run --rm test` passed: 261
-  tests on Python 3.11. The initial Docker run collected 254 tests because it
+  tests on Python 3.11. The later duplicate-event verification passed: 263
+  tests. The initial Docker run collected 254 tests because it
   used a pre-U3 image; rebuilding the test image was required before accepting
   the container result.

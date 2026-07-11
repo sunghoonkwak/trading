@@ -4,6 +4,7 @@ Packet handling event logic for KIS WebSocket.
 Moves on_result logic out of main.py to solve circular dependencies.
 """
 import logging
+from collections import OrderedDict
 from datetime import datetime
 from typing import NotRequired, TypedDict
 
@@ -17,6 +18,9 @@ from core.trading_config import strip_market_prefix
 from kis.ws_parser import mask_dict_for_log
 from telegram_bot.telegram_utils import send_notification
 from utils.format_utils import format_number, get_fixed_width
+
+_MAX_RECENT_ORDER_EVENTS = 1_000
+_recent_order_events: OrderedDict[tuple[str, ...], None] = OrderedDict()
 
 
 class _MarketState(TypedDict):
@@ -39,6 +43,32 @@ class _MarketStateUpdate(TypedDict, total=False):
     vol: float
     time: str
     sign_str: str
+
+
+def _is_duplicate_order_event(tr_id: str, row) -> bool:
+    order_no = str(row.get("ODER_NO", "")).strip()
+    if not order_no:
+        return False
+
+    event_key = (
+        tr_id,
+        order_no,
+        str(row.get("STCK_SHRN_ISCD", "")).strip(),
+        str(row.get("STCK_CNTG_HOUR", "")).strip(),
+        str(row.get("CNTG_YN", "")).strip(),
+        str(row.get("RCTF_CLS", "")).strip(),
+        str(row.get("RFUS_YN", "")).strip(),
+        str(row.get("CNTG_QTY", "")).strip(),
+        str(row.get("CNTG_UNPR", "")).strip(),
+    )
+    if event_key in _recent_order_events:
+        _recent_order_events.move_to_end(event_key)
+        return True
+
+    _recent_order_events[event_key] = None
+    if len(_recent_order_events) > _MAX_RECENT_ORDER_EVENTS:
+        _recent_order_events.popitem(last=False)
+    return False
 
 
 def _handle_domestic_market(tr_id: str, row) -> bool:
@@ -396,9 +426,15 @@ def on_result(ws, tr_id, df: pd.DataFrame, dm: dict):
             _handle_overseas_market(tr_id, row)
 
         elif tr_id in ["H0STCNI0", "H0STCNI9"]:  # Real + Demo trading
+            if _is_duplicate_order_event(tr_id, row):
+                logging.info("Skipping duplicate KIS order event: %s", row.get("ODER_NO"))
+                continue
             _handle_domestic_order(row)
 
         elif tr_id in ["H0GSCNI0", "H0GSCNI9"]:
+            if _is_duplicate_order_event(tr_id, row):
+                logging.info("Skipping duplicate KIS order event: %s", row.get("ODER_NO"))
+                continue
             _handle_overseas_order(tr_id, row)
 
         else:
