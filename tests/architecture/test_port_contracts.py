@@ -3,7 +3,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from application.ports import CorrelationId, OperationResult, PortfolioSource, redact_value
+from application.ports import (
+    CorrelationId,
+    OperationResult,
+    PortfolioReader,
+    PortfolioSource,
+    redact_value,
+)
 
 
 def test_port_result_preserves_safe_outcome_and_correlation_contract():
@@ -35,3 +41,15 @@ def test_portfolio_source_contract_requires_only_normalized_fetch():
 
     source: PortfolioSource = FakeSource()
     assert source.fetch(scope="all") == {"metadata": {}, "scope": "all"}
+
+
+def test_portfolio_reader_contract_accepts_the_application_service():
+    class Reader:
+        def get_portfolio_data(self, force_refresh=False, scope="all"):
+            return {"force_refresh": force_refresh, "scope": scope}
+
+    reader: PortfolioReader = Reader()
+    assert reader.get_portfolio_data(force_refresh=True, scope="toss") == {
+        "force_refresh": True,
+        "scope": "toss",
+    }

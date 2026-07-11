@@ -14,6 +14,17 @@ class PortfolioSource(Protocol):
         """Return the established raw portfolio shape for a scope."""
 
 
+class PortfolioReader(Protocol):
+    """Application use case consumed by transport adapters."""
+
+    def get_portfolio_data(
+        self,
+        force_refresh: bool = False,
+        scope: str = "all",
+    ) -> dict[str, Any]:
+        """Return the established processed portfolio result."""
+
+
 @dataclass(frozen=True)
 class OperationResult(Generic[T]):
     """A redaction-safe result returned by a port without raising secrets."""
