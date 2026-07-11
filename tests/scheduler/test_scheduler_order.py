@@ -47,7 +47,7 @@ def test_scheduler_strategy_suite_uses_the_application_facade(monkeypatch):
         def run_suite(self, *, execute):
             return ({"execute": execute}, {})
 
-    monkeypatch.setattr(scheduler_order, "get_strategy_run_service", lambda: Service())
+    scheduler_order.configure_strategy_run_service(Service())
 
     assert scheduler_order.run_strategy_suite(execute=True) == ({"execute": True}, {})
 
@@ -59,7 +59,7 @@ def test_scheduler_rebalancing_uses_application_facade_with_cache_key(monkeypatc
         def run_rebalancing(self, *, execute, orderable_cache_key):
             return {"execute": execute, "cache_key": orderable_cache_key}
 
-    monkeypatch.setattr(scheduler_order, "get_strategy_run_service", lambda: Service())
+    scheduler_order.configure_strategy_run_service(Service())
 
     assert scheduler_order.run_rebalancing_strategy(
         execute=True,

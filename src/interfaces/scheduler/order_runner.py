@@ -7,19 +7,33 @@ Reuses the same execution and reporting logic as the Telegram bot.
 """
 import logging
 
+from application.strategy_run_service import StrategyRunService
 from interfaces.telegram.report_formatter import format_strategy_report
-from strategy.execution_service import get_strategy_run_service
 from telegram_bot.telegram_utils import send_notification
+
+_strategy_run_service: StrategyRunService | None = None
+
+
+def configure_strategy_run_service(service: StrategyRunService) -> None:
+    """Inject the application strategy use case from the composition root."""
+    global _strategy_run_service
+    _strategy_run_service = service
+
+
+def _get_strategy_run_service() -> StrategyRunService:
+    if _strategy_run_service is None:
+        raise RuntimeError("StrategyRunService is not configured.")
+    return _strategy_run_service
 
 
 def run_strategy_suite(execute: bool = False):
     """Compatibility seam for the shared application strategy use case."""
-    return get_strategy_run_service().run_suite(execute=execute)
+    return _get_strategy_run_service().run_suite(execute=execute)
 
 
 def run_rebalancing_strategy(execute: bool = False, orderable_cache_key: str = ""):
     """Compatibility seam for the application rebalancing use case."""
-    return get_strategy_run_service().run_rebalancing(
+    return _get_strategy_run_service().run_rebalancing(
         execute=execute,
         orderable_cache_key=orderable_cache_key,
     )

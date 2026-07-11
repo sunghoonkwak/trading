@@ -178,9 +178,12 @@ class TradingSystem:
         print("[Startup] Step 4: Starting Scheduler Service...")
         try:
             from infrastructure.portfolio import build_portfolio_service
+            from interfaces.scheduler.order_runner import configure_strategy_run_service
             from interfaces.scheduler.runner import set_portfolio_reader, start_scheduler
+            from strategy.execution_service import get_strategy_run_service
 
             set_portfolio_reader(build_portfolio_service())
+            configure_strategy_run_service(get_strategy_run_service())
             start_scheduler()
             print("[Startup] ✓ Scheduler started")
         except Exception as e:
