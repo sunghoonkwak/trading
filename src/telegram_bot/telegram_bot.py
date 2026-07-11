@@ -64,7 +64,7 @@ async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             import glob
 
-            from scheduler.scheduler_portfolio import REPORTS_DIR
+            from interfaces.scheduler.portfolio_runner import REPORTS_DIR
             list_of_files = glob.glob(os.path.join(REPORTS_DIR, "report_*.txt"))
             if list_of_files:
                 latest_file = max(list_of_files, key=os.path.getctime)
@@ -77,7 +77,8 @@ async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        from scheduler.scheduler_portfolio import REPORTS_DIR
+        from interfaces.scheduler.portfolio_runner import REPORTS_DIR
+
         report_path = os.path.join(REPORTS_DIR, f"report_{target_date}.txt")
 
         if not os.path.exists(report_path):

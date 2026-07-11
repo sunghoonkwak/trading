@@ -370,9 +370,14 @@ async def trigger_portfolio_report(background_tasks: BackgroundTasks):
         return _runtime_off_response()
 
     try:
-        from scheduler.scheduler_portfolio import run_daily_portfolio_report
-        # Run in background to not block response
-        background_tasks.add_task(run_daily_portfolio_report)
+        from data.data_service import build_portfolio_service
+        from interfaces.scheduler.portfolio_runner import run_daily_portfolio_report
+
+        # Run in background to not block response.
+        background_tasks.add_task(
+            run_daily_portfolio_report,
+            build_portfolio_service(),
+        )
         return {"success": True, "message": "Portfolio report triggered"}
     except Exception as e:
         logging.error(f"[WebServer] Trigger portfolio error: {e}")
@@ -390,7 +395,7 @@ async def trigger_order_report(background_tasks: BackgroundTasks):
         return _runtime_off_response()
 
     try:
-        from scheduler.scheduler_order import run_daily_order_report
+        from interfaces.scheduler.order_runner import run_daily_order_report
         # Run in background to not block response
         background_tasks.add_task(run_daily_order_report)
         return {"success": True, "message": "Order report triggered"}
