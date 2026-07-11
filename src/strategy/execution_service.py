@@ -34,6 +34,13 @@ from utils.market_utils import get_us_market_status
 from utils.price_utils import resolve_current_price
 
 _orderable_usd_cache: Dict[str, float] = {}
+_portfolio_reader_factory = None
+
+
+def configure_portfolio_reader_factory(factory) -> None:
+    """Inject a portfolio use-case factory from the composition root."""
+    global _portfolio_reader_factory
+    _portfolio_reader_factory = factory
 
 
 class StrategyRunContext:
@@ -102,10 +109,15 @@ def get_market_data(
 
 def get_strategy_market_data_service() -> StrategyMarketDataService:
     """Build the application market-data service from legacy adapters."""
-    from data.data_service import get_portfolio_data
+    if _portfolio_reader_factory is None:
+        from data.data_service import get_portfolio_data
+
+        load_portfolio = get_portfolio_data
+    else:
+        load_portfolio = _portfolio_reader_factory().get_portfolio_data
 
     return StrategyMarketDataService(
-        load_portfolio=get_portfolio_data,
+        load_portfolio=load_portfolio,
         load_strategy_config=lambda: load_json(ConfigFile.STRATEGY_CONFIG, default={}),
         fetch_prices=market_data.fetch_prices,
         resolve_price=resolve_current_price,
