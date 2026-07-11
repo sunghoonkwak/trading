@@ -97,11 +97,14 @@ def _get_portfolio_reader() -> PortfolioReader:
     if _portfolio_reader is not None:
         return _portfolio_reader
 
-    from data.data_service import get_portfolio_data
+    from infrastructure.portfolio import build_portfolio_service
 
     class _LegacyPortfolioReader:
         def get_portfolio_data(self, force_refresh: bool = False, scope: str = "all"):
-            return get_portfolio_data(force_refresh=force_refresh, scope=scope)
+            return build_portfolio_service().get_portfolio_data(
+                force_refresh=force_refresh,
+                scope=scope,
+            )
 
     return _LegacyPortfolioReader()
 
