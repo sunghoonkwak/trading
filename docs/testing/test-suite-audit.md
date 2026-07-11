@@ -87,10 +87,10 @@ the current suite,” not “production behavior is known faulty.”
 | P0 | Portfolio scope normalization | `src/data/portfolio_scope.py` had no matching direct test module; scope tests entered later at data service/integration. | **Added in U3:** missing values default to `all`, supported values normalize case/whitespace, and unsupported values fail before a broker fetch. | `tests/data/test_portfolio_scope.py`. |
 | P0 | Rebalancing price safety | Property suite asserts positive quantities, while workflows pass orderable cash into calculation. | **Added in U3:** a missing asset price returns no executable orders. | `tests/strategy/test_rebalancing.py`. |
 | P0 | KIS malformed event handling | No direct `kis_event_handler` test module; current realtime suite focuses on logs/parser normalization. | **Added in U3:** empty frames and malformed domestic order rows report an error without notification or order-sync side effects. | `tests/kis/test_event_handler.py`. |
-| P1 | Toss rate-limit header parsing | Existing API helper suite covers interval and 429 retry. | Malformed `Retry-After`, retry bound, and independent API-group behavior remain safe. | New `tests/toss/test_rate_limit.py` only if moving rate tests improves cohesion; otherwise extend API helper suite. |
-| P1 | Broker error and payload boundaries | KIS broker tests cover key orderable cash failures; direct `order_admin`/`toss_broker` malformed payload paths are thin. | Empty/invalid buying power, unsupported order type, pagination/modify failure preserve safe error/audit behavior. | Extend `tests/kis/test_broker.py` or create focused broker test only after source seam review. |
-| P2 | Runtime/web concurrent transition edges | Runtime suite covers on/off and permission blocks; lock/control modules lack direct focused tests. | Repeated or conflicting runtime commands remain fail-closed and idempotent. | Extend `tests/core/test_runtime.py` if deterministic seam exists. |
-| P2 | Value-averaging numeric boundaries | Core target/history cases exist; invalid price and negative/fractional holdings are not explicitly named. | Invalid/zero price and non-executable quantity create no order while preserving safe context. | Extend `tests/strategy/test_value_averaging.py`. |
+| P1 | Toss rate-limit header parsing | **Added:** malformed `Retry-After` uses deterministic fallback backoff; `max_retries=1` makes exactly two attempts and one delay. | Retry parsing and retry boundary remain offline and deterministic. | `tests/toss/test_api_helpers.py`. |
+| P1 | Broker error and payload boundaries | **Added:** Toss and KIS reject malformed USD buying-power values; both brokers reject unsupported order types before authentication or order submission. | Invalid broker input fails locally with a clear error and no order side effect. | `tests/toss/test_api_helpers.py`, `tests/kis/test_broker.py`. |
+| P2 | Runtime/web concurrent transition edges | **Added:** an `off` command waits for an in-progress `on` command, then stops the fully started runtime. | Shared runtime lock prevents interleaved dependency start/stop. | `tests/core/test_runtime.py`. |
+| P2 | Value-averaging numeric boundaries | **Added:** zero and negative input prices create no order; negative prices normalize to zero in retained context. | Non-positive pricing cannot reach order quantity division. | `tests/strategy/test_value_averaging.py`. |
 
 ## U1 Completion Evidence
 
@@ -141,3 +141,15 @@ the current suite,” not “production behavior is known faulty.”
   tests. The initial Docker run collected 254 tests because it
   used a pre-U3 image; rebuilding the test image was required before accepting
   the container result.
+
+## P1/P2 Follow-up Verification
+
+- `venv/bin/pytest tests/toss/test_api_helpers.py tests/kis/test_broker.py
+  tests/core/test_runtime.py tests/strategy/test_value_averaging.py` passed:
+  106 tests.
+- `venv/bin/ruff check src/broker/toss_broker.py src/broker/kis_broker.py
+  tests/toss/test_api_helpers.py tests/kis/test_broker.py
+  tests/core/test_runtime.py tests/strategy/test_value_averaging.py` passed.
+- `venv/bin/pytest tests` passed: 272 tests.
+- `docker compose build test && docker compose run --rm test` passed: 272
+  tests on Python 3.11.

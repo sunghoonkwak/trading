@@ -211,6 +211,21 @@ def test_threshold_and_missing_price_suppress_orders_but_keep_context():
     assert contexts["NOPRICE"]["cur_price"] == 0
 
 
+@pytest.mark.parametrize("current_price", [0.0, -10.0])
+def test_non_positive_price_never_creates_value_averaging_order(current_price):
+    orders, contexts = value_averaging.calculate_orders(
+        {"SOXL": {"daily_budget": 100, "threshold_rate": 0}},
+        {"SOXL": {"current_value_usd": -20}},
+        {"SOXL": current_price},
+        [],
+        "2026-07-09",
+    )
+
+    assert orders == []
+    assert contexts["SOXL"]["cur_price"] == max(current_price, 0)
+    assert contexts["SOXL"]["daily_target_amount"] == 120
+
+
 @pytest.mark.parametrize(
     ("target", "accumulated", "expected"),
     [(10, 0, 1.0), (0, 0, 0.0), (-10, 0, 0.0)],

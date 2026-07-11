@@ -72,20 +72,28 @@ def get_orderable_usd(symbol: str, order_price: float) -> float:
     )
     if result is None or result.empty or "ovrs_ord_psbl_amt" not in result:
         raise RuntimeError("KIS did not return overseas orderable USD.")
-    return float(result.iloc[0]["ovrs_ord_psbl_amt"])
+    amount = result.iloc[0]["ovrs_ord_psbl_amt"]
+    try:
+        return float(amount)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(
+            f"KIS overseas orderable USD is not numeric: {amount!r}"
+        ) from exc
 
 
 def place_overseas_order(order: StrategyOrder) -> Tuple[bool, str]:
     """Place a single overseas stock order through KIS."""
     if not trading_config.is_kis_rest_api_enabled():
         return False, "KIS REST API is disabled"
+    if order.order_type not in _ORDER_TYPE_TO_KIS:
+        return False, f"Unsupported KIS order type: {order.order_type!r}"
 
     try:
         trenv = _get_kis_auth().getTREnv()
         ord_dv = "buy" if order.side == OrderSide.BUY else "sell"
 
         exec_price = order.price
-        exec_type = _ORDER_TYPE_TO_KIS.get(order.order_type, order.order_type)
+        exec_type = _ORDER_TYPE_TO_KIS[order.order_type]
         if order.side == OrderSide.SELL and order.price == 0:
             exec_price = 0.01
             exec_type = ORDER_TYPE_US_LIMIT

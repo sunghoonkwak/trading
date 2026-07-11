@@ -368,6 +368,26 @@ class TossOrderApiTest(unittest.TestCase):
             },
         )
 
+    def test_toss_broker_rejects_malformed_buying_power(self):
+        from broker import toss_broker
+
+        original_load = toss_broker.load_access_token
+        original_account = toss_broker.get_default_account_seq
+        original_buying_power = toss_broker.get_buying_power
+        try:
+            toss_broker.load_access_token = lambda: "access-token"
+            toss_broker.get_default_account_seq = lambda access_token: 3
+            toss_broker.get_buying_power = lambda **kwargs: {
+                "cashBuyingPower": "not-a-number"
+            }
+
+            with self.assertRaisesRegex(RuntimeError, "cashBuyingPower is not numeric"):
+                toss_broker.get_orderable_usd("AAPL", 200.0)
+        finally:
+            toss_broker.load_access_token = original_load
+            toss_broker.get_default_account_seq = original_account
+            toss_broker.get_buying_power = original_buying_power
+
     def test_toss_broker_maps_strategy_limit_order(self):
         from broker import toss_broker
         from strategy.base import OrderSide, StrategyOrder
@@ -448,6 +468,41 @@ class TossOrderApiTest(unittest.TestCase):
         self.assertEqual(calls["side"], "SELL")
         self.assertEqual(calls["order_type"], "LIMIT")
         self.assertEqual(calls["time_in_force"], "CLS")
+
+    def test_toss_broker_rejects_unknown_order_type_without_request(self):
+        from broker import toss_broker
+        from strategy.base import OrderSide, StrategyOrder
+
+        original_load = toss_broker.load_access_token
+        original_account = toss_broker.get_default_account_seq
+        original_create_order = toss_broker.create_order
+        try:
+            toss_broker.load_access_token = lambda: self.fail(
+                "unsupported order type must not load a Toss token"
+            )
+            toss_broker.get_default_account_seq = lambda access_token: self.fail(
+                "unsupported order type must not look up a Toss account"
+            )
+            toss_broker.create_order = lambda **kwargs: self.fail(
+                "unsupported order type must not reach Toss"
+            )
+
+            success, message = toss_broker.place_order(
+                StrategyOrder(
+                    symbol="AAPL",
+                    side=OrderSide.BUY,
+                    quantity=1,
+                    price=185.12,
+                    order_type="UNSUPPORTED",
+                )
+            )
+        finally:
+            toss_broker.load_access_token = original_load
+            toss_broker.get_default_account_seq = original_account
+            toss_broker.create_order = original_create_order
+
+        self.assertFalse(success)
+        self.assertIn("Unsupported Toss order type", message)
 
     def test_cancel_order_posts_empty_json_body(self):
         from toss.cancel_order import cancel_order
@@ -595,6 +650,79 @@ class TossRateLimitTest(unittest.TestCase):
         )
 
         self.assertEqual(payload["result"], {"ok": True})
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(clock.sleeps, [2.0])
+
+    def test_request_json_uses_backoff_for_malformed_retry_after(self):
+        from toss.client import request_json
+        from toss.rate_limit import TossRateLimitManager
+
+        clock = FakeClock()
+        manager = TossRateLimitManager(
+            sleep_func=clock.sleep,
+            monotonic_func=clock.monotonic,
+            jitter_func=lambda _start, _end: 0.0,
+        )
+        calls = []
+
+        def fake_urlopen(api_request, timeout):
+            calls.append(api_request.full_url)
+            if len(calls) == 1:
+                raise error.HTTPError(
+                    api_request.full_url,
+                    429,
+                    "Too Many Requests",
+                    {"Retry-After": "soon"},
+                    None,
+                )
+            return _response({"result": {"ok": True}})
+
+        request_json(
+            request.Request("https://example.test/api/v1/orders", method="GET"),
+            group="ORDER",
+            action_name="orders",
+            timeout=10.0,
+            urlopen=fake_urlopen,
+            rate_limiter=manager,
+            max_retries=1,
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(clock.sleeps, [1.0])
+
+    def test_request_json_stops_after_retry_limit(self):
+        from toss.client import request_json
+        from toss.rate_limit import TossRateLimitManager
+
+        clock = FakeClock()
+        manager = TossRateLimitManager(
+            sleep_func=clock.sleep,
+            monotonic_func=clock.monotonic,
+            jitter_func=lambda _start, _end: 0.0,
+        )
+        calls = []
+
+        def fake_urlopen(api_request, timeout):
+            calls.append(api_request.full_url)
+            raise error.HTTPError(
+                api_request.full_url,
+                429,
+                "Too Many Requests",
+                {"Retry-After": "2"},
+                None,
+            )
+
+        with self.assertRaisesRegex(RuntimeError, "HTTP 429"):
+            request_json(
+                request.Request("https://example.test/api/v1/orders", method="GET"),
+                group="ORDER",
+                action_name="orders",
+                timeout=10.0,
+                urlopen=fake_urlopen,
+                rate_limiter=manager,
+                max_retries=1,
+            )
+
         self.assertEqual(len(calls), 2)
         self.assertEqual(clock.sleeps, [2.0])
 

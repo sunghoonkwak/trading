@@ -82,6 +82,27 @@ def test_get_orderable_usd_reads_overseas_orderable_amount(monkeypatch):
     assert calls["env_dv"] == "real"
 
 
+def test_get_orderable_usd_rejects_malformed_kis_amount(monkeypatch):
+    monkeypatch.setattr(
+        kis_broker,
+        "ka",
+        SimpleNamespace(getTREnv=lambda: _FakeTREnv()),
+    )
+    monkeypatch.setattr(
+        kis_broker.trading_config,
+        "get_stock_info",
+        lambda ticker: {"market": "AMS"},
+    )
+    monkeypatch.setattr(
+        kis_broker,
+        "inquire_psamount",
+        lambda **kwargs: pd.DataFrame([{"ovrs_ord_psbl_amt": "not-a-number"}]),
+    )
+
+    with pytest.raises(RuntimeError, match="orderable USD is not numeric"):
+        kis_broker.get_orderable_usd("SOXL", 25.40)
+
+
 def test_get_orderable_usd_is_blocked_when_kis_rest_api_disabled(monkeypatch):
     monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
     monkeypatch.setattr(
@@ -125,6 +146,36 @@ def test_place_overseas_order_is_blocked_when_kis_rest_api_disabled(monkeypatch)
 
     assert success is False
     assert "KIS REST API is disabled" in message
+
+
+def test_place_overseas_order_rejects_unknown_order_type(monkeypatch):
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "true")
+    order = StrategyOrder(
+        symbol="TQQQ",
+        side=OrderSide.BUY,
+        quantity=1,
+        price=50.0,
+        order_type="UNSUPPORTED",
+    )
+    monkeypatch.setattr(
+        kis_broker,
+        "_get_kis_auth",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("unsupported order type must not authenticate")
+        ),
+    )
+    monkeypatch.setattr(
+        kis_broker,
+        "_get_order_overseas_stock",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("unsupported order type must not reach KIS")
+        ),
+    )
+
+    success, message = kis_broker.place_overseas_order(order)
+
+    assert success is False
+    assert "Unsupported KIS order type" in message
 
 
 def test_order_admin_fetches_open_orders_without_domestic_by_default(monkeypatch):

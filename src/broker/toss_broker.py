@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Tuple
 
 from strategy.base import OrderSide, StrategyOrder
-from strategy.constants import ORDER_TYPE_LOC
+from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 from toss.account_cache import get_default_account_seq
 from toss.auth import load_access_token
 from toss.create_order import create_order
@@ -32,6 +32,9 @@ def get_orderable_usd(symbol: str, order_price: float) -> float:
 
 
 def _order_payload(order: StrategyOrder) -> Dict[str, str]:
+    if order.order_type not in {ORDER_TYPE_LIMIT, ORDER_TYPE_LOC}:
+        raise ValueError(f"Unsupported Toss order type: {order.order_type!r}")
+
     side = "BUY" if order.side == OrderSide.BUY else "SELL"
     payload = {
         "symbol": order.symbol,
@@ -57,12 +60,13 @@ def _order_payload(order: StrategyOrder) -> Dict[str, str]:
 def place_order(order: StrategyOrder) -> Tuple[bool, str]:
     """Place a single stock order through Toss Invest."""
     try:
+        payload = _order_payload(order)
         access_token = load_access_token()
         account_seq = get_default_account_seq(access_token)
         create_order(
             account_seq=account_seq,
             access_token=access_token,
-            **_order_payload(order),
+            **payload,
         )
         return True, "Success"
     except Exception as exc:

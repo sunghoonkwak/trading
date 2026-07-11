@@ -1,4 +1,5 @@
 import sys
+import threading
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -628,6 +629,52 @@ def test_runtime_off_is_idempotent(monkeypatch):
 
     assert result.success is True
     assert result.already_in_state is True
+    assert system.is_trading_runtime_running() is False
+
+
+def test_runtime_off_waits_for_in_progress_runtime_on(monkeypatch):
+    main = _load_main(monkeypatch)
+    system = main.TradingSystem()
+    startup_entered = threading.Event()
+    allow_startup = threading.Event()
+    stop_called = threading.Event()
+    results = {}
+
+    def block_gsheet_initialization():
+        startup_entered.set()
+        assert allow_startup.wait(timeout=1)
+
+    monkeypatch.setattr(system, "initialize_gsheet_cache", block_gsheet_initialization)
+    monkeypatch.setattr(system, "initialize_kis", lambda: True)
+    monkeypatch.setattr(system, "initialize_toss", lambda: True)
+    monkeypatch.setattr(system, "start_scheduler", lambda: None)
+    monkeypatch.setattr(main.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        system,
+        "_stop_runtime_dependencies",
+        lambda: stop_called.set(),
+    )
+
+    start_thread = threading.Thread(
+        target=lambda: results.setdefault("on", system.start_trading_runtime())
+    )
+    stop_thread = threading.Thread(
+        target=lambda: results.setdefault("off", system.stop_trading_runtime())
+    )
+    start_thread.start()
+    assert startup_entered.wait(timeout=1)
+    stop_thread.start()
+
+    assert not stop_called.wait(timeout=0.05)
+    allow_startup.set()
+    start_thread.join(timeout=1)
+    stop_thread.join(timeout=1)
+
+    assert not start_thread.is_alive()
+    assert not stop_thread.is_alive()
+    assert results["on"].success is True
+    assert results["off"].success is True
+    assert stop_called.is_set()
     assert system.is_trading_runtime_running() is False
 
 
