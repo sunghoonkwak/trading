@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
+from application.order_report_service import OrderReportService
+from application.strategy_run_service import StrategyRunService
 from broker import market_data, strategy_broker
 from data.config_manager import ConfigFile, load_json, save_json
 from strategy import raoeo, rebalancing, value_averaging
@@ -164,6 +166,20 @@ def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
         order.reason,
     )
     return strategy_broker.place_order(order)
+
+
+def get_strategy_run_service() -> StrategyRunService:
+    """Build the application use-case facade over the legacy orchestration."""
+    return StrategyRunService(
+        run_raoeo=run_raoeo_strategy,
+        run_value_averaging=run_va_strategy,
+        run_rebalancing=run_rebalancing_strategy,
+    )
+
+
+def get_order_report_service() -> OrderReportService:
+    """Build the application order-result facade over the configured broker."""
+    return OrderReportService(execute_order=execute_single_order)
 
 
 def _build_base_report(today_str: str, market_status: Dict) -> Dict:
