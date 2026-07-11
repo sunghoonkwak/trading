@@ -44,12 +44,49 @@ from .telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
 # Conversation states
 SELECT_TICKER = 0
 _portfolio_reader: PortfolioReader | None = None
+_get_current_price = None
+_fetch_price = None
+_fetch_open_orders = None
+_get_weight_diffs = None
+_refresh_gsheet_cache = None
 
 
 def configure_portfolio_reader(reader: PortfolioReader) -> None:
     """Inject the portfolio application use case from the composition root."""
     global _portfolio_reader
     _portfolio_reader = reader
+
+
+def configure_portfolio_collaborators(
+    *, get_current_price, fetch_price, fetch_open_orders, get_weight_diffs, refresh_gsheet_cache
+) -> None:
+    """Inject portfolio command collaborators from the composition root."""
+    global _get_current_price, _fetch_price, _fetch_open_orders, _get_weight_diffs, _refresh_gsheet_cache
+    _get_current_price = get_current_price
+    _fetch_price = fetch_price
+    _fetch_open_orders = fetch_open_orders
+    _get_weight_diffs = get_weight_diffs
+    _refresh_gsheet_cache = refresh_gsheet_cache
+
+
+def _current_price(ticker):
+    return (_get_current_price or market_data.get_current_price)(ticker)
+
+
+def _market_price(ticker):
+    return (_fetch_price or market_data.fetch_price)(ticker)
+
+
+def _open_orders():
+    return (_fetch_open_orders or order_admin.fetch_open_orders)()
+
+
+def _weight_diffs(scope):
+    return (_get_weight_diffs or get_weight_diffs)(scope)
+
+
+def _gsheet_refresh():
+    return (_refresh_gsheet_cache or refresh_gsheet_cache)()
 
 
 def _get_portfolio_data():
@@ -168,9 +205,9 @@ def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
 
     # Only try API fallback if merged_data doesn't have valid price
     if cur_price <= 0 and currency == "USD":
-        cur_price = market_data.get_current_price(ticker)
+        cur_price = _current_price(ticker)
         if cur_price <= 0:
-            cur_price = market_data.fetch_price(ticker)
+            cur_price = _market_price(ticker)
 
     # Final fallback to avg_price if still 0
     if cur_price <= 0:
@@ -238,10 +275,10 @@ def format_ticker_not_in_portfolio(ticker: str, portfolio_data: dict) -> str:
     targets = portfolio_data.get("targets", {})
     tgt_weight = targets.get(ticker, 0) * 100
 
-    cur_price = market_data.get_current_price(ticker)
+    cur_price = _current_price(ticker)
 
     if cur_price <= 0:
-        cur_price = market_data.fetch_price(ticker)
+        cur_price = _market_price(ticker)
 
     lines = [
         f"📊 <b>{ticker}</b>",
@@ -644,7 +681,7 @@ async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("[TG] /placed_orders from user")
     try:
         loop = asyncio.get_running_loop()
-        df, num_us, num_kr, num_toss = await loop.run_in_executor(None, order_admin.fetch_open_orders)
+        df, num_us, num_kr, num_toss = await loop.run_in_executor(None, _open_orders)
         msg = format_placed_orders(df, num_us, num_kr, num_toss)
         await wrap_reply(update, msg, parse_mode='HTML')
     except Exception as e:
@@ -656,7 +693,7 @@ async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYP
     logging.info("[TG] /portfolio_weight from user")
     try:
         loop = asyncio.get_running_loop()
-        diffs, total_usd, cash_info = await loop.run_in_executor(None, get_weight_diffs, "all")
+        diffs, total_usd, cash_info = await loop.run_in_executor(None, _weight_diffs, "all")
         msg = format_weight_diffs(diffs, total_usd, cash_info)
         await wrap_reply(update, msg, parse_mode='HTML')
     except Exception as e:
@@ -668,7 +705,7 @@ async def cmd_gsheet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("[TG] /gsheet from user")
     try:
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, refresh_gsheet_cache)
+        result = await loop.run_in_executor(None, _gsheet_refresh)
         status = (
             "✅ <b>GSheet cache updated</b>"
             if result["success"]
