@@ -33,7 +33,7 @@ from telegram.ext import (
     filters,
 )
 
-from application.ports import PortfolioReader
+from application.ports import MarketPriceReader, OpenOrderReader, PortfolioReader
 from broker import market_data, order_admin
 from data.data_service import get_weight_diffs
 from infrastructure.portfolio import refresh_gsheet_cache
@@ -58,13 +58,17 @@ def configure_portfolio_reader(reader: PortfolioReader) -> None:
 
 
 def configure_portfolio_collaborators(
-    *, get_current_price, fetch_price, fetch_open_orders, get_weight_diffs, refresh_gsheet_cache
+    *,
+    market_reader: MarketPriceReader,
+    order_reader: OpenOrderReader,
+    get_weight_diffs,
+    refresh_gsheet_cache,
 ) -> None:
     """Inject portfolio command collaborators from the composition root."""
     global _get_current_price, _fetch_price, _fetch_open_orders, _get_weight_diffs, _refresh_gsheet_cache
-    _get_current_price = get_current_price
-    _fetch_price = fetch_price
-    _fetch_open_orders = fetch_open_orders
+    _get_current_price = market_reader.get_current_price
+    _fetch_price = market_reader.fetch_price
+    _fetch_open_orders = order_reader.fetch_open_orders
     _get_weight_diffs = get_weight_diffs
     _refresh_gsheet_cache = refresh_gsheet_cache
 

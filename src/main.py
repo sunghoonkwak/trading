@@ -46,8 +46,7 @@ class TradingSystem:
     def initialize_telegram(self):
         """Initializes the Telegram bot thread."""
         print("[Startup] Step 1: Initializing Telegram Bot...")
-        from broker.market_data import fetch_price, get_current_price
-        from broker.order_admin import fetch_open_orders
+        from broker import market_data, order_admin
         from data.data_service import get_weight_diffs
         from infrastructure.portfolio import build_portfolio_service, refresh_gsheet_cache
         from interfaces.telegram.rebalancing import configure_strategy_run_service
@@ -64,9 +63,8 @@ class TradingSystem:
 
         configure_portfolio_reader(build_portfolio_service())
         configure_portfolio_collaborators(
-            get_current_price=get_current_price,
-            fetch_price=fetch_price,
-            fetch_open_orders=fetch_open_orders,
+            market_reader=market_data,
+            order_reader=order_admin,
             get_weight_diffs=get_weight_diffs,
             refresh_gsheet_cache=refresh_gsheet_cache,
         )
