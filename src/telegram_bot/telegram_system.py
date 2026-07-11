@@ -75,8 +75,9 @@ def get_runtime_control_guide() -> str:
 
 
 def get_runtime_on_guide() -> str:
+    from interfaces.telegram.portfolio import get_portfolio_commands_desc
+
     from .telegram_memo import get_memo_commands_desc
-    from .telegram_portfolio import get_portfolio_commands_desc
 
     port_desc = get_portfolio_commands_desc().strip()
     memo_desc = get_memo_commands_desc().strip()

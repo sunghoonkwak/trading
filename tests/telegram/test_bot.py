@@ -4,10 +4,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from interfaces.telegram import portfolio as telegram_portfolio
 from interfaces.telegram import rebalancing as telegram_rebalancing
 from interfaces.telegram import strategy as telegram_strategy
 from strategy.base import OrderSide, StrategyOrder, StrategyStatus
-from telegram_bot import telegram_portfolio
 
 
 def test_telegram_strategy_suite_uses_application_facade(monkeypatch):
@@ -489,7 +489,7 @@ def test_portfolio_weight_command_uses_valid_portfolio_scope(monkeypatch):
         "get_running_loop",
         lambda: FakeLoop(),
     )
-    monkeypatch.setattr(telegram_portfolio, "get_weight_diffs", fake_get_weight_diffs)
+    monkeypatch.setattr(telegram_portfolio, "_get_weight_diffs", fake_get_weight_diffs)
     monkeypatch.setattr(
         telegram_portfolio,
         "format_weight_diffs",
@@ -535,7 +535,7 @@ def test_gsheet_command_refreshes_only_gsheet_cache(monkeypatch):
     monkeypatch.setattr(telegram_portfolio, "wrap_reply", fake_reply)
     monkeypatch.setattr(
         telegram_portfolio,
-        "refresh_gsheet_cache",
+            "_refresh_gsheet_cache",
         lambda: {
             "success": True,
             "holdings_count": 3,
@@ -593,8 +593,8 @@ def test_format_weight_diffs_shows_group_total_and_main_ticker(monkeypatch):
 
 def test_ticker_detail_hides_current_price_source(monkeypatch):
     monkeypatch.setattr(
-        telegram_portfolio.market_data,
-        "get_current_price",
+        telegram_portfolio,
+        "_get_current_price",
         lambda ticker: 100.0,
     )
 
@@ -621,8 +621,8 @@ def test_ticker_detail_hides_current_price_source(monkeypatch):
 
 def test_ticker_not_in_portfolio_hides_current_price_source(monkeypatch):
     monkeypatch.setattr(
-        telegram_portfolio.market_data,
-        "get_current_price",
+        telegram_portfolio,
+        "_get_current_price",
         lambda ticker: 7460.0,
     )
 
