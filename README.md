@@ -72,14 +72,13 @@ venv/bin/ruff check src tests --fix
 trading/
 ├── src/
 │   ├── main.py                  # Docker 런타임 엔트리포인트
-│   ├── core/                    # 상수, 설정, 웹 서버, 락, 표시 상태
-│   ├── kis/                     # KIS REST/WebSocket, 공식 API 래퍼
-│   ├── toss/                    # Toss Invest Open API helper
-│   ├── broker/                  # KIS/Toss facade와 전략 broker 선택
-│   ├── strategy/                # RAOEO, VA, 리밸런싱, 실행 서비스
-│   ├── scheduler/               # 정기 리포트와 주기적 리밸런싱 작업
-│   ├── telegram_bot/            # Telegram 명령어와 알림
-│   ├── data/                    # 설정/포트폴리오 데이터 로딩과 비중 계산
+│   ├── interfaces/              # Telegram/scheduler/web transport adapter
+│   ├── application/             # portfolio·strategy·order use case와 ports
+│   ├── domain/                  # 전략 규칙, portfolio 변환, 값 타입
+│   ├── infrastructure/          # KIS, Toss, portfolio source/cache adapter
+│   ├── core/                    # 런타임 기술 유틸리티와 기존 web surface
+│   ├── broker/, data/, strategy/ # 이전 중인 compatibility/adapter surface
+│   ├── telegram_bot/            # Telegram bot lifecycle와 남은 handler surface
 │   ├── state/                   # 시장/시스템 상태 캐시
 │   ├── utils/                   # 로깅, 포맷, 시장 시간 유틸리티
 │   └── web/                     # 웹 대시보드 정적 파일과 인증서 위치
