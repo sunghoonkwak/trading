@@ -364,3 +364,33 @@ Then introduce contracts and concrete adapters, migrate one vertical use case at
 - Compatibility modules have been removed according to the compatibility register; no production module under `src/` imports a legacy package.
 - Documentation accurately maps the final layers and all abandoned migration code or unused shims are removed.
 - Ruff, mypy, the full host suite, and the Docker test suite pass.
+
+<!--
+Execution handoff (2026-07-11)
+
+Completed commits:
+- 06d4f80 refactor(architecture): add layered seams
+- 857ea8c refactor(portfolio): add application service
+- 8b13c46 refactor(portfolio): remove worker callback
+
+Completed units: U1, U2, U3, U9; U4 is partially complete.
+
+Key decisions already implemented:
+- The vendor distribution is at src/infrastructure/kis/kis_api/.
+  src/kis/kis_api/ is a compatibility import shim only.
+- Do not add files under the vendor tree. WebSocket helper code is at
+  src/infrastructure/kis/ws_parser.py; only the required compatibility patch
+  remains in kis_auth.py.
+- KIS vendor hooks are injected from infrastructure; do not restore vendor
+  imports of broker/core/state/Telegram modules.
+- Toss implementations live under src/infrastructure/toss/; src/toss/ is
+  compatibility-only.
+- PortfolioService exists at src/application/portfolio_service.py and the
+  KIS worker no longer dispatches GET_PORTFOLIO to application/data code.
+
+Resume order: finish U4 source/cache adapters and direct application ports,
+then U5, U6, U7, and U8. Preserve fail-closed startup, order policy, public
+monkeypatch seams, and no live calls. Last full offline verification before
+the U4 follow-up was venv/bin/pytest tests: 285 passed. Re-run it before the
+next commit because U4 follow-up changed portfolio retrieval afterward.
+-->
