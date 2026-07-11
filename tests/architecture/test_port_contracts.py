@@ -5,6 +5,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from application.ports import (
     CorrelationId,
+    MarketPriceReader,
+    OpenOrderReader,
     OperationResult,
     PortfolioReader,
     PortfolioSource,
@@ -63,3 +65,21 @@ def test_order_executor_contract_accepts_a_broker_adapter():
 
     executor: StrategyOrderExecutor = Executor()
     assert executor.execute("SOXL") == ("SOXL", "accepted")
+
+
+def test_market_and_open_order_reader_contracts_accept_adapters():
+    class Market:
+        def get_current_price(self, _ticker):
+            return 10.0
+
+        def fetch_price(self, _ticker):
+            return 11.0
+
+    class Orders:
+        def fetch_open_orders(self):
+            return (None, 1, 2, 3)
+
+    market: MarketPriceReader = Market()
+    orders: OpenOrderReader = Orders()
+    assert (market.get_current_price("SOXL"), market.fetch_price("SOXL")) == (10.0, 11.0)
+    assert orders.fetch_open_orders() == (None, 1, 2, 3)

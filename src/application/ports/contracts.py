@@ -32,6 +32,23 @@ class StrategyOrderExecutor(Protocol):
         """Return the established accepted/rejected order result."""
 
 
+class MarketPriceReader(Protocol):
+    """Read current prices for transport adapters without a broker import."""
+
+    def get_current_price(self, ticker: str) -> float:
+        """Return a cached or current market price."""
+
+    def fetch_price(self, ticker: str) -> float:
+        """Fetch a current market price when no cached value exists."""
+
+
+class OpenOrderReader(Protocol):
+    """Read the established open-order report for a transport adapter."""
+
+    def fetch_open_orders(self) -> tuple[Any, int, int, int | None]:
+        """Return open orders and the established broker count breakdown."""
+
+
 @dataclass(frozen=True)
 class OperationResult(Generic[T]):
     """A redaction-safe result returned by a port without raising secrets."""
