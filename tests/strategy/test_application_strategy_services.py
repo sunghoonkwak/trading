@@ -93,3 +93,17 @@ def test_history_service_removes_only_the_requested_date_and_persists_it():
 
     assert service.clear_date("2026-07-10") == {"date": "2026-07-10", "removed": True}
     assert saved == [[{"date": "2026-07-11"}]]
+
+
+def test_history_service_upserts_strategy_and_preserves_cash_funding_results():
+    saved = []
+    service = StrategyHistoryService(
+        load=lambda: [{"date": "2026-07-11", "raoeo": {"cash_funding_results": ["sale"]}}],
+        save=lambda history: saved.append(history) or True,
+    )
+
+    service.save_strategy("2026-07-11", "raoeo", {"orders": []})
+
+    assert saved == [[
+        {"date": "2026-07-11", "raoeo": {"orders": [], "cash_funding_results": ["sale"]}}
+    ]]

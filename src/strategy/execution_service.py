@@ -374,25 +374,14 @@ def _save_strategy_to_history(
     strategy_data: Dict
 ):
     """Save a strategy's result to the unified history file."""
-    hist_data = _load_history()
-
-    # Find or create today's entry
-    today_entry = _get_today_entry(hist_data, today_str)
-    if not today_entry:
-        today_entry = {"date": today_str}
-        hist_data.insert(0, today_entry)
-
-    # Update strategy section
-    previous_data = today_entry.get(strategy_key, {})
-    if strategy_key == "raoeo" and previous_data.get("cash_funding_results"):
-        strategy_data.setdefault(
-            "cash_funding_results",
-            previous_data["cash_funding_results"],
-        )
-    today_entry[strategy_key] = strategy_data
-
-    # Keep last 200 entries
-    save_json(ConfigFile.STRATEGY_HISTORY, hist_data[:200])
+    StrategyHistoryService(
+        load=_load_history,
+        save=lambda history: save_json(ConfigFile.STRATEGY_HISTORY, history),
+    ).save_strategy(
+        today_str,
+        strategy_key,
+        strategy_data,
+    )
 
 
 def _build_strategy_history_data(

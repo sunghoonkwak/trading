@@ -116,3 +116,24 @@ class StrategyHistoryService:
         if removed and not self._save(updated):
             raise RuntimeError("Failed to save strategy_history.json.")
         return {"date": target_date, "removed": removed}
+
+    def save_strategy(
+        self,
+        date: str,
+        strategy_key: str,
+        strategy_data: dict[str, Any],
+    ) -> None:
+        """Upsert one strategy result and retain the newest 200 dates."""
+        history = self.load_history()
+        entry = next(
+            (item for item in history if isinstance(item, dict) and item.get("date") == date),
+            None,
+        )
+        if entry is None:
+            entry = {"date": date}
+            history.insert(0, entry)
+        previous = entry.get(strategy_key, {})
+        if strategy_key == "raoeo" and previous.get("cash_funding_results"):
+            strategy_data.setdefault("cash_funding_results", previous["cash_funding_results"])
+        entry[strategy_key] = strategy_data
+        self._save(history[:200])
