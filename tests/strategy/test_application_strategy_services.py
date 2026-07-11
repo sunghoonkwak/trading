@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from application.order_report_service import OrderReportService
-from application.strategy_run_service import StrategyRunService
+from application.strategy_run_service import StrategyMarketDataService, StrategyRunService
 from domain.strategy.base import OrderSide, StrategyOrder
 
 
@@ -44,3 +44,22 @@ def test_legacy_execution_service_exposes_application_use_case_facade(monkeypatc
     service = execution_service.get_strategy_run_service()
 
     assert service.run_raoeo() == {"strategy": "raoeo"}
+
+
+def test_market_data_service_uses_injected_portfolio_config_and_price_ports():
+    requested = []
+    service = StrategyMarketDataService(
+        load_portfolio=lambda *, force_refresh, scope: requested.append(
+            (force_refresh, scope)
+        ) or {"merged_data": {"TQQQ": {"cur_price": 100.0}}},
+        load_strategy_config=lambda: {"raoeo": {"targets": {"TQQQ": {}, "SOXL": {}}}},
+        fetch_prices=lambda tickers: {ticker: 10.0 for ticker in tickers},
+        resolve_price=lambda _ticker, holding, _prices: holding.get("cur_price", 0.0),
+        strategy_broker_name=lambda: "toss",
+    )
+
+    holdings, prices = service.get_market_data(force_refresh=True)
+
+    assert requested == [(True, "toss")]
+    assert holdings == {"TQQQ": {"cur_price": 100.0}}
+    assert prices == {"TQQQ": 100.0, "SOXL": 10.0}

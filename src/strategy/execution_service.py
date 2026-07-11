@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 from application.order_report_service import OrderReportService
-from application.strategy_run_service import StrategyRunService
+from application.strategy_run_service import StrategyMarketDataService, StrategyRunService
 from broker import market_data, strategy_broker
 from data.config_manager import ConfigFile, load_json, save_json
 from strategy import raoeo, rebalancing, value_averaging
@@ -90,39 +90,23 @@ def get_market_data(
     Fetch current portfolio and prices for all configured strategy targets.
     Returns: (portfolio_holdings, current_prices_map)
     """
+    return get_strategy_market_data_service().get_market_data(
+        force_refresh=force_refresh,
+        include_cash_ticker=include_cash_ticker,
+    )
+
+
+def get_strategy_market_data_service() -> StrategyMarketDataService:
+    """Build the application market-data service from legacy adapters."""
     from data.data_service import get_portfolio_data
 
-    portfolio = get_portfolio_data(
-        force_refresh=force_refresh,
-        scope=strategy_broker.get_strategy_broker_name(),
+    return StrategyMarketDataService(
+        load_portfolio=get_portfolio_data,
+        load_strategy_config=lambda: load_json(ConfigFile.STRATEGY_CONFIG, default={}),
+        fetch_prices=market_data.fetch_prices,
+        resolve_price=resolve_current_price,
+        strategy_broker_name=strategy_broker.get_strategy_broker_name,
     )
-    holdings = portfolio.get('merged_data', {})
-
-    strategy_config = load_json(ConfigFile.STRATEGY_CONFIG, default={})
-    raoeo_conf = strategy_config.get('raoeo', {}).get('targets', {})
-    va_conf = strategy_config.get('value_averaging', {}).get('targets', {})
-    reb_conf = strategy_config.get('rebalancing', {}).get('assets', [])
-    cash_ticker = strategy_config.get("cash_ticker", "")
-
-    reb_tickers = {a['ticker'] for a in reb_conf}
-    all_tickers = set(raoeo_conf.keys()) | set(va_conf.keys()) | reb_tickers
-    if include_cash_ticker and cash_ticker:
-        all_tickers.add(cash_ticker)
-    current_prices = {}
-    missing_price_tickers = []
-
-    for t in all_tickers:
-        holding = holdings.get(t, {})
-        price = resolve_current_price(t, holding, {})
-        if price > 0:
-            current_prices[t] = price
-        else:
-            missing_price_tickers.append(t)
-
-    if missing_price_tickers:
-        current_prices.update(market_data.fetch_prices(missing_price_tickers))
-
-    return holdings, current_prices
 
 
 def get_orderable_usd(symbol: str, order_price: float) -> float:
