@@ -21,9 +21,17 @@ from utils.market_utils import get_fear_and_greed
 # =============================================================================
 
 def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
+    return build_portfolio_service().get_portfolio_data(
+        force_refresh=force_refresh,
+        scope=scope,
+    )
+
+
+def build_portfolio_service() -> PortfolioService:
+    """Compose the portfolio use case from the legacy infrastructure adapters."""
     from data.calculate_weights import calculate_target_weights
 
-    service = PortfolioService(
+    return PortfolioService(
         is_kis_ready=is_kis_ready,
         portfolio_source=IntegratedPortfolioSource(),
         save_portfolio=lambda value: save_json(ConfigFile.PORTFOLIO, value),
@@ -32,7 +40,6 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
         fear_and_greed=get_fear_and_greed,
         publish_alert=add_alert,
     )
-    return service.get_portfolio_data(force_refresh=force_refresh, scope=scope)
 
 
 def _apply_scope_filter(data: Dict, scope: str) -> Dict:
