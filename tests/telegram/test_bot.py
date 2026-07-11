@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from strategy.base import OrderSide, StrategyOrder, StrategyStatus
-from telegram_bot import telegram_portfolio, telegram_strategy
+from telegram_bot import telegram_portfolio, telegram_rebalancing, telegram_strategy
 
 
 def test_telegram_strategy_suite_uses_application_facade(monkeypatch):
@@ -16,6 +16,16 @@ def test_telegram_strategy_suite_uses_application_facade(monkeypatch):
     monkeypatch.setattr(telegram_strategy, "get_strategy_run_service", lambda: Service())
 
     assert telegram_strategy.run_strategy_suite(execute=True) == ({"execute": True}, {})
+
+
+def test_telegram_rebalancing_uses_application_facade(monkeypatch):
+    class Service:
+        def run_rebalancing(self, *, execute):
+            return {"execute": execute}
+
+    monkeypatch.setattr(telegram_rebalancing, "get_strategy_run_service", lambda: Service())
+
+    assert telegram_rebalancing.run_rebalancing_strategy(execute=True) == {"execute": True}
 
 
 def test_strategy_command_shows_cash_funding_summary(monkeypatch):

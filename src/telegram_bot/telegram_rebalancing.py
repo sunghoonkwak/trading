@@ -18,7 +18,7 @@ from telegram.ext import (
 )
 
 from strategy.base import StrategyStatus
-from strategy.execution_service import run_rebalancing_strategy
+from strategy.execution_service import get_strategy_run_service
 from strategy.report_formatter import format_rebalancing_report
 
 from .telegram_system import (
@@ -29,6 +29,11 @@ from .telegram_system import (
 from .telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
 
 REB_CONFIRM = 0
+
+
+def run_rebalancing_strategy(execute: bool = False):
+    """Compatibility seam for the application rebalancing use case."""
+    return get_strategy_run_service().run_rebalancing(execute=execute)
 
 def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
     if has_orders:
