@@ -4,8 +4,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from interfaces.telegram import rebalancing as telegram_rebalancing
 from strategy.base import OrderSide, StrategyOrder, StrategyStatus
-from telegram_bot import telegram_portfolio, telegram_rebalancing, telegram_strategy
+from telegram_bot import telegram_portfolio, telegram_strategy
 
 
 def test_telegram_strategy_suite_uses_application_facade(monkeypatch):
