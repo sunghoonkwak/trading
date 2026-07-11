@@ -83,3 +83,36 @@ class StrategyMarketDataService:
         if missing:
             prices.update(self._fetch_prices(missing))
         return holdings, prices
+
+
+class StrategyHistoryService:
+    """Manage strategy-history records through injected persistence ports."""
+
+    def __init__(
+        self,
+        *,
+        load: Callable[[], list[dict[str, Any]]],
+        save: Callable[[list[dict[str, Any]]], bool],
+    ) -> None:
+        self._load = load
+        self._save = save
+
+    def load_history(self) -> list[dict[str, Any]]:
+        """Load the established list-shaped history document."""
+        history = self._load()
+        if not isinstance(history, list):
+            raise ValueError("strategy_history.json must contain a list.")
+        return history
+
+    def clear_date(self, target_date: str) -> dict[str, Any]:
+        """Remove one date's complete strategy history entry."""
+        history = self.load_history()
+        updated = [
+            entry
+            for entry in history
+            if not (isinstance(entry, dict) and entry.get("date") == target_date)
+        ]
+        removed = len(updated) != len(history)
+        if removed and not self._save(updated):
+            raise RuntimeError("Failed to save strategy_history.json.")
+        return {"date": target_date, "removed": removed}

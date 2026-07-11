@@ -4,7 +4,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from application.order_report_service import OrderReportService
-from application.strategy_run_service import StrategyMarketDataService, StrategyRunService
+from application.strategy_run_service import (
+    StrategyHistoryService,
+    StrategyMarketDataService,
+    StrategyRunService,
+)
 from domain.strategy.base import OrderSide, StrategyOrder
 
 
@@ -78,3 +82,14 @@ def test_market_data_service_uses_injected_portfolio_config_and_price_ports():
     assert requested == [(True, "toss")]
     assert holdings == {"TQQQ": {"cur_price": 100.0}}
     assert prices == {"TQQQ": 100.0, "SOXL": 10.0}
+
+
+def test_history_service_removes_only_the_requested_date_and_persists_it():
+    saved = []
+    service = StrategyHistoryService(
+        load=lambda: [{"date": "2026-07-10"}, {"date": "2026-07-11"}],
+        save=lambda history: saved.append(history) or True,
+    )
+
+    assert service.clear_date("2026-07-10") == {"date": "2026-07-10", "removed": True}
+    assert saved == [[{"date": "2026-07-11"}]]

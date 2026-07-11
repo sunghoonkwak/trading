@@ -15,7 +15,11 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 from application.order_report_service import OrderReportService
-from application.strategy_run_service import StrategyMarketDataService, StrategyRunService
+from application.strategy_run_service import (
+    StrategyHistoryService,
+    StrategyMarketDataService,
+    StrategyRunService,
+)
 from broker import market_data, strategy_broker
 from data.config_manager import ConfigFile, load_json, save_json
 from strategy import raoeo, rebalancing, value_averaging
@@ -187,7 +191,15 @@ def _build_base_report(today_str: str, market_status: Dict) -> Dict:
 
 def _load_history() -> list:
     """Load unified strategy history."""
-    return load_json(ConfigFile.STRATEGY_HISTORY, default=[])
+    return get_strategy_history_service().load_history()
+
+
+def get_strategy_history_service() -> StrategyHistoryService:
+    """Build the application history service from the legacy JSON adapter."""
+    return StrategyHistoryService(
+        load=lambda: load_json(ConfigFile.STRATEGY_HISTORY, default=[]),
+        save=lambda history: save_json(ConfigFile.STRATEGY_HISTORY, history),
+    )
 
 
 def normalize_strategy_history_date(raw: str = "") -> str:
@@ -213,22 +225,7 @@ def normalize_strategy_history_date(raw: str = "") -> str:
 def clear_strategy_history_for_date(target_date: str = "") -> Dict[str, Any]:
     """Remove the full strategy history entry for a date."""
     target_date = normalize_strategy_history_date(target_date)
-    hist_data = _load_history()
-    if not isinstance(hist_data, list):
-        raise ValueError("strategy_history.json must contain a list.")
-
-    updated = []
-    removed = False
-    for entry in hist_data:
-        if isinstance(entry, dict) and entry.get("date") == target_date:
-            removed = True
-            continue
-        updated.append(entry)
-
-    if removed and not save_json(ConfigFile.STRATEGY_HISTORY, updated):
-        raise RuntimeError("Failed to save strategy_history.json.")
-
-    return {"date": target_date, "removed": removed}
+    return get_strategy_history_service().clear_date(target_date)
 
 
 def _get_today_entry(hist_data: list, today_str: str) -> Optional[Dict]:
