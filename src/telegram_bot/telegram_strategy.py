@@ -24,9 +24,9 @@ from strategy.constants import TZ_ET
 from strategy.execution_service import (
     clear_strategy_history_for_date,
     execute_raoeo_cash_funding,
+    get_strategy_run_service,
     normalize_strategy_history_date,
     prepare_raoeo_cash_funding,
-    run_strategy_suite,
     save_raoeo_cash_funding_result,
 )
 from strategy.report_formatter import format_strategy_report
@@ -39,6 +39,11 @@ from .telegram_system import (
 from .telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
 
 STRATEGY_CONFIRM = 0
+
+
+def run_strategy_suite(execute: bool = False):
+    """Compatibility seam for the shared application strategy use case."""
+    return get_strategy_run_service().run_suite(execute=execute)
 
 def build_confirm_keyboard(
     has_orders: bool,

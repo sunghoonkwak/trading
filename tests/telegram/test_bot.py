@@ -8,6 +8,16 @@ from strategy.base import OrderSide, StrategyOrder, StrategyStatus
 from telegram_bot import telegram_portfolio, telegram_strategy
 
 
+def test_telegram_strategy_suite_uses_application_facade(monkeypatch):
+    class Service:
+        def run_suite(self, *, execute):
+            return ({"execute": execute}, {})
+
+    monkeypatch.setattr(telegram_strategy, "get_strategy_run_service", lambda: Service())
+
+    assert telegram_strategy.run_strategy_suite(execute=True) == ({"execute": True}, {})
+
+
 def test_strategy_command_shows_cash_funding_summary(monkeypatch):
     buy_order = StrategyOrder("SOXL", OrderSide.BUY, 4, 250.0, "Buy Normal")
     funding_order = StrategyOrder("BIL", OrderSide.SELL, 3, 99.0, "cash funding")
