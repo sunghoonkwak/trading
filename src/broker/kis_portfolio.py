@@ -6,12 +6,14 @@ from typing import Any, Dict, List, Optional, TypedDict
 import pandas as pd
 
 from core.trading_config import is_kis_domestic_enabled, is_kis_rest_api_enabled
-from kis.kis_api import kis_auth as ka
-from kis.kis_api.domestic_stock.inquire_balance.inquire_balance import inquire_balance
-from kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import (
+from infrastructure.kis.kis_api import kis_auth as ka
+from infrastructure.kis.kis_api.domestic_stock.inquire_balance.inquire_balance import (
+    inquire_balance,
+)
+from infrastructure.kis.kis_api.overseas_stock.inquire_present_balance.inquire_present_balance import (
     inquire_present_balance,
 )
-from kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import (
+from infrastructure.kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import (
     inquire_psamount,
 )
 

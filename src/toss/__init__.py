@@ -1,1 +1,1 @@
-"""Toss Invest Open API helpers."""
+"""Compatibility package for migrated Toss infrastructure adapters."""

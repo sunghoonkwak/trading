@@ -1,7 +1,7 @@
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-extend-exclude = ["src/kis/kis_api"]
+extend-exclude = ["src/infrastructure/kis/kis_api"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "B"]
@@ -101,11 +101,11 @@ ignore_missing_imports = true
 show_error_codes = true
 pretty = true
 explicit_package_bases = true
-exclude = ["^src/kis/kis_api/"]
+exclude = ["^src/infrastructure/kis/kis_api/"]
 
 [tool.coverage.run]
 source = ["src"]
-omit = ["src/kis/kis_api/*"]
+omit = ["src/infrastructure/kis/kis_api/*"]
 
 [tool.coverage.report]
 fail_under = 60

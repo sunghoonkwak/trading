@@ -84,9 +84,10 @@ Many modules have matching `.md` notes beside `.py` files. Update them when
 behavior or operational expectations change. Do not hand-edit generated or
 vendor-like KIS endpoint wrappers unless intentionally scoped.
 
-Treat `src/kis/kis_api/**` as the official Korea Investment Securities API
-distribution boundary. Keep application policy, orchestration, and testing
-seams outside that tree, preferably in `src/broker/`, `src/strategy/`,
+Treat `src/infrastructure/kis/kis_api/**` as the official Korea Investment
+Securities API distribution boundary. `src/kis/kis_api/**` is a compatibility
+import shim only. Keep application policy, orchestration, and testing seams
+outside the vendor tree, preferably in `src/broker/`, `src/strategy/`,
 `src/data/`, or other app-owned modules. Changes inside the official KIS tree
 should be limited to deliberate compatibility/security patches that are worth
 reapplying during upstream updates.

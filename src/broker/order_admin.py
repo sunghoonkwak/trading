@@ -13,16 +13,16 @@ from core.display import add_alert, clear_order_states, update_order_state
 
 
 def _get_trenv():
-    from kis.kis_api import kis_auth as ka
+    from infrastructure.kis.kis_api import kis_auth as ka
 
     return ka.getTREnv()
 
 
 def _get_domestic_order_endpoints():
-    from kis.kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import (
+    from infrastructure.kis.kis_api.domestic_stock.inquire_psbl_rvsecncl.inquire_psbl_rvsecncl import (
         inquire_psbl_rvsecncl,
     )
-    from kis.kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import (
+    from infrastructure.kis.kis_api.domestic_stock.order_rvsecncl.order_rvsecncl import (
         order_rvsecncl,
     )
 
@@ -30,10 +30,10 @@ def _get_domestic_order_endpoints():
 
 
 def _get_overseas_order_endpoints():
-    from kis.kis_api.overseas_stock.inquire_nccs.inquire_nccs import (
+    from infrastructure.kis.kis_api.overseas_stock.inquire_nccs.inquire_nccs import (
         inquire_nccs as inquire_nccs_overseas,
     )
-    from kis.kis_api.overseas_stock.order_rvsecncl.order_rvsecncl import (
+    from infrastructure.kis.kis_api.overseas_stock.order_rvsecncl.order_rvsecncl import (
         order_rvsecncl as order_rvsecncl_overseas,
     )
 

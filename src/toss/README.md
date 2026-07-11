@@ -1,7 +1,7 @@
-# Toss Invest Helpers (`src/toss/`)
+# Toss Invest Compatibility Exports (`src/toss/`)
 
-이 패키지는 Toss Invest Open API를 호출하는 작은 CLI/helper 함수들을
-담고 있습니다.
+이 경로는 기존 스크립트와 테스트를 위한 호환 export입니다. 실제 Toss
+Open API 어댑터 구현은 `src/infrastructure/toss/`에 있습니다.
 
 ## Reference
 
@@ -45,7 +45,7 @@ schema에서 다음 항목을 확인합니다.
 - shared manager는 그룹별 Toss TPS 제한과 별도로, 연속 Toss API 요청 사이에
   전역 최소 1초 간격을 둡니다. 전략 실행에서 주문 여러 개가 한 번에 발생해도
   Toss로 나가는 shared helper 요청은 이 간격을 지켜 직렬화됩니다.
-- `toss.client.request_json()`은 최종 Toss API query 실패를 RuntimeError로
+- `infrastructure.toss.client.request_json()`은 최종 Toss API query 실패를 RuntimeError로
   올리기 전에 Telegram 알림을 전송합니다. 429 재시도 중간 실패는 알림을
   보내지 않고, 재시도 후에도 실패한 경우에만 알림을 보냅니다.
 - shared Toss request helper는 요청/응답 덤프를 DEBUG 로그로 남깁니다.

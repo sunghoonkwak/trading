@@ -305,7 +305,9 @@ venv/bin/pip-audit -r requirements.txt
 ```
 
 mutation test는 `pyproject.toml`에 지정된 `src/strategy/`와 `src/broker/`만
-대상으로 하며, 공식 KIS 배포 코드인 `src/kis/kis_api/`는 포함하지 않습니다.
+대상으로 하며, 공식 KIS 배포 코드인
+`src/infrastructure/kis/kis_api/`는 포함하지 않습니다. 기존
+`src/kis/kis_api/`는 호환 import shim입니다.
 먼저 다음의 제한된 plumbing smoke로 mutation 생성, 테스트 수집, 단일 mutant
 실행이 정상인지 확인합니다.
 

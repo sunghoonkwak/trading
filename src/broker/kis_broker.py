@@ -24,7 +24,7 @@ _ORDER_TYPE_TO_KIS = {
 def _get_kis_auth():
     global ka
     if ka is None:
-        from kis.kis_api import kis_auth
+        from infrastructure.kis.kis_api import kis_auth
 
         ka = kis_auth
     return ka
@@ -33,7 +33,7 @@ def _get_kis_auth():
 def _get_inquire_psamount():
     global inquire_psamount
     if inquire_psamount is None:
-        from kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import (
+        from infrastructure.kis.kis_api.overseas_stock.inquire_psamount.inquire_psamount import (
             inquire_psamount as imported_inquire_psamount,
         )
 
@@ -44,7 +44,7 @@ def _get_inquire_psamount():
 def _get_order_overseas_stock():
     global order_overseas_stock
     if order_overseas_stock is None:
-        from kis.kis_api.overseas_stock.order.order import (
+        from infrastructure.kis.kis_api.overseas_stock.order.order import (
             order as imported_order_overseas_stock,
         )
 

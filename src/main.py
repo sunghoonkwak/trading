@@ -89,6 +89,9 @@ class TradingSystem:
         """Initializes KIS API and WebSocket connection."""
         print("[Startup] Step 2: Initializing KIS API...")
         try:
+            from infrastructure.kis import configure_kis_vendor_hooks
+
+            configure_kis_vendor_hooks()
             from broker.kis_worker import (
                 initialize_websocket_and_pipe,
                 is_kis_thread_running,
@@ -153,8 +156,11 @@ class TradingSystem:
         """Initializes Toss access token for today's trading session."""
         print("[Startup] Step 3: Initializing Toss API...")
         try:
+            from infrastructure.toss.client import configure_failure_notifier
+            from telegram_bot.telegram_utils import send_notification
             from toss.auth import ensure_daily_token
 
+            configure_failure_notifier(send_notification)
             token_path = ensure_daily_token()
             logging.info(f"[Startup] Toss token ready: {token_path}")
             print("[Startup] ✓ Toss API token ready")

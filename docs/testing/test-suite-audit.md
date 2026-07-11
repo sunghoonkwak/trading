@@ -95,6 +95,11 @@ the current suite,” not “production behavior is known faulty.”
 ## U1 Completion Evidence
 
 - All 26 discovered `test_*.py` modules are represented in the inventory.
+- `tests/architecture/test_boundaries.py` statically checks the target layer
+  rules and the KIS vendor boundary at
+  `src/infrastructure/kis/kis_api/`. U3 retires the temporary allowance:
+  `LEGACY_IMPORT_ALLOWLIST_VERSION = 2` is explicitly empty, and vendor
+  imports are checked in a subprocess for application-owned side effects.
 - C1–C3 have a named surviving behavior contract; no other deletion candidate
   is proposed.
 - Large KIS broker, strategy workflow, portfolio integration, architecture,

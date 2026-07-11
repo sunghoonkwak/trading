@@ -1,7 +1,7 @@
 # KIS Broker Facade (`src/broker/kis_broker.py`)
 
 이 모듈은 앱 소유 영역에서 공식 KIS API wrapper를 감싸는 얇은
-facade입니다. `src/kis/kis_api/**`는 공식 배포판 경계로 유지하고,
+facade입니다. `src/infrastructure/kis/kis_api/**`는 공식 배포판 경계로 유지하고,
 전략 실행 정책과 테스트 seam은 이 모듈에서 제공합니다.
 
 ## Responsibilities
