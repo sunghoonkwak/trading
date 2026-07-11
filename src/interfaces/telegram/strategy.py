@@ -19,8 +19,8 @@ from telegram.ext import (
     TypeHandler,
 )
 
-from interfaces.telegram.report_formatter import format_strategy_report
 from domain.strategy.base import StrategyStatus
+from interfaces.telegram.report_formatter import format_strategy_report
 from strategy.constants import TZ_ET
 from strategy.execution_service import (
     clear_strategy_history_for_date,

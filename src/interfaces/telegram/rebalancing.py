@@ -17,8 +17,8 @@ from telegram.ext import (
     TypeHandler,
 )
 
-from interfaces.telegram.report_formatter import format_rebalancing_report
 from domain.strategy.base import StrategyStatus
+from interfaces.telegram.report_formatter import format_rebalancing_report
 from strategy.execution_service import get_strategy_run_service
 from telegram_bot.telegram_system import (
     clear_runtime_confirmation_pending,
