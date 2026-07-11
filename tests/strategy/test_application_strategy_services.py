@@ -18,11 +18,11 @@ def test_strategy_run_service_delegates_each_use_case_to_injected_port():
 
     assert service.run_raoeo(execute=False) == {"status": "skipped"}
     assert service.run_value_averaging(execute=True) == {"status": "skipped"}
-    assert service.run_rebalancing(execute=False) == {"status": "skipped"}
+    assert service.run_rebalancing(execute=False, orderable_cache_key="2026-07-11") == {"status": "skipped"}
     assert calls == [
         ("raoeo", {"execute": False}),
         ("va", {"execute": True}),
-        ("rebalancing", {"execute": False}),
+        ("rebalancing", {"execute": False, "orderable_cache_key": "2026-07-11"}),
     ]
 
 

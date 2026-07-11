@@ -18,14 +18,14 @@ class StrategyRunService:
         self._run_value_averaging = run_value_averaging
         self._run_rebalancing = run_rebalancing
 
-    def run_raoeo(self, *, execute: bool = False) -> dict[str, Any]:
+    def run_raoeo(self, *, execute: bool = False, **kwargs: Any) -> dict[str, Any]:
         """Run the configured RAOEO strategy."""
-        return self._run_raoeo(execute=execute)
+        return self._run_raoeo(execute=execute, **kwargs)
 
-    def run_value_averaging(self, *, execute: bool = False) -> dict[str, Any]:
+    def run_value_averaging(self, *, execute: bool = False, **kwargs: Any) -> dict[str, Any]:
         """Run the configured value-averaging strategy."""
-        return self._run_value_averaging(execute=execute)
+        return self._run_value_averaging(execute=execute, **kwargs)
 
-    def run_rebalancing(self, *, execute: bool = False) -> dict[str, Any]:
+    def run_rebalancing(self, *, execute: bool = False, **kwargs: Any) -> dict[str, Any]:
         """Run the configured rebalancing strategy."""
-        return self._run_rebalancing(execute=execute)
+        return self._run_rebalancing(execute=execute, **kwargs)
