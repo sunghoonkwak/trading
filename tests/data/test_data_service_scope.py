@@ -73,8 +73,11 @@ def test_data_service_passes_scope_to_portfolio_sources_without_worker_dispatch(
 
     captured = {}
 
-    monkeypatch.setattr(data_service, "is_kis_ready", lambda: True)
-    monkeypatch.setattr(data_service, "add_alert", lambda message, level: None)
+    class Source:
+        def get_portfolio_data(self, force_refresh=False, scope="all"):
+            return integration.get_integrated_portfolio(scope=scope)
+
+    monkeypatch.setattr(data_service, "build_portfolio_service", lambda: Source())
     monkeypatch.setattr(
         integration,
         "get_integrated_portfolio",

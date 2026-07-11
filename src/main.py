@@ -174,7 +174,7 @@ class TradingSystem:
         """Starts the background task scheduler."""
         print("[Startup] Step 4: Starting Scheduler Service...")
         try:
-            from data.data_service import build_portfolio_service
+            from infrastructure.portfolio import build_portfolio_service
             from interfaces.scheduler.runner import set_portfolio_reader, start_scheduler
 
             set_portfolio_reader(build_portfolio_service())
@@ -192,7 +192,7 @@ class TradingSystem:
         from core.constants import DEFAULT_HOST, DEFAULT_WEB_PORT
         try:
             from core.web_server import set_portfolio_reader, start_web_server
-            from data.data_service import build_portfolio_service
+            from infrastructure.portfolio import build_portfolio_service
 
             set_portfolio_reader(build_portfolio_service())
             threading.Thread(target=start_web_server, kwargs={"host": DEFAULT_HOST, "port": DEFAULT_WEB_PORT}, daemon=True).start()

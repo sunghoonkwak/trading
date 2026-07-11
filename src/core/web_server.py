@@ -370,7 +370,7 @@ async def trigger_portfolio_report(background_tasks: BackgroundTasks):
         return _runtime_off_response()
 
     try:
-        from data.data_service import build_portfolio_service
+        from infrastructure.portfolio import build_portfolio_service
         from interfaces.scheduler.portfolio_runner import run_daily_portfolio_report
 
         # Run in background to not block response.

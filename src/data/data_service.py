@@ -9,11 +9,10 @@ from typing import Dict, List, Tuple
 
 from application.portfolio_service import PortfolioService
 from broker import market_data
-from core.display import add_alert
-from data.config_manager import ConfigFile, load_json, save_json
+from data.config_manager import ConfigFile, load_json
 from domain.portfolio.processing import PortfolioProcessor  # noqa: F401 - legacy export
-from infrastructure.portfolio import IntegratedPortfolioSource
-from state.system_state import is_kis_ready
+from infrastructure.portfolio import build_portfolio_service
+from state.system_state import is_kis_ready  # noqa: F401 - legacy patch seam
 from utils.market_utils import get_fear_and_greed
 
 # =============================================================================
@@ -24,21 +23,6 @@ def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
     return build_portfolio_service().get_portfolio_data(
         force_refresh=force_refresh,
         scope=scope,
-    )
-
-
-def build_portfolio_service() -> PortfolioService:
-    """Compose the portfolio use case from the legacy infrastructure adapters."""
-    from data.calculate_weights import calculate_target_weights
-
-    return PortfolioService(
-        is_kis_ready=is_kis_ready,
-        portfolio_source=IntegratedPortfolioSource(),
-        save_portfolio=lambda value: save_json(ConfigFile.PORTFOLIO, value),
-        load_weights=lambda: load_json(ConfigFile.PORTFOLIO_WEIGHTS),
-        calculate_targets=calculate_target_weights,
-        fear_and_greed=get_fear_and_greed,
-        publish_alert=add_alert,
     )
 
 
