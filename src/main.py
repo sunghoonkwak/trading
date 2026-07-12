@@ -215,13 +215,7 @@ class TradingSystem:
             from application.strategy_execution import get_strategy_run_service
             from infrastructure.portfolio import build_portfolio_service
             from infrastructure.strategy_execution import configure_strategy_execution_service
-            from interfaces.scheduler.order_runner import (
-                SchedulerOrderRunner,
-                configure_strategy_run_service,
-            )
-            from interfaces.scheduler.order_runner import (
-                configure_notification_sender as configure_order_notification_sender,
-            )
+            from interfaces.scheduler.order_runner import SchedulerOrderRunner
             from interfaces.scheduler.portfolio_runner import (
                 configure_notification_sender as configure_portfolio_notification_sender,
             )
@@ -229,8 +223,6 @@ class TradingSystem:
             from interfaces.telegram.utils import send_notification
 
             configure_strategy_execution_service()
-            configure_strategy_run_service(get_strategy_run_service())
-            configure_order_notification_sender(send_notification)
             configure_portfolio_notification_sender(send_notification)
             self._scheduler_runner = SchedulerRunner(
                 portfolio_reader=build_portfolio_service(),
@@ -257,7 +249,6 @@ class TradingSystem:
             from core.constants import ENV_TRUE_VALUES
             from data.config_manager import ConfigFile, load_json, save_json
             from infrastructure.portfolio import build_portfolio_service
-            from interfaces.scheduler.order_runner import run_daily_order_report
             from interfaces.scheduler.portfolio_runner import run_daily_portfolio_report
             from interfaces.web import WebDependencies, create_web_app, start_web_server
 
@@ -273,7 +264,7 @@ class TradingSystem:
                     fetch_open_orders=order_admin.fetch_open_orders,
                     execute_manage_action=order_admin.execute_manage_action,
                     run_portfolio_report=run_daily_portfolio_report,
-                    run_order_report=run_daily_order_report,
+                    run_order_report=self._run_manual_order_report,
                     env_flag=lambda name, default=False: os.environ.get(name, "").strip().lower()
                     in ENV_TRUE_VALUES if name in os.environ else default,
                 )
@@ -283,6 +274,11 @@ class TradingSystem:
             print("[Startup] ✓ Web Event Viewer started in background")
         except Exception:
             logging.exception("[Startup] Web server failed to start")
+
+    def _run_manual_order_report(self):
+        if self._scheduler_runner is None:
+            raise RuntimeError("Scheduler runtime is not running.")
+        self._scheduler_runner.run_daily_order_report()
 
     def _notify_startup_failure(self, component: str):
         """Send a best-effort Telegram alert for fail-closed startup errors."""

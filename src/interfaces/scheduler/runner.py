@@ -79,6 +79,10 @@ class SchedulerRunner:
             self._thread.join(timeout=5.0)
         self._thread = None
 
+    def run_daily_order_report(self) -> None:
+        """Run the injected order job for an authorized manual trigger."""
+        self._order_runner.run_daily_order_report()
+
 
 def set_portfolio_reader(reader: PortfolioReader) -> None:
     """Inject the portfolio use case required by the scheduled report."""
