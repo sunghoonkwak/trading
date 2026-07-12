@@ -32,7 +32,6 @@ Production code must not introduce new imports from them.
 
 | Surface | Current consumers | Removal condition |
 | --- | --- | --- |
-| `strategy/base.py`, `strategy/constants.py`, strategy rule wrappers | Tests and external script compatibility | Tests and scripts import `domain.strategy` directly. |
 | `data/data_service.py` | `main.py` weight-diff wiring and legacy data tests | Replace the remaining weight-diff collaborator before removal. |
 | `toss/` | `main.py` token startup plus Toss tests/backtest compatibility | Migrate callers to `infrastructure.toss`. |
 | `broker/kis_*` forwarding modules | `main.py`, KIS tests, worker compatibility | Compose direct infrastructure adapters and migrate callers. |

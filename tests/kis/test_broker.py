@@ -11,7 +11,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from broker import kis_broker
-from strategy.base import OrderSide, StrategyOrder
+from domain.strategy.base import OrderSide, StrategyOrder
 
 
 class _FakeTREnv:
@@ -550,7 +550,7 @@ def test_get_orderable_usd_rejects_missing_amount(monkeypatch):
 
 
 def test_place_overseas_order_maps_strategy_order(monkeypatch):
-    from strategy.constants import ORDER_TYPE_LIMIT
+    from domain.strategy.constants import ORDER_TYPE_LIMIT
 
     calls = {}
     order = StrategyOrder(
@@ -594,7 +594,7 @@ def test_place_overseas_order_maps_strategy_order(monkeypatch):
 
 
 def test_place_overseas_order_uses_limit_price_for_zero_price_sell(monkeypatch):
-    from strategy.constants import ORDER_TYPE_LOC
+    from domain.strategy.constants import ORDER_TYPE_LOC
 
     calls = {}
     order = StrategyOrder(

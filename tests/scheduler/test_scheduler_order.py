@@ -91,8 +91,8 @@ def test_scheduler_rebalancing_uses_application_facade_with_cache_key(monkeypatc
 
 
 def test_periodic_rebalancing_is_quiet_when_disabled(monkeypatch, caplog):
+    from domain.strategy.base import StrategyStatus
     from interfaces.scheduler import order_runner as scheduler_order
-    from strategy.base import StrategyStatus
 
     class FrozenDateTime(datetime):
         @classmethod

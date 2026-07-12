@@ -390,8 +390,8 @@ class TossOrderApiTest(unittest.TestCase):
 
     def test_toss_broker_maps_strategy_limit_order(self):
         from broker import toss_broker
-        from strategy.base import OrderSide, StrategyOrder
-        from strategy.constants import ORDER_TYPE_LIMIT
+        from domain.strategy.base import OrderSide, StrategyOrder
+        from domain.strategy.constants import ORDER_TYPE_LIMIT
 
         calls = {}
 
@@ -434,8 +434,8 @@ class TossOrderApiTest(unittest.TestCase):
 
     def test_toss_broker_maps_strategy_loc_order(self):
         from broker import toss_broker
-        from strategy.base import OrderSide, StrategyOrder
-        from strategy.constants import ORDER_TYPE_LOC
+        from domain.strategy.base import OrderSide, StrategyOrder
+        from domain.strategy.constants import ORDER_TYPE_LOC
 
         calls = {}
 
@@ -471,7 +471,7 @@ class TossOrderApiTest(unittest.TestCase):
 
     def test_toss_broker_rejects_unknown_order_type_without_request(self):
         from broker import toss_broker
-        from strategy.base import OrderSide, StrategyOrder
+        from domain.strategy.base import OrderSide, StrategyOrder
 
         original_load = toss_broker.load_access_token
         original_account = toss_broker.get_default_account_seq

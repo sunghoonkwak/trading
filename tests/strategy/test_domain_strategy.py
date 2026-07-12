@@ -4,8 +4,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from domain.strategy import OrderSide, StrategyOrder
+from domain.strategy.base import StrategyOrder as LegacyStrategyOrder
 from domain.strategy.rebalancing import calculate_orders
-from strategy.base import StrategyOrder as LegacyStrategyOrder
 
 
 def test_domain_strategy_order_values_remain_compatible_with_legacy_imports():

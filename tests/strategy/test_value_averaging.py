@@ -5,9 +5,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from strategy import value_averaging
-from strategy.base import OrderSide
-from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
+from domain.strategy import value_averaging
+from domain.strategy.base import OrderSide
+from domain.strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 
 
 def test_empty_and_disabled_targets_produce_no_orders(caplog):

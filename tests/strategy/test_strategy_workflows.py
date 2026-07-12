@@ -9,9 +9,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from application import strategy_execution as execution_service
 from application.strategy_execution import StrategyExecutionDependencies
-from strategy import raoeo, rebalancing
-from strategy.base import OrderSide, StrategyOrder, StrategyStatus
-from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
+from domain.strategy import raoeo, rebalancing
+from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
+from domain.strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
 
 
 @pytest.fixture(autouse=True)

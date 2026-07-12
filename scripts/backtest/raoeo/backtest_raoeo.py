@@ -13,8 +13,8 @@ src_path = os.path.join(project_root, "src")
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-from strategy.raoeo import calculate_orders
-from strategy.base import OrderSide
+from domain.strategy.base import OrderSide
+from domain.strategy.raoeo import calculate_orders
 from kis.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
 # Configure logging to WARNING so calculate_orders logs don't spam output

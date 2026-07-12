@@ -8,9 +8,9 @@ from hypothesis import strategies as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from strategy.base import OrderSide, StrategyOrder
-from strategy.raoeo import calculate_cash_funding_order
-from strategy.rebalancing import _build_rebalance_orders
+from domain.strategy.base import OrderSide, StrategyOrder
+from domain.strategy.raoeo import calculate_cash_funding_order
+from domain.strategy.rebalancing import _build_rebalance_orders
 
 
 @given(

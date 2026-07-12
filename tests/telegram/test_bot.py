@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
 from interfaces.telegram import portfolio as telegram_portfolio
 from interfaces.telegram import rebalancing as telegram_rebalancing
 from interfaces.telegram import strategy as telegram_strategy
-from strategy.base import OrderSide, StrategyOrder, StrategyStatus
 
 
 def _portfolio_dependencies(**overrides):

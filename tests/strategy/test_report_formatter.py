@@ -3,12 +3,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
+from domain.strategy.constants import ORDER_TYPE_LOC
 from interfaces.telegram.report_formatter import (
     format_rebalancing_report,
     format_strategy_report,
 )
-from strategy.base import OrderSide, StrategyOrder, StrategyStatus
-from strategy.constants import ORDER_TYPE_LOC
 
 
 def _order(

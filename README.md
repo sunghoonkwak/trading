@@ -310,7 +310,7 @@ mutation test는 `pyproject.toml`에 지정된 `src/strategy/`와 `src/broker/`�
 실행이 정상인지 확인합니다.
 
 ```bash
-venv/bin/mutmut run --max-children 1 strategy.raoeo.x_calculate_cash_funding_order__mutmut_1
+venv/bin/mutmut run --max-children 1 domain.strategy.raoeo.x_calculate_cash_funding_order__mutmut_1
 venv/bin/mutmut results
 ```
 

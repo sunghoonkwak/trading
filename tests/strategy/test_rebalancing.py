@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from strategy import rebalancing
+from domain.strategy import rebalancing
 
 
 def test_rebalancing_skips_orders_when_an_asset_has_no_price():
