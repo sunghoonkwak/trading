@@ -6,7 +6,6 @@ import asyncio
 import json
 import logging
 import os
-import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -452,7 +451,7 @@ def _cancel_order_sync(order_id: str):
 
         # Execute cancellation (action_type='2' means cancel)
         df_res, err_msg = _require_dependencies().execute_manage_action(
-            market, '2', target_order, None
+            str(market or "US"), '2', target_order, None
         )
 
         if err_msg:
