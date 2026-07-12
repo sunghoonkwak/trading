@@ -12,7 +12,7 @@
   조회를 인증 전에 차단하고 빈 source와 disabled metadata를 반환합니다.
 - `get_integrated_portfolio(scope="all")`를 제공합니다.
 - `get_integrated_portfolio`는
-  `data.portfolio_integration.get_integrated_portfolio`로 lazy 위임합니다.
+  `infrastructure.portfolio.integration.get_integrated_portfolio`로 lazy 위임합니다.
 - KIS 국내주식 잔고조회는 기본 비활성화되어 있습니다. 국내 계좌를
   다시 포함하려면 런타임 환경변수 `KIS_ENABLE_DOMESTIC=true`를 설정합니다.
 - 해외 현재잔고 응답에서 환율을 찾지 못하면 `inquire_psamount`의 `exrt`를
@@ -21,7 +21,7 @@
 
 ## Import Boundary
 
-`data.portfolio_integration`은 이 모듈을 lazy-load한 뒤 표준 source
+`infrastructure.portfolio.integration`은 이 모듈을 lazy-load한 뒤 표준 source
 데이터를 병합합니다. KIS raw API 조회와 KIS raw 응답 필드 처리는 broker
 계층에 두고, 공식 KIS endpoint wrapper는
 `src/infrastructure/kis/kis_api/` 경계를 그대로

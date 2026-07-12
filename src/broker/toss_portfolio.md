@@ -16,6 +16,6 @@
 
 ## Import Boundary
 
-`data.portfolio_integration`은 이 facade를 lazy-load한 뒤 표준 source
+`infrastructure.portfolio.integration`은 이 facade를 lazy-load한 뒤 표준 source
 데이터를 병합합니다. Toss endpoint path, response field, access token,
 portfolio 조회용 accountSeq 기본값은 broker 계층에 둡니다.

@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from data.portfolio_scope import normalize_portfolio_scope
+from domain.portfolio.scope import normalize_portfolio_scope
 
 
 @pytest.mark.parametrize(

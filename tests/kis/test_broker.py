@@ -863,7 +863,7 @@ from kis.kis_api.overseas_stock.inquire_present_balance import (
     inquire_present_balance as inquire_present_balance_module,
 )
 
-from data.data_service import PortfolioProcessor
+from domain.portfolio.processing import PortfolioProcessor
 
 
 class _FakeTREnv:

@@ -45,6 +45,6 @@ GSheet source 캐시만 갱신하고 성공/경고 요약을 응답합니다. �
 - **F&G Index**: `utils.market_utils.get_fear_and_greed()`를 통해 10분 캐싱된 F&G 지수 표시
 - **Group Handling**: Constituents의 보유비중은 main ticker에 합산
 - **GSheet Caching**: 포트폴리오 결과는 매번 새로 계산하고, 느린 GSheet
-  source만 `data.portfolio_integration`에서 메모리 캐시합니다.
+  source만 `infrastructure.portfolio.integration`에서 메모리 캐시합니다.
 - **Exception Resilience**: 주요 명령 핸들러는 오류 발생 시 사용자에게 메시지를 보내고 `ConversationHandler.END` 또는 기존 상태를 반환해 대화 상태 꼬임을 줄입니다.
 - **Retry on Timeout**: `wrap_reply`/`wrap_edit`는 `TimedOut`/`NetworkError` 발생 시 최대 2회 재시도합니다 (1초 간격).

@@ -6,4 +6,4 @@ infrastructure adapter used by `application.portfolio_service.PortfolioService`
 through the `PortfolioSource` contract.
 
 The adapter preserves partial-error metadata and notification behavior. Legacy
-`data.portfolio_integration` imports remain forwarding-only during migration.
+This module is the final implementation for portfolio source integration.

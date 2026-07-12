@@ -34,12 +34,9 @@ Production code must not introduce new imports from them.
 | --- | --- | --- |
 | `strategy/base.py`, `strategy/constants.py`, strategy rule wrappers | Tests and external script compatibility | Tests and scripts import `domain.strategy` directly. |
 | `data/data_service.py` | `main.py`, legacy data tests | Move weight-diff orchestration to an application use case. |
-| `data/portfolio_scope.py` | Portfolio-scope tests | Migrate tests to `domain.portfolio.scope`. |
-| `data/portfolio_processing.py` | Broker compatibility tests | Migrate tests to `domain.portfolio.processing`. |
-| `data/portfolio_integration.py` | Documentation and historical imports | Remove after documentation and external consumers move. |
 | `toss/` | Tests and backtest/script compatibility | Migrate consumers to `infrastructure.toss`. |
 | `broker/kis_*` forwarding modules | `main.py`, KIS tests, worker compatibility | Compose direct infrastructure adapters and migrate callers. |
 
-The removed `strategy.execution_service`, `core.web_server`, and
-`telegram_bot` surfaces have zero production, test, script, and documentation
-consumers.
+The removed `strategy.execution_service`, `core.web_server`, `telegram_bot`,
+and data portfolio forwarding surfaces have zero production, test, script,
+and documentation consumers.
