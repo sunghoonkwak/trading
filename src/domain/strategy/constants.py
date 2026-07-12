@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Strategy policy defaults shared by strategy modules."""
 import re
+from zoneinfo import ZoneInfo
 
 DEFAULT_FEAR_GREED = 50.0
 DEFAULT_VA_THRESHOLD = 0.15
@@ -17,3 +18,5 @@ ORDER_TYPE_LOC = "LOC"
 # KIS rejects buy orders exceeding 30% above current price.
 # Use 25% cap as a safety margin.
 MAX_BUY_PRICE_RATIO = 1.25
+
+TZ_ET = ZoneInfo("America/New_York")

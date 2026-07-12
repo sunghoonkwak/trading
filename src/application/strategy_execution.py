@@ -27,8 +27,8 @@ from domain.strategy.constants import (
     ORDER_TYPE_LIMIT,
     STRATEGY_HISTORY_COMPACT_DATE_RE,
     STRATEGY_HISTORY_DATE_RE,
+    TZ_ET,
 )
-from strategy.constants import TZ_ET
 from utils.market_utils import get_us_market_status
 from utils.price_utils import resolve_current_price
 

@@ -297,7 +297,7 @@ def test_run_raoeo_stops_before_market_data_on_weekend(monkeypatch):
     class FrozenDateTime:
         @classmethod
         def now(cls, tz=None):
-            return tz.localize(dt.datetime(2026, 7, 4, 8, 12, 4))
+            return dt.datetime(2026, 7, 4, 8, 12, 4, tzinfo=tz)
 
     config = {
         "raoeo": {
@@ -831,7 +831,7 @@ def test_run_va_reuses_empty_order_history_without_fetching_data(monkeypatch):
     class FrozenDateTime:
         @classmethod
         def now(cls, tz=None):
-            return tz.localize(dt.datetime(2026, 6, 17, 8, 12, 4))
+            return dt.datetime(2026, 6, 17, 8, 12, 4, tzinfo=tz)
 
     config = {
         "value_averaging": {
