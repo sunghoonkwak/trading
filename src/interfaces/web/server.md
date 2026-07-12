@@ -1,4 +1,4 @@
-# Web Server (`src/core/web_server.py`)
+# Web Server (`src/interfaces/web/server.py`)
 
 ## Overview (개요)
 FastAPI 기반의 경량 웹 서버로, 시스템 이벤트를 실시간으로 웹 브라우저(Event Viewer)에 중계하는 역할을 합니다.
@@ -62,4 +62,4 @@ openssl req -x509 -newkey rsa:4096 -keyout src/web/certs/key.pem -out src/web/ce
 
 ### `start_web_server(host, port, use_ssl)`
 Uvicorn 서버를 실행합니다.
-- `main.py`에서 `core.web_server` 패키지를 통해 임포트되어 별도 스레드로 기동됩니다.
+- `main.py`가 collaborators를 주입한 뒤 별도 스레드로 기동합니다.

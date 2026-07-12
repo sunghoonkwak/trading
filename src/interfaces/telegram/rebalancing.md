@@ -1,11 +1,11 @@
-# Telegram Rebalancing Handler (`src/telegram_bot/telegram_rebalancing.py`)
+# Telegram Rebalancing Handler (`src/interfaces/telegram/rebalancing.py`)
 
 `/rebalance` 명령어를 처리하여 포트폴리오 리밸런싱 현황을 확인하거나 수동으로 실행하는 핸들러입니다.
 
 ## Core Logic (핵심 로직)
 
 1. **Rebalancing Status Check (리밸런싱 상태 확인)**:
-   - `execution_service.run_rebalancing_strategy`를 호출하여 리밸런싱 필요성과 주문 생성 여부를 확인합니다.
+   - application strategy-run use case로 리밸런싱 필요성과 주문을 확인합니다.
    - 이때 `execute=False` 모드로 호출하여 시뮬레이션 결과만 받습니다.
 
 2. **Interactive Execution (대화형 실행)**:

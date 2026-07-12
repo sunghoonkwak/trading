@@ -1,11 +1,11 @@
-# Telegram Strategy Handler (`src/telegram_bot/telegram_strategy.py`)
+# Telegram Strategy Handler (`src/interfaces/telegram/strategy.py`)
 
 `/strategy` 명령어를 처리하여 RAOEO 및 Value Averaging 전략의 현황을 확인하거나 수동으로 실행하는 핸들러입니다.
 
 ## Core Logic (핵심 로직)
 
 1. **Strategy Status Check (전략 상태 확인)**:
-   - `execution_service.run_strategy_suite`를 호출하여 RAOEO와 Value Averaging을
+   - application strategy-run use case를 호출하여 RAOEO와 Value Averaging을
      같은 실행 컨텍스트에서 계산합니다.
    - 이때 `execute=False`로 호출하여 실제 주문은 전송하지 않고 시뮬레이션 결과만 받습니다.
 

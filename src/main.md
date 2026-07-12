@@ -21,7 +21,7 @@ composition root 역할, 그리고 안정적인 실행을 위한 메인 루프�
      시작하지 않습니다.
    - **백그라운드 스케줄러**: `interfaces.scheduler` adapter를 통한 정기적
      매매 업무 실행. portfolio use case는 `main.py`에서 주입합니다.
-   - **웹 대시보드**: `core.web_server`를 통한 실시간 이벤트 뷰어 제공.
+   - **웹 대시보드**: `interfaces.web` adapter를 통한 실시간 이벤트 뷰어 제공.
      Docker 시작 직후에도 접속 가능하지만, runtime OFF 상태에서는 외부
      API나 주문/스케줄 실행으로 이어지는 요청이 차단됩니다.
 3. **데몬 모드**: 시스템이 종료되지 않도록 메인 스레드에서 무한 대기하며,

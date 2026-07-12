@@ -1,4 +1,4 @@
-# Telegram Bot (`src/telegram_bot/telegram_bot.py`)
+# Telegram Bot (`src/interfaces/telegram/bot.py`)
 
 텔레그램 봇의 초기화, 핸들러 등록, 실행 루프 관리를 담당하는 메인 모듈입니다.
 비동기(`asyncio`) 환경에서 `python-telegram-bot`을 실행하며, 별도 스레드에서 폴링을 수행합니다.
@@ -44,7 +44,7 @@ bot_token,chat_id
 ## Usage Example (사용 예시)
 
 ```python
-from telegram_bot.telegram_bot import initialize_telegram
+from interfaces.telegram.bot import initialize_telegram
 
 # 봇 시작 (백그라운드)
 initialize_telegram()

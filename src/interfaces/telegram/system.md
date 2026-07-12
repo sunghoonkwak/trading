@@ -1,4 +1,4 @@
-# Telegram System Commands (`src/telegram_bot/telegram_system.py`)
+# Telegram System Commands (`src/interfaces/telegram/system.py`)
 
 Trading runtime 생명주기를 Telegram에서 제어하는 명령 모듈입니다.
 

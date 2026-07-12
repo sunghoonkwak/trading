@@ -1,4 +1,4 @@
-# Telegram Portfolio (`src/telegram_bot/telegram_portfolio.py`)
+# Telegram Portfolio (`src/interfaces/telegram/portfolio.py`)
 
 이 모듈은 포트폴리오 요약 및 리밸런싱 관련 Telegram 명령어를 처리합니다.
 

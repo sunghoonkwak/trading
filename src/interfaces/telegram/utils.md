@@ -1,7 +1,7 @@
-# Telegram Utils (`src/telegram_bot/telegram_utils.py`)
+# Telegram Utils (`src/interfaces/telegram/utils.py`)
 
 이 모듈은 Telegram 봇에서 공통으로 사용되는 메시징 래퍼 함수들을 제공합니다.
-순환 참조 방지를 위해 `telegram_bot.py`에서 분리되었습니다.
+Telegram lifecycle adapter와 순환 참조를 피하기 위해 분리되었습니다.
 
 ## Key Functions (주요 함수)
 

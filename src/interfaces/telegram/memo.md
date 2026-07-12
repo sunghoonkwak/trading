@@ -1,4 +1,4 @@
-# Telegram Memo (`src/telegram_bot/telegram_memo.py`)
+# Telegram Memo (`src/interfaces/telegram/memo.py`)
 
 ## Overview (개요)
 Telegram 일반 텍스트 메시지를 `memo.json`에 저장하고, 최근 1주일 메모를
