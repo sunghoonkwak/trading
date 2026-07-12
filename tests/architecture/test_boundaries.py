@@ -179,7 +179,7 @@ def test_app_imports_do_not_load_runtime_kis_modules(tmp_path):
         tmp_path,
         """
 import sys
-import core.web_server
+import interfaces.web.server
 import interfaces.scheduler.order_runner
 import interfaces.telegram.strategy
 assert "kis.kis_api.kis_auth" not in sys.modules

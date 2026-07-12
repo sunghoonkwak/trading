@@ -1,5 +1,5 @@
-"""Web transport adapter facade."""
+"""Web transport adapter."""
 
-from .server import set_portfolio_reader, start_web_server
+from .server import WebDependencies, create_web_app, start_web_server
 
-__all__ = ["set_portfolio_reader", "start_web_server"]
+__all__ = ["WebDependencies", "create_web_app", "start_web_server"]

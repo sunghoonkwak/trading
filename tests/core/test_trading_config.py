@@ -25,7 +25,7 @@ def test_market_prefix_helpers_use_shared_market_mapping(monkeypatch):
 
 
 def test_event_message_json_preserves_message_text():
-    from core import web_server
+    from interfaces.web import server as web_server
 
     payload = json.loads(
         web_server._event_message_json(

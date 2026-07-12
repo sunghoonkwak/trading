@@ -223,15 +223,47 @@ def test_cli_returns_failure_for_invalid_config(tmp_path, capsys):
 
 
 import asyncio
+import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
+import pytest
 from fastapi import BackgroundTasks
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from core import web_server
+from interfaces.web import server as web_server
+
+
+@pytest.fixture(autouse=True)
+def web_dependencies(monkeypatch):
+    """Configure the web adapter with local fakes, not legacy imports."""
+    order_admin = SimpleNamespace(
+        sync_open_orders=lambda: None,
+        fetch_open_orders=lambda: (pd.DataFrame(), 0, 0, 0),
+        execute_manage_action=lambda *_args: (pd.DataFrame(), None),
+    )
+    runtime_control = SimpleNamespace(is_runtime_running=lambda: True)
+    monkeypatch.setattr(web_server, "order_admin", order_admin, raising=False)
+    monkeypatch.setattr(web_server, "runtime_control", runtime_control, raising=False)
+    web_server.create_web_app(
+        web_server.WebDependencies(
+            runtime_is_running=lambda: web_server.runtime_control.is_runtime_running(),
+            set_broadcast_callback=lambda _callback: None,
+            load_memos=lambda: {},
+            save_memos=lambda _memos: True,
+            portfolio_reader=SimpleNamespace(get_portfolio_data=lambda: {}),
+            sync_open_orders=lambda: web_server.order_admin.sync_open_orders(),
+            fetch_open_orders=lambda: web_server.order_admin.fetch_open_orders(),
+            execute_manage_action=lambda *args: web_server.order_admin.execute_manage_action(*args),
+            run_portfolio_report=lambda _reader: None,
+            run_order_report=lambda: None,
+            env_flag=lambda name, default=False: os.environ.get(name, "").lower()
+            in {"1", "true", "yes", "on"} if name in os.environ else default,
+        )
+    )
 
 
 def test_cancel_order_is_disabled_by_default(monkeypatch):
@@ -251,7 +283,7 @@ def test_cancel_order_is_disabled_by_default(monkeypatch):
 
 
 def test_cancel_order_sync_matches_toss_order_id(monkeypatch):
-    from broker import order_admin
+    order_admin = web_server.order_admin
 
     calls = {}
 
@@ -304,7 +336,7 @@ def test_manual_report_trigger_is_disabled_by_default(monkeypatch):
 
 
 def test_web_order_sync_is_blocked_when_runtime_is_off(monkeypatch):
-    from core import runtime_control
+    runtime_control = web_server.runtime_control
 
     monkeypatch.setattr(runtime_control, "is_runtime_running", lambda: False)
 
@@ -325,7 +357,7 @@ def test_web_order_sync_is_blocked_when_runtime_is_off(monkeypatch):
 
 
 def test_web_cancel_order_is_blocked_when_runtime_is_off(monkeypatch):
-    from core import runtime_control
+    runtime_control = web_server.runtime_control
 
     monkeypatch.setenv("WEB_ENABLE_ORDER_CANCEL", "true")
     monkeypatch.setattr(runtime_control, "is_runtime_running", lambda: False)
@@ -348,7 +380,7 @@ def test_web_cancel_order_is_blocked_when_runtime_is_off(monkeypatch):
 
 
 def test_web_manual_triggers_are_blocked_when_runtime_is_off(monkeypatch):
-    from core import runtime_control
+    runtime_control = web_server.runtime_control
 
     monkeypatch.setenv("WEB_ENABLE_MANUAL_REPORT_TRIGGERS", "true")
     monkeypatch.setattr(runtime_control, "is_runtime_running", lambda: False)
@@ -369,7 +401,7 @@ def test_web_manual_triggers_are_blocked_when_runtime_is_off(monkeypatch):
 
 
 def test_web_holdings_lookup_is_blocked_when_runtime_is_off(monkeypatch):
-    from core import runtime_control
+    runtime_control = web_server.runtime_control
 
     monkeypatch.setattr(runtime_control, "is_runtime_running", lambda: False)
 
