@@ -55,10 +55,8 @@ class TradingSystem:
         )
         from interfaces.telegram.rebalancing import configure_strategy_run_service
         from state.system_state import ThreadStatus, update_telegram_state
-        from strategy.execution_service import (
-            configure_portfolio_reader_factory,
-            get_strategy_run_service,
-        )
+        from application.strategy_execution import get_strategy_run_service
+        from infrastructure.strategy_execution import configure_strategy_execution_service
         from telegram_bot.telegram_bot import initialize_telegram
 
         configure_portfolio_reader(build_portfolio_service())
@@ -68,7 +66,7 @@ class TradingSystem:
             get_weight_diffs=get_weight_diffs,
             refresh_gsheet_cache=refresh_gsheet_cache,
         )
-        configure_portfolio_reader_factory(build_portfolio_service)
+        configure_strategy_execution_service()
         configure_strategy_run_service(get_strategy_run_service())
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram():
@@ -196,12 +194,23 @@ class TradingSystem:
         print("[Startup] Step 4: Starting Scheduler Service...")
         try:
             from infrastructure.portfolio import build_portfolio_service
-            from interfaces.scheduler.order_runner import configure_strategy_run_service
+            from interfaces.scheduler.order_runner import (
+                configure_notification_sender as configure_order_notification_sender,
+                configure_strategy_run_service,
+            )
+            from interfaces.scheduler.portfolio_runner import (
+                configure_notification_sender as configure_portfolio_notification_sender,
+            )
             from interfaces.scheduler.runner import set_portfolio_reader, start_scheduler
-            from strategy.execution_service import get_strategy_run_service
+            from application.strategy_execution import get_strategy_run_service
+            from infrastructure.strategy_execution import configure_strategy_execution_service
+            from telegram_bot.telegram_utils import send_notification
 
             set_portfolio_reader(build_portfolio_service())
+            configure_strategy_execution_service()
             configure_strategy_run_service(get_strategy_run_service())
+            configure_order_notification_sender(send_notification)
+            configure_portfolio_notification_sender(send_notification)
             start_scheduler()
             print("[Startup] ✓ Scheduler started")
         except Exception as e:
@@ -215,10 +224,32 @@ class TradingSystem:
         print("[Startup] Step 5: Starting Web Event Viewer...")
         from core.constants import DEFAULT_HOST, DEFAULT_WEB_PORT
         try:
+            from broker import order_admin
+            from core import event_pipe, runtime_control
+            from core.constants import ENV_TRUE_VALUES
+            from data.config_manager import ConfigFile, load_json, save_json
             from infrastructure.portfolio import build_portfolio_service
-            from interfaces.web import set_portfolio_reader, start_web_server
+            from interfaces.scheduler.order_runner import run_daily_order_report
+            from interfaces.scheduler.portfolio_runner import run_daily_portfolio_report
+            from interfaces.web import WebDependencies, create_web_app, start_web_server
 
-            set_portfolio_reader(build_portfolio_service())
+            portfolio_reader = build_portfolio_service()
+            create_web_app(
+                WebDependencies(
+                    runtime_is_running=runtime_control.is_runtime_running,
+                    set_broadcast_callback=event_pipe.set_web_broadcast_callback,
+                    load_memos=lambda: load_json(ConfigFile.MEMO, default={}),
+                    save_memos=lambda memos: save_json(ConfigFile.MEMO, memos),
+                    portfolio_reader=portfolio_reader,
+                    sync_open_orders=order_admin.sync_open_orders,
+                    fetch_open_orders=order_admin.fetch_open_orders,
+                    execute_manage_action=order_admin.execute_manage_action,
+                    run_portfolio_report=run_daily_portfolio_report,
+                    run_order_report=run_daily_order_report,
+                    env_flag=lambda name, default=False: os.environ.get(name, "").strip().lower()
+                    in ENV_TRUE_VALUES if name in os.environ else default,
+                )
+            )
             threading.Thread(target=start_web_server, kwargs={"host": DEFAULT_HOST, "port": DEFAULT_WEB_PORT}, daemon=True).start()
             self._web_server_started = True
             print("[Startup] ✓ Web Event Viewer started in background")

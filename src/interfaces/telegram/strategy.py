@@ -22,7 +22,7 @@ from telegram.ext import (
 from domain.strategy.base import StrategyStatus
 from interfaces.telegram.report_formatter import format_strategy_report
 from strategy.constants import TZ_ET
-from strategy.execution_service import (
+from application.strategy_execution import (
     clear_strategy_history_for_date,
     execute_raoeo_cash_funding,
     get_strategy_run_service,

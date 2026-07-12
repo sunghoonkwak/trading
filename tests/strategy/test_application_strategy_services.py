@@ -84,11 +84,11 @@ def test_order_report_service_returns_retry_status_and_pending_orders():
     assert result["pending_orders"] == [second]
 
 
-def test_legacy_execution_service_exposes_application_use_case_facade(monkeypatch):
-    from strategy import execution_service
+def test_application_execution_exposes_application_use_case_facade(monkeypatch):
+    from application import strategy_execution
 
-    monkeypatch.setattr(execution_service, "run_raoeo_strategy", lambda **_kwargs: {"strategy": "raoeo"})
-    service = execution_service.get_strategy_run_service()
+    monkeypatch.setattr(strategy_execution, "run_raoeo_strategy", lambda **_kwargs: {"strategy": "raoeo"})
+    service = strategy_execution.get_strategy_run_service()
 
     assert service.run_raoeo() == {"strategy": "raoeo"}
 

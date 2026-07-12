@@ -1,12 +1,58 @@
 import datetime as dt
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from strategy import execution_service, raoeo, rebalancing
+from application import strategy_execution as execution_service
+from application.strategy_execution import StrategyExecutionDependencies
+from strategy import raoeo, rebalancing
 from strategy.base import OrderSide, StrategyOrder, StrategyStatus
 from strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
+
+
+@pytest.fixture(autouse=True)
+def strategy_dependencies(monkeypatch):
+    """Test application behavior through injected ports, never legacy modules."""
+    history = []
+    load_config = lambda: {}
+    portfolio = SimpleNamespace(
+        get_portfolio_data=lambda force_refresh=False, scope="all": {"merged_data": {}}
+    )
+    broker = SimpleNamespace(
+        get_strategy_broker_name=lambda: "kis",
+        get_orderable_usd=lambda _symbol, _price: 0.0,
+        place_order=lambda _order: (True, "Success"),
+    )
+    market_data = SimpleNamespace(
+        fetch_price=lambda _ticker: 0.0,
+        fetch_prices=lambda _tickers: {},
+    )
+
+    monkeypatch.setattr(execution_service, "strategy_broker", broker, raising=False)
+    monkeypatch.setattr(execution_service, "market_data", market_data, raising=False)
+    monkeypatch.setattr(execution_service, "get_portfolio_data", portfolio.get_portfolio_data, raising=False)
+    monkeypatch.setattr(execution_service, "load_json", lambda *_args, **_kwargs: load_config(), raising=False)
+    monkeypatch.setattr(execution_service, "save_json", lambda _file, data: True, raising=False)
+    execution_service.configure_strategy_execution(
+        StrategyExecutionDependencies(
+            load_strategy_config=lambda: execution_service.load_json(None, default={}),
+            load_history=lambda: history,
+            save_history=lambda data: execution_service.save_json(None, data)
+            or history.__setitem__(slice(None), data)
+            or True,
+            fetch_prices=lambda tickers: execution_service.market_data.fetch_prices(tickers),
+            strategy_broker_name=lambda: execution_service.strategy_broker.get_strategy_broker_name(),
+            get_orderable_usd=lambda symbol, price: execution_service.strategy_broker.get_orderable_usd(symbol, price),
+            execute_order=lambda order: execution_service.strategy_broker.place_order(order),
+            portfolio_reader_factory=lambda: SimpleNamespace(
+                get_portfolio_data=execution_service.get_portfolio_data
+            ),
+        )
+    )
 
 
 def _targets_config():
@@ -341,7 +387,7 @@ def test_get_market_data_uses_configured_broker_as_portfolio_scope(monkeypatch):
         lambda: "toss",
     )
     monkeypatch.setattr(
-        "data.data_service.get_portfolio_data",
+        "application.strategy_execution.get_portfolio_data",
         lambda force_refresh=False, scope="all": requested.append(
             (force_refresh, scope)
         ) or {"merged_data": {"AAPL": {"qty": 2, "cur_price": 160.0}}},
@@ -370,7 +416,7 @@ def test_get_market_data_uses_holding_price_before_rest_price(monkeypatch):
         lambda: "toss",
     )
     monkeypatch.setattr(
-        "data.data_service.get_portfolio_data",
+        "application.strategy_execution.get_portfolio_data",
         lambda force_refresh=False, scope="all": {
             "merged_data": {"AAPL": {"qty": 2, "cur_price": 160.0}},
         },
@@ -406,7 +452,7 @@ def test_get_market_data_fetches_missing_prices_in_batch(monkeypatch):
         lambda: "toss",
     )
     monkeypatch.setattr(
-        "data.data_service.get_portfolio_data",
+        "application.strategy_execution.get_portfolio_data",
         lambda force_refresh=False, scope="all": {
             "merged_data": {"AAPL": {"qty": 2, "cur_price": 0.0}},
         },
@@ -991,7 +1037,7 @@ def test_run_strategy_suite_reuses_context_for_raoeo_and_va(monkeypatch):
         lambda file_type, default=None: config,
     )
     monkeypatch.setattr(
-        "data.data_service.get_portfolio_data",
+        "application.strategy_execution.get_portfolio_data",
         lambda force_refresh=False, scope="all": portfolio_calls.append(
             (force_refresh, scope)
         ) or {
