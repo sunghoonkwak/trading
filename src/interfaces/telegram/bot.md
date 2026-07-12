@@ -18,7 +18,8 @@
 ## Key Functions (주요 함수)
 
 ### `initialize_telegram`
-봇 스레드를 생성하고 시작합니다. 메인 프로세스(`main.py`)에서 호출됩니다.
+봇 스레드를 생성하고 시작합니다. 메인 프로세스(`main.py`)에서 portfolio와
+rebalancing application collaborators를 명시적으로 전달해 호출합니다.
 
 - **출력 (Output)**: `bool` (성공 여부)
 - **중복 방지 (Lock)**: `threading.Lock`과 `_is_initialized` 플래그를 사용하여 중복 실행을 원천 차단합니다.
@@ -46,6 +47,5 @@ bot_token,chat_id
 ```python
 from interfaces.telegram.bot import initialize_telegram
 
-# 봇 시작 (백그라운드)
-initialize_telegram()
+# Production composition is owned by main.py; do not construct it here.
 ```

@@ -7,6 +7,9 @@ for interactive ticker selection.
 """
 import logging
 import warnings
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from telegram.warnings import PTBUserWarning
@@ -40,70 +43,61 @@ from .utils import wrap_edit, wrap_edit_message, wrap_reply
 
 # Conversation states
 SELECT_TICKER = 0
-_portfolio_reader: PortfolioReader | None = None
-_get_current_price = None
-_fetch_price = None
-_fetch_open_orders = None
-_get_weight_diffs = None
-_refresh_gsheet_cache = None
+@dataclass(frozen=True)
+class PortfolioCommandDependencies:
+    """Portfolio collaborators owned by one Telegram handler registration."""
+
+    reader: PortfolioReader
+    market_reader: MarketPriceReader
+    order_reader: OpenOrderReader
+    get_weight_diffs: Any
+    refresh_gsheet_cache: Any
 
 
-def configure_portfolio_reader(reader: PortfolioReader) -> None:
-    """Inject the portfolio application use case from the composition root."""
-    global _portfolio_reader
-    _portfolio_reader = reader
+_command_dependencies: ContextVar[PortfolioCommandDependencies | None] = ContextVar(
+    "telegram_portfolio_dependencies", default=None
+)
 
 
-def configure_portfolio_collaborators(
-    *,
-    market_reader: MarketPriceReader,
-    order_reader: OpenOrderReader,
-    get_weight_diffs,
-    refresh_gsheet_cache,
-) -> None:
-    """Inject portfolio command collaborators from the composition root."""
-    global _get_current_price, _fetch_price, _fetch_open_orders, _get_weight_diffs, _refresh_gsheet_cache
-    _get_current_price = market_reader.get_current_price
-    _fetch_price = market_reader.fetch_price
-    _fetch_open_orders = order_reader.fetch_open_orders
-    _get_weight_diffs = get_weight_diffs
-    _refresh_gsheet_cache = refresh_gsheet_cache
+def _dependencies() -> PortfolioCommandDependencies:
+    dependencies = _command_dependencies.get()
+    if dependencies is None:
+        raise RuntimeError("Portfolio command is not bound to a Telegram factory.")
+    return dependencies
+
+
+@contextmanager
+def bind_portfolio_dependencies(dependencies: PortfolioCommandDependencies):
+    """Bind one composition for focused direct-handler tests."""
+    token = _command_dependencies.set(dependencies)
+    try:
+        yield
+    finally:
+        _command_dependencies.reset(token)
 
 
 def _current_price(ticker):
-    if _get_current_price is None:
-        raise RuntimeError("Portfolio collaborators are not configured.")
-    return _get_current_price(ticker)
+    return _dependencies().market_reader.get_current_price(ticker)
 
 
 def _market_price(ticker):
-    if _fetch_price is None:
-        raise RuntimeError("Portfolio collaborators are not configured.")
-    return _fetch_price(ticker)
+    return _dependencies().market_reader.fetch_price(ticker)
 
 
 def _open_orders():
-    if _fetch_open_orders is None:
-        raise RuntimeError("Portfolio collaborators are not configured.")
-    return _fetch_open_orders()
+    return _dependencies().order_reader.fetch_open_orders()
 
 
 def _weight_diffs(scope):
-    if _get_weight_diffs is None:
-        raise RuntimeError("Portfolio collaborators are not configured.")
-    return _get_weight_diffs(scope)
+    return _dependencies().get_weight_diffs(scope)
 
 
 def _gsheet_refresh():
-    if _refresh_gsheet_cache is None:
-        raise RuntimeError("Portfolio collaborators are not configured.")
-    return _refresh_gsheet_cache()
+    return _dependencies().refresh_gsheet_cache()
 
 
 def _get_portfolio_data():
-    if _portfolio_reader is None:
-        raise RuntimeError("PortfolioReader is not configured.")
-    return _portfolio_reader.get_portfolio_data()
+    return _dependencies().reader.get_portfolio_data()
 
 def format_weight_diffs(diffs: list, total_usd: float, cash_info: dict) -> str:
     """
@@ -741,29 +735,42 @@ async def cmd_gsheet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-def register_portfolio_handlers(app: Application):
+def register_portfolio_handlers(
+    app: Application,
+    dependencies: PortfolioCommandDependencies,
+):
     """Register Portfolio command handlers."""
+    def bind(handler):
+        async def bound(update, context):
+            token = _command_dependencies.set(dependencies)
+            try:
+                return await handler(update, context)
+            finally:
+                _command_dependencies.reset(token)
+
+        return bound
+
     # ConversationHandler for /portfolio
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("portfolio", cmd_portfolio)],
+        entry_points=[CommandHandler("portfolio", bind(cmd_portfolio))],
         states={
             SELECT_TICKER: [
-                CallbackQueryHandler(handle_ticker_callback, pattern=r'^port_'),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_ticker_text)
+                CallbackQueryHandler(bind(handle_ticker_callback), pattern=r'^port_'),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, bind(handle_ticker_text))
             ],
-            ConversationHandler.TIMEOUT: [TypeHandler(Update, timeout_handler)]
+            ConversationHandler.TIMEOUT: [TypeHandler(Update, bind(timeout_handler))]
         },
         fallbacks=[
-            CommandHandler("cancel", cancel_handler)
+            CommandHandler("cancel", bind(cancel_handler))
         ],
         conversation_timeout=60,
         per_message=False,
     )
 
     app.add_handler(conv_handler)
-    app.add_handler(CommandHandler("gsheet", cmd_gsheet))
-    app.add_handler(CommandHandler("portfolio_weight", cmd_portfolio_weight))
-    app.add_handler(CommandHandler("placed_orders", cmd_placed_orders))
+    app.add_handler(CommandHandler("gsheet", bind(cmd_gsheet)))
+    app.add_handler(CommandHandler("portfolio_weight", bind(cmd_portfolio_weight)))
+    app.add_handler(CommandHandler("placed_orders", bind(cmd_placed_orders)))
 
 
 def get_portfolio_commands_desc() -> str:

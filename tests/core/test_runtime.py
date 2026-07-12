@@ -248,7 +248,7 @@ def web_dependencies(monkeypatch):
     runtime_control = SimpleNamespace(is_runtime_running=lambda: True)
     monkeypatch.setattr(web_server, "order_admin", order_admin, raising=False)
     monkeypatch.setattr(web_server, "runtime_control", runtime_control, raising=False)
-    web_server.create_web_app(
+    application = web_server.create_web_app(
         web_server.WebDependencies(
             runtime_is_running=lambda: web_server.runtime_control.is_runtime_running(),
             set_broadcast_callback=lambda _callback: None,
@@ -264,6 +264,8 @@ def web_dependencies(monkeypatch):
             in {"1", "true", "yes", "on"} if name in os.environ else default,
         )
     )
+    with web_server.bind_web_runtime(application):
+        yield
 
 
 def test_cancel_order_is_disabled_by_default(monkeypatch):
@@ -280,6 +282,33 @@ def test_cancel_order_is_disabled_by_default(monkeypatch):
         "success": False,
         "error": "Order cancel endpoint is disabled",
     }
+
+
+def test_web_factory_keeps_independent_compositions():
+    def make_app(running):
+        return web_server.create_web_app(
+            web_server.WebDependencies(
+                runtime_is_running=lambda: running,
+                set_broadcast_callback=lambda _callback: None,
+                load_memos=lambda: {},
+                save_memos=lambda _memos: True,
+                portfolio_reader=SimpleNamespace(get_portfolio_data=lambda: {}),
+                sync_open_orders=lambda: None,
+                fetch_open_orders=lambda: (pd.DataFrame(), 0, 0, 0),
+                execute_manage_action=lambda *_args: (pd.DataFrame(), None),
+                run_portfolio_report=lambda _reader: None,
+                run_order_report=lambda: None,
+                env_flag=lambda _name, default=False: default,
+            )
+        )
+
+    running_app = make_app(True)
+    stopped_app = make_app(False)
+
+    assert running_app is not stopped_app
+    assert stopped_app.state.web_runtime is not running_app.state.web_runtime
+    assert running_app.state.web_runtime.dependencies.runtime_is_running() is True
+    assert stopped_app.state.web_runtime.dependencies.runtime_is_running() is False
 
 
 def test_cancel_order_sync_matches_toss_order_id(monkeypatch):

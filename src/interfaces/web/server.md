@@ -1,8 +1,10 @@
 # Web Server (`src/interfaces/web/server.py`)
 
 ## Overview (개요)
-FastAPI 기반의 경량 웹 서버로, 시스템 이벤트를 실시간으로 웹 브라우저(Event Viewer)에 중계하는 역할을 합니다.
-`src/core/` 패키지로 이동되어 시스템의 핵심 서비스 레이어에서 동작하며, **WebSocket**을 통한 실시간 데이터 스트리밍에 집중합니다.
+FastAPI 기반의 경량 웹 interface adapter로, 시스템 이벤트를 실시간으로 웹
+브라우저(Event Viewer)에 중계합니다. `main.py`가 `WebDependencies`를
+주입해 `create_web_app()`으로 앱을 만들며, 각 앱은 독립된 WebSocket manager와
+event-pipe callback을 가집니다.
 
 ## Core Logic (핵심 로직)
 1. **WebSocket Streaming**: `/ws` 엔드포인트를 통해 클라이언트와 연결하고 실시간 데이터(주문, 시세, 로그)를 전송합니다.
@@ -51,7 +53,8 @@ openssl req -x509 -newkey rsa:4096 -keyout src/web/certs/key.pem -out src/web/ce
 ## Key Components (주요 구성 요소)
 
 ### `BASE_DIR` 상수
-모듈의 현재 위치(`src/core/`)로부터 한 단계 상위인 `src/` 디렉토리를 가리킵니다. 이를 통해 `web/`, `certs/` 등 다른 형제 디렉토리의 자산을 안정적으로 참조합니다.
+모듈의 현재 위치(`src/interfaces/web/`)에서 `src/` 디렉토리를 계산합니다.
+이를 통해 `web/`, `certs/` 등 정적 자산을 안정적으로 참조합니다.
 
 ### `favicon()` / `get_index()`
 - `src/web/` 폴더 내의 정적 파일을 읽어 반환합니다.
@@ -60,6 +63,6 @@ openssl req -x509 -newkey rsa:4096 -keyout src/web/certs/key.pem -out src/web/ce
     - `src/web/favicon.ico`
     - `src/web/static/` (CSS, JS)
 
-### `start_web_server(host, port, use_ssl)`
+### `start_web_server(application, host, port, use_ssl)`
 Uvicorn 서버를 실행합니다.
-- `main.py`가 collaborators를 주입한 뒤 별도 스레드로 기동합니다.
+- `main.py`가 composition한 FastAPI application을 별도 스레드로 기동합니다.

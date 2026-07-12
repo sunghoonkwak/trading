@@ -19,7 +19,10 @@ from telegram.ext import Application, CommandHandler, ContextTypes, Updater
 
 from core import display
 from core.constants import CONFIG_ROOT
-from interfaces.telegram.portfolio import register_portfolio_handlers
+from interfaces.telegram.portfolio import (
+    PortfolioCommandDependencies,
+    register_portfolio_handlers,
+)
 from interfaces.telegram.rebalancing import register_rebalancing_handlers
 from interfaces.telegram.strategy import register_strategy_handlers
 
@@ -95,7 +98,11 @@ async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await wrap_reply(update, f"⚠️ Error reading report: {e}", parse_mode='HTML')
 
 
-def initialize_telegram():
+def initialize_telegram(
+    *,
+    portfolio_dependencies: PortfolioCommandDependencies,
+    strategy_run_service,
+):
     """
     Initialize Telegram bot and start polling in a background thread.
     Uses asyncio event loop explicitly to avoid set_wakeup_fd issues.
@@ -146,9 +153,9 @@ def initialize_telegram():
             # Register Handlers
             set_telegram_bot(_app.bot, _chat_id)
             register_system_handlers(_app)
-            register_portfolio_handlers(_app)
+            register_portfolio_handlers(_app, portfolio_dependencies)
             register_strategy_handlers(_app)
-            register_rebalancing_handlers(_app)
+            register_rebalancing_handlers(_app, strategy_run_service)
             register_memo_handler(_app)
             _app.add_handler(CommandHandler("daily_report", cmd_daily_report))
             _app.add_error_handler(error_handler)

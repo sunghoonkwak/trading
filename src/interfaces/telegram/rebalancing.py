@@ -5,6 +5,8 @@ Telegram Rebalancing Module
 Handles the /rebalance command to view and execute the rebalancing strategy.
 """
 import logging
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, Optional, cast
 
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -29,20 +31,27 @@ from .system import (
 from .utils import wrap_edit, wrap_edit_message, wrap_reply
 
 REB_CONFIRM = 0
-_strategy_run_service: StrategyRunService | None = None
+_strategy_run_service: ContextVar[StrategyRunService | None] = ContextVar(
+    "telegram_rebalancing_service", default=None
+)
 
 
-def configure_strategy_run_service(service: StrategyRunService) -> None:
-    """Inject the application strategy use case from the composition root."""
-    global _strategy_run_service
-    _strategy_run_service = service
+@contextmanager
+def bind_rebalancing_service(service: StrategyRunService):
+    """Bind one application service for focused direct-handler tests."""
+    token = _strategy_run_service.set(service)
+    try:
+        yield
+    finally:
+        _strategy_run_service.reset(token)
 
 
 def run_rebalancing_strategy(execute: bool = False):
     """Compatibility seam for the application rebalancing use case."""
-    if _strategy_run_service is None:
-        raise RuntimeError("StrategyRunService is not configured.")
-    return _strategy_run_service.run_rebalancing(execute=execute)
+    service = _strategy_run_service.get()
+    if service is None:
+        raise RuntimeError("Rebalancing command is not bound to a Telegram factory.")
+    return service.run_rebalancing(execute=execute)
 
 def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
     if has_orders:
@@ -135,12 +144,22 @@ async def reb_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_runtime_confirmation_pending(context)
     return ConversationHandler.END
 
-def register_rebalancing_handlers(app: Application):
+def register_rebalancing_handlers(app: Application, strategy_run_service: StrategyRunService):
+    def bind(handler):
+        async def bound(update, context):
+            token = _strategy_run_service.set(strategy_run_service)
+            try:
+                return await handler(update, context)
+            finally:
+                _strategy_run_service.reset(token)
+
+        return bound
+
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("rebalance", cmd_rebalance)],
+        entry_points=[CommandHandler("rebalance", bind(cmd_rebalance))],
         states={
-            REB_CONFIRM: [CallbackQueryHandler(handle_reb_callback, pattern=r'^reb_')],
-            ConversationHandler.TIMEOUT: [TypeHandler(Update, reb_timeout)]
+            REB_CONFIRM: [CallbackQueryHandler(bind(handle_reb_callback), pattern=r'^reb_')],
+            ConversationHandler.TIMEOUT: [TypeHandler(Update, bind(reb_timeout))]
         },
         fallbacks=[],
         conversation_timeout=60

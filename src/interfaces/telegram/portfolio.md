@@ -1,6 +1,8 @@
 # Telegram Portfolio (`src/interfaces/telegram/portfolio.py`)
 
 이 모듈은 포트폴리오 요약 및 리밸런싱 관련 Telegram 명령어를 처리합니다.
+`main.py`가 `PortfolioCommandDependencies`를 주입해 등록하며, 핸들러마다
+factory-owned collaborators를 바인딩합니다.
 
 ## Commands (명령어)
 

@@ -6,13 +6,14 @@ import asyncio
 import json
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Optional, Set
 
 import uvicorn
-from fastapi import BackgroundTasks, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -35,20 +36,89 @@ class WebDependencies:
     env_flag: Callable[[str, bool], bool]
 
 
-_dependencies: Optional[WebDependencies] = None
+@dataclass
+class _WebRuntime:
+    dependencies: WebDependencies
+    manager: "ConnectionManager"
+    event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+_runtime_context: ContextVar[Optional[_WebRuntime]] = ContextVar(
+    "web_runtime", default=None
+)
 
 
 def create_web_app(dependencies: WebDependencies) -> FastAPI:
-    """Configure and return the web transport adapter application."""
-    global _dependencies
-    _dependencies = dependencies
-    return app
+    """Build an independently composed web transport application."""
+    runtime = _WebRuntime(dependencies=dependencies, manager=ConnectionManager())
+
+    @asynccontextmanager
+    async def app_lifespan(_app: FastAPI):
+        runtime.event_loop = asyncio.get_running_loop()
+        try:
+            dependencies.set_broadcast_callback(broadcast_callback)
+            logging.info("[WebServer] Registered web broadcast callback")
+        except Exception as exc:
+            logging.warning("[WebServer] Could not register callback: %s", exc)
+        yield
+        runtime.event_loop = None
+
+    def broadcast_callback(
+        msg_type: str,
+        message: str,
+        time_str: Optional[str] = None,
+    ) -> None:
+        if runtime.event_loop is None:
+            logging.error("[WebServer] Cannot broadcast: event loop is unavailable")
+            return
+        try:
+            data = _event_message_json(msg_type, message, time_str)
+            asyncio.run_coroutine_threadsafe(
+                runtime.manager.broadcast(data), runtime.event_loop
+            )
+        except Exception as exc:
+            logging.error("[WebServer] Broadcast error: %s", exc)
+
+    application = FastAPI(title="Trading Event Viewer", lifespan=app_lifespan)
+    application.state.web_runtime = runtime
+
+    @application.middleware("http")
+    async def bind_runtime(request, call_next):
+        token = _runtime_context.set(runtime)
+        try:
+            return await call_next(request)
+        finally:
+            _runtime_context.reset(token)
+
+    async def websocket_with_runtime(websocket: WebSocket):
+        token = _runtime_context.set(runtime)
+        try:
+            await websocket_endpoint(websocket)
+        finally:
+            _runtime_context.reset(token)
+
+    if os.path.exists(static_dir):
+        application.mount("/static", StaticFiles(directory=static_dir), name="static")
+    application.include_router(router)
+    application.websocket("/ws")(websocket_with_runtime)
+    return application
+
+
+@contextmanager
+def bind_web_runtime(application: FastAPI):
+    """Bind an app composition for direct adapter calls in focused tests."""
+    token = _runtime_context.set(application.state.web_runtime)
+    try:
+        yield
+    finally:
+        _runtime_context.reset(token)
 
 
 def _require_dependencies() -> WebDependencies:
-    if _dependencies is None:
-        raise RuntimeError("Web dependencies are not configured.")
-    return _dependencies
+    runtime = _runtime_context.get()
+    if runtime is None:
+        raise RuntimeError("Web request is not bound to an application composition.")
+    return runtime.dependencies
 
 
 class ConnectionManager:
@@ -86,11 +156,6 @@ class ConnectionManager:
                 self.active_connections.discard(conn)
 
 
-manager = ConnectionManager()
-
-# Event loop reference for thread-safe broadcasting
-_event_loop: Optional[asyncio.AbstractEventLoop] = None
-
 # Base directory for assets (src folder)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -124,60 +189,18 @@ def _event_message_json(
     )
 
 
-def _broadcast_callback(
-    msg_type: str,
-    message: str,
-    time_str: Optional[str] = None,
-):
-    """Callback for event_pipe to broadcast messages to web clients."""
-    global _event_loop
-    if _event_loop is None:
-        logging.error("[WebServer] Cannot broadcast: _event_loop is None")
-        return
-    try:
-        data = _event_message_json(msg_type, message, time_str)
-        asyncio.run_coroutine_threadsafe(manager.broadcast(data), _event_loop)
-    except Exception as e:
-        logging.error(f"[WebServer] Broadcast error: {e}")
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan manager."""
-    global _event_loop
-
-    # Startup
-    _event_loop = asyncio.get_running_loop()
-
-    # Register broadcast callback with event_pipe
-    try:
-        _require_dependencies().set_broadcast_callback(_broadcast_callback)
-        logging.info("[WebServer] Registered web broadcast callback")
-    except Exception as e:
-        logging.warning(f"[WebServer] Could not register callback: {e}")
-
-    yield
-
-    # Shutdown
-    _event_loop = None
-
-
-app = FastAPI(title="Trading Event Viewer", lifespan=lifespan)
+router = APIRouter()
 
 # Mount static files
 web_dir = os.path.join(BASE_DIR, "web")
 static_dir = os.path.join(web_dir, "static")
-
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
 
 class MemoDeleteRequest(BaseModel):
     date: str
     text: str
 
 
-@app.get("/favicon.ico", include_in_schema=False)
+@router.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     """Serve favicon."""
     favicon_path = os.path.join(web_dir, "favicon.ico")
@@ -186,7 +209,7 @@ async def favicon():
     return {"error": "favicon.ico not found"}
 
 
-@app.get("/")
+@router.get("/")
 async def get_index():
     """Serve main event viewer page."""
     index_path = os.path.join(web_dir, "index.html")
@@ -195,7 +218,7 @@ async def get_index():
     return {"error": "index.html not found"}
 
 
-@app.get("/api/memos")
+@router.get("/api/memos")
 async def get_memos():
     """Fetch all memos from memo.json."""
     try:
@@ -205,7 +228,7 @@ async def get_memos():
         return {"error": str(e)}
 
 
-@app.post("/api/memos/delete")
+@router.post("/api/memos/delete")
 async def delete_memo(request: MemoDeleteRequest):
     """Delete a specific memo."""
     try:
@@ -232,7 +255,7 @@ async def delete_memo(request: MemoDeleteRequest):
         return {"success": False, "error": str(e)}
 
 
-@app.get("/api/holdings/{ticker}")
+@router.get("/api/holdings/{ticker}")
 async def get_holdings_data(ticker: str):
     """Fetch holdings data for a specific ticker from portfolio.json."""
     if not _is_runtime_running():
@@ -311,10 +334,12 @@ async def get_holdings_data(ticker: str):
         return {"error": str(e)}
 
 
-@app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time event streaming."""
-    await manager.connect(websocket)
+    runtime = _runtime_context.get()
+    if runtime is None:
+        raise RuntimeError("WebSocket is not bound to an application composition.")
+    await runtime.manager.connect(websocket)
     try:
         while True:
             data = await websocket.receive_text()
@@ -323,10 +348,10 @@ async def websocket_endpoint(websocket: WebSocket):
             elif data == "sync_orders":
                 await _sync_orders_for_client()
     except WebSocketDisconnect:
-        await manager.disconnect(websocket)
+        await runtime.manager.disconnect(websocket)
     except Exception as e:
         logging.error(f"[WebServer] WebSocket error: {e}")
-        await manager.disconnect(websocket)
+        await runtime.manager.disconnect(websocket)
 
 
 async def _sync_orders_for_client():
@@ -340,7 +365,7 @@ async def _sync_orders_for_client():
     return {"success": True}
 
 
-@app.post("/api/orders/{order_id}/cancel")
+@router.post("/api/orders/{order_id}/cancel")
 async def cancel_order(order_id: str):
     """Cancel an open order by its order ID."""
     if not _env_flag("WEB_ENABLE_ORDER_CANCEL"):
@@ -359,7 +384,7 @@ async def cancel_order(order_id: str):
         return {"success": False, "error": str(e)}
 
 
-@app.post("/api/trigger/portfolio")
+@router.post("/api/trigger/portfolio")
 async def trigger_portfolio_report(background_tasks: BackgroundTasks):
     """Trigger daily portfolio report manually."""
     if not _env_flag("WEB_ENABLE_MANUAL_REPORT_TRIGGERS"):
@@ -381,7 +406,7 @@ async def trigger_portfolio_report(background_tasks: BackgroundTasks):
         return {"success": False, "error": str(e)}
 
 
-@app.post("/api/trigger/order")
+@router.post("/api/trigger/order")
 async def trigger_order_report(background_tasks: BackgroundTasks):
     """Trigger daily order report manually."""
     if not _env_flag("WEB_ENABLE_MANUAL_REPORT_TRIGGERS"):
@@ -470,7 +495,12 @@ def _cancel_order_sync(order_id: str):
         return {"success": False, "error": str(e)}
 
 
-def start_web_server(host: str = "0.0.0.0", port: int = 8080, use_ssl: bool = True):
+def start_web_server(
+    application: FastAPI,
+    host: str = "0.0.0.0",
+    port: int = 8080,
+    use_ssl: bool = True,
+):
     """Start the web server with optional HTTPS support."""
     # Configure uvicorn to log to the same file as main app
     log_config = uvicorn.config.LOGGING_CONFIG
@@ -487,7 +517,7 @@ def start_web_server(host: str = "0.0.0.0", port: int = 8080, use_ssl: bool = Tr
 
     if ssl_enabled:
         uvicorn.run(
-            app,
+            application,
             host=host,
             port=port,
             ssl_certfile=cert_file,
@@ -499,7 +529,7 @@ def start_web_server(host: str = "0.0.0.0", port: int = 8080, use_ssl: bool = Tr
         if use_ssl:
             logging.warning("[WebServer] SSL requested but certs not found, falling back to HTTP")
         uvicorn.run(
-            app,
+            application,
             host=host,
             port=port,
             log_level="warning",
@@ -508,4 +538,4 @@ def start_web_server(host: str = "0.0.0.0", port: int = 8080, use_ssl: bool = Tr
 
 
 if __name__ == "__main__":
-    start_web_server()
+    raise SystemExit("Create the web app from the production composition root.")

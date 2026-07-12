@@ -55,28 +55,25 @@ class TradingSystem:
         from infrastructure.strategy_execution import configure_strategy_execution_service
         from interfaces.telegram.bot import initialize_telegram
         from interfaces.telegram.memo import configure_memo_store
-        from interfaces.telegram.portfolio import (
-            configure_portfolio_collaborators,
-            configure_portfolio_reader,
-        )
-        from interfaces.telegram.rebalancing import configure_strategy_run_service
+        from interfaces.telegram.portfolio import PortfolioCommandDependencies
         from state.system_state import ThreadStatus, update_telegram_state
 
-        configure_portfolio_reader(build_portfolio_service())
         configure_memo_store(
             lambda: load_json(ConfigFile.MEMO, default={}),
             lambda memos: save_json(ConfigFile.MEMO, memos),
         )
-        configure_portfolio_collaborators(
-            market_reader=market_data,
-            order_reader=order_admin,
-            get_weight_diffs=get_weight_diffs,
-            refresh_gsheet_cache=refresh_gsheet_cache,
-        )
         configure_strategy_execution_service()
-        configure_strategy_run_service(get_strategy_run_service())
         update_telegram_state(thread_status=ThreadStatus.STARTING)
-        if initialize_telegram():
+        if initialize_telegram(
+            portfolio_dependencies=PortfolioCommandDependencies(
+                reader=build_portfolio_service(),
+                market_reader=market_data,
+                order_reader=order_admin,
+                get_weight_diffs=get_weight_diffs,
+                refresh_gsheet_cache=refresh_gsheet_cache,
+            ),
+            strategy_run_service=get_strategy_run_service(),
+        ):
             from broker.kis_event_handler import (
                 configure_notification_sender as configure_kis_event_notification_sender,
             )
@@ -253,7 +250,7 @@ class TradingSystem:
             from interfaces.web import WebDependencies, create_web_app, start_web_server
 
             portfolio_reader = build_portfolio_service()
-            create_web_app(
+            web_app = create_web_app(
                 WebDependencies(
                     runtime_is_running=runtime_control.is_runtime_running,
                     set_broadcast_callback=event_pipe.set_web_broadcast_callback,
@@ -269,7 +266,15 @@ class TradingSystem:
                     in ENV_TRUE_VALUES if name in os.environ else default,
                 )
             )
-            threading.Thread(target=start_web_server, kwargs={"host": DEFAULT_HOST, "port": DEFAULT_WEB_PORT}, daemon=True).start()
+            threading.Thread(
+                target=start_web_server,
+                kwargs={
+                    "application": web_app,
+                    "host": DEFAULT_HOST,
+                    "port": DEFAULT_WEB_PORT,
+                },
+                daemon=True,
+            ).start()
             self._web_server_started = True
             print("[Startup] ✓ Web Event Viewer started in background")
         except Exception:

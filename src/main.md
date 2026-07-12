@@ -49,6 +49,10 @@ control plane으로 떠 있으므로 중복 시작하지 않습니다. KIS 또�
 초기화 실패 시 Telegram 알림을 시도하고 runtime을 OFF로 유지하지만,
 Telegram/web control plane과 컨테이너 프로세스는 계속 살아 있습니다.
 
+`tests/core/test_runtime.py`는 fake collaborators로 이 순서와 KIS/Toss
+실패 시 scheduler/web을 시작하지 않는 fail-closed lifecycle smoke를
+검증합니다. 이 smoke는 네트워크 또는 주문 변경 호출을 하지 않습니다.
+
 ### `TradingSystem.stop_trading_runtime`
 Telegram `/system_off` 명령에서 호출됩니다. Scheduler와 KIS/WebSocket
 runtime을 중지하고 Telegram bot은 유지합니다. 이미 OFF 상태인 경우에도

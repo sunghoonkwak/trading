@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
@@ -8,6 +9,21 @@ from interfaces.telegram import portfolio as telegram_portfolio
 from interfaces.telegram import rebalancing as telegram_rebalancing
 from interfaces.telegram import strategy as telegram_strategy
 from strategy.base import OrderSide, StrategyOrder, StrategyStatus
+
+
+def _portfolio_dependencies(**overrides):
+    defaults = {
+        "reader": SimpleNamespace(get_portfolio_data=lambda: {}),
+        "market_reader": SimpleNamespace(
+            get_current_price=lambda _ticker: 0.0,
+            fetch_price=lambda _ticker: 0.0,
+        ),
+        "order_reader": SimpleNamespace(fetch_open_orders=lambda: (None, 0, 0, 0)),
+        "get_weight_diffs": lambda _scope: ([], 0.0, {}),
+        "refresh_gsheet_cache": lambda: {},
+    }
+    defaults.update(overrides)
+    return telegram_portfolio.PortfolioCommandDependencies(**defaults)
 
 
 def test_telegram_strategy_suite_uses_application_facade(monkeypatch):
@@ -25,9 +41,10 @@ def test_telegram_rebalancing_uses_application_facade(monkeypatch):
         def run_rebalancing(self, *, execute):
             return {"execute": execute}
 
-    telegram_rebalancing.configure_strategy_run_service(Service())
-
-    assert telegram_rebalancing.run_rebalancing_strategy(execute=True) == {"execute": True}
+    with telegram_rebalancing.bind_rebalancing_service(Service()):
+        assert telegram_rebalancing.run_rebalancing_strategy(execute=True) == {
+            "execute": True
+        }
 
 
 def test_strategy_command_shows_cash_funding_summary(monkeypatch):
@@ -489,7 +506,6 @@ def test_portfolio_weight_command_uses_valid_portfolio_scope(monkeypatch):
         "get_running_loop",
         lambda: FakeLoop(),
     )
-    monkeypatch.setattr(telegram_portfolio, "_get_weight_diffs", fake_get_weight_diffs)
     monkeypatch.setattr(
         telegram_portfolio,
         "format_weight_diffs",
@@ -503,7 +519,10 @@ def test_portfolio_weight_command_uses_valid_portfolio_scope(monkeypatch):
     class Context:
         user_data = {}
 
-    asyncio.run(telegram_portfolio.cmd_portfolio_weight(Update(), Context()))
+    with telegram_portfolio.bind_portfolio_dependencies(
+        _portfolio_dependencies(get_weight_diffs=fake_get_weight_diffs)
+    ):
+        asyncio.run(telegram_portfolio.cmd_portfolio_weight(Update(), Context()))
 
     assert captured == {"scope": "all"}
     assert replies
@@ -533,18 +552,14 @@ def test_gsheet_command_refreshes_only_gsheet_cache(monkeypatch):
         lambda: FakeLoop(),
     )
     monkeypatch.setattr(telegram_portfolio, "wrap_reply", fake_reply)
-    monkeypatch.setattr(
-        telegram_portfolio,
-            "_refresh_gsheet_cache",
-        lambda: {
+    refresh = lambda: {
             "success": True,
             "holdings_count": 3,
             "cash_count": 1,
             "accounts_count": 2,
             "error": None,
             "last_updated": "2026-06-26T01:02:03+00:00",
-        },
-    )
+        }
 
     class Update:
         pass
@@ -552,7 +567,10 @@ def test_gsheet_command_refreshes_only_gsheet_cache(monkeypatch):
     class Context:
         user_data = {}
 
-    asyncio.run(telegram_portfolio.cmd_gsheet(Update(), Context()))
+    with telegram_portfolio.bind_portfolio_dependencies(
+        _portfolio_dependencies(refresh_gsheet_cache=refresh)
+    ):
+        asyncio.run(telegram_portfolio.cmd_gsheet(Update(), Context()))
 
     assert len(replies) == 1
     assert "GSheet cache updated" in replies[0]
@@ -592,13 +610,15 @@ def test_format_weight_diffs_shows_group_total_and_main_ticker(monkeypatch):
 
 
 def test_ticker_detail_hides_current_price_source(monkeypatch):
-    monkeypatch.setattr(
-        telegram_portfolio,
-        "_get_current_price",
-        lambda ticker: 100.0,
-    )
-
-    text = telegram_portfolio.format_ticker_detail(
+    with telegram_portfolio.bind_portfolio_dependencies(
+        _portfolio_dependencies(
+            market_reader=SimpleNamespace(
+                get_current_price=lambda _ticker: 100.0,
+                fetch_price=lambda _ticker: 0.0,
+            )
+        )
+    ):
+        text = telegram_portfolio.format_ticker_detail(
         "AAPL",
         {
             "qty": 2,
@@ -611,7 +631,7 @@ def test_ticker_detail_hides_current_price_source(monkeypatch):
             "current_weights": {"AAPL": 0.1},
             "targets": {"AAPL": 0.2},
         },
-    )
+        )
 
     assert "<b>Cur Price:</b> $100.00" in text
     assert "(WS)" not in text
@@ -620,16 +640,18 @@ def test_ticker_detail_hides_current_price_source(monkeypatch):
 
 
 def test_ticker_not_in_portfolio_hides_current_price_source(monkeypatch):
-    monkeypatch.setattr(
-        telegram_portfolio,
-        "_get_current_price",
-        lambda ticker: 7460.0,
-    )
-
-    text = telegram_portfolio.format_ticker_not_in_portfolio(
-        "453850",
-        {"targets": {"453850": 0}},
-    )
+    with telegram_portfolio.bind_portfolio_dependencies(
+        _portfolio_dependencies(
+            market_reader=SimpleNamespace(
+                get_current_price=lambda _ticker: 7460.0,
+                fetch_price=lambda _ticker: 0.0,
+            )
+        )
+    ):
+        text = telegram_portfolio.format_ticker_not_in_portfolio(
+            "453850",
+            {"targets": {"453850": 0}},
+        )
 
     assert "<b>Cur Price:</b> $7,460.00" in text
     assert "(WebSocket)" not in text
