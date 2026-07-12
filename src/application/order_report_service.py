@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from typing import Any
+from uuid import uuid4
 
 from application.ports import StrategyOrderExecutor
 from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
@@ -21,11 +22,20 @@ class OrderReportService:
 
     def execute(self, order: StrategyOrder) -> dict[str, Any]:
         """Return channel-neutral execution result data."""
+        if not order.correlation_id:
+            order.correlation_id = str(uuid4())
         if callable(self._execute_order):
             success, message = self._execute_order(order)
         else:
             success, message = self._execute_order.execute(order)
-        return {"order": order, "success": success, "message": message}
+        ambiguous = message.startswith("[AMBIGUOUS]")
+        return {
+            "order": order,
+            "success": success,
+            "message": message,
+            "ambiguous": ambiguous,
+            "correlation_id": order.correlation_id,
+        }
 
     def execute_many(
         self,

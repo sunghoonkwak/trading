@@ -31,6 +31,7 @@ class StrategyOrder:
     reason: str = ""
     order_type: str = ORDER_TYPE_LIMIT
     target_budget: Optional[float] = None
+    correlation_id: Optional[str] = None
 
     def __str__(self):
         side_str = "BUY" if self.side == OrderSide.BUY else "SELL"

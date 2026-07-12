@@ -66,6 +66,7 @@ def place_order(order: StrategyOrder) -> Tuple[bool, str]:
         create_order(
             account_seq=account_seq,
             access_token=access_token,
+            client_order_id=order.correlation_id,
             **payload,
         )
         return True, "Success"

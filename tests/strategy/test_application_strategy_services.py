@@ -48,11 +48,13 @@ def test_order_report_service_returns_channel_neutral_execution_result():
     order = StrategyOrder("SOXL", OrderSide.BUY, 1, 10.0)
     service = OrderReportService(execute_order=lambda received: (received is order, "accepted"))
 
-    assert service.execute(order) == {
-        "order": order,
-        "success": True,
-        "message": "accepted",
-    }
+    result = service.execute(order)
+
+    assert result["order"] is order
+    assert result["success"] is True
+    assert result["message"] == "accepted"
+    assert result["ambiguous"] is False
+    assert result["correlation_id"] == order.correlation_id
 
 
 def test_order_report_service_executes_sells_before_buys_and_waits_once():
@@ -82,6 +84,19 @@ def test_order_report_service_returns_retry_status_and_pending_orders():
     assert result["status"].value == "partial"
     assert result["succeeded_orders"] == [first]
     assert result["pending_orders"] == [second]
+
+
+def test_order_report_service_assigns_correlation_id_to_ambiguous_outcome():
+    order = StrategyOrder("SOXL", OrderSide.BUY, 1, 10.0)
+    service = OrderReportService(
+        execute_order=lambda _order: (False, "[AMBIGUOUS] broker timeout")
+    )
+
+    result = service.execute(order)
+
+    assert result["ambiguous"] is True
+    assert result["correlation_id"]
+    assert order.correlation_id == result["correlation_id"]
 
 
 def test_application_execution_exposes_application_use_case_facade(monkeypatch):

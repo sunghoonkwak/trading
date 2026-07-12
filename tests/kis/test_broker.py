@@ -656,7 +656,7 @@ def test_place_overseas_order_reports_timeout(monkeypatch):
     success, message = kis_broker.place_overseas_order(order)
 
     assert success is False
-    assert "[API Timeout]" in message
+    assert "[AMBIGUOUS]" in message
 
 
 def test_strategy_broker_defaults_to_kis(monkeypatch):

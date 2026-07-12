@@ -755,6 +755,42 @@ def test_run_raoeo_persists_skipped_buy_budget_history(monkeypatch):
     assert saved["history"][0]["raoeo"]["skipped_buy_budgets"] == {"FAS": 83.33}
 
 
+def test_raoeo_history_does_not_retry_ambiguous_order(monkeypatch):
+    report = {"orders": [], "succeeded_orders": [], "pending_orders": [], "info": {}}
+    history = {
+        "orders": [
+            {
+                "ticker": "TQQQ",
+                "side": "BUY",
+                "qty": 1,
+                "price": 100.0,
+                "success": False,
+                "ambiguous": True,
+                "message": "[AMBIGUOUS] broker timeout",
+                "correlation_id": "order-1",
+            }
+        ]
+    }
+
+    monkeypatch.setattr(
+        execution_service,
+        "get_order_report_service",
+        lambda: (_ for _ in ()).throw(AssertionError("ambiguous orders must not retry")),
+    )
+
+    execution_service._handle_raoeo_history(
+        report,
+        history,
+        execute=True,
+        market_status={"is_market_open": True},
+        today_str="2026-07-12",
+    )
+
+    assert report["status"] == StrategyStatus.ERROR
+    assert report["pending_orders"] == []
+    assert report["error"] == "Ambiguous order outcome requires reconciliation."
+
+
 def test_run_va_with_all_targets_disabled_stops_before_history(monkeypatch):
     config = {
         "value_averaging": {

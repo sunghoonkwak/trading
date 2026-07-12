@@ -121,7 +121,10 @@ def place_overseas_order(order: StrategyOrder) -> Tuple[bool, str]:
             return True, "Success"
         return False, str(err)
     except requests.exceptions.Timeout:
-        error_msg = f"[API Timeout] execution timed out for {order.symbol}"
+        error_msg = (
+            f"[AMBIGUOUS] execution timed out for {order.symbol}; "
+            f"correlation_id={order.correlation_id or 'unassigned'}"
+        )
         logging.error(error_msg)
         return False, error_msg
     except Exception as e:

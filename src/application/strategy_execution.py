@@ -9,8 +9,8 @@ This module handles the orchestration of strategy execution:
 """
 import logging
 import time
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
@@ -303,8 +303,9 @@ def _restore_orders_from_strategy_history(
                 order_type=order_data.get("order_type", ORDER_TYPE_LIMIT),
                 reason=order_data.get("reason", ""),
                 target_budget=order_data.get("target_budget"),
+                correlation_id=order_data.get("correlation_id"),
             )
-            success = order_data.get("success", False)
+            success = order_data.get("success", False) or order_data.get("ambiguous", False)
             restored.append((order, success))
         except Exception as e:
             logging.error(f"Failed to restore order: {order_data}, error: {e}")
@@ -313,7 +314,13 @@ def _restore_orders_from_strategy_history(
     return restored
 
 
-def _build_order_history_entry(order: StrategyOrder, success: bool, message: str) -> Dict:
+def _build_order_history_entry(
+    order: StrategyOrder,
+    success: bool,
+    message: str,
+    *,
+    ambiguous: bool = False,
+) -> Dict:
     """Serialize a strategy order for strategy_history.json."""
     entry = {
         "ticker": order.symbol,
@@ -324,9 +331,12 @@ def _build_order_history_entry(order: StrategyOrder, success: bool, message: str
         "reason": order.reason,
         "success": success,
         "message": message,
+        "ambiguous": ambiguous,
     }
     if order.target_budget is not None:
         entry["target_budget"] = order.target_budget
+    if order.correlation_id:
+        entry["correlation_id"] = order.correlation_id
     return entry
 
 
@@ -384,6 +394,7 @@ def _build_merged_history_entries(
             order,
             result["success"],
             result["message"],
+            ambiguous=result.get("ambiguous", False),
         ))
     return merged_orders
 
@@ -414,6 +425,11 @@ def _retry_failed_history_orders(
     )
     save_data["orders"] = _build_merged_history_entries(succeeded, results)
     _save_strategy_to_history(today_str, strategy_key, save_data)
+
+
+def _has_ambiguous_history_order(strategy_hist: Dict) -> bool:
+    """Prevent automatic retries until an operator reconciles a timeout."""
+    return any(order.get("ambiguous", False) for order in strategy_hist.get("orders", []))
 
 
 def _save_strategy_to_history(
@@ -462,6 +478,7 @@ def _build_strategy_history_data(
                 order,
                 res["success"],
                 res["message"],
+                ambiguous=res.get("ambiguous", False),
             ))
     elif report.get("orders"):
         for order in report["orders"]:
@@ -605,6 +622,12 @@ def _handle_raoeo_history(
     logging.info(f"RAOEO: Found today's history at {raoeo_hist.get('time', '?')}")
     succeeded, failed = _restore_history_orders(report, raoeo_hist)
 
+    if _has_ambiguous_history_order(raoeo_hist):
+        report["status"] = StrategyStatus.ERROR
+        report["error"] = "Ambiguous order outcome requires reconciliation."
+        report["pending_orders"] = []
+        return
+
     if not failed:
         report["status"] = StrategyStatus.EXECUTED
         logging.info("RAOEO: All orders from history were successful.")
@@ -640,6 +663,12 @@ def _handle_va_history(
     logging.info(f"VA: Found today's history at {va_hist.get('time', '?')}")
     succeeded, failed = _restore_history_orders(report, va_hist)
     report["info"]["targets_context"] = va_hist.get("targets_context", {})
+
+    if _has_ambiguous_history_order(va_hist):
+        report["status"] = StrategyStatus.ERROR
+        report["error"] = "Ambiguous order outcome requires reconciliation."
+        report["pending_orders"] = []
+        return
 
     if not failed:
         hist_status = va_hist.get("status")
