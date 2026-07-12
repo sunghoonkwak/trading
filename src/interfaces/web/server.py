@@ -156,8 +156,8 @@ class ConnectionManager:
                 self.active_connections.discard(conn)
 
 
-# Base directory for assets (src folder)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Directory for this adapter and its Event Viewer assets.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -192,7 +192,7 @@ def _event_message_json(
 router = APIRouter()
 
 # Mount static files
-web_dir = os.path.join(BASE_DIR, "web")
+web_dir = BASE_DIR
 static_dir = os.path.join(web_dir, "static")
 
 class MemoDeleteRequest(BaseModel):

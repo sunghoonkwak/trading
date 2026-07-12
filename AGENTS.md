@@ -12,7 +12,7 @@ This is a Python 3.11+ KIS real-time trading system. Runtime entry point:
 - `src/scheduler/`, `src/telegram_bot/`, `src/data/`, `src/state/`,
   `src/utils/`: supporting services
 - `src/broker/`: application-owned broker facades around external trading APIs
-- `src/web/static/`: web assets
+- `src/interfaces/web/`: Event Viewer adapter and web assets
 - `templates/`: sample configuration only
 - `scripts/backtest/raoeo/`: backtest tooling
 

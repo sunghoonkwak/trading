@@ -166,7 +166,7 @@ docker logs -f my-trading-bot
 http://localhost:8080
 ```
 
-`src/web/certs/cert.pem`과 `src/web/certs/key.pem`이 있으면 HTTPS로
+`src/interfaces/web/certs/cert.pem`과 `src/interfaces/web/certs/key.pem`이 있으면 HTTPS로
 시작합니다.
 
 ```text

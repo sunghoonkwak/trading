@@ -9,9 +9,9 @@ event-pipe callback을 가집니다.
 ## Core Logic (핵심 로직)
 1. **WebSocket Streaming**: `/ws` 엔드포인트를 통해 클라이언트와 연결하고 실시간 데이터(주문, 시세, 로그)를 전송합니다.
 2. **Event Broadcasting**: `core.event_pipe`로부터 수신한 메시지를 연결된 모든 웹 클라이언트에게 브로드캐스트합니다.
-3. **Static File Serving**: `src/web/` 디렉토리의 정적 파일(`favicon.ico`, `index.html`, `styles.css`, `app.js`)을 제공합니다.
+3. **Static File Serving**: `src/interfaces/web/` 디렉토리의 정적 파일(`favicon.ico`, `index.html`, `styles.css`, `app.js`)을 제공합니다.
 4. **Log Redirection**: Uvicorn 서버의 로그를 표준 출력으로 리다이렉트하여 컨테이너 로그 시스템과 통합합니다.
-5. **HTTPS 지원**: `src/web/certs/` 폴더의 인증서를 통한 SSL/TLS 암호화 연결을 지원합니다.
+5. **HTTPS 지원**: `src/interfaces/web/certs/` 폴더의 인증서를 통한 SSL/TLS 암호화 연결을 지원합니다.
 6. **Holdings Data API**: 특정 종목의 상세 보유 현황을 조회하기 위한 REST API(`/api/holdings/{ticker}`)를 제공합니다.
 
 ## Configuration (설정)
@@ -31,15 +31,14 @@ event-pipe callback을 가집니다.
 ### 인증서 생성 (예시)
 ```bash
 # 프로젝트 루트(src/의 부모) 기준
-mkdir -p src/web/certs
-openssl req -x509 -newkey rsa:4096 -keyout src/web/certs/key.pem -out src/web/certs/cert.pem \
+mkdir -p src/interfaces/web/certs
+openssl req -x509 -newkey rsa:4096 -keyout src/interfaces/web/certs/key.pem -out src/interfaces/web/certs/cert.pem \
   -days 365 -nodes -subj "/CN=localhost/O=Trading/C=KR"
 ```
 
 ### 인증서 위치
-- `src/web/certs/cert.pem`: SSL 인증서
-- `src/web/certs/key.pem`: 개인 키
-- *참고: 웹 서버 자산의 응집도를 높이기 위해 인증서 폴더가 `src/web/certs/`로 이동되었습니다.*
+- `src/interfaces/web/certs/cert.pem`: SSL 인증서
+- `src/interfaces/web/certs/key.pem`: 개인 키
 
 ### 동작 방식
 - 인증서 파일이 존재하면 자동으로 **HTTPS**로 실행
@@ -53,15 +52,15 @@ openssl req -x509 -newkey rsa:4096 -keyout src/web/certs/key.pem -out src/web/ce
 ## Key Components (주요 구성 요소)
 
 ### `BASE_DIR` 상수
-모듈의 현재 위치(`src/interfaces/web/`)에서 `src/` 디렉토리를 계산합니다.
-이를 통해 `web/`, `certs/` 등 정적 자산을 안정적으로 참조합니다.
+모듈과 같은 `src/interfaces/web/` 디렉토리를 사용합니다.
+이를 통해 정적 자산과 인증서를 함께 참조합니다.
 
 ### `favicon()` / `get_index()`
-- `src/web/` 폴더 내의 정적 파일을 읽어 반환합니다.
+- `src/interfaces/web/` 폴더 내의 정적 파일을 읽어 반환합니다.
 - 정적 파일 폴더 구조:
-    - `src/web/index.html`
-    - `src/web/favicon.ico`
-    - `src/web/static/` (CSS, JS)
+    - `src/interfaces/web/index.html`
+    - `src/interfaces/web/favicon.ico`
+    - `src/interfaces/web/static/` (CSS, JS)
 
 ### `start_web_server(application, host, port, use_ssl)`
 Uvicorn 서버를 실행합니다.
