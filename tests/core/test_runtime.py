@@ -667,11 +667,9 @@ def test_runtime_off_stops_scheduler_and_kis_but_keeps_telegram(monkeypatch):
     system = main.TradingSystem()
     system._runtime_running = True
 
-    fake_scheduler = types.ModuleType("interfaces.scheduler.runner")
-    fake_scheduler.stop_scheduler = lambda: calls.append("stop_scheduler")
+    system._scheduler_runner = SimpleNamespace(stop=lambda: calls.append("stop_scheduler"))
     fake_kis_worker = types.ModuleType("broker.kis_worker")
     fake_kis_worker.stop_kis_thread = lambda: calls.append("stop_kis_thread")
-    monkeypatch.setitem(sys.modules, "interfaces.scheduler.runner", fake_scheduler)
     monkeypatch.setitem(sys.modules, "broker.kis_worker", fake_kis_worker)
 
     result = system.stop_trading_runtime()

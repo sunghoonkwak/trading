@@ -22,9 +22,8 @@ try:
 except ImportError:
     pass
 
-# Import Core Modules
+from application.runtime_service import RuntimeCommandResult, RuntimeController
 from core import display, event_pipe, lock_manager, trading_config
-from core.runtime_control import RuntimeCommandResult, register_runtime_hooks
 from utils.logger import LogManager
 
 
@@ -54,14 +53,10 @@ class TradingSystem:
         from infrastructure.portfolio import build_portfolio_service, refresh_gsheet_cache
         from infrastructure.strategy_execution import configure_strategy_execution_service
         from interfaces.telegram.bot import initialize_telegram
-        from interfaces.telegram.memo import configure_memo_store
+        from interfaces.telegram.memo import MemoStore
         from interfaces.telegram.portfolio import PortfolioCommandDependencies
         from state.system_state import ThreadStatus, update_telegram_state
 
-        configure_memo_store(
-            lambda: load_json(ConfigFile.MEMO, default={}),
-            lambda memos: save_json(ConfigFile.MEMO, memos),
-        )
         configure_strategy_execution_service()
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram(
@@ -73,6 +68,15 @@ class TradingSystem:
                 refresh_gsheet_cache=refresh_gsheet_cache,
             ),
             strategy_run_service=get_strategy_run_service(),
+            memo_store=MemoStore(
+                load=lambda: load_json(ConfigFile.MEMO, default={}),
+                save=lambda memos: save_json(ConfigFile.MEMO, memos),
+            ),
+            runtime_controller=RuntimeController(
+                start=self.start_trading_runtime,
+                stop=self.stop_trading_runtime,
+                is_running=self.is_trading_runtime_running,
+            ),
         ):
             from broker.kis_event_handler import (
                 configure_notification_sender as configure_kis_event_notification_sender,
@@ -213,20 +217,18 @@ class TradingSystem:
             from infrastructure.portfolio import build_portfolio_service
             from infrastructure.strategy_execution import configure_strategy_execution_service
             from interfaces.scheduler.order_runner import SchedulerOrderRunner
-            from interfaces.scheduler.portfolio_runner import (
-                configure_notification_sender as configure_portfolio_notification_sender,
-            )
+            from interfaces.scheduler.portfolio_runner import SchedulerPortfolioRunner
             from interfaces.scheduler.runner import SchedulerRunner
             from interfaces.telegram.utils import send_notification
 
             configure_strategy_execution_service()
-            configure_portfolio_notification_sender(send_notification)
             self._scheduler_runner = SchedulerRunner(
                 portfolio_reader=build_portfolio_service(),
                 order_runner=SchedulerOrderRunner(
                     strategy_run_service=get_strategy_run_service(),
                     notify=send_notification,
                 ),
+                portfolio_runner=SchedulerPortfolioRunner(send_notification),
             )
             self._scheduler_runner.start()
             print("[Startup] ✓ Scheduler started")
@@ -242,17 +244,19 @@ class TradingSystem:
         from core.constants import DEFAULT_HOST, DEFAULT_WEB_PORT
         try:
             from broker import order_admin
-            from core import event_pipe, runtime_control
+            from core import event_pipe
             from core.constants import ENV_TRUE_VALUES
             from data.config_manager import ConfigFile, load_json, save_json
             from infrastructure.portfolio import build_portfolio_service
-            from interfaces.scheduler.portfolio_runner import run_daily_portfolio_report
+            from interfaces.scheduler.portfolio_runner import SchedulerPortfolioRunner
+            from interfaces.telegram.utils import send_notification
             from interfaces.web import WebDependencies, create_web_app, start_web_server
 
             portfolio_reader = build_portfolio_service()
+            portfolio_runner = SchedulerPortfolioRunner(send_notification)
             web_app = create_web_app(
                 WebDependencies(
-                    runtime_is_running=runtime_control.is_runtime_running,
+                    runtime_is_running=self.is_trading_runtime_running,
                     set_broadcast_callback=event_pipe.set_web_broadcast_callback,
                     load_memos=lambda: load_json(ConfigFile.MEMO, default={}),
                     save_memos=lambda memos: save_json(ConfigFile.MEMO, memos),
@@ -260,7 +264,7 @@ class TradingSystem:
                     sync_open_orders=order_admin.sync_open_orders,
                     fetch_open_orders=order_admin.fetch_open_orders,
                     execute_manage_action=order_admin.execute_manage_action,
-                    run_portfolio_report=run_daily_portfolio_report,
+                    run_portfolio_report=portfolio_runner.run_daily_portfolio_report,
                     run_order_report=self._run_manual_order_report,
                     env_flag=lambda name, default=False: os.environ.get(name, "").strip().lower()
                     in ENV_TRUE_VALUES if name in os.environ else default,
@@ -359,10 +363,6 @@ class TradingSystem:
             if self._scheduler_runner is not None:
                 self._scheduler_runner.stop()
                 self._scheduler_runner = None
-            else:
-                from interfaces.scheduler.runner import stop_scheduler
-
-                stop_scheduler()
         except Exception as e:
             logging.warning("[Runtime] Scheduler stop skipped or failed: %s", e)
         try:
@@ -414,11 +414,6 @@ class TradingSystem:
             print("\n[ERROR] Telegram initialization failed. Trading runtime will not start.")
             self.shutdown()
             sys.exit(1)
-        register_runtime_hooks(
-            self.start_trading_runtime,
-            self.stop_trading_runtime,
-            self.is_trading_runtime_running,
-        )
         self.start_web_server()
 
         print("\n[Startup] Control plane is ready. Trading runtime is OFF.")

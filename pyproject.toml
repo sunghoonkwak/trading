@@ -17,7 +17,7 @@ files = [
     "src/core/display.py",
     "src/core/http_defaults.py",
     "src/core/lock_manager.py",
-    "src/core/runtime_control.py",
+    "src/application/runtime_service.py",
     "src/core/thread_comm.py",
     "src/core/trading_config.py",
     "src/interfaces/web/server.py",

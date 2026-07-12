@@ -17,6 +17,7 @@ import requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, Updater
 
+from application.runtime_service import RuntimeController
 from core import display
 from core.constants import CONFIG_ROOT
 from interfaces.telegram.portfolio import (
@@ -26,7 +27,7 @@ from interfaces.telegram.portfolio import (
 from interfaces.telegram.rebalancing import register_rebalancing_handlers
 from interfaces.telegram.strategy import register_strategy_handlers
 
-from .memo import register_memo_handler
+from .memo import MemoStore, register_memo_handler
 from .system import get_initial_control_guide, register_system_handlers
 from .utils import set_telegram_bot, wrap_reply, wrap_send
 
@@ -102,6 +103,8 @@ def initialize_telegram(
     *,
     portfolio_dependencies: PortfolioCommandDependencies,
     strategy_run_service,
+    memo_store: MemoStore,
+    runtime_controller: RuntimeController,
 ):
     """
     Initialize Telegram bot and start polling in a background thread.
@@ -152,11 +155,11 @@ def initialize_telegram(
 
             # Register Handlers
             set_telegram_bot(_app.bot, _chat_id)
-            register_system_handlers(_app)
+            register_system_handlers(_app, runtime_controller)
             register_portfolio_handlers(_app, portfolio_dependencies)
             register_strategy_handlers(_app)
             register_rebalancing_handlers(_app, strategy_run_service)
-            register_memo_handler(_app)
+            register_memo_handler(_app, memo_store)
             _app.add_handler(CommandHandler("daily_report", cmd_daily_report))
             _app.add_error_handler(error_handler)
 

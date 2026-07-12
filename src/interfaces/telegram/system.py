@@ -3,6 +3,8 @@
 
 import asyncio
 import logging
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, cast
 
 from telegram import Update
@@ -16,7 +18,7 @@ from telegram.ext import (
     filters,
 )
 
-from core import runtime_control
+from application.runtime_service import RuntimeController
 
 from .utils import wrap_reply
 
@@ -37,6 +39,26 @@ RUNTIME_CALLBACK_PREFIXES = (
     "clear_strategy_history_",
 )
 PENDING_CONFIRMATION_KEY = "runtime_confirmation_pending"
+_runtime_controller: ContextVar[RuntimeController | None] = ContextVar(
+    "telegram_runtime_controller", default=None
+)
+
+
+def _controller() -> RuntimeController:
+    controller = _runtime_controller.get()
+    if controller is None:
+        raise RuntimeError("System command is not bound to a Telegram factory.")
+    return controller
+
+
+@contextmanager
+def bind_runtime_controller(controller: RuntimeController):
+    """Bind a lifecycle controller for focused direct-handler tests."""
+    token = _runtime_controller.set(controller)
+    try:
+        yield
+    finally:
+        _runtime_controller.reset(token)
 
 
 def mark_runtime_confirmation_pending(context: ContextTypes.DEFAULT_TYPE, label: str):
@@ -97,7 +119,7 @@ async def block_runtime_commands_when_off(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    if runtime_control.is_runtime_running():
+    if _controller().is_running():
         return
 
     if update.effective_message is None or not update.effective_message.text:
@@ -120,7 +142,7 @@ async def block_runtime_callbacks_when_off(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
-    if runtime_control.is_runtime_running():
+    if _controller().is_running():
         return
 
     query = update.callback_query
@@ -148,7 +170,7 @@ async def cmd_system_on(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⏳ Starting trading runtime...",
         parse_mode="HTML",
     )
-    result = await asyncio.to_thread(runtime_control.start_runtime)
+    result = await asyncio.to_thread(_controller().start)
     if result.success:
         await wrap_reply(
             update,
@@ -178,7 +200,7 @@ async def cmd_system_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    result = await asyncio.to_thread(runtime_control.stop_runtime)
+    result = await asyncio.to_thread(_controller().stop)
     icon = "✅" if result.success else "🚨"
     await wrap_reply(
         update,
@@ -189,24 +211,35 @@ async def cmd_system_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_system_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info("[TG] /system_status from user")
-    status = "ON" if runtime_control.is_runtime_running() else "OFF"
+    is_running = _controller().is_running()
+    status = "ON" if is_running else "OFF"
     await wrap_reply(
         update,
         f"🧭 <b>Trading runtime:</b> <code>{status}</code>\n\n"
-        f"{get_runtime_on_guide() if runtime_control.is_runtime_running() else get_initial_control_guide()}",
+        f"{get_runtime_on_guide() if is_running else get_initial_control_guide()}",
         parse_mode="HTML",
     )
 
 
-def register_system_handlers(app: Application):
+def register_system_handlers(app: Application, controller: RuntimeController):
+    def bind(handler):
+        async def bound(update, context):
+            token = _runtime_controller.set(controller)
+            try:
+                return await handler(update, context)
+            finally:
+                _runtime_controller.reset(token)
+
+        return bound
+
     app.add_handler(
-        MessageHandler(filters.COMMAND, block_runtime_commands_when_off),
+        MessageHandler(filters.COMMAND, bind(block_runtime_commands_when_off)),
         group=-1,
     )
     app.add_handler(
-        CallbackQueryHandler(block_runtime_callbacks_when_off),
+        CallbackQueryHandler(bind(block_runtime_callbacks_when_off)),
         group=-1,
     )
-    app.add_handler(CommandHandler("system_on", cmd_system_on))
-    app.add_handler(CommandHandler("system_off", cmd_system_off))
-    app.add_handler(CommandHandler("system_status", cmd_system_status))
+    app.add_handler(CommandHandler("system_on", bind(cmd_system_on)))
+    app.add_handler(CommandHandler("system_off", bind(cmd_system_off)))
+    app.add_handler(CommandHandler("system_status", bind(cmd_system_status)))

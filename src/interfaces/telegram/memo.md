@@ -4,6 +4,8 @@
 Telegram 일반 텍스트 메시지를 `memo.json`에 저장하고, 최근 1주일 메모를
 조회하는 명령어를 제공합니다. 컴퓨터를 떠나 있을 때 버그, 아이디어, 작업
 메모를 남기는 용도입니다.
+`MemoStore`는 `main.py`가 Telegram handler factory에 주입하며, module-global
+store는 사용하지 않습니다.
 
 ## Core Logic (핵심 로직)
 - **Auto Save**: 명령어가 아닌 텍스트 메시지를 KST 타임스탬프와 함께 저장합니다.

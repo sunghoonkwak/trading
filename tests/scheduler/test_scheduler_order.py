@@ -16,19 +16,19 @@ def test_daily_order_report_runs_strategy_suite_once(monkeypatch):
 
     monkeypatch.setattr(
         scheduler_order,
-        "run_strategy_suite",
-        lambda execute=False: calls.append(execute) or (raoeo_report, va_report),
-    )
-    monkeypatch.setattr(
-        scheduler_order,
         "format_strategy_report",
         lambda raoeo, va: "strategy report",
     )
 
     notifications = []
-    scheduler_order.configure_notification_sender(notifications.append)
+    class Service:
+        def run_suite(self, *, execute):
+            calls.append(execute)
+            return raoeo_report, va_report
 
-    scheduler_order.run_daily_order_report()
+    scheduler_order.SchedulerOrderRunner(
+        strategy_run_service=Service(), notify=notifications.append
+    ).run_daily_order_report()
 
     assert calls == [True]
     assert notifications == [
@@ -43,9 +43,13 @@ def test_scheduler_strategy_suite_uses_the_application_facade(monkeypatch):
         def run_suite(self, *, execute):
             return ({"execute": execute}, {})
 
-    scheduler_order.configure_strategy_run_service(Service())
+    notifications = []
+    runner = scheduler_order.SchedulerOrderRunner(
+        strategy_run_service=Service(), notify=notifications.append
+    )
+    runner.run_daily_order_report()
 
-    assert scheduler_order.run_strategy_suite(execute=True) == ({"execute": True}, {})
+    assert notifications
 
 
 def test_factory_owned_order_runner_does_not_use_module_configuration(monkeypatch):
@@ -78,11 +82,11 @@ def test_scheduler_rebalancing_uses_application_facade_with_cache_key(monkeypatc
         def run_rebalancing(self, *, execute, orderable_cache_key):
             return {"execute": execute, "cache_key": orderable_cache_key}
 
-    scheduler_order.configure_strategy_run_service(Service())
-
-    assert scheduler_order.run_rebalancing_strategy(
-        execute=True,
-        orderable_cache_key="2026-07-11",
+    runner = scheduler_order.SchedulerOrderRunner(
+        strategy_run_service=Service(), notify=lambda _message: None
+    )
+    assert runner._strategy_run_service.run_rebalancing(
+        execute=True, orderable_cache_key="2026-07-11"
     ) == {"execute": True, "cache_key": "2026-07-11"}
 
 
@@ -96,23 +100,19 @@ def test_periodic_rebalancing_is_quiet_when_disabled(monkeypatch, caplog):
             return cls(2026, 6, 23, 10, 0, tzinfo=tz)
 
     calls = []
-    monkeypatch.setattr(
-        scheduler_order,
-        "run_rebalancing_strategy",
-        lambda execute=False, orderable_cache_key="": calls.append(
-            (execute, orderable_cache_key)
-        )
-        or {"status": StrategyStatus.DISABLED},
+    notifications = []
+    class Service:
+        def run_rebalancing(self, *, execute, orderable_cache_key):
+            calls.append((execute, orderable_cache_key))
+            return {"status": StrategyStatus.DISABLED}
+
+    runner = scheduler_order.SchedulerOrderRunner(
+        strategy_run_service=Service(), notify=notifications.append
     )
 
-    notifications = []
-    scheduler_order.configure_notification_sender(notifications.append)
-
     caplog.set_level(logging.INFO)
-    scheduler_order._last_first_notify_date = ""
-
     with patch("datetime.datetime", FrozenDateTime):
-        scheduler_order.run_periodic_rebalancing()
+        runner.run_periodic_rebalancing()
 
     assert calls == [(True, "2026-06-23")]
     assert notifications == []

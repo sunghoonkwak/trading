@@ -8,26 +8,13 @@ import json
 import logging
 import os
 import re
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Optional
 
 from application.ports import PortfolioReader
 from core.constants import CONFIG_ROOT, DEFAULT_USD_KRW_EXCHANGE_RATE
 from interfaces.telegram.portfolio_formatter import format_portfolio_summary
-
-_notification_sender = None
-
-
-def configure_notification_sender(sender) -> None:
-    """Inject the notification port from the runtime composition root."""
-    global _notification_sender
-    _notification_sender = sender
-
-
-def _send_notification(message: str) -> None:
-    if _notification_sender is None:
-        raise RuntimeError("Scheduler notification sender is not configured.")
-    _notification_sender(message)
 
 # Configuration
 HISTORY_DIR = os.path.join(CONFIG_ROOT, "portfolio_history")
@@ -261,7 +248,20 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
     return "\n".join(comparison_lines)
 
 
-def run_daily_portfolio_report(portfolio_reader: PortfolioReader):
+class SchedulerPortfolioRunner:
+    """Factory-owned daily portfolio report job."""
+
+    def __init__(self, notify: Callable[[str], None]) -> None:
+        self._notify = notify
+
+    def run_daily_portfolio_report(self, portfolio_reader: PortfolioReader) -> None:
+        run_daily_portfolio_report(portfolio_reader, self._notify)
+
+
+def run_daily_portfolio_report(
+    portfolio_reader: PortfolioReader,
+    notify: Callable[[str], None],
+):
     """
     Execute daily portfolio reporting routine (typically scheduled for morning).
     - Tue-Sat: Collect Data (Save JSON) + Send Notification.
@@ -295,11 +295,11 @@ def run_daily_portfolio_report(portfolio_reader: PortfolioReader):
                 logging.info(f"[Scheduler] Monday - Loaded Friday's data from {latest_file}")
             except Exception as e:
                 logging.error(f"[Scheduler] Failed to load Friday's data: {e}")
-                _send_notification("⚠️ Monday report failed: Could not load Friday's data")
+                notify("⚠️ Monday report failed: Could not load Friday's data")
                 return
         else:
             logging.warning("[Scheduler] Monday - No history files found")
-            _send_notification("⚠️ Monday report: No historical data available")
+            notify("⚠️ Monday report: No historical data available")
             return
     else:
         # Tue(1) ~ Sat(5): Fetch new data and save
@@ -328,7 +328,7 @@ def run_daily_portfolio_report(portfolio_reader: PortfolioReader):
                 else:
                     error_msg = f"[Scheduler] Failed to get portfolio: {e}"
                 logging.error(error_msg)
-                _send_notification(error_msg)
+                notify(error_msg)
                 return
 
             # Save data (Tue-Sat)
@@ -362,9 +362,9 @@ def run_daily_portfolio_report(portfolio_reader: PortfolioReader):
                 f.write(final_message)
 
             # Send
-            _send_notification(final_message)
+            notify(final_message)
             logging.info("[Scheduler] Notification sent and report backed up.")
 
         except Exception as e:
             logging.error(f"[Scheduler] Notification failed: {e}")
-            _send_notification(f"⚠️ Scheduler Error: {e}")
+            notify(f"⚠️ Scheduler Error: {e}")

@@ -178,15 +178,15 @@ def test_strategy_confirmation_guides_before_system_off(monkeypatch):
 
 
 def test_system_off_is_blocked_while_confirmation_is_pending(monkeypatch):
-    from core.runtime_control import RuntimeCommandResult
+    from application.runtime_service import RuntimeCommandResult, RuntimeController
     from interfaces.telegram import system as telegram_system
 
     stop_calls = []
     replies = []
-    monkeypatch.setattr(
-        telegram_system.runtime_control,
-        "stop_runtime",
-        lambda: stop_calls.append("stop") or RuntimeCommandResult(True, "OFF"),
+    controller = RuntimeController(
+        start=lambda: RuntimeCommandResult(True, "ON"),
+        stop=lambda: stop_calls.append("stop") or RuntimeCommandResult(True, "OFF"),
+        is_running=lambda: True,
     )
 
     async def fake_reply(update, text, **kwargs):
@@ -201,7 +201,8 @@ def test_system_off_is_blocked_while_confirmation_is_pending(monkeypatch):
     class Context:
         user_data = {"runtime_confirmation_pending": "strategy"}
 
-    asyncio.run(telegram_system.cmd_system_off(Update(), Context()))
+    with telegram_system.bind_runtime_controller(controller):
+        asyncio.run(telegram_system.cmd_system_off(Update(), Context()))
 
     assert stop_calls == []
     assert "/system_off" in replies[0]
@@ -211,13 +212,14 @@ def test_system_off_is_blocked_while_confirmation_is_pending(monkeypatch):
 def test_runtime_callback_is_blocked_when_runtime_is_off(monkeypatch):
     from telegram.ext import ApplicationHandlerStop
 
+    from application.runtime_service import RuntimeCommandResult, RuntimeController
     from interfaces.telegram import system as telegram_system
 
     replies = []
-    monkeypatch.setattr(
-        telegram_system.runtime_control,
-        "is_runtime_running",
-        lambda: False,
+    controller = RuntimeController(
+        start=lambda: RuntimeCommandResult(True, "ON"),
+        stop=lambda: RuntimeCommandResult(True, "OFF"),
+        is_running=lambda: False,
     )
 
     async def fake_reply(update, text, **kwargs):
@@ -239,7 +241,8 @@ def test_runtime_callback_is_blocked_when_runtime_is_off(monkeypatch):
         user_data = {}
 
     try:
-        asyncio.run(telegram_system.block_runtime_callbacks_when_off(Update(), Context()))
+        with telegram_system.bind_runtime_controller(controller):
+            asyncio.run(telegram_system.block_runtime_callbacks_when_off(Update(), Context()))
     except ApplicationHandlerStop:
         stopped = True
     else:

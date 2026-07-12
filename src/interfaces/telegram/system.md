@@ -1,6 +1,8 @@
 # Telegram System Commands (`src/interfaces/telegram/system.py`)
 
 Trading runtime 생명주기를 Telegram에서 제어하는 명령 모듈입니다.
+`RuntimeController`는 `main.py`가 handler factory에 주입하므로, Telegram
+명령은 core callback registry에 의존하지 않습니다.
 
 ## Core Logic
 

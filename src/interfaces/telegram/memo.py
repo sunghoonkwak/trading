@@ -6,6 +6,9 @@ Telegram memo transport adapter.
 """
 import html
 import logging
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Callable, cast
 from zoneinfo import ZoneInfo
@@ -17,21 +20,31 @@ from core import display
 
 from .utils import wrap_reply
 
-_load_memos: Callable[[], dict] | None = None
-_save_memos: Callable[[dict], bool] | None = None
+
+@dataclass(frozen=True)
+class MemoStore:
+    load: Callable[[], dict]
+    save: Callable[[dict], bool]
 
 
-def configure_memo_store(load: Callable[[], dict], save: Callable[[dict], bool]) -> None:
-    """Inject memo persistence from the runtime composition root."""
-    global _load_memos, _save_memos
-    _load_memos = load
-    _save_memos = save
+_memo_store: ContextVar[MemoStore | None] = ContextVar("telegram_memo_store", default=None)
 
 
 def _require_memo_store() -> tuple[Callable[[], dict], Callable[[dict], bool]]:
-    if _load_memos is None or _save_memos is None:
-        raise RuntimeError("Telegram memo store is not configured.")
-    return _load_memos, _save_memos
+    store = _memo_store.get()
+    if store is None:
+        raise RuntimeError("Memo command is not bound to a Telegram factory.")
+    return store.load, store.save
+
+
+@contextmanager
+def bind_memo_store(store: MemoStore):
+    """Bind one persistence store for focused direct-handler tests."""
+    token = _memo_store.set(store)
+    try:
+        yield
+    finally:
+        _memo_store.reset(token)
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -100,11 +113,21 @@ async def cmd_memo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await wrap_reply(update, "\n".join(lines), parse_mode='HTML')
 
 
-def register_memo_handler(app: Application):
+def register_memo_handler(app: Application, store: MemoStore):
     """Register memo handler for non-command text messages."""
-    app.add_handler(CommandHandler("memo", cmd_memo))
+    def bind(handler):
+        async def bound(update, context):
+            token = _memo_store.set(store)
+            try:
+                return await handler(update, context)
+            finally:
+                _memo_store.reset(token)
+
+        return bound
+
+    app.add_handler(CommandHandler("memo", bind(cmd_memo)))
     # Handle all text messages that are NOT commands
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bind(handle_text_message)))
 
 
 def get_memo_commands_desc() -> str:

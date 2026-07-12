@@ -39,8 +39,9 @@ Telegram 등 런타임 프로세스 안의 `requests` 호출이 무기한 대기
 
 ### `TradingSystem.run`
 컨테이너의 시작 프로세스를 실행합니다. Telegram bot과 web Event Viewer를
-초기화하고 `core.runtime_control`에 runtime on/off hook을 등록한 뒤 daemon
-loop에 진입합니다. Docker 시작 직후 trading runtime 상태는 OFF입니다.
+초기화하고 `application.runtime_service.RuntimeController`를 Telegram
+factory에 주입한 뒤 daemon loop에 진입합니다. Docker 시작 직후 trading
+runtime 상태는 OFF입니다.
 
 ### `TradingSystem.start_trading_runtime`
 Telegram `/system_on` 명령에서 호출됩니다. GSheet cache, KIS, Toss,

@@ -37,9 +37,10 @@ Production code must not introduce new imports from them.
 | `toss/` | `main.py` token startup plus Toss tests/backtest compatibility | Migrate callers to `infrastructure.toss`. |
 | `broker/kis_*` forwarding modules | `main.py`, KIS tests, worker compatibility | Compose direct infrastructure adapters and migrate callers. |
 
-The removed `strategy.execution_service`, `core.web_server`, `telegram_bot`,
-and data portfolio forwarding surfaces have zero production, test, script,
-and documentation consumers.
+The removed `strategy.execution_service`, `core.runtime_control`,
+`core.web_server`, `scheduler` forwarding modules, `telegram_bot`, and data
+portfolio forwarding surfaces have zero production, test, script, and
+documentation consumers.
 
 `interfaces.web.create_web_app()` is a factory: each application owns its
 dependencies, connection manager, event-loop callback, and lifespan. The
@@ -47,7 +48,7 @@ production composition root passes that exact application instance to
 `start_web_server()`; no module-level web application or dependency registry is
 used.
 
-Telegram portfolio and rebalancing handlers are registered with factory-owned
-application collaborators. Scheduler production composition uses
-`SchedulerRunner` and `SchedulerOrderRunner`; its legacy module functions stay
-only while scheduler tests and external automation still consume them.
+Telegram portfolio, memo, rebalancing, and runtime-control handlers are
+registered with factory-owned application collaborators. Scheduler production
+composition uses `SchedulerRunner`, `SchedulerOrderRunner`, and
+`SchedulerPortfolioRunner`; no scheduler module-global collaborator remains.
