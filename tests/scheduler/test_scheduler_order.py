@@ -48,6 +48,29 @@ def test_scheduler_strategy_suite_uses_the_application_facade(monkeypatch):
     assert scheduler_order.run_strategy_suite(execute=True) == ({"execute": True}, {})
 
 
+def test_factory_owned_order_runner_does_not_use_module_configuration(monkeypatch):
+    from interfaces.scheduler import order_runner as scheduler_order
+
+    class Service:
+        def run_suite(self, *, execute):
+            return ({"execute": execute}, {"execute": execute})
+
+    notifications = []
+    monkeypatch.setattr(
+        scheduler_order,
+        "format_strategy_report",
+        lambda _raoeo, _va: "factory report",
+    )
+    runner = scheduler_order.SchedulerOrderRunner(
+        strategy_run_service=Service(),
+        notify=notifications.append,
+    )
+
+    runner.run_daily_order_report()
+
+    assert notifications == ["⏰ <b>Daily Scheduler Execution</b>\n\nfactory report"]
+
+
 def test_scheduler_rebalancing_uses_application_facade_with_cache_key(monkeypatch):
     from interfaces.scheduler import order_runner as scheduler_order
 

@@ -11,7 +11,11 @@ import pytz
 import schedule
 
 from application.ports import PortfolioReader
-from interfaces.scheduler.order_runner import run_daily_order_report, run_periodic_rebalancing
+from interfaces.scheduler.order_runner import (
+    SchedulerOrderRunner,
+    run_daily_order_report,
+    run_periodic_rebalancing,
+)
 from interfaces.scheduler.portfolio_runner import run_daily_portfolio_report
 
 # Target times in US/Eastern (hour, minute)
@@ -22,6 +26,58 @@ _current_order_kst = ""
 _scheduler_thread = None
 _stop_event = threading.Event()
 _portfolio_reader: PortfolioReader | None = None
+
+
+class SchedulerRunner:
+    """Factory-owned scheduler lifecycle used by the production composition root."""
+
+    def __init__(
+        self,
+        *,
+        portfolio_reader: PortfolioReader,
+        order_runner: SchedulerOrderRunner,
+    ) -> None:
+        self._portfolio_reader = portfolio_reader
+        self._order_runner = order_runner
+        self._thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._current_order_kst = ""
+
+    def _run_loop(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                schedule.run_pending()
+            except Exception as exc:
+                logging.error("[Scheduler] Error in run_pending: %s", exc)
+            self._stop_event.wait(60)
+
+    def start(self) -> None:
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        schedule.clear()
+        schedule.every().day.at("07:00").do(
+            run_daily_portfolio_report,
+            self._portfolio_reader,
+        )
+        self._current_order_kst = _et_to_kst(*ORDER_REPORT_ET)
+        schedule.every().day.at(self._current_order_kst).do(
+            self._order_runner.run_daily_order_report
+        ).tag("order_report")
+        schedule.every(5).minutes.do(self._order_runner.run_periodic_rebalancing)
+        self._thread = threading.Thread(
+            target=self._run_loop,
+            daemon=True,
+            name="SchedulerThread",
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        schedule.clear()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5.0)
+        self._thread = None
 
 
 def set_portfolio_reader(reader: PortfolioReader) -> None:

@@ -37,6 +37,7 @@ class TradingSystem:
         self._runtime_lock = threading.Lock()
         self._runtime_running = False
         self._web_server_started = False
+        self._scheduler_runner = None
 
     def setup_logging(self):
         """Configures system-wide logging via LogManager."""
@@ -215,23 +216,30 @@ class TradingSystem:
             from infrastructure.portfolio import build_portfolio_service
             from infrastructure.strategy_execution import configure_strategy_execution_service
             from interfaces.scheduler.order_runner import (
-                configure_notification_sender as configure_order_notification_sender,
+                SchedulerOrderRunner,
+                configure_strategy_run_service,
             )
             from interfaces.scheduler.order_runner import (
-                configure_strategy_run_service,
+                configure_notification_sender as configure_order_notification_sender,
             )
             from interfaces.scheduler.portfolio_runner import (
                 configure_notification_sender as configure_portfolio_notification_sender,
             )
-            from interfaces.scheduler.runner import set_portfolio_reader, start_scheduler
+            from interfaces.scheduler.runner import SchedulerRunner
             from interfaces.telegram.utils import send_notification
 
-            set_portfolio_reader(build_portfolio_service())
             configure_strategy_execution_service()
             configure_strategy_run_service(get_strategy_run_service())
             configure_order_notification_sender(send_notification)
             configure_portfolio_notification_sender(send_notification)
-            start_scheduler()
+            self._scheduler_runner = SchedulerRunner(
+                portfolio_reader=build_portfolio_service(),
+                order_runner=SchedulerOrderRunner(
+                    strategy_run_service=get_strategy_run_service(),
+                    notify=send_notification,
+                ),
+            )
+            self._scheduler_runner.start()
             print("[Startup] ✓ Scheduler started")
         except Exception as e:
             logging.error(f"[Startup] Scheduler error: {e}")
@@ -347,8 +355,13 @@ class TradingSystem:
 
     def _stop_runtime_dependencies(self):
         try:
-            from interfaces.scheduler.runner import stop_scheduler
-            stop_scheduler()
+            if self._scheduler_runner is not None:
+                self._scheduler_runner.stop()
+                self._scheduler_runner = None
+            else:
+                from interfaces.scheduler.runner import stop_scheduler
+
+                stop_scheduler()
         except Exception as e:
             logging.warning("[Runtime] Scheduler stop skipped or failed: %s", e)
         try:
