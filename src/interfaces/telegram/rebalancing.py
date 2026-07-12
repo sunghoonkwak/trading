@@ -20,12 +20,13 @@ from telegram.ext import (
 from application.strategy_run_service import StrategyRunService
 from domain.strategy.base import StrategyStatus
 from interfaces.telegram.report_formatter import format_rebalancing_report
-from telegram_bot.telegram_system import (
+
+from .system import (
     clear_runtime_confirmation_pending,
     get_pending_confirmation_warning,
     mark_runtime_confirmation_pending,
 )
-from telegram_bot.telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
+from .utils import wrap_edit, wrap_edit_message, wrap_reply
 
 REB_CONFIRM = 0
 _strategy_run_service: StrategyRunService | None = None
@@ -120,7 +121,7 @@ async def reb_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = cast(dict[Any, Any], context.user_data)
     if 'reb_msg_id' in user_data:
         try:
-            from telegram_bot.telegram_bot import _chat_id
+            from .bot import _chat_id
             if _chat_id:
                 await wrap_edit_message(
                     chat_id=_chat_id,

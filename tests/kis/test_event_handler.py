@@ -35,11 +35,7 @@ def _capture_domestic_order_effects(monkeypatch):
         "add_alert",
         lambda *args, **kwargs: effects["alerts"].append((args, kwargs)),
     )
-    monkeypatch.setattr(
-        kis_event_handler,
-        "send_notification",
-        lambda message: effects["notifications"].append(message),
-    )
+    kis_event_handler.configure_notification_sender(effects["notifications"].append)
     monkeypatch.setattr(
         kis_event_handler,
         "remove_order_state",
@@ -116,11 +112,7 @@ def test_domestic_order_parse_error_has_no_notification_side_effect(monkeypatch)
         "add_alert",
         unexpected_side_effect,
     )
-    monkeypatch.setattr(
-        kis_event_handler,
-        "send_notification",
-        unexpected_side_effect,
-    )
+    kis_event_handler.configure_notification_sender(unexpected_side_effect)
     monkeypatch.setattr(
         kis_event_handler,
         "sync_open_orders",

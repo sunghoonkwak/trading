@@ -21,4 +21,4 @@ def test_toss_infrastructure_import_does_not_load_telegram_interface():
         if isinstance(node, ast.ImportFrom) and node.module
     }
 
-    assert "telegram_bot.telegram_utils" not in imported_modules
+    assert "interfaces.telegram.utils" not in imported_modules

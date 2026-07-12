@@ -15,7 +15,19 @@ from infrastructure.kis.kis_ws_notifications import (
     build_reconnection_success_message,
 )
 from state.system_state import WebSocketStatus, update_kis_state
-from telegram_bot.telegram_utils import send_notification
+
+_notification_sender = None
+
+
+def configure_notification_sender(sender) -> None:
+    """Inject notification delivery from the runtime composition root."""
+    global _notification_sender
+    _notification_sender = sender
+
+
+def _send_notification(message: str, *, parse_mode: str = "HTML") -> None:
+    if _notification_sender is not None:
+        _notification_sender(message, parse_mode=parse_mode)
 
 
 def _handle_websocket_event(event: str, **payload: Any) -> None:
@@ -23,7 +35,7 @@ def _handle_websocket_event(event: str, **payload: Any) -> None:
         message = str(payload["message"])
         display.add_alert(f"[WS] {message.split(chr(10))[0][:60]}", payload["level"])
     elif event == "notification":
-        send_notification(str(payload["message"]), parse_mode="HTML")
+        _send_notification(str(payload["message"]), parse_mode="HTML")
     elif event == "status":
         status_map = {
             "connected": WebSocketStatus.CONNECTED,
@@ -36,19 +48,19 @@ def _handle_websocket_event(event: str, **payload: Any) -> None:
         if status is not None:
             update_kis_state(ws_status=status)
     elif event == "reconnection_success":
-        send_notification(
+        _send_notification(
             build_reconnection_success_message(int(payload["failed_attempts"])),
             parse_mode="HTML",
         )
     elif event == "reconnection_failure":
-        send_notification(
+        _send_notification(
             build_reconnection_failure_message(
                 int(payload["attempt_number"]), payload["error"]
             ),
             parse_mode="HTML",
         )
     elif event == "approval_refresh_failure":
-        send_notification(
+        _send_notification(
             "🔑 <b>Approval Key Refresh Failed</b>\n"
             f"Error: {payload['error']}\n"
             "Manual intervention may be required.",

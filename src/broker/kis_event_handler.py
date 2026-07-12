@@ -16,11 +16,22 @@ from core.display import add_alert, remove_order_state
 from core.event_pipe import print_viewer
 from core.trading_config import strip_market_prefix
 from kis.ws_parser import mask_dict_for_log
-from telegram_bot.telegram_utils import send_notification
 from utils.format_utils import format_number, get_fixed_width
 
 _MAX_RECENT_ORDER_EVENTS = 1_000
 _recent_order_events: OrderedDict[tuple[str, ...], None] = OrderedDict()
+_notification_sender = None
+
+
+def configure_notification_sender(sender) -> None:
+    """Inject notification delivery after the control plane starts."""
+    global _notification_sender
+    _notification_sender = sender
+
+
+def _send_notification(message: str) -> None:
+    if _notification_sender is not None:
+        _notification_sender(message)
 
 
 class _MarketState(TypedDict):
@@ -280,7 +291,7 @@ def _handle_domestic_order(row) -> bool:
 
         # Send to Telegram
         emoji = {"ODR": "📝", "EXE": "✅", "CAN": "❌", "COR": "✏️", "REJ": "🚫"}.get(tag, "📌")
-        send_notification(f"{emoji} <b>{tag}</b> {side} {name}\nQty: {qty} @ {price}")
+        _send_notification(f"{emoji} <b>{tag}</b> {side} {name}\nQty: {qty} @ {price}")
 
         # Immediate UI update: remove from list if canceled or executed
         if tag in ["CAN", "EXE"]:
@@ -390,7 +401,7 @@ def _handle_overseas_order(tr_id: str, row) -> bool:
 
         # Send to Telegram
         emoji = {"ODR": "📝", "EXE": "✅", "CAN": "❌", "COR": "✏️", "REJ": "🚫"}.get(tag, "📌")
-        send_notification(f"{emoji} <b>{tag}</b> {side} {code}\nQty: {qty} @ {price}")
+        _send_notification(f"{emoji} <b>{tag}</b> {side} {code}\nQty: {qty} @ {price}")
 
         # Immediate UI update: remove from list if canceled or executed
         if tag in ["CAN", "EXE"]:

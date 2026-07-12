@@ -760,9 +760,9 @@ def test_run_exits_before_dependencies_when_telegram_init_fails(monkeypatch):
 def test_notify_startup_failure_sends_telegram_alert(monkeypatch):
     main = _load_main(monkeypatch)
     messages = []
-    fake_telegram_utils = types.ModuleType("telegram_bot.telegram_utils")
+    fake_telegram_utils = types.ModuleType("interfaces.telegram.utils")
     fake_telegram_utils.send_notification = lambda message: messages.append(message)
-    monkeypatch.setitem(sys.modules, "telegram_bot.telegram_utils", fake_telegram_utils)
+    monkeypatch.setitem(sys.modules, "interfaces.telegram.utils", fake_telegram_utils)
 
     main.TradingSystem()._notify_startup_failure("Toss")
 

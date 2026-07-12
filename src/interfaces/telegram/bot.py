@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Telegram Integration Module
+Telegram lifecycle interface adapter.
 
 This module provides Telegram bot functionality for remote access to
 trading commands and notifications.
@@ -23,9 +23,9 @@ from interfaces.telegram.portfolio import register_portfolio_handlers
 from interfaces.telegram.rebalancing import register_rebalancing_handlers
 from interfaces.telegram.strategy import register_strategy_handlers
 
-from .telegram_memo import register_memo_handler
-from .telegram_system import get_initial_control_guide, register_system_handlers
-from .telegram_utils import set_telegram_bot, wrap_reply, wrap_send
+from .memo import register_memo_handler
+from .system import get_initial_control_guide, register_system_handlers
+from .utils import set_telegram_bot, wrap_reply, wrap_send
 
 # Module state
 _app: Optional[Application] = None

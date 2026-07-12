@@ -2,21 +2,36 @@
 """
 Telegram Memo Module
 
-Saves arbitrary text messages to memo.json for later review.
+Telegram memo transport adapter.
 """
 import html
 import logging
 from datetime import datetime, timedelta
-from typing import cast
+from typing import Callable, cast
 from zoneinfo import ZoneInfo
 
 from telegram import Message, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from core import display
-from data.config_manager import ConfigFile, load_json, save_json
 
-from .telegram_utils import wrap_reply
+from .utils import wrap_reply
+
+_load_memos: Callable[[], dict] | None = None
+_save_memos: Callable[[dict], bool] | None = None
+
+
+def configure_memo_store(load: Callable[[], dict], save: Callable[[dict], bool]) -> None:
+    """Inject memo persistence from the runtime composition root."""
+    global _load_memos, _save_memos
+    _load_memos = load
+    _save_memos = save
+
+
+def _require_memo_store() -> tuple[Callable[[], dict], Callable[[dict], bool]]:
+    if _load_memos is None or _save_memos is None:
+        raise RuntimeError("Telegram memo store is not configured.")
+    return _load_memos, _save_memos
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -36,11 +51,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     entry = f"{time_str} : {text}"
 
     # Load, append to date, save
-    messages = load_json(ConfigFile.MEMO, default={})
+    load_memos, save_memos = _require_memo_store()
+    messages = load_memos()
     if date_key not in messages:
         messages[date_key] = []
     messages[date_key].append(entry)
-    save_json(ConfigFile.MEMO, messages)
+    save_memos(messages)
 
     # Calculate today count and weekly total
     today_count = len(messages.get(date_key, []))
@@ -57,7 +73,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def cmd_memo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Command handler for /memo - show recent 7 days of messages."""
     logging.info("[TG] /memo from user")
-    messages = load_json(ConfigFile.MEMO, default={})
+    load_memos, _ = _require_memo_store()
+    messages = load_memos()
     if not messages:
         await wrap_reply(update, "📭 No saved messages.")
         return

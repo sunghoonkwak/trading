@@ -18,7 +18,7 @@ from telegram.ext import (
 
 from core import runtime_control
 
-from .telegram_utils import wrap_reply
+from .utils import wrap_reply
 
 RUNTIME_COMMANDS = {"system_on", "system_off", "system_status"}
 RUNTIME_REQUIRED_COMMANDS = {
@@ -77,7 +77,7 @@ def get_runtime_control_guide() -> str:
 def get_runtime_on_guide() -> str:
     from interfaces.telegram.portfolio import get_portfolio_commands_desc
 
-    from .telegram_memo import get_memo_commands_desc
+    from .memo import get_memo_commands_desc
 
     port_desc = get_portfolio_commands_desc().strip()
     memo_desc = get_memo_commands_desc().strip()

@@ -19,9 +19,6 @@ from telegram.ext import (
     TypeHandler,
 )
 
-from domain.strategy.base import StrategyStatus
-from interfaces.telegram.report_formatter import format_strategy_report
-from strategy.constants import TZ_ET
 from application.strategy_execution import (
     clear_strategy_history_for_date,
     execute_raoeo_cash_funding,
@@ -30,12 +27,16 @@ from application.strategy_execution import (
     prepare_raoeo_cash_funding,
     save_raoeo_cash_funding_result,
 )
-from telegram_bot.telegram_system import (
+from domain.strategy.base import StrategyStatus
+from interfaces.telegram.report_formatter import format_strategy_report
+from strategy.constants import TZ_ET
+
+from .system import (
     clear_runtime_confirmation_pending,
     get_pending_confirmation_warning,
     mark_runtime_confirmation_pending,
 )
-from telegram_bot.telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
+from .utils import wrap_edit, wrap_edit_message, wrap_reply
 
 STRATEGY_CONFIRM = 0
 
@@ -261,7 +262,7 @@ async def strategy_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = cast(dict[Any, Any], context.user_data)
     if 'strategy_msg_id' in user_data:
         try:
-            from telegram_bot.telegram_bot import _chat_id
+            from .bot import _chat_id
             if _chat_id:
                 await wrap_edit_message(
                     chat_id=_chat_id,

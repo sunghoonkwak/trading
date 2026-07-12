@@ -35,7 +35,8 @@ from telegram.ext import (
 
 from application.ports import MarketPriceReader, OpenOrderReader, PortfolioReader
 from interfaces.telegram.portfolio_formatter import format_portfolio_summary
-from telegram_bot.telegram_utils import wrap_edit, wrap_edit_message, wrap_reply
+
+from .utils import wrap_edit, wrap_edit_message, wrap_reply
 
 # Conversation states
 SELECT_TICKER = 0
@@ -509,7 +510,7 @@ async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_data.pop('portfolio_data', None)
         last_msg_id = user_data.pop('last_port_msg_id', None)
         if last_msg_id:
-            from .telegram_bot import _chat_id
+            from .bot import _chat_id
             if _chat_id:
                 await wrap_edit_message(
                     chat_id=_chat_id,

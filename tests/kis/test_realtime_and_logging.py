@@ -19,17 +19,12 @@ def _load_event_handler(monkeypatch):
     fake_broker = types.ModuleType("broker")
     fake_order_admin = types.ModuleType("broker.order_admin")
     fake_order_admin.sync_open_orders = lambda: None
-    fake_telegram_bot = types.ModuleType("telegram_bot")
-    fake_telegram_utils = types.ModuleType("telegram_bot.telegram_utils")
-    fake_telegram_utils.send_notification = lambda *args, **kwargs: None
 
     monkeypatch.setitem(sys.modules, "kis", fake_kis)
     monkeypatch.setitem(sys.modules, "core.event_pipe", fake_event_pipe)
     monkeypatch.setitem(sys.modules, "kis.ws_parser", fake_ws_parser)
     monkeypatch.setitem(sys.modules, "broker", fake_broker)
     monkeypatch.setitem(sys.modules, "broker.order_admin", fake_order_admin)
-    monkeypatch.setitem(sys.modules, "telegram_bot", fake_telegram_bot)
-    monkeypatch.setitem(sys.modules, "telegram_bot.telegram_utils", fake_telegram_utils)
 
     spec = importlib.util.spec_from_file_location(
         "event_handler_under_test",

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Telegram Utilities
+Telegram transport utilities.
 """
 import asyncio
 import logging

@@ -39,21 +39,21 @@ def _find_import_violations(source_root):
     rules = {
         "domain": {
             "application", "infrastructure", "interfaces", "kis", "toss",
-            "broker", "core", "data", "state", "telegram_bot", "scheduler", "web",
+            "broker", "core", "data", "state", "scheduler", "web",
         },
         "application/ports": {
             "application", "infrastructure", "interfaces", "kis", "toss",
-            "broker", "core", "data", "state", "telegram_bot", "scheduler", "web",
+            "broker", "core", "data", "state", "scheduler", "web",
         },
         "application": {
             "infrastructure", "interfaces", "kis", "toss", "broker", "core",
-            "data", "state", "telegram_bot", "scheduler", "web",
+            "data", "state", "scheduler", "web",
         },
         "infrastructure": {"interfaces"},
         "interfaces": {"infrastructure", "kis", "toss", "broker", "data", "state"},
         "infrastructure/kis/kis_api": {
             "application", "domain", "infrastructure", "interfaces", "broker", "core",
-            "data", "state", "telegram_bot", "scheduler", "toss", "web",
+            "data", "state", "scheduler", "toss", "web",
         },
     }
     violations = []
@@ -126,13 +126,13 @@ assert "kis.kis_api.kis_auth" not in sys.modules
     assert result.returncode == 0, result.stderr
 
 
-def test_telegram_package_import_does_not_initialize_bot_module(tmp_path):
+def test_telegram_interface_import_does_not_initialize_bot_module(tmp_path):
     result = _run_import_check(
         tmp_path,
         """
 import sys
-import telegram_bot
-assert "telegram_bot.telegram_bot" not in sys.modules
+import interfaces.telegram
+assert "interfaces.telegram.bot" not in sys.modules
 """,
     )
 
@@ -257,7 +257,7 @@ def test_vendor_kis_import_does_not_load_application_owned_packages(tmp_path):
         """
 import sys
 import kis.kis_api.kis_auth
-for prefix in ("application", "broker", "core", "data", "domain", "interfaces", "state", "telegram_bot", "toss"):
+for prefix in ("application", "broker", "core", "data", "domain", "interfaces", "state", "toss"):
     assert not any(name == prefix or name.startswith(prefix + ".") for name in sys.modules)
 """,
     )
@@ -273,7 +273,7 @@ import sys
 import application.ports
 import domain.portfolio
 import domain.strategy
-for prefix in ("kis", "toss", "telegram", "telegram_bot", "fastapi", "core"):
+for prefix in ("kis", "toss", "telegram", "fastapi", "core"):
     assert not any(name == prefix or name.startswith(prefix + ".") for name in sys.modules)
 """,
     )

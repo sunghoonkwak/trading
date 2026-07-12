@@ -197,17 +197,25 @@ def fetch_toss_prices(tickers: Iterable[str]) -> Dict[str, float]:
         return {}
 
 
+_warning_notifier = None
+
+
+def configure_warning_notifier(notifier) -> None:
+    """Inject optional operator notification delivery at composition time."""
+    global _warning_notifier
+    _warning_notifier = notifier
+
+
 def send_telegram_warning(message: str) -> None:
     """Send a portfolio warning to Telegram and the local alert stream."""
     from core.display import add_alert
 
     add_alert(message, "WARNING")
-    try:
-        from telegram_bot.telegram_utils import send_notification
-
-        send_notification(message)
-    except Exception as e:
-        logging.warning("[Portfolio] Telegram warning failed: %s", e)
+    if _warning_notifier is not None:
+        try:
+            _warning_notifier(message)
+        except Exception as e:
+            logging.warning("[Portfolio] Telegram warning failed: %s", e)
 
 
 def discard_source_current_prices(source: Dict[str, Any]) -> None:

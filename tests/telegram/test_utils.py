@@ -8,7 +8,7 @@ from telegram.error import TimedOut
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from telegram_bot import telegram_utils
+from interfaces.telegram import utils as telegram_utils
 
 
 class FakeMessage:

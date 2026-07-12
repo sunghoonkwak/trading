@@ -46,20 +46,26 @@ class TradingSystem:
     def initialize_telegram(self):
         """Initializes the Telegram bot thread."""
         print("[Startup] Step 1: Initializing Telegram Bot...")
+        from application.strategy_execution import get_strategy_run_service
         from broker import market_data, order_admin
+        from data.config_manager import ConfigFile, load_json, save_json
         from data.data_service import get_weight_diffs
         from infrastructure.portfolio import build_portfolio_service, refresh_gsheet_cache
+        from infrastructure.strategy_execution import configure_strategy_execution_service
+        from interfaces.telegram.bot import initialize_telegram
+        from interfaces.telegram.memo import configure_memo_store
         from interfaces.telegram.portfolio import (
             configure_portfolio_collaborators,
             configure_portfolio_reader,
         )
         from interfaces.telegram.rebalancing import configure_strategy_run_service
         from state.system_state import ThreadStatus, update_telegram_state
-        from application.strategy_execution import get_strategy_run_service
-        from infrastructure.strategy_execution import configure_strategy_execution_service
-        from telegram_bot.telegram_bot import initialize_telegram
 
         configure_portfolio_reader(build_portfolio_service())
+        configure_memo_store(
+            lambda: load_json(ConfigFile.MEMO, default={}),
+            lambda memos: save_json(ConfigFile.MEMO, memos),
+        )
         configure_portfolio_collaborators(
             market_reader=market_data,
             order_reader=order_admin,
@@ -70,6 +76,18 @@ class TradingSystem:
         configure_strategy_run_service(get_strategy_run_service())
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram():
+            from broker.kis_event_handler import (
+                configure_notification_sender as configure_kis_event_notification_sender,
+            )
+            from infrastructure.kis.vendor_callbacks import (
+                configure_notification_sender as configure_kis_vendor_notification_sender,
+            )
+            from infrastructure.portfolio.integration import configure_warning_notifier
+            from interfaces.telegram.utils import send_notification
+
+            configure_kis_event_notification_sender(send_notification)
+            configure_kis_vendor_notification_sender(send_notification)
+            configure_warning_notifier(send_notification)
             update_telegram_state(thread_status=ThreadStatus.RUNNING, bot_connected=True)
             logging.info("[Startup] Telegram Bot initialized")
             print("[Startup] ✓ Telegram Bot initialized")
@@ -176,7 +194,7 @@ class TradingSystem:
         print("[Startup] Step 3: Initializing Toss API...")
         try:
             from infrastructure.toss.client import configure_failure_notifier
-            from telegram_bot.telegram_utils import send_notification
+            from interfaces.telegram.utils import send_notification
             from toss.auth import ensure_daily_token
 
             configure_failure_notifier(send_notification)
@@ -193,18 +211,20 @@ class TradingSystem:
         """Starts the background task scheduler."""
         print("[Startup] Step 4: Starting Scheduler Service...")
         try:
+            from application.strategy_execution import get_strategy_run_service
             from infrastructure.portfolio import build_portfolio_service
+            from infrastructure.strategy_execution import configure_strategy_execution_service
             from interfaces.scheduler.order_runner import (
                 configure_notification_sender as configure_order_notification_sender,
+            )
+            from interfaces.scheduler.order_runner import (
                 configure_strategy_run_service,
             )
             from interfaces.scheduler.portfolio_runner import (
                 configure_notification_sender as configure_portfolio_notification_sender,
             )
             from interfaces.scheduler.runner import set_portfolio_reader, start_scheduler
-            from application.strategy_execution import get_strategy_run_service
-            from infrastructure.strategy_execution import configure_strategy_execution_service
-            from telegram_bot.telegram_utils import send_notification
+            from interfaces.telegram.utils import send_notification
 
             set_portfolio_reader(build_portfolio_service())
             configure_strategy_execution_service()
@@ -259,7 +279,7 @@ class TradingSystem:
     def _notify_startup_failure(self, component: str):
         """Send a best-effort Telegram alert for fail-closed startup errors."""
         try:
-            from telegram_bot.telegram_utils import send_notification
+            from interfaces.telegram.utils import send_notification
 
             send_notification(
                 "🚨 <b>Startup failure</b>\n"
@@ -274,7 +294,7 @@ class TradingSystem:
         print("\n[System] Shutting down...")
         self.stop_trading_runtime()
         try:
-            from telegram_bot.telegram_bot import shutdown_telegram
+            from interfaces.telegram.bot import shutdown_telegram
             shutdown_telegram()
         except: pass
         print("[System] Goodbye!")
