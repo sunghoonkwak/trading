@@ -33,6 +33,7 @@ created it. Store new documents in the following directories.
 - [Testing records](testing/)
 - [Developer references](reference/)
 - [Guides](guides/)
+- [Layered architecture](architecture.md)
 
 ## Architecture Map
 
