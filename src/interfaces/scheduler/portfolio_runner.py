@@ -14,7 +14,20 @@ from typing import Optional
 from application.ports import PortfolioReader
 from core.constants import CONFIG_ROOT, DEFAULT_USD_KRW_EXCHANGE_RATE
 from interfaces.telegram.portfolio_formatter import format_portfolio_summary
-from telegram_bot.telegram_utils import send_notification
+
+_notification_sender = None
+
+
+def configure_notification_sender(sender) -> None:
+    """Inject the notification port from the runtime composition root."""
+    global _notification_sender
+    _notification_sender = sender
+
+
+def _send_notification(message: str) -> None:
+    if _notification_sender is None:
+        raise RuntimeError("Scheduler notification sender is not configured.")
+    _notification_sender(message)
 
 # Configuration
 HISTORY_DIR = os.path.join(CONFIG_ROOT, "portfolio_history")
@@ -282,11 +295,11 @@ def run_daily_portfolio_report(portfolio_reader: PortfolioReader):
                 logging.info(f"[Scheduler] Monday - Loaded Friday's data from {latest_file}")
             except Exception as e:
                 logging.error(f"[Scheduler] Failed to load Friday's data: {e}")
-                send_notification("⚠️ Monday report failed: Could not load Friday's data")
+                _send_notification("⚠️ Monday report failed: Could not load Friday's data")
                 return
         else:
             logging.warning("[Scheduler] Monday - No history files found")
-            send_notification("⚠️ Monday report: No historical data available")
+            _send_notification("⚠️ Monday report: No historical data available")
             return
     else:
         # Tue(1) ~ Sat(5): Fetch new data and save
@@ -315,7 +328,7 @@ def run_daily_portfolio_report(portfolio_reader: PortfolioReader):
                 else:
                     error_msg = f"[Scheduler] Failed to get portfolio: {e}"
                 logging.error(error_msg)
-                send_notification(error_msg)
+                _send_notification(error_msg)
                 return
 
             # Save data (Tue-Sat)
@@ -349,9 +362,9 @@ def run_daily_portfolio_report(portfolio_reader: PortfolioReader):
                 f.write(final_message)
 
             # Send
-            send_notification(final_message)
+            _send_notification(final_message)
             logging.info("[Scheduler] Notification sent and report backed up.")
 
         except Exception as e:
             logging.error(f"[Scheduler] Notification failed: {e}")
-            send_notification(f"⚠️ Scheduler Error: {e}")
+            _send_notification(f"⚠️ Scheduler Error: {e}")

@@ -26,11 +26,7 @@ def test_daily_order_report_runs_strategy_suite_once(monkeypatch):
     )
 
     notifications = []
-    monkeypatch.setattr(
-        scheduler_order,
-        "send_notification",
-        lambda message: notifications.append(message),
-    )
+    scheduler_order.configure_notification_sender(notifications.append)
 
     scheduler_order.run_daily_order_report()
 
@@ -87,11 +83,7 @@ def test_periodic_rebalancing_is_quiet_when_disabled(monkeypatch, caplog):
     )
 
     notifications = []
-    monkeypatch.setattr(
-        scheduler_order,
-        "send_notification",
-        lambda message: notifications.append(message),
-    )
+    scheduler_order.configure_notification_sender(notifications.append)
 
     caplog.set_level(logging.INFO)
     scheduler_order._last_first_notify_date = ""

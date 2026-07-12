@@ -9,15 +9,27 @@ import logging
 
 from application.strategy_run_service import StrategyRunService
 from interfaces.telegram.report_formatter import format_strategy_report
-from telegram_bot.telegram_utils import send_notification
 
 _strategy_run_service: StrategyRunService | None = None
+_notification_sender = None
 
 
 def configure_strategy_run_service(service: StrategyRunService) -> None:
     """Inject the application strategy use case from the composition root."""
     global _strategy_run_service
     _strategy_run_service = service
+
+
+def configure_notification_sender(sender) -> None:
+    """Inject the notification port from the runtime composition root."""
+    global _notification_sender
+    _notification_sender = sender
+
+
+def _send_notification(message: str) -> None:
+    if _notification_sender is None:
+        raise RuntimeError("Scheduler notification sender is not configured.")
+    _notification_sender(message)
 
 
 def _get_strategy_run_service() -> StrategyRunService:
@@ -53,14 +65,14 @@ def run_daily_order_report():
         raoeo_err = raoeo_res.get("error")
         va_err = va_res.get("error")
         if raoeo_err == "API Timeout" or va_err == "API Timeout":
-            send_notification(f"⚠️ [네트워크 타임아웃] KIS API 무응답 (Daily Report)\nRAOEO: {raoeo_err}, VA: {va_err}")
+            _send_notification(f"⚠️ [네트워크 타임아웃] KIS API 무응답 (Daily Report)\nRAOEO: {raoeo_err}, VA: {va_err}")
 
         # Format Unified Report
         report_text = format_strategy_report(raoeo_res, va_res)
 
         # Send Notification
         full_message = f"⏰ <b>Daily Scheduler Execution</b>\n\n{report_text}"
-        send_notification(full_message)
+        _send_notification(full_message)
 
         logging.info("[Scheduler] Daily execution completed and report sent.")
 
@@ -70,7 +82,7 @@ def run_daily_order_report():
         else:
             alert_msg = f"⚠️ Scheduler Order Error: {e}"
         logging.error(f"[Scheduler] Daily Order Job failed: {e}", exc_info=True)
-        send_notification(alert_msg)
+        _send_notification(alert_msg)
 
 # Module-level flag: US/Eastern date of last first-notification
 _last_first_notify_date: str = ""
@@ -130,12 +142,12 @@ def run_periodic_rebalancing():
 
         if should_notify:
             if status == StrategyStatus.ERROR and reb_res.get("error") == "API Timeout":
-                send_notification("⚠️ [네트워크 타임아웃] KIS API 무응답 (Periodic Rebalancing)")
+                _send_notification("⚠️ [네트워크 타임아웃] KIS API 무응답 (Periodic Rebalancing)")
             else:
                 from interfaces.telegram.report_formatter import format_rebalancing_report
                 header = "🚀 <b>First Rebalancing Check</b>" if is_first_call else "🔄 <b>Periodic Rebalancing</b>"
                 report_text = format_rebalancing_report(reb_res)
-                send_notification(f"{header}\n\n{report_text}")
+                _send_notification(f"{header}\n\n{report_text}")
                 logging.info(f"[Scheduler] Rebalancing notification sent (FirstCall: {is_first_call})")
         else:
             logging.info("[Scheduler] Rebalancing checked: No action needed.")
@@ -149,6 +161,6 @@ def run_periodic_rebalancing():
         else:
             alert_msg = f"⚠️ Periodic Rebalancing Error: {e}"
         logging.error(f"[Scheduler] Periodic Rebalancing failed: {e}", exc_info=True)
-        send_notification(alert_msg)
+        _send_notification(alert_msg)
         # Still mark date so we don't retry first-call notification on error
         _last_first_notify_date = us_date
