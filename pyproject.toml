@@ -77,7 +77,7 @@ files = [
     "src/strategy/rebalancing.py",
     "src/strategy/value_averaging.py",
     "src/strategy/raoeo.py",
-    "src/strategy/execution_service.py",
+    "src/application/strategy_execution.py",
     "src/strategy/constants.py",
     "src/broker/__init__.py",
     "src/broker/kis_broker.py",

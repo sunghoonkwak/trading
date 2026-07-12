@@ -144,7 +144,7 @@ def test_strategy_execution_import_does_not_touch_kis_config(tmp_path):
         tmp_path,
         """
 import pathlib
-import strategy.execution_service
+import application.strategy_execution
 assert not (pathlib.Path.home() / "KIS_config").exists()
 """,
     )

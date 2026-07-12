@@ -1,4 +1,4 @@
-# Execution Service (`src/strategy/execution_service.py`)
+# Strategy Execution Service (`src/application/strategy_execution.py`)
 
 이 모듈은 모든 전략(`RAOEO`, `Value Averaging`, `Rebalancing`)의 실행주기를 관리하고 조율하는 역할을 합니다.
 
@@ -131,7 +131,7 @@ Value Averaging은 오늘 history가 있으면 `orders`가 비어 있어도 저�
 ## Usage Example (사용 예시)
 
 ```python
-from strategy.execution_service import run_raoeo_strategy
+from application.strategy_execution import run_raoeo_strategy
 
 # 1. 단순 계산 및 리포트 확인 (주문 전송 X)
 report = run_raoeo_strategy(execute=False)
