@@ -162,10 +162,10 @@ def test_extreme_fear_leverage_allocation_still_applies():
 
 
 def test_weight_diffs_merge_non_bonds_group_constituents(monkeypatch):
-    from data import data_service
+    from infrastructure.portfolio import weight_diffs
 
     monkeypatch.setattr(
-        data_service,
+        weight_diffs,
         "load_json",
         lambda _config_file: {
             "cash_strategy": {"min": 0.1, "mid": 0.2, "max": 0.3},
@@ -181,9 +181,9 @@ def test_weight_diffs_merge_non_bonds_group_constituents(monkeypatch):
             ],
         },
     )
-    monkeypatch.setattr(data_service, "get_fear_and_greed", lambda: 50)
+    monkeypatch.setattr(weight_diffs, "get_fear_and_greed", lambda: 50)
     monkeypatch.setattr(
-        data_service,
+        weight_diffs,
         "get_portfolio_data",
         lambda scope="all": {
             "merged_data": {
@@ -209,7 +209,7 @@ def test_weight_diffs_merge_non_bonds_group_constituents(monkeypatch):
         },
     )
 
-    diffs, _, _ = data_service.get_weight_diffs("all")
+    diffs, _, _ = weight_diffs.get_weight_diffs("all")
 
     assert {d["ticker"] for d in diffs} == {"TLTW"}
     assert diffs[0]["cur_w"] == pytest.approx(0.07)
@@ -217,10 +217,10 @@ def test_weight_diffs_merge_non_bonds_group_constituents(monkeypatch):
 
 
 def test_weight_diffs_exclude_bonds_group_and_count_it_as_cash(monkeypatch):
-    from data import data_service
+    from infrastructure.portfolio import weight_diffs
 
     monkeypatch.setattr(
-        data_service,
+        weight_diffs,
         "load_json",
         lambda _config_file: {
             "cash_strategy": {"min": 0.1, "mid": 0.2, "max": 0.3},
@@ -237,9 +237,9 @@ def test_weight_diffs_exclude_bonds_group_and_count_it_as_cash(monkeypatch):
             ],
         },
     )
-    monkeypatch.setattr(data_service, "get_fear_and_greed", lambda: 50)
+    monkeypatch.setattr(weight_diffs, "get_fear_and_greed", lambda: 50)
     monkeypatch.setattr(
-        data_service,
+        weight_diffs,
         "get_portfolio_data",
         lambda scope="all": {
             "merged_data": {
@@ -277,7 +277,7 @@ def test_weight_diffs_exclude_bonds_group_and_count_it_as_cash(monkeypatch):
         },
     )
 
-    diffs, _, cash_info = data_service.get_weight_diffs("all")
+    diffs, _, cash_info = weight_diffs.get_weight_diffs("all")
 
     assert {d["ticker"] for d in diffs} == {"TSM"}
     assert cash_info["current"] == pytest.approx(0.17)
@@ -285,10 +285,10 @@ def test_weight_diffs_exclude_bonds_group_and_count_it_as_cash(monkeypatch):
 
 
 def test_weight_diffs_include_group_value_and_main_ticker_trade_qty(monkeypatch):
-    from data import data_service
+    from infrastructure.portfolio import weight_diffs
 
     monkeypatch.setattr(
-        data_service,
+        weight_diffs,
         "load_json",
         lambda _config_file: {
             "cash_strategy": {"min": 0.1, "mid": 0.2, "max": 0.3},
@@ -304,9 +304,9 @@ def test_weight_diffs_include_group_value_and_main_ticker_trade_qty(monkeypatch)
             "satellites": [],
         },
     )
-    monkeypatch.setattr(data_service, "get_fear_and_greed", lambda: 50)
+    monkeypatch.setattr(weight_diffs, "get_fear_and_greed", lambda: 50)
     monkeypatch.setattr(
-        data_service,
+        weight_diffs,
         "get_portfolio_data",
         lambda scope="all": {
             "merged_data": {
@@ -332,7 +332,7 @@ def test_weight_diffs_include_group_value_and_main_ticker_trade_qty(monkeypatch)
         },
     )
 
-    diffs, _, _ = data_service.get_weight_diffs("all")
+    diffs, _, _ = weight_diffs.get_weight_diffs("all")
 
     assert len(diffs) == 1
     assert diffs[0]["ticker"] == "QQQM"

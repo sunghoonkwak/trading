@@ -49,8 +49,11 @@ class TradingSystem:
         from application.strategy_execution import get_strategy_run_service
         from broker import market_data, order_admin
         from data.config_manager import ConfigFile, load_json, save_json
-        from data.data_service import get_weight_diffs
-        from infrastructure.portfolio import build_portfolio_service, refresh_gsheet_cache
+        from infrastructure.portfolio import (
+            build_portfolio_service,
+            refresh_gsheet_cache,
+        )
+        from infrastructure.portfolio.weight_diffs import get_weight_diffs
         from infrastructure.strategy_execution import configure_strategy_execution_service
         from interfaces.telegram.bot import initialize_telegram
         from interfaces.telegram.memo import MemoStore

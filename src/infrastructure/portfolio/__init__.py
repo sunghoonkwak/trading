@@ -7,6 +7,7 @@ from .integration import (
     invalidate_gsheet_cache,
     refresh_gsheet_cache,
 )
+from .weight_diffs import get_weight_diffs
 
 __all__ = [
     "IntegratedPortfolioSource",
@@ -14,4 +15,5 @@ __all__ = [
     "get_integrated_portfolio",
     "invalidate_gsheet_cache",
     "refresh_gsheet_cache",
+    "get_weight_diffs",
 ]

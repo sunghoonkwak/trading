@@ -32,11 +32,10 @@ Production code must not introduce new imports from them.
 
 | Surface | Current consumers | Removal condition |
 | --- | --- | --- |
-| `data/data_service.py` | `main.py` weight-diff wiring and legacy data tests | Replace the remaining weight-diff collaborator before removal. |
 | `toss/` | `main.py` token startup plus Toss tests/backtest compatibility | Migrate callers to `infrastructure.toss`. |
 | `broker/kis_*` forwarding modules | `main.py`, KIS tests, worker compatibility | Compose direct infrastructure adapters and migrate callers. |
 
-The removed `strategy.execution_service`, `core.runtime_control`,
+The removed `data.data_service`, `strategy.execution_service`, `core.runtime_control`,
 `core.web_server`, `scheduler` forwarding modules, `telegram_bot`, and data
 portfolio forwarding surfaces have zero production, test, script, and
 documentation consumers.

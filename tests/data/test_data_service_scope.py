@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def test_data_service_toss_scope_filters_toss_account(monkeypatch):
-    from data import data_service
+    from application.portfolio_service import PortfolioService
 
     raw = {
         "metadata": {"exchange_rate": 1300.0},
@@ -60,16 +60,15 @@ def test_data_service_toss_scope_filters_toss_account(monkeypatch):
         "metadata": raw["metadata"],
     }
 
-    scoped = data_service._apply_scope_filter(data, "toss")
+    scoped = PortfolioService.apply_scope_filter(data, "toss")
 
     assert {holding["ticker"] for holding in scoped["holdings"]} == {"AAPL"}
     assert set(scoped["merged_data"]) == {"AAPL", "USD cash"}
     assert scoped["merged_data"]["USD cash"]["qty"] == 20
 
 
-def test_data_service_passes_scope_to_portfolio_sources_without_worker_dispatch(monkeypatch):
-    from data import data_service
-    from infrastructure.portfolio import integration
+def test_portfolio_composition_passes_scope_to_sources_without_worker_dispatch(monkeypatch):
+    from infrastructure.portfolio import composition, integration
 
     captured = {}
 
@@ -77,7 +76,7 @@ def test_data_service_passes_scope_to_portfolio_sources_without_worker_dispatch(
         def get_portfolio_data(self, force_refresh=False, scope="all"):
             return integration.get_integrated_portfolio(scope=scope)
 
-    monkeypatch.setattr(data_service, "build_portfolio_service", lambda: Source())
+    monkeypatch.setattr(composition, "build_portfolio_service", lambda: Source())
     monkeypatch.setattr(
         integration,
         "get_integrated_portfolio",
@@ -87,7 +86,9 @@ def test_data_service_passes_scope_to_portfolio_sources_without_worker_dispatch(
     )
 
     try:
-        data_service.get_portfolio_data(force_refresh=True, scope="toss")
+        composition.build_portfolio_service().get_portfolio_data(
+            force_refresh=True, scope="toss"
+        )
     except RuntimeError as exc:
         assert str(exc) == "stop after request"
     else:

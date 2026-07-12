@@ -202,12 +202,12 @@ assert "kis.get_portfolio" not in sys.modules
     assert result.returncode == 0, result.stderr
 
 
-def test_data_service_import_does_not_load_kis_worker_from_kis_package(tmp_path):
+def test_weight_diff_adapter_import_does_not_load_kis_worker(tmp_path):
     result = _run_import_check(
         tmp_path,
         """
 import sys
-import data.data_service
+import infrastructure.portfolio.weight_diffs
 assert "kis.kis_thread" not in sys.modules
 """,
     )
