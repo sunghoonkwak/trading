@@ -3,14 +3,14 @@
 import logging
 from typing import Any, Callable, Optional
 
-from infrastructure.kis.kis_logger import (
-    log_api_request_debug,
-    log_api_resp_debug,
-    log_ws_send,
-)
 from infrastructure.kis.kis_ws_notifications import (
     build_reconnection_failure_message,
     build_reconnection_success_message,
+)
+from infrastructure.kis.logger import (
+    log_api_request_debug,
+    log_api_resp_debug,
+    log_ws_send,
 )
 
 _notification_sender = None

@@ -643,7 +643,7 @@ class TradingSystem:
     def run(self):
         """Main execution loop."""
         self.setup_logging()
-        from infrastructure.kis.kis_logger import install_kis_logging
+        from infrastructure.kis.logger import install_kis_logging
 
         install_kis_logging()
         print("=== KIS Real-time Trading System ===\n")
