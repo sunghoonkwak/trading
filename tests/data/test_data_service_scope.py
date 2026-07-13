@@ -67,28 +67,30 @@ def test_data_service_toss_scope_filters_toss_account(monkeypatch):
     assert scoped["merged_data"]["USD cash"]["qty"] == 20
 
 
-def test_portfolio_composition_passes_scope_to_sources_without_worker_dispatch(monkeypatch):
-    from infrastructure.portfolio import composition, integration
+def test_portfolio_composition_passes_scope_to_sources_without_worker_dispatch():
+    from infrastructure.portfolio import composition
 
     captured = {}
 
     class Source:
-        def get_portfolio_data(self, force_refresh=False, scope="all"):
-            return integration.get_integrated_portfolio(scope=scope)
+        def fetch(self, *, scope):
+            captured["scope"] = scope
+            raise RuntimeError("stop after request")
 
-    monkeypatch.setattr(composition, "build_portfolio_service", lambda: Source())
-    monkeypatch.setattr(
-        integration,
-        "get_integrated_portfolio",
-        lambda scope="all": captured.update(
-            {"scope": scope}
-        ) or (_ for _ in ()).throw(RuntimeError("stop after request")),
+    service = composition.build_portfolio_service(
+        composition.PortfolioServiceDependencies(
+            is_kis_ready=lambda: True,
+            portfolio_source=Source(),
+            save_portfolio=lambda _value: None,
+            load_weights=lambda: {},
+            calculate_targets=lambda *_args: ({}, None, None),
+            fear_and_greed=lambda: 50,
+            publish_alert=lambda _message, _level: None,
+        )
     )
 
     try:
-        composition.build_portfolio_service().get_portfolio_data(
-            force_refresh=True, scope="toss"
-        )
+        service.get_portfolio_data(force_refresh=True, scope="toss")
     except RuntimeError as exc:
         assert str(exc) == "stop after request"
     else:

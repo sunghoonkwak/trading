@@ -55,6 +55,30 @@ class TradingSystem:
             logging.error("Error loading Telegram credentials: %s", error)
             return None, None
 
+    def _build_portfolio_service(self):
+        """Compose the portfolio use case from runtime adapters."""
+        from data.calculate_weights import calculate_target_weights
+        from data.config_manager import ConfigFile, load_json, save_json
+        from infrastructure.portfolio.composition import (
+            PortfolioServiceDependencies,
+            build_portfolio_service,
+        )
+        from infrastructure.portfolio.integration import IntegratedPortfolioSource
+        from state.system_state import is_kis_ready
+        from utils.market_utils import get_fear_and_greed
+
+        return build_portfolio_service(
+            PortfolioServiceDependencies(
+                is_kis_ready=is_kis_ready,
+                portfolio_source=IntegratedPortfolioSource(),
+                save_portfolio=lambda value: save_json(ConfigFile.PORTFOLIO, value),
+                load_weights=lambda: load_json(ConfigFile.PORTFOLIO_WEIGHTS),
+                calculate_targets=calculate_target_weights,
+                fear_and_greed=get_fear_and_greed,
+                publish_alert=display.add_alert,
+            )
+        )
+
     def initialize_telegram(self):
         """Initializes the Telegram bot thread."""
         print("[Startup] Step 1: Initializing Telegram Bot...")
@@ -69,10 +93,7 @@ class TradingSystem:
         from broker import market_data, order_admin
         from data.calculate_weights import get_cash_weight
         from data.config_manager import ConfigFile, load_json, save_json
-        from infrastructure.portfolio import (
-            build_portfolio_service,
-            refresh_gsheet_cache,
-        )
+        from infrastructure.portfolio import refresh_gsheet_cache
         from infrastructure.portfolio.weight_diffs import (
             WeightDiffDependencies,
             get_weight_diffs,
@@ -89,14 +110,14 @@ class TradingSystem:
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram(
             portfolio_dependencies=PortfolioCommandDependencies(
-                reader=build_portfolio_service(),
+                reader=self._build_portfolio_service(),
                 market_reader=market_data,
                 order_reader=order_admin,
                 get_weight_diffs=lambda scope="all": get_weight_diffs(
                     scope,
                     WeightDiffDependencies(
                         get_portfolio_data=lambda requested_scope: (
-                            build_portfolio_service().get_portfolio_data(
+                            self._build_portfolio_service().get_portfolio_data(
                                 scope=requested_scope
                             )
                         ),
@@ -271,7 +292,6 @@ class TradingSystem:
         try:
             from application.strategy_execution import get_strategy_run_service
             from core.constants import DEFAULT_USD_KRW_EXCHANGE_RATE
-            from infrastructure.portfolio import build_portfolio_service
             from infrastructure.strategy_execution import configure_strategy_execution_service
             from interfaces.scheduler.order_runner import SchedulerOrderRunner
             from interfaces.scheduler.portfolio_runner import (
@@ -283,7 +303,7 @@ class TradingSystem:
 
             configure_strategy_execution_service()
             self._scheduler_runner = SchedulerRunner(
-                portfolio_reader=build_portfolio_service(),
+                portfolio_reader=self._build_portfolio_service(),
                 order_runner=SchedulerOrderRunner(
                     strategy_run_service=get_strategy_run_service(),
                     notify=send_notification,
@@ -313,7 +333,6 @@ class TradingSystem:
             from core import event_pipe
             from core.constants import ENV_TRUE_VALUES
             from data.config_manager import ConfigFile, load_json, save_json
-            from infrastructure.portfolio import build_portfolio_service
             from interfaces.scheduler.portfolio_runner import (
                 SchedulerPortfolioRunner,
                 SchedulerReportDependencies,
@@ -321,7 +340,7 @@ class TradingSystem:
             from interfaces.telegram.utils import send_notification
             from interfaces.web import WebDependencies, create_web_app, start_web_server
 
-            portfolio_reader = build_portfolio_service()
+            portfolio_reader = self._build_portfolio_service()
             portfolio_runner = SchedulerPortfolioRunner(
                 send_notification,
                 SchedulerReportDependencies(

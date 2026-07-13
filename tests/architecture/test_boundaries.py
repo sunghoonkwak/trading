@@ -224,6 +224,16 @@ def test_weight_diff_adapter_uses_composed_dependencies():
     assert "infrastructure.portfolio.composition" not in imports
 
 
+def test_portfolio_composition_uses_composed_dependencies():
+    imports = _imports_in(SRC_DIR / "infrastructure/portfolio/composition.py")
+
+    assert "core.display" not in imports
+    assert "data.config_manager" not in imports
+    assert "data.calculate_weights" not in imports
+    assert "state.system_state" not in imports
+    assert "utils.market_utils" not in imports
+
+
 def test_portfolio_integration_does_not_import_legacy_display():
     imports = _imports_in(SRC_DIR / "infrastructure/portfolio/integration.py")
 
