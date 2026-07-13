@@ -132,7 +132,6 @@ class TradingSystem:
         from application.strategy_execution import (
             StrategyExecutionDependencies,
             StrategyExecutionRuntime,
-            configure_strategy_execution,
         )
         from infrastructure import market_data, market_signals
         from infrastructure.config import ConfigFile, load_json, save_json
@@ -162,7 +161,6 @@ class TradingSystem:
                 portfolio_reader_factory=self._build_portfolio_service,
                 get_market_status=market_signals.get_us_market_status,
         )
-        configure_strategy_execution(dependencies)
         self._strategy_runtime = StrategyExecutionRuntime(dependencies)
 
     def initialize_telegram(self):
