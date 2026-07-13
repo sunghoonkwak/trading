@@ -291,7 +291,7 @@ venv/bin/pytest --cov=src --cov-report=term-missing tests
 Hypothesis 기반 전략 속성 테스트만 빠르게 실행하려면 다음 명령을 사용합니다.
 
 ```bash
-venv/bin/pytest tests/strategy/test_raoeo_properties.py
+venv/bin/pytest tests/domain/test_raoeo_properties.py
 ```
 
 런타임 의존성 보안 감사:

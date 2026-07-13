@@ -91,11 +91,12 @@ patches that are worth reapplying during upstream updates.
 
 ## Testing
 
-Keep durable regression tests under module-oriented directories such as
-`tests/kis/`, `tests/toss/`, `tests/raoeo/`, `tests/telegram/`, `tests/data/`,
-`tests/core/`, and `tests/scheduler/`. Use descriptive `test_*.py` filenames
-inside those directories, and avoid splitting one behavior area into many tiny
-files.
+Keep durable regression tests aligned with production ownership:
+`tests/application/`, `tests/domain/`, `tests/infrastructure/`,
+`tests/interfaces/`, and `tests/architecture/`. Keep KIS, Toss, portfolio,
+Telegram, and scheduler tests below their owning layer directory. Use
+descriptive `test_*.py` filenames and avoid splitting one behavior area into
+many tiny files.
 
 When creating temporary tests only to guide an implementation or debug a
 one-off issue, put them under `tests/tmp/`. Treat that directory as scratch

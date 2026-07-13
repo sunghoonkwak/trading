@@ -8,6 +8,26 @@ The assessment is static: it reads test contracts, seams, and matching
 application-owned code. It does not treat line count, assertion count, or
 coverage lines as a reason to remove a test.
 
+## Layered Architecture Test Layout (2026-07-14)
+
+The refactoring follow-up reorganized the retained regression tests to match
+the production layer that owns the behavior:
+
+- `tests/application/`: application use cases, ports, and orchestration.
+- `tests/domain/`: portfolio and strategy rules with in-memory inputs.
+- `tests/infrastructure/`: KIS, Toss, portfolio, GSheet, and technical
+  adapters, with provider-specific suites nested below the owning adapter.
+- `tests/interfaces/`: Telegram and scheduler transport behavior.
+- `tests/architecture/`: only durable import-direction and import-safety
+  contracts.
+
+The previous path-absence, legacy-consumer, compatibility-shim, and
+duck-typed port tests were removed. They described the migration process,
+not runtime behavior. The architecture suite now retains only the layer
+dependency rules, diagnostic quality, vendor isolation, and domain/port
+import-safety contracts. `tests/conftest.py` owns the shared `src` import path
+so a test's physical location does not affect imports.
+
 ## Decision Rules
 
 | Rule | Decision outcome |
