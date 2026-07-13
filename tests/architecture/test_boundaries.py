@@ -317,6 +317,10 @@ def test_retired_kis_logger_compatibility_module_is_removed():
     assert not (SRC_DIR / "broker/kis_logger.py").exists()
 
 
+def test_retired_kis_ws_notifications_compatibility_module_is_removed():
+    assert not (SRC_DIR / "broker/kis_ws_notifications.py").exists()
+
+
 def test_kis_rest_client_does_not_import_legacy_state():
     imports = _imports_in(SRC_DIR / "infrastructure/kis/kis_rest_client.py")
 
