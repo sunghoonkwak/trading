@@ -7,6 +7,16 @@ from infrastructure.gsheet import portfolio_source
 from infrastructure.gsheet.portfolio_source import parse_worksheet_data
 
 
+def test_gsheet_source_owns_the_portfolio_cache_lifecycle():
+    from infrastructure.gsheet import portfolio_source
+    from infrastructure.portfolio import integration
+
+    assert hasattr(portfolio_source, "invalidate_portfolio_cache")
+    assert hasattr(portfolio_source, "refresh_portfolio_cache")
+    assert hasattr(portfolio_source, "get_cached_portfolio")
+    assert not hasattr(integration, "_gsheet_cache")
+
+
 class FakeWorksheet:
     def __init__(self, rows):
         self.rows = rows

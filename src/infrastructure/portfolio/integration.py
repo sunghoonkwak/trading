@@ -2,8 +2,6 @@
 """Portfolio source integration implemented by infrastructure adapters."""
 
 import logging
-import threading
-from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
@@ -14,11 +12,6 @@ from domain.portfolio.scope import (
     normalize_portfolio_scope,
 )
 from infrastructure.portfolio.kis_source import fetch_kis_portfolio_source
-
-_gsheet_cache_lock = threading.Lock()
-_gsheet_cache: Optional[Dict[str, Any]] = None
-_gsheet_cache_error: Optional[str] = None
-_gsheet_cache_updated_at: Optional[datetime] = None
 
 
 class IntegratedPortfolioSource:
@@ -38,87 +31,31 @@ def _empty_source() -> Dict[str, Any]:
 
 
 def invalidate_gsheet_cache() -> None:
-    """Clear the in-memory GSheet source cache."""
-    global _gsheet_cache, _gsheet_cache_error, _gsheet_cache_updated_at
+    """Clear the GSheet adapter cache through the compatibility seam."""
+    from infrastructure.gsheet.portfolio_source import invalidate_portfolio_cache
 
-    with _gsheet_cache_lock:
-        _gsheet_cache = None
-        _gsheet_cache_error = None
-        _gsheet_cache_updated_at = None
+    invalidate_portfolio_cache()
 
 
 def fetch_gsheet_portfolio() -> Tuple[Dict[str, Any], Optional[str]]:
-    """Fetch passive portfolio holdings from Google Sheets."""
-    from infrastructure.gsheet import connect_google_sheet, parse_worksheet_data
+    """Fetch GSheet data through the adapter compatibility seam."""
+    from infrastructure.gsheet.portfolio_source import fetch_portfolio
 
-    gs_data = _empty_source()
-    errors = []
-    for currency in ["USD", "KRW"]:
-        sheet = connect_google_sheet(currency)
-        if sheet:
-            parsed = parse_worksheet_data(sheet, currency)
-            gs_data["accounts"].update(parsed["accounts"])
-            gs_data["holdings"].extend(parsed["holdings"])
-            gs_data["asset_info"].update(parsed["asset_info"])
-            gs_data["cash_holdings"].extend(parsed["cash_holdings"])
-        else:
-            errors.append(f"Failed to connect {currency} sheet")
-
-    return gs_data, " | ".join(errors) if errors else None
+    return fetch_portfolio()
 
 
 def refresh_gsheet_cache() -> Dict[str, Any]:
-    """Fetch Google Sheets and replace the in-memory GSheet source cache."""
-    global _gsheet_cache, _gsheet_cache_error, _gsheet_cache_updated_at
+    """Refresh the GSheet adapter cache through the compatibility seam."""
+    from infrastructure.gsheet.portfolio_source import refresh_portfolio_cache
 
-    try:
-        source, error = fetch_gsheet_portfolio()
-    except Exception as e:
-        logging.warning("[Portfolio] GSheet cache refresh failed: %s", e)
-        with _gsheet_cache_lock:
-            _gsheet_cache_error = str(e)
-            if _gsheet_cache is None:
-                _gsheet_cache = _empty_source()
-            cached = deepcopy(_gsheet_cache)
-            cached_at = _gsheet_cache_updated_at
-        return {
-            "success": False,
-            "holdings_count": len(cached.get("holdings", [])),
-            "cash_count": len(cached.get("cash_holdings", [])),
-            "accounts_count": len(cached.get("accounts", {})),
-            "error": str(e),
-            "last_updated": cached_at.isoformat() if cached_at else None,
-        }
-
-    updated_at = datetime.now(timezone.utc)
-    with _gsheet_cache_lock:
-        _gsheet_cache = deepcopy(source)
-        _gsheet_cache_error = error
-        _gsheet_cache_updated_at = updated_at
-
-    return {
-        "success": error is None,
-        "holdings_count": len(source.get("holdings", [])),
-        "cash_count": len(source.get("cash_holdings", [])),
-        "accounts_count": len(source.get("accounts", {})),
-        "error": error,
-        "last_updated": updated_at.isoformat(),
-    }
+    return refresh_portfolio_cache(fetch_gsheet_portfolio)
 
 
 def get_cached_gsheet_portfolio() -> Tuple[Dict[str, Any], Optional[str]]:
-    """Return cached GSheet source data, loading it once on first use."""
-    with _gsheet_cache_lock:
-        cached = deepcopy(_gsheet_cache) if _gsheet_cache is not None else None
-        error = _gsheet_cache_error
+    """Read the GSheet adapter cache through the compatibility seam."""
+    from infrastructure.gsheet.portfolio_source import get_cached_portfolio
 
-    if cached is None:
-        refresh_gsheet_cache()
-        with _gsheet_cache_lock:
-            cached = deepcopy(_gsheet_cache) if _gsheet_cache is not None else _empty_source()
-            error = _gsheet_cache_error
-
-    return cached, error
+    return get_cached_portfolio(fetch_gsheet_portfolio)
 
 
 def fetch_toss_exchange_rate() -> Tuple[Optional[float], Optional[str]]:
