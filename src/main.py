@@ -106,7 +106,7 @@ class TradingSystem:
         from state.system_state import ThreadStatus, update_telegram_state
         from utils.market_utils import get_fear_and_greed
 
-        configure_strategy_execution_service()
+        configure_strategy_execution_service(self._build_portfolio_service)
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram(
             portfolio_dependencies=PortfolioCommandDependencies(
@@ -301,7 +301,7 @@ class TradingSystem:
             from interfaces.scheduler.runner import SchedulerRunner
             from interfaces.telegram.utils import send_notification
 
-            configure_strategy_execution_service()
+            configure_strategy_execution_service(self._build_portfolio_service)
             self._scheduler_runner = SchedulerRunner(
                 portfolio_reader=self._build_portfolio_service(),
                 order_runner=SchedulerOrderRunner(

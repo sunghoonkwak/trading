@@ -9,6 +9,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from application import strategy_execution as execution_service
 from application.strategy_execution import StrategyExecutionDependencies
+
+
+def test_strategy_execution_composition_uses_injected_portfolio_factory(monkeypatch):
+    from infrastructure import strategy_execution as composition
+
+    captured = {}
+    portfolio_factory = lambda: object()
+    monkeypatch.setattr(
+        composition,
+        "configure_strategy_execution",
+        lambda dependencies: captured.setdefault("dependencies", dependencies),
+    )
+
+    composition.configure_strategy_execution_service(portfolio_factory)
+
+    assert captured["dependencies"].portfolio_reader_factory is portfolio_factory
 from domain.strategy import raoeo, rebalancing
 from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
 from domain.strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
