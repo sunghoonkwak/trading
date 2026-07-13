@@ -230,9 +230,11 @@ class TradingSystem:
         """Initializes KIS API and WebSocket connection."""
         print("[Startup] Step 2: Initializing KIS API...")
         try:
+            from core.credentials import get_secrets_from_password
             from infrastructure.kis import configure_kis_vendor_hooks
             from infrastructure.kis.kis_rest_client import configure_state_publisher
-            from state.system_state import AuthStatus, update_kis_state
+            from infrastructure.kis.vendor_callbacks import configure_runtime_collaborators
+            from state.system_state import AuthStatus, WebSocketStatus, update_kis_state
 
             status_by_phase = {
                 "authenticating": AuthStatus.AUTHENTICATING,
@@ -248,7 +250,25 @@ class TradingSystem:
                     **({"last_error": error} if error else {}),
                 )
 
+            websocket_status_by_name = {
+                "connected": WebSocketStatus.CONNECTED,
+                "connecting": WebSocketStatus.CONNECTING,
+                "reconnecting": WebSocketStatus.RECONNECTING,
+                "disconnected": WebSocketStatus.DISCONNECTED,
+                "error": WebSocketStatus.ERROR,
+            }
+
+            def publish_websocket_state(status_name: str) -> None:
+                status = websocket_status_by_name.get(status_name)
+                if status is not None:
+                    update_kis_state(ws_status=status)
+
             configure_state_publisher(publish_kis_auth_state)
+            configure_runtime_collaborators(
+                credential_provider=get_secrets_from_password,
+                alert_publisher=display.add_alert,
+                websocket_state_publisher=publish_websocket_state,
+            )
 
             configure_kis_vendor_hooks()
             from broker.kis_worker import (

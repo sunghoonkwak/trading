@@ -265,6 +265,14 @@ def test_kis_rest_client_does_not_import_legacy_state():
     assert "state.system_state" not in imports
 
 
+def test_kis_vendor_callbacks_use_runtime_collaborators():
+    imports = _imports_in(SRC_DIR / "infrastructure/kis/vendor_callbacks.py")
+
+    assert "core.display" not in imports
+    assert "core.credentials" not in imports
+    assert "state.system_state" not in imports
+
+
 def test_strategy_execution_composition_uses_injected_dependencies():
     imports = _imports_in(SRC_DIR / "infrastructure/strategy_execution.py")
 
