@@ -139,7 +139,7 @@ class PortfolioRetrievalService:
     def _replace_account_source(
         base: dict[str, Any], replacement: dict[str, Any], account_key: str
     ) -> dict[str, Any]:
-        result = {
+        result: dict[str, Any] = {
             "accounts": dict(base.get("accounts", {})),
             "holdings": [
                 item for item in base.get("holdings", []) if item.get("account_key") != account_key

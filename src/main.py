@@ -194,6 +194,7 @@ class TradingSystem:
         from interfaces.telegram.strategy import StrategyCommandDependencies
 
         self._configure_strategy_execution_service()
+        assert self._strategy_runtime is not None
         self._configure_kis_portfolio_source()
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram(
@@ -509,6 +510,7 @@ class TradingSystem:
             from interfaces.telegram.utils import send_notification
 
             self._configure_strategy_execution_service()
+            assert self._strategy_runtime is not None
             self._scheduler_runner = SchedulerRunner(
                 portfolio_reader=self._build_portfolio_service(),
                 order_runner=SchedulerOrderRunner(
