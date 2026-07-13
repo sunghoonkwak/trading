@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""KIS API codes shared by trading and strategy modules."""
+"""KIS exchange and order codes used by KIS infrastructure adapters."""
 
 MARKET_KR = "KR"
 MARKET_US = "US"

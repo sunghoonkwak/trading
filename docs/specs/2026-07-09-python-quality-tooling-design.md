@@ -16,7 +16,7 @@ and commands.
 - Run all three checks for pushes and pull requests in GitHub Actions.
 - Document the local commands.
 
-The official KIS distribution under `src/kis/kis_api/**`, private runtime
+The official KIS distribution under `src/infrastructure/kis/kis_api/**`, private runtime
 configuration, generated data, and external mounts are excluded from Ruff and
 mypy. Existing pytest tests may continue to import KIS modules as needed.
 

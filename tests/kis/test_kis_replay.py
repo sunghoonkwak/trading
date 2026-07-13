@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from kis.ws_parser import normalize_record
+from infrastructure.kis.ws_parser import normalize_record
 
 
 def test_websocket_records_replay_with_configured_width():

@@ -703,11 +703,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from kis.kis_api.overseas_stock.price import price as price_module
-
 from broker import market_data
+from infrastructure.kis.kis_api import kis_auth as ka
+from infrastructure.kis.kis_api.overseas_stock.price import price as price_module
 from infrastructure.portfolio.kis_source import KisPortfolioSourceAdapter
-from kis.kis_api import kis_auth as ka
 
 
 class _FakeTREnv:
@@ -928,11 +927,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from kis.kis_api.overseas_stock.inquire_present_balance import (
+from domain.portfolio.processing import PortfolioProcessor
+from infrastructure.kis.kis_api.overseas_stock.inquire_present_balance import (
     inquire_present_balance as inquire_present_balance_module,
 )
-
-from domain.portfolio.processing import PortfolioProcessor
 
 
 class _FakeTREnv:

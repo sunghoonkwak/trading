@@ -15,7 +15,7 @@ if src_path not in sys.path:
 
 from domain.strategy.base import OrderSide
 from domain.strategy.raoeo import calculate_orders
-from kis.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
+from infrastructure.kis.constants import ORDER_TYPE_US_LOC, ORDER_TYPE_US_LIMIT
 
 # Configure logging to WARNING so calculate_orders logs don't spam output
 logging.basicConfig(level=logging.WARNING, format="%(message)s")

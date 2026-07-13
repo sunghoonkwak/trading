@@ -9,7 +9,11 @@ import requests
 from core import trading_config
 from domain.strategy.base import OrderSide, StrategyOrder
 from domain.strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
-from kis.constants import EXCHANGE_CODE_MAP, ORDER_TYPE_US_LIMIT, ORDER_TYPE_US_LOC
+from infrastructure.kis.constants import (
+    EXCHANGE_CODE_MAP,
+    ORDER_TYPE_US_LIMIT,
+    ORDER_TYPE_US_LOC,
+)
 
 ka = None
 inquire_psamount = None

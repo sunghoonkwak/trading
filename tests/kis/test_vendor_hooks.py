@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from kis.kis_api import kis_auth
+from infrastructure.kis.kis_api import kis_auth
 
 
 def test_vendor_websocket_events_use_registered_callbacks_without_host_imports(monkeypatch):

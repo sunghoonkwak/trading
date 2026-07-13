@@ -50,7 +50,7 @@ advisory identifier and reason rather than disabling the audit.
 ### Mutation Testing
 
 Add `mutmut` as an opt-in local diagnostic focused on application-owned
-strategy and broker modules. Do not mutate `src/kis/kis_api/**`. Document a
+strategy and broker modules. Do not mutate `src/infrastructure/kis/kis_api/**`. Document a
 repeatable command, but do not make mutation score a blocking CI threshold
 until the baseline and runtime are known.
 

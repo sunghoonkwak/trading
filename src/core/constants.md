@@ -6,7 +6,7 @@
 
 1. **앱 공통 기본값**: 설정 루트, 웹 서버 기본값, API 타임아웃처럼 여러 패키지가 공유하는 값을 정의합니다.
 2. **환경 플래그 판정값**: 여러 모듈에서 같은 방식으로 `true`/`false` 계열 환경변수를 해석하도록 공통 값을 제공합니다.
-3. **도메인 경계 유지**: KIS 주문/거래소 코드는 `src/kis/constants.py`, 전략 정책 기본값은 `src/strategy/constants.py`에서 관리합니다.
+3. **도메인 경계 유지**: KIS 주문/거래소 코드는 `src/infrastructure/kis/constants.py`, 전략 정책 기본값은 `src/strategy/constants.py`에서 관리합니다.
 
 ## Key Constants (주요 상수)
 

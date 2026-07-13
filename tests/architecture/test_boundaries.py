@@ -104,7 +104,7 @@ def test_data_package_import_does_not_import_kis_data_service(tmp_path):
 import sys
 import data
 assert "data.data_service" not in sys.modules
-assert "kis.kis_api.kis_auth" not in sys.modules
+assert "infrastructure.kis.kis_api.kis_auth" not in sys.modules
 """,
     )
 
@@ -119,7 +119,7 @@ import sys
 import data
 assert not hasattr(data, "PortfolioCache")
 assert "data.data_service" not in sys.modules
-assert "kis.kis_api.kis_auth" not in sys.modules
+assert "infrastructure.kis.kis_api.kis_auth" not in sys.modules
 """,
     )
 
@@ -152,10 +152,10 @@ assert not (pathlib.Path.home() / "KIS_config").exists()
     assert result.returncode == 0, result.stderr
 
 
-def test_strategy_modules_do_not_import_kis_constants():
+def test_strategy_modules_do_not_import_kis_infrastructure_constants():
     offenders = []
     for path in (SRC_DIR / "strategy").glob("*.py"):
-        if "kis.constants" in path.read_text(encoding="utf-8"):
+        if "infrastructure.kis.constants" in path.read_text(encoding="utf-8"):
             offenders.append(path.name)
 
     assert offenders == []
@@ -182,7 +182,7 @@ import sys
 import interfaces.web.server
 import interfaces.scheduler.order_runner
 import interfaces.telegram.strategy
-assert "kis.kis_api.kis_auth" not in sys.modules
+assert "infrastructure.kis.kis_api.kis_auth" not in sys.modules
 """,
     )
 
@@ -341,6 +341,16 @@ def test_retired_kis_ws_notifications_module_is_removed():
     assert not (SRC_DIR / "infrastructure/kis/kis_ws_notifications.py").exists()
 
 
+def test_retired_kis_compatibility_modules_are_removed():
+    for relative_path in (
+        "kis/__init__.py",
+        "kis/constants.py",
+        "kis/ws_parser.py",
+        "kis/kis_api/__init__.py",
+    ):
+        assert not (SRC_DIR / relative_path).exists()
+
+
 def test_kis_rest_client_does_not_import_legacy_state():
     imports = _imports_in(SRC_DIR / "infrastructure/kis/rest_client.py")
 
@@ -426,7 +436,7 @@ def test_vendor_kis_import_does_not_load_application_owned_packages(tmp_path):
         tmp_path,
         """
 import sys
-import kis.kis_api.kis_auth
+import infrastructure.kis.kis_api.kis_auth
 for prefix in ("application", "broker", "core", "data", "domain", "interfaces", "state", "toss"):
     assert not any(name == prefix or name.startswith(prefix + ".") for name in sys.modules)
 """,

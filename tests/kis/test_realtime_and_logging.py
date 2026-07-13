@@ -10,19 +10,22 @@ sys.path.insert(0, str(SRC_DIR))
 
 
 def _load_event_handler(monkeypatch):
-    fake_kis = types.ModuleType("kis")
+    fake_infrastructure = types.ModuleType("infrastructure")
+    fake_kis = types.ModuleType("infrastructure.kis")
     fake_event_pipe = types.ModuleType("core.event_pipe")
     fake_event_pipe.print_viewer = lambda *args, **kwargs: None
-    fake_ws_parser = types.ModuleType("kis.ws_parser")
+    fake_ws_parser = types.ModuleType("infrastructure.kis.ws_parser")
     fake_ws_parser.mask_dict_for_log = lambda value: value
     fake_kis.ws_parser = fake_ws_parser
+    fake_infrastructure.kis = fake_kis
     fake_broker = types.ModuleType("broker")
     fake_order_admin = types.ModuleType("broker.order_admin")
     fake_order_admin.sync_open_orders = lambda: None
 
-    monkeypatch.setitem(sys.modules, "kis", fake_kis)
+    monkeypatch.setitem(sys.modules, "infrastructure", fake_infrastructure)
+    monkeypatch.setitem(sys.modules, "infrastructure.kis", fake_kis)
     monkeypatch.setitem(sys.modules, "core.event_pipe", fake_event_pipe)
-    monkeypatch.setitem(sys.modules, "kis.ws_parser", fake_ws_parser)
+    monkeypatch.setitem(sys.modules, "infrastructure.kis.ws_parser", fake_ws_parser)
     monkeypatch.setitem(sys.modules, "broker", fake_broker)
     monkeypatch.setitem(sys.modules, "broker.order_admin", fake_order_admin)
 
@@ -208,7 +211,7 @@ from pathlib import Path
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from kis.ws_parser import (
+from infrastructure.kis.ws_parser import (
     build_schema_drift_alert,
     mask_dict_for_log,
     mask_record_for_log,

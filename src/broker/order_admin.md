@@ -39,5 +39,5 @@ KIS 해외 helper에서 각각 변환합니다. Toss는 국내/해외 시장 구
 
 공식 KIS auth와 endpoint wrapper, Toss 주문 조회 helper는 함수 호출
 시점에 lazy-load합니다. 웹 서버와 텔레그램 명령은 `broker.order_admin`만
-호출하고, 주문 관리 정책과 화면 동기화는 `src/kis/` 바깥의 앱 소유
+호출하고, 주문 관리 정책과 화면 동기화는 KIS vendor tree 바깥의 앱 소유
 영역에 둡니다.

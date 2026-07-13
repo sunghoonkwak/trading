@@ -8,8 +8,7 @@ from core import trading_config
 
 
 def _get_price_module():
-    # Keep the documented legacy import seam patchable until U8 retires it.
-    from kis.kis_api.overseas_stock.price import price as price_module
+    from infrastructure.kis.kis_api.overseas_stock.price import price as price_module
 
     return price_module
 
