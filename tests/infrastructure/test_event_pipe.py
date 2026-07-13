@@ -1,3 +1,5 @@
+"""Characterization tests for the event-pipe infrastructure adapter."""
+
 import queue
 import sys
 from pathlib import Path
@@ -7,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from core import event_pipe
+from infrastructure import event_pipe
 
 
 class FakeSocket:

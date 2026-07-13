@@ -41,7 +41,7 @@ KIS WebSocket 클라이언트가 메시지를 수신할 때마다 실행되는 �
     *   연결 유지를 위한 PINGPONG 메시지를 처리합니다 (시스템 로깅 타임스탬프 사용).
 
 ## Dependencies (의존성)
-*   **`core.event_pipe`**: 외부 뷰어로 로그를 스트리밍하는 데 사용됩니다.
+*   **`infrastructure.event_pipe`**: 외부 뷰어로 로그를 스트리밍합니다.
 *   **`infrastructure.display`**: 주문 상태와 알림을 터미널 및 이벤트 뷰어에
     전달합니다.
 *   **주입된 notification sender**: 주문 체결 시 Telegram 알림을 전송합니다.

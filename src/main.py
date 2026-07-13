@@ -23,8 +23,7 @@ except ImportError:
     pass
 
 from application.runtime_service import RuntimeCommandResult, RuntimeController
-from core import event_pipe
-from infrastructure import display, lock_manager
+from infrastructure import display, event_pipe, lock_manager
 from infrastructure import trading_configuration as trading_config
 from infrastructure.logger import LogManager
 from infrastructure.runtime_settings import CONFIG_ROOT
@@ -516,7 +515,6 @@ class TradingSystem:
             DEFAULT_WEB_PORT,
         )
         try:
-            from core import event_pipe
             from infrastructure import market_signals, order_admin
             from infrastructure.config import ConfigFile, load_json, save_json
             from infrastructure.runtime_settings import ENV_TRUE_VALUES

@@ -1,5 +1,5 @@
 """
-Unix domain socket IPC module for WebSocket log communication between main process and viewer.
+Unix domain socket IPC adapter for WebSocket log communication between main process and viewer.
 Uses async write queue to prevent blocking when Event Viewer is unresponsive.
 """
 import logging

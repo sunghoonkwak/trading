@@ -97,33 +97,21 @@ def _run_import_check(tmp_path, code):
     )
 
 
-def test_data_package_import_does_not_import_kis_data_service(tmp_path):
-    result = _run_import_check(
-        tmp_path,
-        """
-import sys
-import data
-assert "data.data_service" not in sys.modules
-assert "infrastructure.kis.kis_api.kis_auth" not in sys.modules
-""",
-    )
+def test_retired_data_package_has_no_active_python_consumers():
+    assert not (SRC_DIR / "data").exists()
 
-    assert result.returncode == 0, result.stderr
+    consumers = []
+    for root in [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            if any(
+                _is_package_or_child(module, "data")
+                for module in _imports_in(path)
+            ):
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
 
-
-def test_data_package_does_not_export_portfolio_cache(tmp_path):
-    result = _run_import_check(
-        tmp_path,
-        """
-import sys
-import data
-assert not hasattr(data, "PortfolioCache")
-assert "data.data_service" not in sys.modules
-assert "infrastructure.kis.kis_api.kis_auth" not in sys.modules
-""",
-    )
-
-    assert result.returncode == 0, result.stderr
+    assert consumers == []
 
 
 def test_telegram_interface_import_does_not_initialize_bot_module(tmp_path):
@@ -524,6 +512,19 @@ def test_retired_core_display_module_has_no_active_python_consumers():
     for root in [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]:
         for path in root.rglob("*.py"):
             if path != Path(__file__) and "core.display" in path.read_text(encoding="utf-8"):
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
+
+
+def test_retired_core_event_pipe_module_has_no_active_python_consumers():
+    assert not (SRC_DIR / "core/event_pipe.py").exists()
+    assert not (SRC_DIR / "core/event_pipe.md").exists()
+
+    consumers = []
+    for root in [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]:
+        for path in root.rglob("*.py"):
+            if path != Path(__file__) and "core.event_pipe" in path.read_text(encoding="utf-8"):
                 consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
 
     assert consumers == []

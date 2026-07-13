@@ -22,8 +22,8 @@ allowing an interface or application module to construct those adapters.
 | `infrastructure/` | KIS, Toss, file, cache, and external-service adapters. |
 | `infrastructure/kis/kis_api/` | The isolated KIS vendor distribution. |
 
-`core/` contains runtime technical primitives only. `utils/` remains limited
-to dependency-free helpers.
+`infrastructure.event_pipe` owns Unix-socket event delivery and its bounded
+writer queue. `utils/` remains limited to dependency-free helpers.
 
 ## Compatibility register
 

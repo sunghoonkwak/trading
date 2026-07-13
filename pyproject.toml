@@ -10,10 +10,9 @@ ignore = ["E402", "E701", "E722", "E731"]
 [tool.mypy]
 python_version = "3.11"
 files = [
-    "src/core/__init__.py",
     "src/infrastructure/runtime_settings.py",
     "src/infrastructure/credentials.py",
-    "src/core/event_pipe.py",
+    "src/infrastructure/event_pipe.py",
     "src/infrastructure/display.py",
     "src/infrastructure/http_defaults.py",
     "src/infrastructure/lock_manager.py",
@@ -74,7 +73,6 @@ source_paths = [
 ]
 also_copy = [
     "src/main.py",
-    "src/core/",
     "src/domain/",
     "src/infrastructure/",
     "src/interfaces/",

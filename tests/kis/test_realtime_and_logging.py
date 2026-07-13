@@ -12,7 +12,7 @@ sys.path.insert(0, str(SRC_DIR))
 def _load_event_handler(monkeypatch):
     fake_infrastructure = types.ModuleType("infrastructure")
     fake_kis = types.ModuleType("infrastructure.kis")
-    fake_event_pipe = types.ModuleType("core.event_pipe")
+    fake_event_pipe = types.ModuleType("infrastructure.event_pipe")
     fake_event_pipe.print_viewer = lambda *args, **kwargs: None
     fake_display = types.ModuleType("infrastructure.display")
     fake_display.add_alert = lambda *args, **kwargs: None
@@ -29,7 +29,7 @@ def _load_event_handler(monkeypatch):
 
     monkeypatch.setitem(sys.modules, "infrastructure", fake_infrastructure)
     monkeypatch.setitem(sys.modules, "infrastructure.kis", fake_kis)
-    monkeypatch.setitem(sys.modules, "core.event_pipe", fake_event_pipe)
+    monkeypatch.setitem(sys.modules, "infrastructure.event_pipe", fake_event_pipe)
     monkeypatch.setitem(sys.modules, "infrastructure.display", fake_display)
     monkeypatch.setitem(
         sys.modules,

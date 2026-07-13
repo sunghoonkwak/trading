@@ -76,7 +76,6 @@ trading/
 │   ├── application/             # portfolio·strategy·order use case와 ports
 │   ├── domain/                  # 전략 규칙, portfolio 변환, 값 타입
 │   ├── infrastructure/          # KIS, Toss, portfolio source/cache adapter
-│   ├── core/                    # 런타임 기술 유틸리티
 │   ├── state/                   # 시장/시스템 상태 캐시
 │   ├── utils/                   # 로깅, 포맷, 시장 시간 유틸리티
 │   └── web/                     # 웹 대시보드 정적 파일과 인증서 위치
