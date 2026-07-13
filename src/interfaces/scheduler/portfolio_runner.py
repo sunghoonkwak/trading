@@ -14,7 +14,6 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from application.ports import PortfolioReader
-from interfaces.telegram.portfolio_formatter import format_portfolio_summary
 
 REPORTS_DIR = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_history")
 
@@ -260,19 +259,27 @@ class SchedulerPortfolioRunner:
         self,
         notify: Callable[[str], None],
         dependencies: SchedulerReportDependencies,
+        format_portfolio_summary: Callable[[dict, Callable[[], float]], str],
     ) -> None:
         self._notify = notify
         self._dependencies = dependencies
+        self._format_portfolio_summary = format_portfolio_summary
         os.makedirs(dependencies.history_dir, exist_ok=True)
 
     def run_daily_portfolio_report(self, portfolio_reader: PortfolioReader) -> None:
-        run_daily_portfolio_report(portfolio_reader, self._notify, self._dependencies)
+        run_daily_portfolio_report(
+            portfolio_reader,
+            self._notify,
+            self._dependencies,
+            self._format_portfolio_summary,
+        )
 
 
 def run_daily_portfolio_report(
     portfolio_reader: PortfolioReader,
     notify: Callable[[str], None],
     dependencies: SchedulerReportDependencies,
+    format_portfolio_summary: Callable[[dict, Callable[[], float]], str],
 ):
     """
     Execute daily portfolio reporting routine (typically scheduled for morning).

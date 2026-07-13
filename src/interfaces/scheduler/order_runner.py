@@ -9,7 +9,6 @@ import logging
 from collections.abc import Callable
 
 from application.strategy_run_service import StrategyRunService
-from interfaces.telegram.report_formatter import format_strategy_report
 
 
 class SchedulerOrderRunner:
@@ -20,9 +19,13 @@ class SchedulerOrderRunner:
         *,
         strategy_run_service: StrategyRunService,
         notify: Callable[[str], None],
+        format_strategy_report: Callable[[dict, dict], str],
+        format_rebalancing_report: Callable[[dict], str],
     ) -> None:
         self._strategy_run_service = strategy_run_service
         self._notify = notify
+        self._format_strategy_report = format_strategy_report
+        self._format_rebalancing_report = format_rebalancing_report
         self._last_first_notify_date = ""
 
     def run_daily_order_report(self) -> None:
@@ -36,7 +39,7 @@ class SchedulerOrderRunner:
                     "⚠️ [네트워크 타임아웃] KIS API 무응답 (Daily Report)\n"
                     f"RAOEO: {raoeo_err}, VA: {va_err}"
                 )
-            report_text = format_strategy_report(raoeo_res, va_res)
+            report_text = self._format_strategy_report(raoeo_res, va_res)
             self._notify(f"⏰ <b>Daily Scheduler Execution</b>\n\n{report_text}")
         except Exception as exc:
             logging.error("[Scheduler] Daily Order Job failed: %s", exc, exc_info=True)
@@ -54,8 +57,6 @@ class SchedulerOrderRunner:
             return
 
         from domain.strategy.base import StrategyStatus
-        from interfaces.telegram.report_formatter import format_rebalancing_report
-
         is_first_call = us_date != self._last_first_notify_date
         try:
             report = self._strategy_run_service.run_rebalancing(
@@ -69,7 +70,7 @@ class SchedulerOrderRunner:
             should_notify = is_first_call or status not in {StrategyStatus.ALREADY_DONE}
             if should_notify:
                 header = "🚀 <b>First Rebalancing Check</b>" if is_first_call else "🔄 <b>Periodic Rebalancing</b>"
-                self._notify(f"{header}\n\n{format_rebalancing_report(report)}")
+                self._notify(f"{header}\n\n{self._format_rebalancing_report(report)}")
             self._last_first_notify_date = us_date
         except Exception as exc:
             logging.error("[Scheduler] Periodic Rebalancing failed: %s", exc, exc_info=True)

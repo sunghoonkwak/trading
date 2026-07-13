@@ -7,18 +7,12 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
-def test_daily_order_report_runs_strategy_suite_once(monkeypatch):
+def test_daily_order_report_runs_strategy_suite_once():
     from interfaces.scheduler import order_runner as scheduler_order
 
     calls = []
     raoeo_report = {"status": "skipped", "error": None}
     va_report = {"status": "skipped", "error": None}
-
-    monkeypatch.setattr(
-        scheduler_order,
-        "format_strategy_report",
-        lambda raoeo, va: "strategy report",
-    )
 
     notifications = []
     class Service:
@@ -27,7 +21,9 @@ def test_daily_order_report_runs_strategy_suite_once(monkeypatch):
             return raoeo_report, va_report
 
     scheduler_order.SchedulerOrderRunner(
-        strategy_run_service=Service(), notify=notifications.append
+        strategy_run_service=Service(), notify=notifications.append,
+        format_strategy_report=lambda *_args: "strategy report",
+        format_rebalancing_report=lambda _report: "rebalancing",
     ).run_daily_order_report()
 
     assert calls == [True]
@@ -45,14 +41,16 @@ def test_scheduler_strategy_suite_uses_the_application_facade(monkeypatch):
 
     notifications = []
     runner = scheduler_order.SchedulerOrderRunner(
-        strategy_run_service=Service(), notify=notifications.append
+        strategy_run_service=Service(), notify=notifications.append,
+        format_strategy_report=lambda *_args: "report",
+        format_rebalancing_report=lambda _report: "rebalancing",
     )
     runner.run_daily_order_report()
 
     assert notifications
 
 
-def test_factory_owned_order_runner_does_not_use_module_configuration(monkeypatch):
+def test_factory_owned_order_runner_does_not_use_module_configuration():
     from interfaces.scheduler import order_runner as scheduler_order
 
     class Service:
@@ -60,14 +58,11 @@ def test_factory_owned_order_runner_does_not_use_module_configuration(monkeypatc
             return ({"execute": execute}, {"execute": execute})
 
     notifications = []
-    monkeypatch.setattr(
-        scheduler_order,
-        "format_strategy_report",
-        lambda _raoeo, _va: "factory report",
-    )
     runner = scheduler_order.SchedulerOrderRunner(
         strategy_run_service=Service(),
         notify=notifications.append,
+        format_strategy_report=lambda _raoeo, _va: "factory report",
+        format_rebalancing_report=lambda _report: "rebalancing",
     )
 
     runner.run_daily_order_report()
@@ -83,7 +78,9 @@ def test_scheduler_rebalancing_uses_application_facade_with_cache_key(monkeypatc
             return {"execute": execute, "cache_key": orderable_cache_key}
 
     runner = scheduler_order.SchedulerOrderRunner(
-        strategy_run_service=Service(), notify=lambda _message: None
+        strategy_run_service=Service(), notify=lambda _message: None,
+        format_strategy_report=lambda *_args: "report",
+        format_rebalancing_report=lambda _report: "rebalancing",
     )
     assert runner._strategy_run_service.run_rebalancing(
         execute=True, orderable_cache_key="2026-07-11"
@@ -107,7 +104,9 @@ def test_periodic_rebalancing_is_quiet_when_disabled(monkeypatch, caplog):
             return {"status": StrategyStatus.DISABLED}
 
     runner = scheduler_order.SchedulerOrderRunner(
-        strategy_run_service=Service(), notify=notifications.append
+        strategy_run_service=Service(), notify=notifications.append,
+        format_strategy_report=lambda *_args: "report",
+        format_rebalancing_report=lambda _report: "rebalancing",
     )
 
     caplog.set_level(logging.INFO)

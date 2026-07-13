@@ -502,6 +502,11 @@ class TradingSystem:
                 SchedulerReportDependencies,
             )
             from interfaces.scheduler.runner import SchedulerRunner
+            from interfaces.telegram.portfolio_formatter import format_portfolio_summary
+            from interfaces.telegram.report_formatter import (
+                format_rebalancing_report,
+                format_strategy_report,
+            )
             from interfaces.telegram.utils import send_notification
 
             self._configure_strategy_execution_service()
@@ -510,6 +515,8 @@ class TradingSystem:
                 order_runner=SchedulerOrderRunner(
                     strategy_run_service=get_strategy_run_service(),
                     notify=send_notification,
+                    format_strategy_report=format_strategy_report,
+                    format_rebalancing_report=format_rebalancing_report,
                 ),
                 portfolio_runner=SchedulerPortfolioRunner(
                     send_notification,
@@ -518,6 +525,7 @@ class TradingSystem:
                         default_exchange_rate=DEFAULT_USD_KRW_EXCHANGE_RATE,
                         get_fear_and_greed=market_signals.get_fear_and_greed,
                     ),
+                    format_portfolio_summary,
                 ),
             )
             self._scheduler_runner.start()
@@ -545,6 +553,7 @@ class TradingSystem:
                 SchedulerPortfolioRunner,
                 SchedulerReportDependencies,
             )
+            from interfaces.telegram.portfolio_formatter import format_portfolio_summary
             from interfaces.telegram.utils import send_notification
             from interfaces.web import WebDependencies, create_web_app, start_web_server
 
@@ -556,6 +565,7 @@ class TradingSystem:
                     default_exchange_rate=DEFAULT_USD_KRW_EXCHANGE_RATE,
                     get_fear_and_greed=market_signals.get_fear_and_greed,
                 ),
+                format_portfolio_summary,
             )
             web_app = create_web_app(
                 WebDependencies(
