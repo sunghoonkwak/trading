@@ -688,12 +688,8 @@ def test_kis_vendor_callbacks_use_runtime_collaborators():
     assert "state.system_state" not in imports
 
 
-def test_strategy_execution_composition_uses_injected_dependencies():
-    imports = _imports_in(SRC_DIR / "infrastructure/strategy_execution.py")
-
-    assert "broker.market_data" not in imports
-    assert "broker.strategy_broker" not in imports
-    assert "data.config_manager" not in imports
+def test_strategy_execution_has_no_infrastructure_composition_shim():
+    assert not (SRC_DIR / "infrastructure/strategy_execution.py").exists()
 
 
 def test_retired_data_gsheet_has_no_active_python_consumers():
