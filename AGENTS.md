@@ -5,13 +5,12 @@
 This is a Python 3.11+ KIS real-time trading system. Runtime entry point:
 `src/main.py`.
 
-- `src/core/`: configuration and web support
-- `src/kis/`: Korea Investment Securities API integration and official KIS
-  sample/vendor-like code
-- `src/strategy/`: RAOEO, value averaging, rebalancing, and execution
-- `src/scheduler/`, `src/telegram_bot/`, `src/data/`, `src/state/`,
-  `src/utils/`: supporting services
-- `src/interfaces/web/`: Event Viewer adapter and web assets
+- `src/interfaces/`: web, Telegram, and scheduler transport adapters
+- `src/application/`: portfolio, strategy, order, and runtime use cases
+- `src/domain/`: strategy rules, portfolio transformations, and value types
+- `src/infrastructure/`: KIS, Toss, portfolio, and external-service adapters
+- `src/core/`, `src/data/`, `src/state/`, `src/utils/`: retained technical,
+  configuration, state, and dependency-free helper modules
 - `templates/`: sample configuration only
 - `scripts/backtest/raoeo/`: backtest tooling
 
@@ -86,7 +85,7 @@ vendor-like KIS endpoint wrappers unless intentionally scoped.
 Treat `src/infrastructure/kis/kis_api/**` as the official Korea Investment
 Securities API distribution boundary. Keep application policy, orchestration,
 and testing seams outside the vendor tree, preferably in `src/application/`,
-`src/strategy/`, `src/data/`, or other app-owned modules. Changes inside the
+`src/domain/`, `src/data/`, or other app-owned modules. Changes inside the
 official KIS tree should be limited to deliberate compatibility/security
 patches that are worth reapplying during upstream updates.
 

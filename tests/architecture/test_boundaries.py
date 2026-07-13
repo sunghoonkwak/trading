@@ -396,6 +396,14 @@ def test_retired_strategy_broker_module_is_removed():
     assert not (SRC_DIR / "broker/strategy_broker.py").exists()
 
 
+def test_retired_legacy_sidecars_are_removed():
+    for relative_path in (
+        "data/portfolio_integration.md",
+        "strategy/report_formatter.md",
+    ):
+        assert not (SRC_DIR / relative_path).exists()
+
+
 def test_no_active_python_consumer_uses_retired_toss_broker_modules():
     roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
     consumers = []

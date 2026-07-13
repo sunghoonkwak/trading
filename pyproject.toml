@@ -72,7 +72,7 @@ skip_covered = true
 
 [tool.mutmut]
 source_paths = [
-    "src/strategy/",
+    "src/domain/strategy/",
     "src/application/strategy_broker.py",
     "src/infrastructure/market_data.py",
 ]

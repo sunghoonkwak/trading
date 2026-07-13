@@ -32,8 +32,10 @@ No compatibility module remains. The removed `broker.market_data`,
 `broker.toss_portfolio`, `data.data_service`, `strategy.execution_service`,
 `core.runtime_control`, `core.web_server`,
 `scheduler` forwarding modules, `telegram_bot`, `toss`, and data portfolio
-forwarding surfaces (including `data.gsheet`) have zero production, test,
-script, and documentation consumers.
+forwarding surfaces (including `data.gsheet` and its legacy integration
+sidecar) have zero production, test, script, and documentation consumers. The
+retired `strategy.report_formatter` sidecar now documents the Telegram
+formatter at its interface destination.
 
 `interfaces.web.create_web_app()` is a factory: each application owns its
 dependencies, connection manager, event-loop callback, and lifespan. The

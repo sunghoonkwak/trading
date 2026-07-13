@@ -34,10 +34,10 @@ CI gate.
 ## mypy Policy
 
 mypy targets application-owned modules with existing typing value, beginning
-with `src/strategy`, `src/application`, and `src/state`. It checks bodies of
-untyped functions but does not initially require every function to be
-annotated. Missing third-party stubs are tolerated so adoption is not blocked
-by external packages.
+with `src/domain/strategy`, `src/application`, and `src/state`. It checks
+bodies of untyped functions but does not initially require every function to
+be annotated. Missing third-party stubs are tolerated so adoption is not
+blocked by external packages.
 
 The target list may expand after additional application modules are annotated.
 The official KIS distribution remains outside the type-checking boundary.
