@@ -12,7 +12,7 @@ three public source/cache exports for callers that have not migrated yet.
 1. **Broker 원천 조회 위임**: `broker.kis_portfolio`와
    `broker.toss_portfolio`가 각 API 데이터를 표준 source 포맷으로 변환해
    제공합니다.
-2. **GSheet 원천 캐시**: `data.gsheet`을 통해 읽은 수동/외부 자산 source를
+2. **GSheet 원천 캐시**: `infrastructure.gsheet`을 통해 읽은 수동/외부 자산 source를
    메모리에 보관합니다. 최초 사용 또는 startup warmup 때 한 번 읽고,
    이후에는 Telegram `/gsheet` 명령으로 갱신합니다.
 3. **Toss 원천 대체**: `scope="all"`에서 Toss 조회가 실패하면 GSheet의

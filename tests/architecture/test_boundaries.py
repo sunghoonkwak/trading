@@ -260,6 +260,19 @@ def test_strategy_execution_composition_uses_injected_dependencies():
     assert "data.config_manager" not in imports
 
 
+def test_retired_data_gsheet_has_no_active_python_consumers():
+    roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
+    consumers = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            if "data.gsheet" in path.read_text(encoding="utf-8"):
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
+
+
 def test_market_utils_status_api_uses_market_open_contract(tmp_path):
     result = _run_import_check(
         tmp_path,
