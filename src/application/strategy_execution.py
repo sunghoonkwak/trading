@@ -240,25 +240,6 @@ def _require_dependencies() -> StrategyExecutionDependencies:
     return _dependencies
 
 
-def configure_portfolio_reader_factory(factory) -> None:
-    """Backward-compatible helper for composition roots during migration."""
-    dependencies = _require_dependencies()
-    configure_strategy_execution(
-        StrategyExecutionDependencies(
-            load_strategy_config=dependencies.load_strategy_config,
-            load_history=dependencies.load_history,
-            save_history=dependencies.save_history,
-            fetch_prices=dependencies.fetch_prices,
-            strategy_broker_name=dependencies.strategy_broker_name,
-            get_orderable_usd=dependencies.get_orderable_usd,
-            execute_order=dependencies.execute_order,
-            portfolio_reader_factory=factory,
-            get_market_status=dependencies.get_market_status,
-            orderable_usd_cache=dependencies.orderable_usd_cache,
-        )
-    )
-
-
 class StrategyRunContext:
     """Share expensive market data across one strategy execution bundle."""
 
