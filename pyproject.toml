@@ -16,7 +16,7 @@ files = [
     "src/core/event_pipe.py",
     "src/core/display.py",
     "src/infrastructure/http_defaults.py",
-    "src/core/lock_manager.py",
+    "src/infrastructure/lock_manager.py",
     "src/application/runtime_service.py",
     "src/core/trading_config.py",
     "src/interfaces/web/server.py",
