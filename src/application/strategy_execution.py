@@ -406,16 +406,6 @@ def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
     return _require_dependencies().execute_order(order)
 
 
-def get_strategy_run_service() -> StrategyRunService:
-    """Build the application use-case facade over the legacy orchestration."""
-    return StrategyRunService(
-        run_raoeo=run_raoeo_strategy,
-        run_value_averaging=run_va_strategy,
-        run_rebalancing=run_rebalancing_strategy,
-        run_suite=run_strategy_suite,
-    )
-
-
 def get_order_report_service() -> OrderReportService:
     """Build the application order-result facade over the configured broker."""
     return OrderReportService(execute_order=execute_single_order, sleep=time.sleep)

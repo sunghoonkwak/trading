@@ -136,13 +136,22 @@ def test_order_management_service_delegates_control_operations():
     assert calls == ["sync", ("TOSS", "2", {"id": "1"}, None)]
 
 
-def test_application_execution_exposes_application_use_case_facade(monkeypatch):
-    from application import strategy_execution
+def test_runtime_exposes_application_use_case_facade():
+    dependencies = StrategyExecutionDependencies(
+        load_strategy_config=lambda: {"raoeo": {"enabled": False}},
+        load_history=lambda: [],
+        save_history=lambda _history: True,
+        fetch_prices=lambda _tickers: {},
+        strategy_broker_name=lambda: "kis",
+        get_orderable_usd=lambda _symbol, _price: 0.0,
+        execute_order=lambda _order: (True, "accepted"),
+        portfolio_reader_factory=lambda: None,
+        get_market_status=lambda _date: {"is_market_open": True, "message": "open"},
+    )
 
-    monkeypatch.setattr(strategy_execution, "run_raoeo_strategy", lambda **_kwargs: {"strategy": "raoeo"})
-    service = strategy_execution.get_strategy_run_service()
+    service = StrategyExecutionRuntime(dependencies).strategy_run_service()
 
-    assert service.run_raoeo() == {"strategy": "raoeo"}
+    assert service.run_raoeo()["status"].value == "disabled"
 
 
 def test_runtime_runs_raoeo_from_its_own_dependencies():
