@@ -67,6 +67,7 @@ class TradingSystem:
         from state.system_state import is_kis_ready
         from utils.market_utils import get_fear_and_greed
 
+        self._configure_kis_portfolio_source()
         return build_portfolio_service(
             PortfolioServiceDependencies(
                 is_kis_ready=is_kis_ready,
@@ -78,6 +79,19 @@ class TradingSystem:
                 publish_alert=display.add_alert,
             )
         )
+
+    def _configure_kis_portfolio_source(self):
+        """Compose KIS portfolio source runtime collaborators."""
+        from infrastructure.portfolio.kis_source import (
+            configure_alert_publisher,
+            configure_feature_flags,
+        )
+
+        configure_feature_flags(
+            rest_api_enabled=trading_config.is_kis_rest_api_enabled,
+            domestic_enabled=trading_config.is_kis_domestic_enabled,
+        )
+        configure_alert_publisher(display.add_alert)
 
     def _configure_strategy_execution_service(self):
         """Compose strategy execution collaborators from runtime adapters."""
@@ -116,9 +130,6 @@ class TradingSystem:
         from data.calculate_weights import get_cash_weight
         from data.config_manager import ConfigFile, load_json, save_json
         from infrastructure.portfolio import refresh_gsheet_cache
-        from infrastructure.portfolio.kis_source import (
-            configure_alert_publisher as configure_kis_portfolio_alert_publisher,
-        )
         from infrastructure.portfolio.weight_diffs import (
             WeightDiffDependencies,
             get_weight_diffs,
@@ -131,7 +142,7 @@ class TradingSystem:
         from utils.market_utils import get_fear_and_greed
 
         self._configure_strategy_execution_service()
-        configure_kis_portfolio_alert_publisher(display.add_alert)
+        self._configure_kis_portfolio_source()
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram(
             portfolio_dependencies=PortfolioCommandDependencies(

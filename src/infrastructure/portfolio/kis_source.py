@@ -5,7 +5,6 @@ from typing import Any, Callable, Dict, List, Optional, TypedDict
 
 import pandas as pd
 
-from core.trading_config import is_kis_domestic_enabled, is_kis_rest_api_enabled
 from infrastructure.kis.kis_api import kis_auth as ka
 from infrastructure.kis.kis_api.domestic_stock.inquire_balance.inquire_balance import (
     inquire_balance,
@@ -34,6 +33,19 @@ class _OverseasAccountResult(TypedDict):
 
 
 _alert_publisher: Optional[Callable[[str, str], None]] = None
+_rest_api_enabled: Optional[Callable[[], bool]] = None
+_domestic_enabled: Optional[Callable[[], bool]] = None
+
+
+def configure_feature_flags(
+    *,
+    rest_api_enabled: Optional[Callable[[], bool]],
+    domestic_enabled: Optional[Callable[[], bool]],
+) -> None:
+    """Inject KIS portfolio feature flags at composition time."""
+    global _rest_api_enabled, _domestic_enabled
+    _rest_api_enabled = rest_api_enabled
+    _domestic_enabled = domestic_enabled
 
 
 def configure_alert_publisher(
@@ -104,7 +116,7 @@ class KisPortfolioSourceAdapter:
     @classmethod
     def _fetch_kis_account_data(cls) -> Dict[str, Any]:
         """Fetch both domestic and overseas balances from KIS."""
-        if not is_kis_rest_api_enabled():
+        if _rest_api_enabled is None or not _rest_api_enabled():
             return {
                 "domestic_stocks": [],
                 "overseas_stocks": [],
@@ -127,7 +139,7 @@ class KisPortfolioSourceAdapter:
             "krw_orderable": 0,
             "error": None,
         }
-        if is_kis_domestic_enabled():
+        if _domestic_enabled is not None and _domestic_enabled():
             try:
                 df1, df2 = inquire_balance(
                     env_dv=env_dv,

@@ -257,6 +257,7 @@ def test_kis_portfolio_source_does_not_import_legacy_broker():
 
     assert "broker.kis_portfolio" not in imports
     assert "core.display" not in imports
+    assert "core.trading_config" not in imports
 
 
 def test_kis_rest_client_does_not_import_legacy_state():

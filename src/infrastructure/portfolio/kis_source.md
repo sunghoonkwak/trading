@@ -10,3 +10,8 @@ external callers and tests while its remaining consumers migrate.
 Local KIS portfolio alerts are supplied by the composition root through
 `configure_alert_publisher()`. Publication is best-effort and cannot change a
 portfolio retrieval result.
+
+The composition root also supplies the KIS REST and domestic-account feature
+flags through `configure_feature_flags()`. Without a REST flag collaborator,
+the adapter returns the existing disabled empty result before authentication or
+an account API call.

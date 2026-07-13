@@ -715,6 +715,19 @@ class _FakeTREnv:
     my_prod = "01"
 
 
+@pytest.fixture(autouse=True)
+def configure_kis_portfolio_feature_flags():
+    from core.trading_config import is_kis_domestic_enabled, is_kis_rest_api_enabled
+    from infrastructure.portfolio.kis_source import configure_feature_flags
+
+    configure_feature_flags(
+        rest_api_enabled=is_kis_rest_api_enabled,
+        domestic_enabled=is_kis_domestic_enabled,
+    )
+    yield
+    configure_feature_flags(rest_api_enabled=None, domestic_enabled=None)
+
+
 def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch):
     calls = {}
 
