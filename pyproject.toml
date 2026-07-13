@@ -24,7 +24,7 @@ files = [
     "src/utils/__init__.py",
     "src/utils/format_utils.py",
     "src/utils/logger.py",
-    "src/utils/market_utils.py",
+    "src/infrastructure/market_signals.py",
     "src/domain/portfolio/weights.py",
     "src/infrastructure/config.py",
     "src/domain/portfolio/processing.py",

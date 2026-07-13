@@ -59,13 +59,13 @@ class TradingSystem:
         """Compose the portfolio use case from runtime adapters."""
         from domain.portfolio.weights import calculate_target_weights
         from infrastructure.config import ConfigFile, load_json, save_json
+        from infrastructure.market_signals import get_fear_and_greed
         from infrastructure.portfolio.composition import (
             PortfolioServiceDependencies,
             build_portfolio_service,
         )
         from infrastructure.portfolio.integration import IntegratedPortfolioSource
         from state.system_state import is_kis_ready
-        from utils.market_utils import get_fear_and_greed
 
         self._configure_gsheet_source()
         self._configure_kis_portfolio_source()
@@ -106,7 +106,7 @@ class TradingSystem:
         """Compose strategy execution collaborators from runtime adapters."""
         from application.strategy_broker import StrategyBrokerService
         from application.strategy_execution import StrategyExecutionDependencies
-        from infrastructure import market_data
+        from infrastructure import market_data, market_signals
         from infrastructure.config import ConfigFile, load_json, save_json
         from infrastructure.kis import broker as kis_broker
         from infrastructure.strategy_execution import configure_strategy_execution_service
@@ -134,6 +134,7 @@ class TradingSystem:
                 get_orderable_usd=strategy_broker.get_orderable_usd,
                 execute_order=strategy_broker.place_order,
                 portfolio_reader_factory=self._build_portfolio_service,
+                get_market_status=market_signals.get_us_market_status,
             )
         )
 
@@ -149,7 +150,12 @@ class TradingSystem:
             save_raoeo_cash_funding_result,
         )
         from domain.portfolio.weights import get_cash_weight
-        from infrastructure import market_data, order_admin, stock_configuration
+        from infrastructure import (
+            market_data,
+            market_signals,
+            order_admin,
+            stock_configuration,
+        )
         from infrastructure.config import ConfigFile, load_json, save_json
         from infrastructure.portfolio import refresh_gsheet_cache
         from infrastructure.portfolio.weight_diffs import (
@@ -161,7 +167,6 @@ class TradingSystem:
         from interfaces.telegram.portfolio import PortfolioCommandDependencies
         from interfaces.telegram.strategy import StrategyCommandDependencies
         from state.system_state import ThreadStatus, update_telegram_state
-        from utils.market_utils import get_fear_and_greed
 
         self._configure_strategy_execution_service()
         self._configure_kis_portfolio_source()
@@ -181,12 +186,13 @@ class TradingSystem:
                         ),
                         load_weights=lambda: load_json(ConfigFile.PORTFOLIO_WEIGHTS),
                         get_cash_weight=get_cash_weight,
-                        get_fear_and_greed=get_fear_and_greed,
+                        get_fear_and_greed=market_signals.get_fear_and_greed,
                         fetch_price=market_data.fetch_price,
                     ),
                 ),
                 refresh_gsheet_cache=refresh_gsheet_cache,
                 load_stock_configuration=stock_configuration.load_stock_configuration,
+                get_fear_and_greed=market_signals.get_fear_and_greed,
             ),
             strategy_dependencies=StrategyCommandDependencies(
                 strategy_run_service=get_strategy_run_service(),
@@ -464,6 +470,7 @@ class TradingSystem:
         try:
             from application.strategy_execution import get_strategy_run_service
             from core.constants import DEFAULT_USD_KRW_EXCHANGE_RATE
+            from infrastructure import market_signals
             from interfaces.scheduler.order_runner import SchedulerOrderRunner
             from interfaces.scheduler.portfolio_runner import (
                 SchedulerPortfolioRunner,
@@ -484,6 +491,7 @@ class TradingSystem:
                     SchedulerReportDependencies(
                         history_dir=os.path.join(CONFIG_ROOT, "portfolio_history"),
                         default_exchange_rate=DEFAULT_USD_KRW_EXCHANGE_RATE,
+                        get_fear_and_greed=market_signals.get_fear_and_greed,
                     ),
                 ),
             )
@@ -502,7 +510,7 @@ class TradingSystem:
         try:
             from core import event_pipe
             from core.constants import ENV_TRUE_VALUES
-            from infrastructure import order_admin
+            from infrastructure import market_signals, order_admin
             from infrastructure.config import ConfigFile, load_json, save_json
             from interfaces.scheduler.portfolio_runner import (
                 SchedulerPortfolioRunner,
@@ -517,6 +525,7 @@ class TradingSystem:
                 SchedulerReportDependencies(
                     history_dir=os.path.join(CONFIG_ROOT, "portfolio_history"),
                     default_exchange_rate=DEFAULT_USD_KRW_EXCHANGE_RATE,
+                    get_fear_and_greed=market_signals.get_fear_and_greed,
                 ),
             )
             web_app = create_web_app(

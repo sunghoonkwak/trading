@@ -1,16 +1,16 @@
 """Telegram presentation helpers for portfolio application results."""
 
+from collections.abc import Callable
 
-def format_portfolio_summary(data: dict) -> str:
+
+def format_portfolio_summary(
+    data: dict,
+    get_fear_and_greed: Callable[[], float],
+) -> str:
     """Format portfolio summary result data for a Telegram message."""
     if data.get("error"):
         return f"⚠️ <b>Error:</b> {data['error']}"
-    try:
-        from utils.market_utils import get_fear_and_greed
-
-        fg_index = int(get_fear_and_greed())
-    except ImportError:
-        fg_index = 50
+    fg_index = int(get_fear_and_greed())
     stats = data.get("stats", {})
     total_usd = data.get("total_value_usd", 0)
     rate = data.get("exchange_rate", 0)

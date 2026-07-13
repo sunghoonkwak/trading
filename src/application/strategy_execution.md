@@ -8,7 +8,8 @@
    - 모든 전략은 `Enabled Check` -> `Market Check` -> `History Check` -> `Determine Action` -> `Execute` -> `Report`의 동일한 6단계 과정을 거칩니다.
 
 2. **Centralized Market Status (시장 상태 중앙 관리)**:
-   - `utils.market_utils`를 통해 휴장일 및 장 운영 시간을 확인하고, 이를 모든 전략 실행에 반영합니다.
+   - composition root가 주입한 market-status adapter를 통해 휴장일 및 장 운영
+     시간을 확인하고, 이를 모든 전략 실행에 반영합니다.
 
 3. **Unified Data Fetching (데이터 조회 통합)**:
    - `get_market_data`는 전략 대상의 보유 수량과 현재가를 조회합니다.

@@ -568,13 +568,26 @@ def test_no_active_python_consumer_uses_retired_price_utils():
     assert consumers == []
 
 
-def test_market_utils_status_api_uses_market_open_contract(tmp_path):
+def test_no_active_python_consumer_uses_retired_market_utils():
+    roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
+    consumers = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            if "utils.market_utils" in path.read_text(encoding="utf-8"):
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
+
+
+def test_market_signals_status_api_uses_market_open_contract(tmp_path):
     result = _run_import_check(
         tmp_path,
         """
-import utils.market_utils as market_utils
-assert not hasattr(market_utils, "is_market_holiday")
-status = market_utils.get_us_market_status("2026-07-04")
+import infrastructure.market_signals as market_signals
+assert not hasattr(market_signals, "is_market_holiday")
+status = market_signals.get_us_market_status("2026-07-04")
 assert set(status) == {"is_market_open", "message"}
 assert status["is_market_open"] is False
 assert "closed" in status["message"].lower()

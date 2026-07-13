@@ -24,6 +24,7 @@ def _portfolio_dependencies(**overrides):
         "get_weight_diffs": lambda _scope: ([], 0.0, {}),
         "refresh_gsheet_cache": lambda: {},
         "load_stock_configuration": lambda: {"KR": [], "US": []},
+        "get_fear_and_greed": lambda: 50.0,
     }
     defaults.update(overrides)
     return telegram_portfolio.PortfolioCommandDependencies(**defaults)
@@ -551,7 +552,9 @@ def test_portfolio_command_preserves_dependencies_in_executor(monkeypatch):
         replies.append(text)
 
     monkeypatch.setattr(telegram_portfolio, "wrap_reply", fake_reply)
-    monkeypatch.setattr(telegram_portfolio, "format_portfolio_summary", lambda _data: "summary")
+    monkeypatch.setattr(
+        telegram_portfolio, "format_portfolio_summary", lambda _data, _fg: "summary"
+    )
     monkeypatch.setattr(
         telegram_portfolio, "build_ticker_keyboard", lambda _data, _loader: None
     )
@@ -583,7 +586,11 @@ def test_ticker_keyboard_uses_injected_stock_configuration():
 
 
 def test_portfolio_handlers_keep_factory_dependencies_isolated(monkeypatch):
-    monkeypatch.setattr(telegram_portfolio, "format_portfolio_summary", lambda data: data["name"])
+    monkeypatch.setattr(
+        telegram_portfolio,
+        "format_portfolio_summary",
+        lambda data, _fg: data["name"],
+    )
     monkeypatch.setattr(
         telegram_portfolio, "build_ticker_keyboard", lambda _data, _loader: None
     )
@@ -665,13 +672,6 @@ def test_gsheet_command_refreshes_only_gsheet_cache(monkeypatch):
 
 
 def test_format_weight_diffs_shows_group_total_and_main_ticker(monkeypatch):
-    monkeypatch.setattr(
-        telegram_portfolio,
-        "get_fear_and_greed",
-        lambda: 50,
-        raising=False,
-    )
-
     text = telegram_portfolio.format_weight_diffs(
         [
             {
@@ -689,6 +689,7 @@ def test_format_weight_diffs_shows_group_total_and_main_ticker(monkeypatch):
         ],
         10000,
         {"current": 0.20, "target": 0.20},
+        lambda: 50.0,
     )
 
     assert "<b>Nasdaq100</b> [QQQM]" in text

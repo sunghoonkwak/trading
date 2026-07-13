@@ -30,7 +30,6 @@ from domain.strategy.constants import (
     TZ_ET,
 )
 from domain.strategy.pricing import resolve_current_price
-from utils.market_utils import get_us_market_status
 
 _orderable_usd_cache: Dict[str, float] = {}
 
@@ -47,6 +46,7 @@ class StrategyExecutionDependencies:
     get_orderable_usd: Callable[[str, float], float]
     execute_order: Callable[[StrategyOrder], Tuple[bool, str]]
     portfolio_reader_factory: Callable[[], Any]
+    get_market_status: Callable[[str], Dict[str, Any]]
 
 
 _dependencies: Optional[StrategyExecutionDependencies] = None
@@ -77,6 +77,7 @@ def configure_portfolio_reader_factory(factory) -> None:
             get_orderable_usd=dependencies.get_orderable_usd,
             execute_order=dependencies.execute_order,
             portfolio_reader_factory=factory,
+            get_market_status=dependencies.get_market_status,
         )
     )
 
@@ -761,7 +762,7 @@ def run_raoeo_strategy(
     Run RAOEO strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = get_us_market_status(today_str)
+    market_status = _require_dependencies().get_market_status(today_str)
     report = _build_base_report(today_str, market_status)
 
     try:
@@ -873,7 +874,7 @@ def run_va_strategy(
     Run Value Averaging strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = get_us_market_status(today_str)
+    market_status = _require_dependencies().get_market_status(today_str)
     report = _build_base_report(today_str, market_status)
 
     try:
@@ -993,7 +994,7 @@ def run_rebalancing_strategy(
     Run Rebalancing strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = get_us_market_status(today_str)
+    market_status = _require_dependencies().get_market_status(today_str)
     report = _build_base_report(today_str, market_status)
 
     try:

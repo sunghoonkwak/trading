@@ -22,6 +22,7 @@ REPORTS_DIR = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_his
 class SchedulerReportDependencies:
     history_dir: str
     default_exchange_rate: float
+    get_fear_and_greed: Callable[[], float]
 
 
 def load_historical_data(history_dir: str, target_date: str) -> Optional[dict]:
@@ -354,7 +355,9 @@ def run_daily_portfolio_report(
     if portfolio_data:
         try:
             # Generate Message
-            summary_text = format_portfolio_summary(portfolio_data)
+            summary_text = format_portfolio_summary(
+                portfolio_data, dependencies.get_fear_and_greed
+            )
 
             # Generate History Comparison
             history_files = get_sorted_history_files(dependencies.history_dir)

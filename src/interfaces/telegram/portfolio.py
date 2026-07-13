@@ -51,6 +51,7 @@ class PortfolioCommandDependencies:
     get_weight_diffs: Any
     refresh_gsheet_cache: Any
     load_stock_configuration: Callable[[], dict]
+    get_fear_and_greed: Callable[[], float]
 
 
 async def _run_in_executor(func, *args):
@@ -59,7 +60,12 @@ async def _run_in_executor(func, *args):
     return await loop.run_in_executor(None, func, *args)
 
 
-def format_weight_diffs(diffs: list, total_usd: float, cash_info: dict) -> str:
+def format_weight_diffs(
+    diffs: list,
+    total_usd: float,
+    cash_info: dict,
+    get_fear_and_greed: Callable[[], float],
+) -> str:
     """
     Format weight differences for Telegram message.
     Args:
@@ -70,11 +76,7 @@ def format_weight_diffs(diffs: list, total_usd: float, cash_info: dict) -> str:
         Formatted string with weight differences
     """
     # Get F&G index
-    try:
-        from utils.market_utils import get_fear_and_greed
-        fg_index = int(get_fear_and_greed())
-    except ImportError:
-        fg_index = 50
+    fg_index = int(get_fear_and_greed())
 
     if not diffs:
         return f"⚖️ <b>Portfolio Rebalancing</b> (F&G: {fg_index})\n\nEverything is balanced!"
@@ -338,7 +340,7 @@ async def _cmd_portfolio(
         user_data['portfolio_data'] = data
 
         # Format summary message
-        msg = format_portfolio_summary(data)
+        msg = format_portfolio_summary(data, dependencies.get_fear_and_greed)
 
         # Build keyboard
         keyboard = build_ticker_keyboard(
@@ -702,7 +704,9 @@ async def _cmd_portfolio_weight(
         diffs, total_usd, cash_info = await _run_in_executor(
             dependencies.get_weight_diffs, "all"
         )
-        msg = format_weight_diffs(diffs, total_usd, cash_info)
+        msg = format_weight_diffs(
+            diffs, total_usd, cash_info, dependencies.get_fear_and_greed
+        )
         await wrap_reply(update, msg, parse_mode='HTML')
     except Exception as e:
         logging.error(f"[TG] cmd_portfolio_weight failed: {e}")

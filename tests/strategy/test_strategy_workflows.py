@@ -25,6 +25,7 @@ def test_strategy_execution_composition_uses_injected_portfolio_factory(monkeypa
         get_orderable_usd=lambda _symbol, _price: 0.0,
         execute_order=lambda _order: (True, "Success"),
         portfolio_reader_factory=portfolio_factory,
+        get_market_status=lambda _date: {"is_market_open": False, "message": ""},
     )
     monkeypatch.setattr(
         composition,
@@ -77,6 +78,10 @@ def strategy_dependencies(monkeypatch):
             portfolio_reader_factory=lambda: SimpleNamespace(
                 get_portfolio_data=execution_service.get_portfolio_data
             ),
+            get_market_status=lambda _date: {
+                "is_market_open": False,
+                "message": "",
+            },
         )
     )
 
@@ -310,13 +315,22 @@ def test_skipped_buy_budget_returns_to_next_day_budget_pool():
     assert info["ticker_info"]["FAS"]["budget_carryover"] == 83.33
 
 def _open_market(monkeypatch):
-    monkeypatch.setattr(
-        execution_service,
-        "get_us_market_status",
-        lambda date=None: {
-            "is_market_open": True,
-            "message": "",
-        },
+    dependencies = execution_service._require_dependencies()
+    execution_service.configure_strategy_execution(
+        StrategyExecutionDependencies(
+            load_strategy_config=dependencies.load_strategy_config,
+            load_history=dependencies.load_history,
+            save_history=dependencies.save_history,
+            fetch_prices=dependencies.fetch_prices,
+            strategy_broker_name=dependencies.strategy_broker_name,
+            get_orderable_usd=dependencies.get_orderable_usd,
+            execute_order=dependencies.execute_order,
+            portfolio_reader_factory=dependencies.portfolio_reader_factory,
+            get_market_status=lambda _date: {
+                "is_market_open": True,
+                "message": "",
+            },
+        )
     )
 
 def test_run_raoeo_stops_before_market_data_on_weekend(monkeypatch):

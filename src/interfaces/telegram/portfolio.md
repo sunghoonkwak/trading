@@ -45,7 +45,7 @@ GSheet source 캐시만 갱신하고 성공/경고 요약을 응답합니다. �
 
 ## Technical Notes
 
-- **F&G Index**: `utils.market_utils.get_fear_and_greed()`를 통해 10분 캐싱된 F&G 지수 표시
+- **F&G Index**: composition root가 주입한 10분 캐싱 F&G adapter로 지수 표시
 - **Group Handling**: Constituents의 보유비중은 main ticker에 합산
 - **GSheet Caching**: 포트폴리오 결과는 매번 새로 계산하고, 느린 GSheet
   source만 `infrastructure.portfolio.integration`에서 메모리 캐시합니다.
