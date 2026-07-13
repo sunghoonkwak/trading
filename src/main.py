@@ -328,10 +328,10 @@ class TradingSystem:
             )
 
             configure_kis_vendor_hooks()
-            from broker.kis_worker import (
+            from infrastructure.kis.worker import (
                 configure_alert_publisher as configure_kis_worker_alert_publisher,
             )
-            from broker.kis_worker import (
+            from infrastructure.kis.worker import (
                 initialize_websocket_and_pipe,
                 is_kis_thread_running,
                 request_kis_auth,
@@ -592,7 +592,7 @@ class TradingSystem:
         except Exception as e:
             logging.warning("[Runtime] Scheduler stop skipped or failed: %s", e)
         try:
-            from broker.kis_worker import stop_kis_thread
+            from infrastructure.kis.worker import stop_kis_thread
             stop_kis_thread()
         except Exception as e:
             logging.warning("[Runtime] KIS worker stop skipped or failed: %s", e)

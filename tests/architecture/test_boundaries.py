@@ -279,6 +279,19 @@ def test_kis_worker_does_not_import_legacy_display():
     assert "core.display" not in imports
 
 
+def test_kis_worker_compatibility_module_forwards_to_infrastructure(tmp_path):
+    result = _run_import_check(
+        tmp_path,
+        """
+import broker.kis_worker as legacy_worker
+import infrastructure.kis.worker as infrastructure_worker
+assert legacy_worker is infrastructure_worker
+""",
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_kis_rest_client_does_not_import_legacy_state():
     imports = _imports_in(SRC_DIR / "infrastructure/kis/kis_rest_client.py")
 

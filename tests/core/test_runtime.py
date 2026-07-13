@@ -490,7 +490,7 @@ def _install_fake_kis_thread(
     ws_init_success=True,
 ):
     calls = []
-    fake_kis_thread = types.ModuleType("broker.kis_worker")
+    fake_kis_thread = types.ModuleType("infrastructure.kis.worker")
 
     def start_kis_thread():
         calls.append("start_kis_thread")
@@ -524,7 +524,7 @@ def _install_fake_kis_thread(
     fake_kis_thread.wait_for_response = wait_for_response
     fake_kis_thread.initialize_websocket_and_pipe = initialize_websocket_and_pipe
 
-    monkeypatch.setitem(sys.modules, "broker.kis_worker", fake_kis_thread)
+    monkeypatch.setitem(sys.modules, "infrastructure.kis.worker", fake_kis_thread)
 
     fake_broker = types.ModuleType("broker")
     fake_kis_event_handler = types.ModuleType("broker.kis_event_handler")
@@ -672,9 +672,9 @@ def test_runtime_off_stops_scheduler_and_kis_but_keeps_telegram(monkeypatch):
     system._runtime_running = True
 
     system._scheduler_runner = SimpleNamespace(stop=lambda: calls.append("stop_scheduler"))
-    fake_kis_worker = types.ModuleType("broker.kis_worker")
+    fake_kis_worker = types.ModuleType("infrastructure.kis.worker")
     fake_kis_worker.stop_kis_thread = lambda: calls.append("stop_kis_thread")
-    monkeypatch.setitem(sys.modules, "broker.kis_worker", fake_kis_worker)
+    monkeypatch.setitem(sys.modules, "infrastructure.kis.worker", fake_kis_worker)
 
     result = system.stop_trading_runtime()
 
