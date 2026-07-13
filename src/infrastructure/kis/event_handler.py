@@ -12,8 +12,8 @@ from infrastructure.display import add_alert, remove_order_state
 from infrastructure.event_pipe import print_viewer
 from infrastructure.kis.ws_parser import mask_dict_for_log
 from infrastructure.order_admin import sync_open_orders
+from infrastructure.text_format import format_number, get_fixed_width
 from infrastructure.trading_configuration import strip_market_prefix
-from utils.format_utils import format_number, get_fixed_width
 
 _MAX_RECENT_ORDER_EVENTS = 1_000
 _recent_order_events: OrderedDict[tuple[str, ...], None] = OrderedDict()

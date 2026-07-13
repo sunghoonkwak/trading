@@ -4,7 +4,7 @@ import sys
 from datetime import datetime
 from typing import Optional
 
-from utils.format_utils import get_fixed_width
+from infrastructure.text_format import get_fixed_width
 
 _event_pipe_module = None
 _pipe_import_attempted = False
