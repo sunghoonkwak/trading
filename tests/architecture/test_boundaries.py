@@ -360,6 +360,10 @@ def test_retired_kis_compatibility_modules_are_removed():
         assert not (SRC_DIR / relative_path).exists()
 
 
+def test_retired_toss_compatibility_package_is_removed():
+    assert list((SRC_DIR / "toss").glob("*.py")) == []
+
+
 def test_kis_rest_client_does_not_import_legacy_state():
     imports = _imports_in(SRC_DIR / "infrastructure/kis/rest_client.py")
 

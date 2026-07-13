@@ -17,11 +17,12 @@ Toss 토큰 초기화는 저장된 토큰을 재사용하기 전에 만료 시�
 margin 안에 있으면 시작 과정에서 새 Toss 토큰을 발급합니다.
 
 런타임 Toss API helper도 저장된 최신 토큰을 사용하기 전에 만료 여부를
-확인합니다. 봇이 실행 중인 동안 토큰이 만료되면 `toss.auth.load_access_token()`
+확인합니다. 봇이 실행 중인 동안 토큰이 만료되면
+`infrastructure.toss.auth.load_access_token()`
 이 새 토큰을 발급한 뒤 갱신된 access token을 반환합니다.
 
 Telegram 알림은 토큰 갱신 자체가 아니라 Toss API query가 최종 실패했을 때
-`toss.client.request_json()` 경계에서 전송합니다. 따라서 holdings,
+`infrastructure.toss.client.request_json()` 경계에서 전송합니다. 따라서 holdings,
 buying-power, orders 같은 Toss 조회 실패는 로그뿐 아니라 Telegram으로도
 운영자에게 전달됩니다.
 

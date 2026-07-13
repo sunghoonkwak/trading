@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
     ],
 )
 def test_get_candles_validates_interval_and_count(interval, count, message):
-    from toss.get_candles import get_candles
+    from infrastructure.toss.get_candles import get_candles
 
     with pytest.raises(ValueError, match=message):
         get_candles(
@@ -27,7 +27,7 @@ def test_get_candles_validates_interval_and_count(interval, count, message):
 
 
 def test_get_candles_builds_all_query_options(monkeypatch):
-    from toss import get_candles
+    from infrastructure.toss import get_candles
 
     captured = {}
 
@@ -59,8 +59,8 @@ def test_get_candles_builds_all_query_options(monkeypatch):
 @pytest.mark.parametrize(
     ("module_name", "function_name", "country"),
     [
-        ("toss.get_kr_market_calendar", "get_kr_market_calendar", "KR"),
-        ("toss.get_us_market_calendar", "get_us_market_calendar", "US"),
+        ("infrastructure.toss.get_kr_market_calendar", "get_kr_market_calendar", "KR"),
+        ("infrastructure.toss.get_us_market_calendar", "get_us_market_calendar", "US"),
     ],
 )
 def test_market_calendar_builds_optional_date(
@@ -96,14 +96,14 @@ def test_market_calendar_builds_optional_date(
     [(0, "between 1 and 50"), (51, "between 1 and 50")],
 )
 def test_get_trades_validates_count(count, message):
-    from toss.get_trades import get_trades
+    from infrastructure.toss.get_trades import get_trades
 
     with pytest.raises(ValueError, match=message):
         get_trades(symbol="AAPL", count=count, access_token="token")
 
 
 def test_get_trades_builds_query(monkeypatch):
-    from toss import get_trades
+    from infrastructure.toss import get_trades
 
     captured = {}
     monkeypatch.setattr(
@@ -125,7 +125,7 @@ def test_get_trades_builds_query(monkeypatch):
 
 
 def test_get_price_limit_builds_query(monkeypatch):
-    from toss import get_price_limit
+    from infrastructure.toss import get_price_limit
 
     captured = {}
     monkeypatch.setattr(
@@ -148,7 +148,7 @@ def test_get_price_limit_builds_query(monkeypatch):
 
 
 def test_get_commissions_builds_account_request(monkeypatch):
-    from toss import get_commissions
+    from infrastructure.toss import get_commissions
 
     captured = {}
 
@@ -172,7 +172,7 @@ def test_get_commissions_builds_account_request(monkeypatch):
 
 
 def test_get_commissions_rejects_missing_result(monkeypatch):
-    from toss import get_commissions
+    from infrastructure.toss import get_commissions
 
     monkeypatch.setattr(
         get_commissions,
@@ -188,7 +188,7 @@ def test_get_commissions_rejects_missing_result(monkeypatch):
 
 
 def test_get_order_encodes_id_and_builds_account_request(monkeypatch):
-    from toss import get_order
+    from infrastructure.toss import get_order
 
     captured = {}
 
@@ -213,7 +213,7 @@ def test_get_order_encodes_id_and_builds_account_request(monkeypatch):
 
 
 def test_get_order_validates_id_and_result(monkeypatch):
-    from toss import get_order
+    from infrastructure.toss import get_order
 
     with pytest.raises(ValueError, match="order_id"):
         get_order.get_order(
@@ -236,7 +236,7 @@ def test_get_order_validates_id_and_result(monkeypatch):
 
 
 def test_get_sellable_quantity_builds_request_and_validates(monkeypatch):
-    from toss import get_sellable_quantity
+    from infrastructure.toss import get_sellable_quantity
 
     captured = {}
 
@@ -273,7 +273,7 @@ def test_get_sellable_quantity_builds_request_and_validates(monkeypatch):
 
 
 def test_get_sellable_quantity_rejects_missing_result(monkeypatch):
-    from toss import get_sellable_quantity
+    from infrastructure.toss import get_sellable_quantity
 
     monkeypatch.setattr(
         get_sellable_quantity,
@@ -290,7 +290,7 @@ def test_get_sellable_quantity_rejects_missing_result(monkeypatch):
 
 
 def test_modify_order_normalizes_body_and_encodes_id(monkeypatch):
-    from toss import modify_order
+    from infrastructure.toss import modify_order
 
     captured = {}
     monkeypatch.setattr(

@@ -194,7 +194,9 @@ def ensure_valid_token(
     token_dir = _configured_root(token_dir)
     token_payload = load_latest_token(token_dir)
     if not token_payload:
-        raise RuntimeError("No saved Toss token found. Run src/toss/auth.py first.")
+        raise RuntimeError(
+            "No saved Toss token found. Run the configured Toss token setup first."
+        )
 
     if not is_token_expired(token_payload, now=now):
         return token_payload

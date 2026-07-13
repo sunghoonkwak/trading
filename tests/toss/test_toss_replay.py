@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from toss.get_holdings import get_holdings
+from infrastructure.toss.get_holdings import get_holdings
 
 
 class FakeHttpResponse:

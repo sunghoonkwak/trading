@@ -15,7 +15,7 @@ composition root 역할, 그리고 안정적인 실행을 위한 메인 루프�
    - **KIS 엔진**: `infrastructure.kis.worker`를 통한 REST 인증 및 실시간 WebSocket 파이프라인 구축.
      `KIS_ENABLE_REST_API=false`이면 REST 인증은 건너뛰고 WebSocket 인증과
      구독 초기화만 수행합니다.
-   - **Toss API**: `toss.auth.ensure_daily_token()`으로 당일 Toss access
+   - **Toss API**: `infrastructure.toss.auth.ensure_daily_token()`으로 당일 Toss access
      token을 준비합니다. KIS 초기화 뒤, 스케줄러와 웹 대시보드 시작 전에
      수행되며 실패하면 Telegram 알림을 시도한 뒤 자동 실행 표면을
      시작하지 않습니다.

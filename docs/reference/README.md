@@ -6,7 +6,8 @@ development.
 ## Toss Invest Open API
 
 - `toss-openapi.json`: current Toss Invest OpenAPI 3.1 schema.
-- Use it before editing `src/toss/` helpers or app-owned Toss integrations.
+- Use it before editing `src/infrastructure/toss/` helpers or app-owned Toss
+  integrations.
 - Confirm endpoint path, HTTP method, request `Content-Type`, required headers,
   and response fields from the schema instead of guessing from previous code.
 

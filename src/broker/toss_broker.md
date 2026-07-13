@@ -12,6 +12,6 @@
 
 ## Boundaries
 
-토큰 로드, 기본 계좌 선택, HTTP 호출은 기존 `src/toss/` helper를
+토큰 로드, 기본 계좌 선택, HTTP 호출은 `src/infrastructure/toss/` helper를
 사용합니다. 실제 계좌에 영향을 주는 주문 생성은
 `strategy_broker.place_order()`를 통해 선택된 경우에만 호출됩니다.

@@ -8,6 +8,5 @@
 fail-closed 한다. `src/main.py`는 Toss startup 전에 이 collaborator를
 조립한다.
 
-`toss.auth`는 기존 scripts와 tests의 compatibility shim이다. 그것만 기존
-private configuration collaborator를 등록하며 새 production consumer는
-infrastructure adapter를 직접 사용한다.
+Private configuration collaborator는 `src/main.py`가 등록하며, adapter를
+직접 사용하는 모든 consumer는 이를 거쳐야 한다.

@@ -61,7 +61,7 @@ For Toss Invest Open API work, consult the checked-in OpenAPI reference first:
 dummy examples only; runtime credentials and account data still belong only in
 `KIS_config/` or external mounts.
 
-- Implement Toss helpers under `src/toss/` and keep orchestration in app-owned
+- Implement Toss helpers under `src/infrastructure/toss/` and keep orchestration in app-owned
   modules such as `src/broker/`.
 - Use the schema to confirm paths, methods, request body `Content-Type`,
   required headers such as `X-Tossinvest-Account`, and response field names

@@ -14,7 +14,7 @@ sys.path.insert(0, str(SRC))
 
 class TossPortfolioApiTest(unittest.TestCase):
     def test_default_account_seq_is_cached_per_access_token(self):
-        from toss.account_cache import (
+        from infrastructure.toss.account_cache import (
             clear_default_account_cache,
             get_default_account_seq,
         )
@@ -45,7 +45,7 @@ class TossPortfolioApiTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
     def test_get_holdings_sends_account_header(self):
-        from toss.get_holdings import get_holdings
+        from infrastructure.toss.get_holdings import get_holdings
 
         captured = {}
 
@@ -81,7 +81,7 @@ class TossPortfolioApiTest(unittest.TestCase):
         self.assertEqual(holdings["items"][0]["symbol"], "005930")
 
     def test_get_buying_power_sends_currency_and_account_header(self):
-        from toss.get_buying_power import get_buying_power
+        from infrastructure.toss.get_buying_power import get_buying_power
 
         captured = {}
 
@@ -115,8 +115,8 @@ class TossAuthTest(unittest.TestCase):
     def test_load_config_reads_credentials_file(self):
         from cryptography.fernet import Fernet
 
-        from core.credentials import generate_key_from_password
-        from toss.auth import load_config
+        from core.credentials import generate_key_from_password, load_credentials
+        from infrastructure.toss.auth import configure_auth_configuration, load_config
 
         config_root = self._temporary_directory()
         (config_root / "password.txt").write_text("test-password\n", encoding="utf-8")
@@ -127,6 +127,10 @@ class TossAuthTest(unittest.TestCase):
             )
         )
 
+        configure_auth_configuration(
+            config_root=config_root,
+            credentials_loader=load_credentials,
+        )
         config = load_config(config_root=config_root)
 
         self.assertEqual(config.client_id, "dummy-client-id")
@@ -134,7 +138,7 @@ class TossAuthTest(unittest.TestCase):
         self.assertEqual(config.base_url, "https://openapi.tossinvest.com")
 
     def test_issue_token_posts_form_urlencoded_request(self):
-        from toss.auth import TossAuthConfig, issue_token
+        from infrastructure.toss.auth import TossAuthConfig, issue_token
 
         captured = {}
 
@@ -173,7 +177,7 @@ class TossAuthTest(unittest.TestCase):
         self.assertEqual(token.access_token, "issued-access-token")
 
     def test_ensure_daily_token_issues_after_date_changes(self):
-        from toss.auth import TossAuthConfig, TossToken, ensure_daily_token
+        from infrastructure.toss.auth import TossAuthConfig, TossToken, ensure_daily_token
 
         token_dir = self._temporary_directory()
         (token_dir / "TOSS20260611_235959.json").write_text(
@@ -206,7 +210,7 @@ class TossAuthTest(unittest.TestCase):
         )
 
     def test_ensure_daily_token_reissues_expired_today_token(self):
-        from toss.auth import TossAuthConfig, TossToken, ensure_daily_token
+        from infrastructure.toss.auth import TossAuthConfig, TossToken, ensure_daily_token
 
         token_dir = self._temporary_directory()
         (token_dir / "TOSS20260612_000403.json").write_text(
@@ -247,7 +251,7 @@ class TossAuthTest(unittest.TestCase):
         )
 
     def test_load_access_token_renews_expired_token(self):
-        from toss.auth import TossAuthConfig, TossToken, load_access_token
+        from infrastructure.toss.auth import TossAuthConfig, TossToken, load_access_token
 
         token_dir = self._temporary_directory()
         (token_dir / "TOSS20260612_000403.json").write_text(
@@ -297,7 +301,7 @@ class TossAuthTest(unittest.TestCase):
 
 class TossOrderApiTest(unittest.TestCase):
     def test_create_order_preserves_fractional_market_sell_quantity(self):
-        from toss.create_order import create_order
+        from infrastructure.toss.create_order import create_order
 
         captured = {}
 
@@ -336,7 +340,7 @@ class TossOrderApiTest(unittest.TestCase):
         self.assertEqual(result["orderId"], "order-1")
 
     def test_toss_broker_reads_usd_buying_power(self):
-        from broker import toss_broker
+        from infrastructure.toss import toss_broker
 
         calls = {}
 
@@ -369,7 +373,7 @@ class TossOrderApiTest(unittest.TestCase):
         )
 
     def test_toss_broker_rejects_malformed_buying_power(self):
-        from broker import toss_broker
+        from infrastructure.toss import toss_broker
 
         original_load = toss_broker.load_access_token
         original_account = toss_broker.get_default_account_seq
@@ -389,9 +393,9 @@ class TossOrderApiTest(unittest.TestCase):
             toss_broker.get_buying_power = original_buying_power
 
     def test_toss_broker_maps_strategy_limit_order(self):
-        from broker import toss_broker
         from domain.strategy.base import OrderSide, StrategyOrder
         from domain.strategy.constants import ORDER_TYPE_LIMIT
+        from infrastructure.toss import toss_broker
 
         calls = {}
 
@@ -433,9 +437,9 @@ class TossOrderApiTest(unittest.TestCase):
         self.assertNotIn("time_in_force", calls)
 
     def test_toss_broker_maps_strategy_loc_order(self):
-        from broker import toss_broker
         from domain.strategy.base import OrderSide, StrategyOrder
         from domain.strategy.constants import ORDER_TYPE_LOC
+        from infrastructure.toss import toss_broker
 
         calls = {}
 
@@ -470,8 +474,8 @@ class TossOrderApiTest(unittest.TestCase):
         self.assertEqual(calls["time_in_force"], "CLS")
 
     def test_toss_broker_rejects_unknown_order_type_without_request(self):
-        from broker import toss_broker
         from domain.strategy.base import OrderSide, StrategyOrder
+        from infrastructure.toss import toss_broker
 
         original_load = toss_broker.load_access_token
         original_account = toss_broker.get_default_account_seq
@@ -505,7 +509,7 @@ class TossOrderApiTest(unittest.TestCase):
         self.assertIn("Unsupported Toss order type", message)
 
     def test_cancel_order_posts_empty_json_body(self):
-        from toss.cancel_order import cancel_order
+        from infrastructure.toss.cancel_order import cancel_order
 
         captured = {}
 
@@ -536,7 +540,7 @@ class TossOrderApiTest(unittest.TestCase):
         self.assertEqual(result["orderId"], "cancel-order")
 
     def test_get_orders_sends_open_order_filters(self):
-        from toss.get_orders import get_orders
+        from infrastructure.toss.get_orders import get_orders
 
         captured = {}
 
@@ -576,8 +580,8 @@ class TossOrderApiTest(unittest.TestCase):
 
 class TossRateLimitTest(unittest.TestCase):
     def test_request_json_waits_one_second_between_requests(self):
-        from toss.client import request_json
-        from toss.rate_limit import TossRateLimitManager
+        from infrastructure.toss.client import request_json
+        from infrastructure.toss.rate_limit import TossRateLimitManager
 
         clock = FakeClock()
         manager = TossRateLimitManager(
@@ -616,8 +620,8 @@ class TossRateLimitTest(unittest.TestCase):
         self.assertEqual(clock.sleeps, [1.0])
 
     def test_request_json_retries_429_after_retry_after(self):
-        from toss.client import request_json
-        from toss.rate_limit import TossRateLimitManager
+        from infrastructure.toss.client import request_json
+        from infrastructure.toss.rate_limit import TossRateLimitManager
 
         clock = FakeClock()
         manager = TossRateLimitManager(
@@ -654,8 +658,8 @@ class TossRateLimitTest(unittest.TestCase):
         self.assertEqual(clock.sleeps, [2.0])
 
     def test_request_json_uses_backoff_for_malformed_retry_after(self):
-        from toss.client import request_json
-        from toss.rate_limit import TossRateLimitManager
+        from infrastructure.toss.client import request_json
+        from infrastructure.toss.rate_limit import TossRateLimitManager
 
         clock = FakeClock()
         manager = TossRateLimitManager(
@@ -691,8 +695,8 @@ class TossRateLimitTest(unittest.TestCase):
         self.assertEqual(clock.sleeps, [1.0])
 
     def test_request_json_stops_after_retry_limit(self):
-        from toss.client import request_json
-        from toss.rate_limit import TossRateLimitManager
+        from infrastructure.toss.client import request_json
+        from infrastructure.toss.rate_limit import TossRateLimitManager
 
         clock = FakeClock()
         manager = TossRateLimitManager(
@@ -727,8 +731,8 @@ class TossRateLimitTest(unittest.TestCase):
         self.assertEqual(clock.sleeps, [2.0])
 
     def test_request_json_notifies_on_final_http_failure(self):
-        from toss.client import request_json
-        from toss.rate_limit import TossRateLimitManager
+        from infrastructure.toss.client import request_json
+        from infrastructure.toss.rate_limit import TossRateLimitManager
 
         notifications = []
         manager = TossRateLimitManager(sleep_func=lambda _seconds: None)
@@ -760,8 +764,8 @@ class TossRateLimitTest(unittest.TestCase):
         self.assertIn("expired-token", notifications[0])
 
     def test_request_json_sanitizes_html_http_failure(self):
-        from toss.client import request_json
-        from toss.rate_limit import TossRateLimitManager
+        from infrastructure.toss.client import request_json
+        from infrastructure.toss.rate_limit import TossRateLimitManager
 
         notifications = []
         manager = TossRateLimitManager(sleep_func=lambda _seconds: None)
@@ -799,8 +803,8 @@ class TossRateLimitTest(unittest.TestCase):
         self.assertNotIn("<HTML", notifications[0])
 
     def test_request_json_notifies_on_transport_failure(self):
-        from toss.client import request_json
-        from toss.rate_limit import TossRateLimitManager
+        from infrastructure.toss.client import request_json
+        from infrastructure.toss.rate_limit import TossRateLimitManager
 
         notifications = []
         manager = TossRateLimitManager(sleep_func=lambda _seconds: None)
@@ -824,9 +828,9 @@ class TossRateLimitTest(unittest.TestCase):
         self.assertIn("network down", notifications[0])
 
     def test_market_helpers_share_default_request_interval(self):
-        from toss.get_exchange_rate import get_exchange_rate
-        from toss.get_orderbook import get_orderbook
-        from toss.rate_limit import DEFAULT_RATE_LIMIT_MANAGER
+        from infrastructure.toss.get_exchange_rate import get_exchange_rate
+        from infrastructure.toss.get_orderbook import get_orderbook
+        from infrastructure.toss.rate_limit import DEFAULT_RATE_LIMIT_MANAGER
 
         clock = FakeClock()
         manager = DEFAULT_RATE_LIMIT_MANAGER

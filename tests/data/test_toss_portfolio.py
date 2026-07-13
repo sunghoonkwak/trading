@@ -5,16 +5,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
-    from broker import toss_portfolio
+    from infrastructure.toss import toss_portfolio
 
     captured = {"buying_power": []}
 
     monkeypatch.setattr(
-        "toss.auth.load_access_token",
+        "infrastructure.toss.auth.load_access_token",
         lambda: "access-token",
     )
     monkeypatch.setattr(
-        "toss.get_holdings.get_holdings",
+        "infrastructure.toss.get_holdings.get_holdings",
         lambda **kwargs: {
             "items": [
                 {
@@ -46,7 +46,9 @@ def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
             "cashBuyingPower": "5000000" if kwargs["currency"] == "KRW" else "3500.5",
         }
 
-    monkeypatch.setattr("toss.get_buying_power.get_buying_power", fake_buying_power)
+    monkeypatch.setattr(
+        "infrastructure.toss.get_buying_power.get_buying_power", fake_buying_power
+    )
 
     source, error = toss_portfolio.fetch_toss_portfolio()
 
