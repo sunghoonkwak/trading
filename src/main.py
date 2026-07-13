@@ -231,6 +231,24 @@ class TradingSystem:
         print("[Startup] Step 2: Initializing KIS API...")
         try:
             from infrastructure.kis import configure_kis_vendor_hooks
+            from infrastructure.kis.kis_rest_client import configure_state_publisher
+            from state.system_state import AuthStatus, update_kis_state
+
+            status_by_phase = {
+                "authenticating": AuthStatus.AUTHENTICATING,
+                "authenticated": AuthStatus.AUTHENTICATED,
+                "failed": AuthStatus.FAILED,
+            }
+
+            def publish_kis_auth_state(phase: str, error: str | None = None) -> None:
+                is_websocket = phase.startswith("ws_")
+                status = status_by_phase[phase.removeprefix("ws_")]
+                update_kis_state(
+                    **({"ws_auth_status": status} if is_websocket else {"auth_status": status}),
+                    **({"last_error": error} if error else {}),
+                )
+
+            configure_state_publisher(publish_kis_auth_state)
 
             configure_kis_vendor_hooks()
             from broker.kis_worker import (

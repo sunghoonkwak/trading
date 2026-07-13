@@ -7,10 +7,28 @@ Handles REST API requests with retry logic, error handling, and timeout manageme
 import logging
 import time
 from functools import wraps
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from infrastructure.kis.kis_api import kis_auth as ka
-from state.system_state import AuthStatus, update_kis_state
+
+_state_publisher: Optional[Callable[[str, Optional[str]], None]] = None
+
+
+def configure_state_publisher(
+    publisher: Optional[Callable[[str, Optional[str]], None]],
+) -> None:
+    """Inject runtime KIS authentication state delivery at composition time."""
+    global _state_publisher
+    _state_publisher = publisher
+
+
+def _publish_state(phase: str, error: Optional[str] = None) -> None:
+    if _state_publisher is None:
+        return
+    try:
+        _state_publisher(phase, error)
+    except Exception as publish_error:
+        logging.warning("[RESTClient] State publication failed: %s", publish_error)
 
 
 class KISAPIError(Exception):
@@ -50,26 +68,26 @@ class RESTClient:
     @retry_on_exception(max_retries=3, delay=2.0)
     def authenticate() -> Dict[str, Any]:
         """Handle REST API authentication with retries."""
-        update_kis_state(auth_status=AuthStatus.AUTHENTICATING)
+        _publish_state("authenticating")
         try:
             ka.auth()
-            update_kis_state(auth_status=AuthStatus.AUTHENTICATED)
+            _publish_state("authenticated")
             logging.info("[RESTClient] REST API authentication successful")
             return {"status": "authenticated"}
         except Exception as exc:
-            update_kis_state(auth_status=AuthStatus.FAILED, last_error=str(exc))
+            _publish_state("failed", str(exc))
             raise KISAuthError(f"REST Auth failed: {exc}") from exc
 
     @staticmethod
     @retry_on_exception(max_retries=3, delay=2.0)
     def authenticate_ws() -> Dict[str, Any]:
         """Handle WebSocket authentication with retries."""
-        update_kis_state(ws_auth_status=AuthStatus.AUTHENTICATING)
+        _publish_state("ws_authenticating")
         try:
             ka.auth_ws()
-            update_kis_state(ws_auth_status=AuthStatus.AUTHENTICATED)
+            _publish_state("ws_authenticated")
             logging.info("[RESTClient] WebSocket authentication successful")
             return {"status": "ws_authenticated"}
         except Exception as exc:
-            update_kis_state(ws_auth_status=AuthStatus.FAILED, last_error=str(exc))
+            _publish_state("ws_failed", str(exc))
             raise KISAuthError(f"WS Auth failed: {exc}") from exc

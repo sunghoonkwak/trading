@@ -259,6 +259,12 @@ def test_kis_portfolio_source_does_not_import_legacy_broker():
     assert "core.display" not in imports
 
 
+def test_kis_rest_client_does_not_import_legacy_state():
+    imports = _imports_in(SRC_DIR / "infrastructure/kis/kis_rest_client.py")
+
+    assert "state.system_state" not in imports
+
+
 def test_strategy_execution_composition_uses_injected_dependencies():
     imports = _imports_in(SRC_DIR / "infrastructure/strategy_execution.py")
 
