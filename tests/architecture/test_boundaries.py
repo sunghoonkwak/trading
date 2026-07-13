@@ -265,6 +265,15 @@ def test_kis_rest_client_does_not_import_legacy_state():
     assert "state.system_state" not in imports
 
 
+def test_kis_ws_manager_does_not_import_legacy_runtime_modules():
+    imports = _imports_in(SRC_DIR / "infrastructure/kis/kis_ws_manager.py")
+
+    assert "core.trading_config" not in imports
+    assert "core.display" not in imports
+    assert "state.system_state" not in imports
+    assert "broker.kis_event_handler" not in imports
+
+
 def test_kis_vendor_callbacks_use_runtime_collaborators():
     imports = _imports_in(SRC_DIR / "infrastructure/kis/vendor_callbacks.py")
 

@@ -233,6 +233,16 @@ class TradingSystem:
             from core.credentials import get_secrets_from_password
             from infrastructure.kis import configure_kis_vendor_hooks
             from infrastructure.kis.kis_rest_client import configure_state_publisher
+            from infrastructure.kis.kis_ws_manager import (
+                configure_alert_publisher as configure_ws_alert_publisher,
+            )
+            from infrastructure.kis.kis_ws_manager import (
+                configure_event_handler,
+                configure_subscription_provider,
+            )
+            from infrastructure.kis.kis_ws_manager import (
+                configure_state_publisher as configure_ws_state_publisher,
+            )
             from infrastructure.kis.vendor_callbacks import configure_runtime_collaborators
             from state.system_state import AuthStatus, WebSocketStatus, update_kis_state
 
@@ -258,10 +268,36 @@ class TradingSystem:
                 "error": WebSocketStatus.ERROR,
             }
 
-            def publish_websocket_state(status_name: str) -> None:
+            def publish_websocket_state(
+                status_name: str,
+                error: str | None = None,
+            ) -> None:
                 status = websocket_status_by_name.get(status_name)
                 if status is not None:
-                    update_kis_state(ws_status=status)
+                    update_kis_state(
+                        ws_status=status,
+                        **({"last_error": error} if error else {}),
+                    )
+
+            from broker.kis_event_handler import on_result
+
+            configure_subscription_provider(
+                domestic_enabled=trading_config.is_kis_domestic_enabled,
+                domestic_tickers=lambda: [
+                    stock["ticker"]
+                    for stock in trading_config.CONFIG.get("KR", [])
+                    if not stock.get("disabled")
+                ],
+                overseas_tickers=lambda: [
+                    stock["ticker"]
+                    for stock in trading_config.CONFIG.get("US", [])
+                    if not stock.get("disabled")
+                ],
+                market_prefix=trading_config.get_kis_market_prefix,
+            )
+            configure_ws_alert_publisher(display.add_alert)
+            configure_ws_state_publisher(publish_websocket_state)
+            configure_event_handler(on_result)
 
             configure_state_publisher(publish_kis_auth_state)
             configure_runtime_collaborators(

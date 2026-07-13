@@ -323,12 +323,6 @@ def test_ws_manager_keeps_thread_reference_when_stop_times_out(monkeypatch):
         def stop(self):
             self.stopped = True
 
-    monkeypatch.setattr("broker.kis_ws_manager.add_alert", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        "broker.kis_ws_manager.update_kis_state",
-        lambda **kwargs: None,
-    )
-
     manager = WSManager()
     manager._ws_instance = FakeWS()
     manager._ws_thread = FakeThread()

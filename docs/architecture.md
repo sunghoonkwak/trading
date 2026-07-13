@@ -34,6 +34,7 @@ Production code must not introduce new imports from them.
 | --- | --- | --- |
 | `toss/` | `main.py` token startup plus Toss tests/backtest compatibility | Migrate callers to `infrastructure.toss`. |
 | `broker/kis_*` forwarding modules | `main.py`, KIS tests, worker compatibility | Compose direct infrastructure adapters and migrate callers. |
+| `broker/kis_ws_manager` | `broker.kis_worker`, KIS stop-timeout test | Migrate the worker and remaining test import. |
 | `broker/kis_portfolio` | KIS compatibility tests | Migrate the remaining public test import, then remove the shim. |
 
 The removed `data.data_service`, `strategy.execution_service`, `core.runtime_control`,
