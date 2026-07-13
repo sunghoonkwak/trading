@@ -10,7 +10,7 @@ import sys
 import threading
 import time
 
-from core.http_defaults import install_requests_default_timeout
+from infrastructure.http_defaults import install_requests_default_timeout
 
 install_requests_default_timeout()
 

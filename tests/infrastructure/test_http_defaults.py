@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def test_install_requests_default_timeout_preserves_explicit_timeout():
-    from core.http_defaults import install_requests_default_timeout
+    from infrastructure.http_defaults import install_requests_default_timeout
 
     calls = []
 

@@ -31,7 +31,7 @@ composition root 역할, 그리고 안정적인 실행을 위한 메인 루프�
 ## Key Functions (주요 함수)
 
 ## HTTP Timeout Defaults
-`core.http_defaults.install_requests_default_timeout()`을 시작 시 호출하여
+`infrastructure.http_defaults.install_requests_default_timeout()`을 시작 시 호출하여
 `requests` 기반 외부 API 호출에 30초 기본 timeout을 적용합니다. 호출자가
 개별 요청에 `timeout`을 명시하면 그 값이 우선합니다. 이 설정은 KIS, Toss,
 Telegram 등 런타임 프로세스 안의 `requests` 호출이 무기한 대기하는 것을

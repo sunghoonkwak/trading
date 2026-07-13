@@ -15,7 +15,7 @@ files = [
     "src/core/credentials.py",
     "src/core/event_pipe.py",
     "src/core/display.py",
-    "src/core/http_defaults.py",
+    "src/infrastructure/http_defaults.py",
     "src/core/lock_manager.py",
     "src/application/runtime_service.py",
     "src/core/thread_comm.py",

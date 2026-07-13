@@ -1,4 +1,4 @@
-# HTTP Defaults (`src/core/http_defaults.py`)
+# HTTP Defaults (`src/infrastructure/http_defaults.py`)
 
 ## Overview
 

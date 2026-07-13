@@ -400,8 +400,24 @@ def test_retired_legacy_sidecars_are_removed():
     for relative_path in (
         "data/portfolio_integration.md",
         "strategy/report_formatter.md",
+        "core/http_defaults.md",
     ):
         assert not (SRC_DIR / relative_path).exists()
+
+
+def test_retired_core_http_defaults_module_has_no_active_python_consumers():
+    assert not (SRC_DIR / "core/http_defaults.py").exists()
+
+    roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
+    consumers = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            if "core.http_defaults" in path.read_text(encoding="utf-8"):
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
 
 
 def test_retired_data_compatibility_modules_are_removed():
