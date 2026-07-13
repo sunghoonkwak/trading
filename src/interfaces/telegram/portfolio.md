@@ -1,8 +1,9 @@
 # Telegram Portfolio (`src/interfaces/telegram/portfolio.py`)
 
 이 모듈은 포트폴리오 요약 및 리밸런싱 관련 Telegram 명령어를 처리합니다.
-`main.py`가 `PortfolioCommandDependencies`를 주입해 등록하며, 핸들러마다
-factory-owned collaborators를 바인딩합니다.
+`main.py`가 `PortfolioCommandDependencies`를 주입해 등록하며,
+`PortfolioCommandHandler` 인스턴스가 해당 factory-owned collaborators를
+보유합니다.
 
 ## Commands (명령어)
 
@@ -48,5 +49,8 @@ GSheet source 캐시만 갱신하고 성공/경고 요약을 응답합니다. �
 - **Group Handling**: Constituents의 보유비중은 main ticker에 합산
 - **GSheet Caching**: 포트폴리오 결과는 매번 새로 계산하고, 느린 GSheet
   source만 `infrastructure.portfolio.integration`에서 메모리 캐시합니다.
+- **Dependency Ownership**: 차단형 의존성 호출을 포함한 모든 명령은 handler
+  인스턴스가 보유한 collaborators를 직접 사용하므로, 별도 Telegram factory
+  composition끼리 의존성을 공유하지 않습니다.
 - **Exception Resilience**: 주요 명령 핸들러는 오류 발생 시 사용자에게 메시지를 보내고 `ConversationHandler.END` 또는 기존 상태를 반환해 대화 상태 꼬임을 줄입니다.
 - **Retry on Timeout**: `wrap_reply`/`wrap_edit`는 `TimedOut`/`NetworkError` 발생 시 최대 2회 재시도합니다 (1초 간격).

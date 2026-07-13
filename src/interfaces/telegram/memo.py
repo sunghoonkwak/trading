@@ -6,8 +6,6 @@ Telegram memo transport adapter.
 """
 import html
 import logging
-from contextlib import contextmanager
-from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Callable, cast
@@ -27,27 +25,11 @@ class MemoStore:
     save: Callable[[dict], bool]
 
 
-_memo_store: ContextVar[MemoStore | None] = ContextVar("telegram_memo_store", default=None)
-
-
-def _require_memo_store() -> tuple[Callable[[], dict], Callable[[dict], bool]]:
-    store = _memo_store.get()
-    if store is None:
-        raise RuntimeError("Memo command is not bound to a Telegram factory.")
-    return store.load, store.save
-
-
-@contextmanager
-def bind_memo_store(store: MemoStore):
-    """Bind one persistence store for focused direct-handler tests."""
-    token = _memo_store.set(store)
-    try:
-        yield
-    finally:
-        _memo_store.reset(token)
-
-
-async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _handle_text_message(
+    store: MemoStore,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     """Handle non-command text messages and save to memo.json."""
     message = cast(Message, update.message)
     text = cast(str, message.text).strip()
@@ -64,12 +46,11 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     entry = f"{time_str} : {text}"
 
     # Load, append to date, save
-    load_memos, save_memos = _require_memo_store()
-    messages = load_memos()
+    messages = store.load()
     if date_key not in messages:
         messages[date_key] = []
     messages[date_key].append(entry)
-    save_memos(messages)
+    store.save(messages)
 
     # Calculate today count and weekly total
     today_count = len(messages.get(date_key, []))
@@ -83,11 +64,14 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     await wrap_reply(update, f"📝 Saved (today: {today_count}, total: {weekly_total})")
 
 
-async def cmd_memo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _cmd_memo(
+    store: MemoStore,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     """Command handler for /memo - show recent 7 days of messages."""
     logging.info("[TG] /memo from user")
-    load_memos, _ = _require_memo_store()
-    messages = load_memos()
+    messages = store.load()
     if not messages:
         await wrap_reply(update, "📭 No saved messages.")
         return
@@ -113,21 +97,28 @@ async def cmd_memo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await wrap_reply(update, "\n".join(lines), parse_mode='HTML')
 
 
+class MemoCommandHandler:
+    """Telegram memo handlers with one explicit persistence store."""
+
+    def __init__(self, store: MemoStore):
+        self._store = store
+
+    async def handle_text_message(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        return await _handle_text_message(self._store, update, context)
+
+    async def cmd_memo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _cmd_memo(self._store, update, context)
+
+
 def register_memo_handler(app: Application, store: MemoStore):
     """Register memo handler for non-command text messages."""
-    def bind(handler):
-        async def bound(update, context):
-            token = _memo_store.set(store)
-            try:
-                return await handler(update, context)
-            finally:
-                _memo_store.reset(token)
+    handler = MemoCommandHandler(store)
 
-        return bound
-
-    app.add_handler(CommandHandler("memo", bind(cmd_memo)))
+    app.add_handler(CommandHandler("memo", handler.cmd_memo))
     # Handle all text messages that are NOT commands
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bind(handle_text_message)))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handler.handle_text_message))
 
 
 def get_memo_commands_desc() -> str:

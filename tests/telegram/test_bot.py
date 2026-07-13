@@ -6,6 +6,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
+from interfaces.telegram import memo as telegram_memo
 from interfaces.telegram import portfolio as telegram_portfolio
 from interfaces.telegram import rebalancing as telegram_rebalancing
 from interfaces.telegram import strategy as telegram_strategy
@@ -41,10 +42,31 @@ def test_telegram_rebalancing_uses_application_facade(monkeypatch):
         def run_rebalancing(self, *, execute):
             return {"execute": execute}
 
-    with telegram_rebalancing.bind_rebalancing_service(Service()):
-        assert telegram_rebalancing.run_rebalancing_strategy(execute=True) == {
-            "execute": True
-        }
+    handler = telegram_rebalancing.RebalancingCommandHandler(Service())
+
+    assert handler.run_rebalancing_strategy(execute=True) == {"execute": True}
+
+
+def test_memo_handler_uses_its_own_store(monkeypatch):
+    replies = []
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append(text)
+
+    monkeypatch.setattr(telegram_memo, "wrap_reply", fake_reply)
+    handler = telegram_memo.MemoCommandHandler(
+        telegram_memo.MemoStore(load=lambda: {}, save=lambda _memos: True)
+    )
+
+    class Update:
+        pass
+
+    class Context:
+        pass
+
+    asyncio.run(handler.cmd_memo(Update(), Context()))
+
+    assert replies == ["📭 No saved messages."]
 
 
 def test_strategy_command_shows_cash_funding_summary(monkeypatch):
@@ -201,8 +223,8 @@ def test_system_off_is_blocked_while_confirmation_is_pending(monkeypatch):
     class Context:
         user_data = {"runtime_confirmation_pending": "strategy"}
 
-    with telegram_system.bind_runtime_controller(controller):
-        asyncio.run(telegram_system.cmd_system_off(Update(), Context()))
+    handler = telegram_system.RuntimeCommandHandler(controller)
+    asyncio.run(handler.cmd_system_off(Update(), Context()))
 
     assert stop_calls == []
     assert "/system_off" in replies[0]
@@ -241,8 +263,8 @@ def test_runtime_callback_is_blocked_when_runtime_is_off(monkeypatch):
         user_data = {}
 
     try:
-        with telegram_system.bind_runtime_controller(controller):
-            asyncio.run(telegram_system.block_runtime_callbacks_when_off(Update(), Context()))
+        handler = telegram_system.RuntimeCommandHandler(controller)
+        asyncio.run(handler.block_runtime_callbacks_when_off(Update(), Context()))
     except ApplicationHandlerStop:
         stopped = True
     else:
@@ -522,13 +544,71 @@ def test_portfolio_weight_command_uses_valid_portfolio_scope(monkeypatch):
     class Context:
         user_data = {}
 
-    with telegram_portfolio.bind_portfolio_dependencies(
+    handler = telegram_portfolio.PortfolioCommandHandler(
         _portfolio_dependencies(get_weight_diffs=fake_get_weight_diffs)
-    ):
-        asyncio.run(telegram_portfolio.cmd_portfolio_weight(Update(), Context()))
+    )
+    asyncio.run(handler.cmd_portfolio_weight(Update(), Context()))
 
     assert captured == {"scope": "all"}
     assert replies
+
+
+def test_portfolio_command_preserves_dependencies_in_executor(monkeypatch):
+    replies = []
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append(text)
+
+    monkeypatch.setattr(telegram_portfolio, "wrap_reply", fake_reply)
+    monkeypatch.setattr(telegram_portfolio, "format_portfolio_summary", lambda _data: "summary")
+    monkeypatch.setattr(telegram_portfolio, "build_ticker_keyboard", lambda _data: None)
+
+    class Update:
+        pass
+
+    class Context:
+        user_data = {}
+
+    dependencies = _portfolio_dependencies(
+        reader=SimpleNamespace(get_portfolio_data=lambda: {"merged_data": {}})
+    )
+
+    handler = telegram_portfolio.PortfolioCommandHandler(dependencies)
+    result = asyncio.run(handler.cmd_portfolio(Update(), Context()))
+
+    assert result == telegram_portfolio.SELECT_TICKER
+    assert replies == ["summary"]
+
+
+def test_portfolio_handlers_keep_factory_dependencies_isolated(monkeypatch):
+    monkeypatch.setattr(telegram_portfolio, "format_portfolio_summary", lambda data: data["name"])
+    monkeypatch.setattr(telegram_portfolio, "build_ticker_keyboard", lambda _data: None)
+
+    replies = []
+
+    async def fake_reply(update, text, **kwargs):
+        replies.append(text)
+
+    monkeypatch.setattr(telegram_portfolio, "wrap_reply", fake_reply)
+
+    class Update:
+        pass
+
+    class Context:
+        def __init__(self):
+            self.user_data = {}
+
+    first = telegram_portfolio.PortfolioCommandHandler(
+        _portfolio_dependencies(reader=SimpleNamespace(get_portfolio_data=lambda: {"name": "first"}))
+    )
+    second = telegram_portfolio.PortfolioCommandHandler(
+        _portfolio_dependencies(reader=SimpleNamespace(get_portfolio_data=lambda: {"name": "second"}))
+    )
+
+    asyncio.run(first.cmd_portfolio(Update(), Context()))
+    asyncio.run(second.cmd_portfolio(Update(), Context()))
+
+    assert replies == ["first", "second"]
 
 
 def test_gsheet_command_refreshes_only_gsheet_cache(monkeypatch):
@@ -570,10 +650,10 @@ def test_gsheet_command_refreshes_only_gsheet_cache(monkeypatch):
     class Context:
         user_data = {}
 
-    with telegram_portfolio.bind_portfolio_dependencies(
+    handler = telegram_portfolio.PortfolioCommandHandler(
         _portfolio_dependencies(refresh_gsheet_cache=refresh)
-    ):
-        asyncio.run(telegram_portfolio.cmd_gsheet(Update(), Context()))
+    )
+    asyncio.run(handler.cmd_gsheet(Update(), Context()))
 
     assert len(replies) == 1
     assert "GSheet cache updated" in replies[0]
@@ -613,15 +693,15 @@ def test_format_weight_diffs_shows_group_total_and_main_ticker(monkeypatch):
 
 
 def test_ticker_detail_hides_current_price_source(monkeypatch):
-    with telegram_portfolio.bind_portfolio_dependencies(
+    handler = telegram_portfolio.PortfolioCommandHandler(
         _portfolio_dependencies(
             market_reader=SimpleNamespace(
                 get_current_price=lambda _ticker: 100.0,
                 fetch_price=lambda _ticker: 0.0,
             )
         )
-    ):
-        text = telegram_portfolio.format_ticker_detail(
+    )
+    text = handler.format_ticker_detail(
         "AAPL",
         {
             "qty": 2,
@@ -643,18 +723,18 @@ def test_ticker_detail_hides_current_price_source(monkeypatch):
 
 
 def test_ticker_not_in_portfolio_hides_current_price_source(monkeypatch):
-    with telegram_portfolio.bind_portfolio_dependencies(
+    handler = telegram_portfolio.PortfolioCommandHandler(
         _portfolio_dependencies(
             market_reader=SimpleNamespace(
                 get_current_price=lambda _ticker: 7460.0,
                 fetch_price=lambda _ticker: 0.0,
             )
         )
-    ):
-        text = telegram_portfolio.format_ticker_not_in_portfolio(
-            "453850",
-            {"targets": {"453850": 0}},
-        )
+    )
+    text = handler.format_ticker_not_in_portfolio(
+        "453850",
+        {"targets": {"453850": 0}},
+    )
 
     assert "<b>Cur Price:</b> $7,460.00" in text
     assert "(WebSocket)" not in text

@@ -1,6 +1,8 @@
 # Telegram Rebalancing Handler (`src/interfaces/telegram/rebalancing.py`)
 
 `/rebalance` 명령어를 처리하여 포트폴리오 리밸런싱 현황을 확인하거나 수동으로 실행하는 핸들러입니다.
+`RebalancingCommandHandler`가 `main.py`에서 주입한 strategy-run service를 직접
+보유합니다.
 
 ## Core Logic (핵심 로직)
 

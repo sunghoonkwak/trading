@@ -5,8 +5,6 @@ Telegram Rebalancing Module
 Handles the /rebalance command to view and execute the rebalancing strategy.
 """
 import logging
-from contextlib import contextmanager
-from contextvars import ContextVar
 from typing import Any, Optional, cast
 
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -31,27 +29,6 @@ from .system import (
 from .utils import wrap_edit, wrap_edit_message, wrap_reply
 
 REB_CONFIRM = 0
-_strategy_run_service: ContextVar[StrategyRunService | None] = ContextVar(
-    "telegram_rebalancing_service", default=None
-)
-
-
-@contextmanager
-def bind_rebalancing_service(service: StrategyRunService):
-    """Bind one application service for focused direct-handler tests."""
-    token = _strategy_run_service.set(service)
-    try:
-        yield
-    finally:
-        _strategy_run_service.reset(token)
-
-
-def run_rebalancing_strategy(execute: bool = False):
-    """Compatibility seam for the application rebalancing use case."""
-    service = _strategy_run_service.get()
-    if service is None:
-        raise RuntimeError("Rebalancing command is not bound to a Telegram factory.")
-    return service.run_rebalancing(execute=execute)
 
 def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
     if has_orders:
@@ -62,13 +39,17 @@ def build_confirm_keyboard(has_orders: bool) -> Optional[InlineKeyboardMarkup]:
         return InlineKeyboardMarkup(keyboard)
     return None
 
-async def cmd_rebalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _cmd_rebalance(
+    strategy_run_service: StrategyRunService,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     """Handler for /rebalance command."""
     logging.info("[TG] /rebalance from user")
     user_data = cast(dict[Any, Any], context.user_data)
 
     try:
-        reb_rep = run_rebalancing_strategy(execute=False)
+        reb_rep = strategy_run_service.run_rebalancing(execute=False)
     except Exception as e:
         logging.error(f"Rebalancing Calc Error: {e}", exc_info=True)
         await wrap_reply(update, f"⚠️ Error calculating rebalancing: {e}")
@@ -98,7 +79,11 @@ async def cmd_rebalance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return REB_CONFIRM if has_orders else ConversationHandler.END
 
-async def handle_reb_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _handle_reb_callback(
+    strategy_run_service: StrategyRunService,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     query = cast(CallbackQuery, update.callback_query)
     user_data = cast(dict[Any, Any], context.user_data)
     await query.answer()
@@ -114,7 +99,7 @@ async def handle_reb_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         await wrap_edit(update, "⏳ <b>Executing rebalance...</b>", parse_mode='HTML')
 
         try:
-            reb_res = run_rebalancing_strategy(execute=True)
+            reb_res = strategy_run_service.run_rebalancing(execute=True)
             final_report = format_rebalancing_report(reb_res)
             await wrap_edit(update, final_report, parse_mode='HTML')
 
@@ -126,7 +111,7 @@ async def handle_reb_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         clear_runtime_confirmation_pending(context)
         return ConversationHandler.END
 
-async def reb_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _reb_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = cast(dict[Any, Any], context.user_data)
     if 'reb_msg_id' in user_data:
         try:
@@ -144,22 +129,36 @@ async def reb_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_runtime_confirmation_pending(context)
     return ConversationHandler.END
 
-def register_rebalancing_handlers(app: Application, strategy_run_service: StrategyRunService):
-    def bind(handler):
-        async def bound(update, context):
-            token = _strategy_run_service.set(strategy_run_service)
-            try:
-                return await handler(update, context)
-            finally:
-                _strategy_run_service.reset(token)
 
-        return bound
+class RebalancingCommandHandler:
+    """Telegram rebalancing handlers with one explicit application service."""
+
+    def __init__(self, strategy_run_service: StrategyRunService):
+        self._strategy_run_service = strategy_run_service
+
+    def run_rebalancing_strategy(self, execute: bool = False):
+        return self._strategy_run_service.run_rebalancing(execute=execute)
+
+    async def cmd_rebalance(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _cmd_rebalance(self._strategy_run_service, update, context)
+
+    async def handle_reb_callback(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        return await _handle_reb_callback(self._strategy_run_service, update, context)
+
+    async def reb_timeout(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _reb_timeout(update, context)
+
+
+def register_rebalancing_handlers(app: Application, strategy_run_service: StrategyRunService):
+    handler = RebalancingCommandHandler(strategy_run_service)
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("rebalance", bind(cmd_rebalance))],
+        entry_points=[CommandHandler("rebalance", handler.cmd_rebalance)],
         states={
-            REB_CONFIRM: [CallbackQueryHandler(bind(handle_reb_callback), pattern=r'^reb_')],
-            ConversationHandler.TIMEOUT: [TypeHandler(Update, bind(reb_timeout))]
+            REB_CONFIRM: [CallbackQueryHandler(handler.handle_reb_callback, pattern=r'^reb_')],
+            ConversationHandler.TIMEOUT: [TypeHandler(Update, handler.reb_timeout)]
         },
         fallbacks=[],
         conversation_timeout=60

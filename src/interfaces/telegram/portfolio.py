@@ -7,8 +7,6 @@ for interactive ticker selection.
 """
 import logging
 import warnings
-from contextlib import contextmanager
-from contextvars import ContextVar
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
@@ -54,50 +52,11 @@ class PortfolioCommandDependencies:
     refresh_gsheet_cache: Any
 
 
-_command_dependencies: ContextVar[PortfolioCommandDependencies | None] = ContextVar(
-    "telegram_portfolio_dependencies", default=None
-)
+async def _run_in_executor(func, *args):
+    """Run a blocking application or infrastructure call."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, func, *args)
 
-
-def _dependencies() -> PortfolioCommandDependencies:
-    dependencies = _command_dependencies.get()
-    if dependencies is None:
-        raise RuntimeError("Portfolio command is not bound to a Telegram factory.")
-    return dependencies
-
-
-@contextmanager
-def bind_portfolio_dependencies(dependencies: PortfolioCommandDependencies):
-    """Bind one composition for focused direct-handler tests."""
-    token = _command_dependencies.set(dependencies)
-    try:
-        yield
-    finally:
-        _command_dependencies.reset(token)
-
-
-def _current_price(ticker):
-    return _dependencies().market_reader.get_current_price(ticker)
-
-
-def _market_price(ticker):
-    return _dependencies().market_reader.fetch_price(ticker)
-
-
-def _open_orders():
-    return _dependencies().order_reader.fetch_open_orders()
-
-
-def _weight_diffs(scope):
-    return _dependencies().get_weight_diffs(scope)
-
-
-def _gsheet_refresh():
-    return _dependencies().refresh_gsheet_cache()
-
-
-def _get_portfolio_data():
-    return _dependencies().reader.get_portfolio_data()
 
 def format_weight_diffs(diffs: list, total_usd: float, cash_info: dict) -> str:
     """
@@ -182,7 +141,12 @@ def format_weight_diffs(diffs: list, total_usd: float, cash_info: dict) -> str:
     return "\n".join(lines)
 
 
-def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
+def format_ticker_detail(
+    ticker: str,
+    data: dict,
+    portfolio_data: dict,
+    market_reader: MarketPriceReader,
+) -> str:
     """
     Format detailed ticker information for Telegram message.
 
@@ -208,9 +172,9 @@ def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
 
     # Only try API fallback if merged_data doesn't have valid price
     if cur_price <= 0 and currency == "USD":
-        cur_price = _current_price(ticker)
+        cur_price = market_reader.get_current_price(ticker)
         if cur_price <= 0:
-            cur_price = _market_price(ticker)
+            cur_price = market_reader.fetch_price(ticker)
 
     # Final fallback to avg_price if still 0
     if cur_price <= 0:
@@ -263,7 +227,11 @@ def format_ticker_detail(ticker: str, data: dict, portfolio_data: dict) -> str:
     return "\n".join(lines)
 
 
-def format_ticker_not_in_portfolio(ticker: str, portfolio_data: dict) -> str:
+def format_ticker_not_in_portfolio(
+    ticker: str,
+    portfolio_data: dict,
+    market_reader: MarketPriceReader,
+) -> str:
     """
     Format info for a ticker not currently in portfolio.
     Shows current price and target weight.
@@ -278,10 +246,10 @@ def format_ticker_not_in_portfolio(ticker: str, portfolio_data: dict) -> str:
     targets = portfolio_data.get("targets", {})
     tgt_weight = targets.get(ticker, 0) * 100
 
-    cur_price = _current_price(ticker)
+    cur_price = market_reader.get_current_price(ticker)
 
     if cur_price <= 0:
-        cur_price = _market_price(ticker)
+        cur_price = market_reader.fetch_price(ticker)
 
     lines = [
         f"📊 <b>{ticker}</b>",
@@ -357,15 +325,18 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _cmd_portfolio(
+    dependencies: PortfolioCommandDependencies,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     """Command handler for /portfolio - Entry point for ConversationHandler."""
 
     logging.info("[TG] /portfolio from user")
     user_data = cast(dict[Any, Any], context.user_data)
     try:
         # Get portfolio data and cache in user_data
-        loop = asyncio.get_running_loop()
-        data = await loop.run_in_executor(None, _get_portfolio_data)
+        data = await _run_in_executor(dependencies.reader.get_portfolio_data)
         user_data['portfolio_data'] = data
 
         # Format summary message
@@ -385,7 +356,11 @@ async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 
-async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _handle_ticker_callback(
+    dependencies: PortfolioCommandDependencies,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     """Handle InlineKeyboard button clicks for ticker selection."""
     user_data = cast(dict[Any, Any], context.user_data)
     try:
@@ -420,14 +395,18 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
                 break
 
         if not found_ticker:
-            detail_msg = format_ticker_not_in_portfolio(ticker, portfolio_data)
+            detail_msg = format_ticker_not_in_portfolio(
+                ticker, portfolio_data, dependencies.market_reader
+            )
             keyboard = build_ticker_keyboard(portfolio_data)
             await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
             return SELECT_TICKER
 
         # Format and send ticker detail
         ticker_data = merged_data[found_ticker]
-        detail_msg = format_ticker_detail(found_ticker, ticker_data, portfolio_data)
+        detail_msg = format_ticker_detail(
+            found_ticker, ticker_data, portfolio_data, dependencies.market_reader
+        )
 
         # Edit message to show detail
         keyboard = build_ticker_keyboard(portfolio_data)
@@ -441,7 +420,11 @@ async def handle_ticker_callback(update: Update, context: ContextTypes.DEFAULT_T
         return SELECT_TICKER
 
 
-async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _handle_ticker_text(
+    dependencies: PortfolioCommandDependencies,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     """Handle text input for ticker selection."""
     user_data = cast(dict[Any, Any], context.user_data)
     try:
@@ -461,7 +444,9 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         if not found_ticker:
             # Ticker not in portfolio - show target weight info
-            detail_msg = format_ticker_not_in_portfolio(ticker_input, portfolio_data)
+            detail_msg = format_ticker_not_in_portfolio(
+                ticker_input, portfolio_data, dependencies.market_reader
+            )
             keyboard = build_ticker_keyboard(portfolio_data)
             sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
             if sent_msg:
@@ -470,7 +455,9 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         # Format and send ticker detail
         ticker_data = merged_data[found_ticker]
-        detail_msg = format_ticker_detail(found_ticker, ticker_data, portfolio_data)
+        detail_msg = format_ticker_detail(
+            found_ticker, ticker_data, portfolio_data, dependencies.market_reader
+        )
 
         keyboard = build_ticker_keyboard(portfolio_data)
         sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
@@ -483,7 +470,7 @@ async def handle_ticker_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return SELECT_TICKER
 
 
-async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /cancel command to exit conversation."""
     logging.info("[TG] /cancel from user")
     user_data = cast(dict[Any, Any], context.user_data)
@@ -495,7 +482,7 @@ async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _timeout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle conversation timeout."""
     logging.info("[TG] Portfolio session timed out")
     user_data = cast(dict[Any, Any], context.user_data)
@@ -679,36 +666,49 @@ def format_placed_orders(df, num_us: int, num_kr: int, num_toss: int | None = No
     return "\n".join(lines)
 
 
-async def cmd_placed_orders(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _cmd_placed_orders(
+    dependencies: PortfolioCommandDependencies,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     """Command handler for /placed_orders - Show open orders."""
     logging.info("[TG] /placed_orders from user")
     try:
-        loop = asyncio.get_running_loop()
-        df, num_us, num_kr, num_toss = await loop.run_in_executor(None, _open_orders)
+        df, num_us, num_kr, num_toss = await _run_in_executor(
+            dependencies.order_reader.fetch_open_orders
+        )
         msg = format_placed_orders(df, num_us, num_kr, num_toss)
         await wrap_reply(update, msg, parse_mode='HTML')
     except Exception as e:
         logging.error(f"[TG] cmd_placed_orders failed: {e}")
 
 
-async def cmd_portfolio_weight(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _cmd_portfolio_weight(
+    dependencies: PortfolioCommandDependencies,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     """Command handler for /portfolio_weight."""
     logging.info("[TG] /portfolio_weight from user")
     try:
-        loop = asyncio.get_running_loop()
-        diffs, total_usd, cash_info = await loop.run_in_executor(None, _weight_diffs, "all")
+        diffs, total_usd, cash_info = await _run_in_executor(
+            dependencies.get_weight_diffs, "all"
+        )
         msg = format_weight_diffs(diffs, total_usd, cash_info)
         await wrap_reply(update, msg, parse_mode='HTML')
     except Exception as e:
         logging.error(f"[TG] cmd_portfolio_weight failed: {e}")
 
 
-async def cmd_gsheet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _cmd_gsheet(
+    dependencies: PortfolioCommandDependencies,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     """Command handler for /gsheet - refresh cached GSheet source data."""
     logging.info("[TG] /gsheet from user")
     try:
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, _gsheet_refresh)
+        result = await _run_in_executor(dependencies.refresh_gsheet_cache)
         status = (
             "✅ <b>GSheet cache updated</b>"
             if result["success"]
@@ -735,42 +735,79 @@ async def cmd_gsheet(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+class PortfolioCommandHandler:
+    """Telegram portfolio handlers with one explicit dependency composition."""
+
+    def __init__(self, dependencies: PortfolioCommandDependencies):
+        self._dependencies = dependencies
+
+    async def cmd_portfolio(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _cmd_portfolio(self._dependencies, update, context)
+
+    async def handle_ticker_callback(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        return await _handle_ticker_callback(self._dependencies, update, context)
+
+    async def handle_ticker_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _handle_ticker_text(self._dependencies, update, context)
+
+    async def cancel_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _cancel_handler(update, context)
+
+    async def timeout_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _timeout_handler(update, context)
+
+    async def cmd_placed_orders(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _cmd_placed_orders(self._dependencies, update, context)
+
+    async def cmd_portfolio_weight(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        return await _cmd_portfolio_weight(self._dependencies, update, context)
+
+    async def cmd_gsheet(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _cmd_gsheet(self._dependencies, update, context)
+
+    def format_ticker_detail(self, ticker: str, data: dict, portfolio_data: dict) -> str:
+        return format_ticker_detail(
+            ticker, data, portfolio_data, self._dependencies.market_reader
+        )
+
+    def format_ticker_not_in_portfolio(self, ticker: str, portfolio_data: dict) -> str:
+        return format_ticker_not_in_portfolio(
+            ticker, portfolio_data, self._dependencies.market_reader
+        )
+
+
 def register_portfolio_handlers(
     app: Application,
     dependencies: PortfolioCommandDependencies,
 ):
     """Register Portfolio command handlers."""
-    def bind(handler):
-        async def bound(update, context):
-            token = _command_dependencies.set(dependencies)
-            try:
-                return await handler(update, context)
-            finally:
-                _command_dependencies.reset(token)
-
-        return bound
+    handler = PortfolioCommandHandler(dependencies)
 
     # ConversationHandler for /portfolio
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("portfolio", bind(cmd_portfolio))],
+        entry_points=[CommandHandler("portfolio", handler.cmd_portfolio)],
         states={
             SELECT_TICKER: [
-                CallbackQueryHandler(bind(handle_ticker_callback), pattern=r'^port_'),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, bind(handle_ticker_text))
+                CallbackQueryHandler(handler.handle_ticker_callback, pattern=r'^port_'),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handler.handle_ticker_text)
             ],
-            ConversationHandler.TIMEOUT: [TypeHandler(Update, bind(timeout_handler))]
+            ConversationHandler.TIMEOUT: [TypeHandler(Update, handler.timeout_handler)]
         },
         fallbacks=[
-            CommandHandler("cancel", bind(cancel_handler))
+            CommandHandler("cancel", handler.cancel_handler)
         ],
         conversation_timeout=60,
         per_message=False,
     )
 
     app.add_handler(conv_handler)
-    app.add_handler(CommandHandler("gsheet", bind(cmd_gsheet)))
-    app.add_handler(CommandHandler("portfolio_weight", bind(cmd_portfolio_weight)))
-    app.add_handler(CommandHandler("placed_orders", bind(cmd_placed_orders)))
+    app.add_handler(CommandHandler("gsheet", handler.cmd_gsheet))
+    app.add_handler(CommandHandler("portfolio_weight", handler.cmd_portfolio_weight))
+    app.add_handler(CommandHandler("placed_orders", handler.cmd_placed_orders))
 
 
 def get_portfolio_commands_desc() -> str:
