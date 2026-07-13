@@ -620,12 +620,14 @@ def _execute_orders(
     orders: List[StrategyOrder],
     sell_first: bool = False,
     sell_wait_seconds: int = 0,
+    order_report_service: Optional[OrderReportService] = None,
 ) -> List[Dict]:
     """
     Execute a list of orders. Optionally execute sells first with a wait.
     Returns: list of execution result dicts
     """
-    return get_order_report_service().execute_many(
+    service = order_report_service or get_order_report_service()
+    return service.execute_many(
         orders,
         sell_first=sell_first,
         sell_wait_seconds=sell_wait_seconds,
