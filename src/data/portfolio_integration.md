@@ -9,7 +9,7 @@ three public source/cache exports for callers that have not migrated yet.
 
 ## Core Logic
 
-1. **Broker 원천 조회 위임**: `broker.kis_portfolio`와
+1. **Broker 원천 조회 위임**: `infrastructure.portfolio.kis_source`와
    `broker.toss_portfolio`가 각 API 데이터를 표준 source 포맷으로 변환해
    제공합니다.
 2. **GSheet 원천 캐시**: `infrastructure.gsheet`을 통해 읽은 수동/외부 자산 source를
