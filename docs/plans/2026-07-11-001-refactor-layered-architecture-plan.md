@@ -321,6 +321,11 @@ Then introduce contracts and concrete adapters, migrate one vertical use case at
 
 - Read `docs/reference/toss-openapi.json` before modifying any Toss adapter behavior.
 - Preserve the sidecar `.md` documentation convention for modules whose role or operational expectations change.
+- Before deleting a moved module's sidecar `.md`, inventory its behavioral and
+  operational content, create or update the destination sidecar, and search
+  runtime, tests, scripts, and documentation for the legacy path. Treat a
+  sidecar deletion without a documented destination or zero-content rationale
+  as a migration defect; review the rename/deletion diff before committing.
 - Do not commit credentials, account data, tokens, generated caches, logs, or runtime configuration while adding new infrastructure adapters.
 - Do not restart the live service merely to diagnose this refactor; use offline tests and, when explicitly required later, read-only container diagnostics.
 
