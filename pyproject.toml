@@ -17,6 +17,7 @@ files = [
     "src/infrastructure/display.py",
     "src/infrastructure/http_defaults.py",
     "src/infrastructure/lock_manager.py",
+    "src/infrastructure/system_state.py",
     "src/application/runtime_service.py",
     "src/infrastructure/trading_configuration.py",
     "src/interfaces/web/server.py",
@@ -48,8 +49,6 @@ files = [
     "src/application/strategy_broker.py",
     "src/infrastructure/order_admin.py",
     "src/infrastructure/kis/event_handler.py",
-    "src/state/__init__.py",
-    "src/state/system_state.py",
 ]
 check_untyped_defs = true
 ignore_missing_imports = true

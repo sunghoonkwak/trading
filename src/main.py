@@ -67,7 +67,7 @@ class TradingSystem:
             build_portfolio_service,
         )
         from infrastructure.portfolio.integration import IntegratedPortfolioSource
-        from state.system_state import is_kis_ready
+        from infrastructure.system_state import is_kis_ready
 
         self._configure_gsheet_source()
         self._configure_kis_portfolio_source()
@@ -166,11 +166,11 @@ class TradingSystem:
             WeightDiffDependencies,
             get_weight_diffs,
         )
+        from infrastructure.system_state import ThreadStatus, update_telegram_state
         from interfaces.telegram.bot import initialize_telegram
         from interfaces.telegram.memo import MemoStore
         from interfaces.telegram.portfolio import PortfolioCommandDependencies
         from interfaces.telegram.strategy import StrategyCommandDependencies
-        from state.system_state import ThreadStatus, update_telegram_state
 
         self._configure_strategy_execution_service()
         self._configure_kis_portfolio_source()
@@ -289,7 +289,7 @@ class TradingSystem:
             from infrastructure.kis.ws_manager import (
                 configure_state_publisher as configure_ws_state_publisher,
             )
-            from state.system_state import (
+            from infrastructure.system_state import (
                 AuthStatus,
                 ThreadStatus,
                 WebSocketStatus,

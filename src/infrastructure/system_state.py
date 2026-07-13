@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 System State Management Module
 
@@ -48,6 +47,7 @@ class TelegramState:
     last_error: Optional[str] = None
     last_updated: datetime = field(default_factory=datetime.now)
 
+
 class SystemStateManager:
     """Singleton manager for system-wide thread states."""
     _instance: Optional["SystemStateManager"] = None
@@ -85,13 +85,11 @@ class SystemStateManager:
         with self._lock:
             return self._telegram
 
-# =============================================================================
-# Runtime State Helpers
-# =============================================================================
 _manager = SystemStateManager()
 
 def update_kis_state(**kwargs): _manager.update_kis(**kwargs)
 def update_telegram_state(**kwargs): _manager.update_telegram(**kwargs)
+
 
 def is_kis_ready() -> bool:
     s = _manager.get_kis()
