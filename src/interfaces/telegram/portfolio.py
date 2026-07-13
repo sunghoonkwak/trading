@@ -9,7 +9,6 @@ import logging
 import warnings
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from pathlib import Path
 
 from telegram.warnings import PTBUserWarning
 
@@ -285,14 +284,12 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
     Returns:
         InlineKeyboardMarkup with ticker buttons
     """
-    import json
-    # Load stock configuration
-    config_path = Path(__file__).resolve().parents[2] / "stock_configuration.json"
+    from infrastructure.stock_configuration import load_stock_configuration
+
     button_tickers = []
 
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
+        config = load_stock_configuration()
 
         # Get tickers with telegram_button: true from both KR and US
         for region in ['KR', 'US']:

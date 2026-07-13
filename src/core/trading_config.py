@@ -1,7 +1,10 @@
-import json
 import os
 
 from core.constants import ENV_FALSE_VALUES, ENV_TRUE_VALUES
+from infrastructure.stock_configuration import (
+    load_stock_configuration,
+    save_stock_configuration,
+)
 
 _DEFAULT_KIS_US_MARKET = ("NAS", "DNAS")
 _KIS_US_MARKETS = {
@@ -35,19 +38,7 @@ def _kis_market_codes(market: str) -> tuple[str, str]:
     return _KIS_US_MARKETS.get(market.upper(), _DEFAULT_KIS_US_MARKET)
 
 
-# Load Stock Configuration from JSON
-CONFIG = {}
-
-try:
-    # Look for the config file in the parent 'src' directory
-    _src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _json_path = os.path.join(_src_dir, "stock_configuration.json")
-
-    if os.path.exists(_json_path):
-        with open(_json_path, "r", encoding="utf-8") as f:
-            CONFIG = json.load(f)
-except Exception as e:
-    print(f"[Config] Error loading stock_configuration.json: {e}")
+CONFIG = load_stock_configuration()
 
 
 def strip_market_prefix(ticker: str) -> str:
@@ -94,12 +85,7 @@ def update_stock_name(ticker: str, new_name: str):
             break
 
     if changed:
-        try:
-            # Use the already calculated _json_path to save changes
-            with open(_json_path, "w", encoding="utf-8") as f:
-                json.dump(CONFIG, f, indent=4, ensure_ascii=False)
-        except Exception as e:
-            print(f"[Config] Error saving stock_configuration.json: {e}")
+        save_stock_configuration(CONFIG)
 
 
 def get_kis_exchange_code(ticker: str) -> str:
