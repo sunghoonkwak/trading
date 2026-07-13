@@ -25,7 +25,7 @@ except ImportError:
 from application.runtime_service import RuntimeCommandResult, RuntimeController
 from core import display, event_pipe, lock_manager, trading_config
 from core.constants import CONFIG_ROOT
-from utils.logger import LogManager
+from infrastructure.logger import LogManager
 
 
 class TradingSystem:

@@ -1,6 +1,6 @@
-# Logger Management (`src/utils/logger.py`)
+# Logger Management (`src/infrastructure/logger.py`)
 
-시스템 전반의 로깅 설정을 중앙 집중식으로 관리하고, 로그 파일의 순환(Rotation) 및 아카이빙을 처리하는 모듈입니다.
+시스템 전반의 로깅 설정을 중앙 집중식으로 관리하고, 로그 파일의 순환(Rotation) 및 아카이빙을 처리하는 인프라 adapter입니다.
 
 ## Core Logic (핵심 로직)
 
@@ -12,6 +12,7 @@
 ## Key Functions (주요 함수)
 
 ### `LogManager.setup`
+
 로깅 시스템을 초기화하고 핸들러를 등록합니다.
 
 - **입력 (Input)**:
@@ -19,13 +20,10 @@
   - `log_name` (str): 생성할 로그 파일 이름 (기본값: `trading_system.log`).
 - **출력 (Output)**: `str` (설정된 로그 파일의 전체 경로)
 
-## Configuration (None)
-
 ## Usage Example (사용 예시)
 
 ```python
-from utils.logger import LogManager
+from infrastructure.logger import LogManager
 
-# 메인 시스템 시작 시 호출
 LogManager.setup("/app/src")
 ```
