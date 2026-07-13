@@ -22,7 +22,7 @@
    - `StrategyRunContext`는 RAOEO/VA 같은 한 실행 묶음 안에서 포트폴리오와
      가격 스냅샷을 공유합니다. Telegram과 scheduler 모두 이 공통 경로를
      사용합니다.
-   - 공식 KIS/Toss endpoint helper는 `execution_service`에서 직접
+   - 공식 KIS/Toss endpoint helper는 `strategy_execution`에서 직접
      import하지 않고 앱 소유 broker facade 뒤에서 호출합니다.
 
 4. **Unified History Management (통합 히스토리 관리)**:

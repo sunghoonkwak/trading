@@ -7,7 +7,8 @@ slow Google Sheets source cache.
 
 `scope="all"`, `"kis"`, and `"toss"` preserve the established account and
 cash filtering rules. `all` may retain safe partial source data; broker-only
-scopes are used for strategy decisions and only expose their selected account.
+scopes recalculate holdings, cash, totals, statistics, and current weights for
+the selected broker. The returned `accounts` list remains the raw source list.
 Invalid or missing exchange rates must not create an incorrect aggregate.
 
 The service returns raw source data, merged holdings, total USD value, stats,
