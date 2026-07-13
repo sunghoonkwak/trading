@@ -8,7 +8,8 @@ KIS 런타임 요청을 앱 소유 큐/스레드에서 직렬 처리하는 worke
 
 1. **스레드 루프**: `kis_request_queue`를 감시하고 요청별 응답을
    `kis_response_queue`에 넣습니다.
-2. **인증 요청**: REST/WebSocket 인증은 `broker.kis_rest_client.RESTClient`에
+2. **인증 요청**: REST/WebSocket 인증은
+   `infrastructure.kis.kis_rest_client.RESTClient`에
    위임합니다. `KIS_ENABLE_REST_API=false`이면 REST 인증 요청은 disabled
    응답을 반환하지만 WebSocket 인증 요청은 계속 허용합니다.
 3. **포트폴리오 요청**: `infrastructure.portfolio.integration`에서 KIS/GSheet
