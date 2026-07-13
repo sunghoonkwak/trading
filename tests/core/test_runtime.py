@@ -13,7 +13,7 @@ sys.path.insert(0, str(SRC))
 
 class CredentialsTest(unittest.TestCase):
     def test_load_credentials_reads_kis_and_toss_values(self):
-        from core.credentials import (
+        from infrastructure.credentials import (
             generate_key_from_password,
             load_credentials,
         )
@@ -36,7 +36,7 @@ class CredentialsTest(unittest.TestCase):
         self.assertEqual(credentials.toss_client_secret, "toss-client-secret")
 
     def test_legacy_kis_credentials_keep_toss_values_empty(self):
-        from core.credentials import (
+        from infrastructure.credentials import (
             generate_key_from_password,
             load_credentials,
         )

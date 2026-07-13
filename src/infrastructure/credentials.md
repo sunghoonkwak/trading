@@ -1,6 +1,6 @@
 # Trading Credentials
 
-`src/core/credentials.py`는 KIS와 Toss 연동에서 공통으로 사용하는 암호화된
+`src/infrastructure/credentials.py`는 KIS와 Toss 연동에서 공통으로 사용하는 암호화된
 자격 증명 로딩을 담당합니다.
 
 런타임 파일은 `~/KIS_config/` 아래에 둡니다.

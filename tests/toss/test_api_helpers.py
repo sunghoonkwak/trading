@@ -115,7 +115,7 @@ class TossAuthTest(unittest.TestCase):
     def test_load_config_reads_credentials_file(self):
         from cryptography.fernet import Fernet
 
-        from core.credentials import generate_key_from_password, load_credentials
+        from infrastructure.credentials import generate_key_from_password, load_credentials
         from infrastructure.toss.auth import configure_auth_configuration, load_config
 
         config_root = self._temporary_directory()

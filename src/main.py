@@ -275,7 +275,7 @@ class TradingSystem:
         """Initializes KIS API and WebSocket connection."""
         print("[Startup] Step 2: Initializing KIS API...")
         try:
-            from core.credentials import get_secrets_from_password
+            from infrastructure.credentials import get_secrets_from_password
             from infrastructure.kis import configure_kis_vendor_hooks
             from infrastructure.kis.rest_client import configure_state_publisher
             from infrastructure.kis.vendor_callbacks import configure_runtime_collaborators
@@ -446,7 +446,7 @@ class TradingSystem:
         """Initializes Toss access token for today's trading session."""
         print("[Startup] Step 3: Initializing Toss API...")
         try:
-            from core.credentials import load_credentials
+            from infrastructure.credentials import load_credentials
             from infrastructure.toss.auth import (
                 configure_auth_configuration,
                 ensure_daily_token,

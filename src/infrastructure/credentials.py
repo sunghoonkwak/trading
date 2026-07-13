@@ -1,3 +1,5 @@
+"""Encrypted credential-file adapter for KIS and Toss."""
+
 from __future__ import annotations
 
 import base64
