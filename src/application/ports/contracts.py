@@ -63,6 +63,18 @@ class OpenOrderReader(Protocol):
         """Return open orders and the established broker count breakdown."""
 
 
+class OrderControlService(OpenOrderReader, Protocol):
+    """Application use case for explicit open-order controls."""
+
+    def sync_open_orders(self) -> bool:
+        """Synchronize the cross-broker open-order view."""
+
+    def execute_manage_action(
+        self, market: str, action_type: str, order_data: Any, new_price: Any
+    ) -> tuple[Any, str | None]:
+        """Submit one explicit cancel or correction action."""
+
+
 @dataclass(frozen=True)
 class OperationResult(Generic[T]):
     """A redaction-safe result returned by a port without raising secrets."""

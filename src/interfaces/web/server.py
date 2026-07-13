@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from application.order_report_service import OrderManagementService
+from application.ports import OrderControlService
 
 
 @dataclass(frozen=True)
@@ -30,7 +30,7 @@ class WebDependencies:
     load_memos: Callable[[], dict[str, list[str]]]
     save_memos: Callable[[dict[str, list[str]]], bool]
     portfolio_reader: Any
-    order_service: OrderManagementService
+    order_service: OrderControlService
     run_portfolio_report: Callable[[Any], None]
     run_order_report: Callable[[], None]
     env_flag: Callable[[str, bool], bool]

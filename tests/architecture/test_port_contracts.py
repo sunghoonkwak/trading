@@ -8,6 +8,7 @@ from application.ports import (
     MarketPriceReader,
     OpenOrderReader,
     OperationResult,
+    OrderControlService,
     PortfolioReader,
     PortfolioSource,
     SerializedKisOperations,
@@ -106,3 +107,18 @@ def test_market_and_open_order_reader_contracts_accept_adapters():
     orders: OpenOrderReader = Orders()
     assert (market.get_current_price("SOXL"), market.fetch_price("SOXL")) == (10.0, 11.0)
     assert orders.fetch_open_orders() == (None, 1, 2, 3)
+
+
+def test_order_control_contract_accepts_application_service():
+    class Controls:
+        def sync_open_orders(self):
+            return True
+
+        def fetch_open_orders(self):
+            return (None, 0, 0, 0)
+
+        def execute_manage_action(self, market, action_type, order_data, new_price):
+            return (None, None)
+
+    controls: OrderControlService = Controls()
+    assert controls.sync_open_orders() is True
