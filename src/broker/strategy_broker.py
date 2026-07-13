@@ -35,7 +35,7 @@ def get_orderable_usd(symbol: str, order_price: float) -> float:
     """Return USD buying power for the configured strategy broker."""
     broker_name = get_strategy_broker_name()
     if broker_name == TOSS_BROKER:
-        from infrastructure.toss import toss_broker
+        from infrastructure.toss import broker as toss_broker
 
         return toss_broker.get_orderable_usd(symbol, order_price)
 
@@ -48,7 +48,7 @@ def place_order(order: StrategyOrder) -> Tuple[bool, str]:
     """Place a strategy order through the configured strategy broker."""
     broker_name = get_strategy_broker_name()
     if broker_name == TOSS_BROKER:
-        from infrastructure.toss import toss_broker
+        from infrastructure.toss import broker as toss_broker
 
         return toss_broker.place_order(order)
 

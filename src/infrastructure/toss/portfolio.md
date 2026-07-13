@@ -1,7 +1,7 @@
 # Toss Portfolio Adapter
 
-`infrastructure.toss.toss_portfolio` reads Toss holdings and buying power into
-the normalized portfolio-source format.
+`infrastructure.toss.portfolio` reads Toss holdings and buying power into the
+normalized portfolio-source format.
 
 ## Responsibilities
 

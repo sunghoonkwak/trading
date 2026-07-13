@@ -152,7 +152,7 @@ the current suite,” not “production behavior is known faulty.”
 - `venv/bin/pytest tests/toss/test_api_helpers.py tests/kis/test_broker.py
   tests/core/test_runtime.py tests/strategy/test_value_averaging.py` passed:
   106 tests.
-- `venv/bin/ruff check src/infrastructure/toss/toss_broker.py src/broker/kis_broker.py
+- `venv/bin/ruff check src/infrastructure/toss/broker.py src/broker/kis_broker.py
   tests/toss/test_api_helpers.py tests/kis/test_broker.py
   tests/core/test_runtime.py tests/strategy/test_value_averaging.py` passed.
 - `venv/bin/pytest tests` passed: 272 tests.

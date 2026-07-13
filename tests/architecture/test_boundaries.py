@@ -372,6 +372,14 @@ def test_retired_toss_broker_compatibility_modules_are_removed():
         assert not (SRC_DIR / relative_path).exists()
 
 
+def test_retired_toss_prefixed_adapter_modules_are_removed():
+    for relative_path in (
+        "infrastructure/toss/toss_broker.py",
+        "infrastructure/toss/toss_portfolio.py",
+    ):
+        assert not (SRC_DIR / relative_path).exists()
+
+
 def test_no_active_python_consumer_uses_retired_toss_broker_modules():
     roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
     consumers = []
@@ -386,6 +394,19 @@ def test_no_active_python_consumer_uses_retired_toss_broker_modules():
                 or "from broker import toss_broker" in source
                 or "from broker import toss_portfolio" in source
             ):
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
+
+
+def test_no_active_python_consumer_uses_retired_toss_prefixed_adapters():
+    roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
+    consumers = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            if "infrastructure.toss.toss_" in path.read_text(encoding="utf-8"):
                 consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
 
     assert consumers == []

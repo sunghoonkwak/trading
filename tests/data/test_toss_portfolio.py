@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def test_fetch_toss_portfolio_converts_api_payload(monkeypatch):
-    from infrastructure.toss import toss_portfolio
+    from infrastructure.toss import portfolio as toss_portfolio
 
     captured = {"buying_power": []}
 

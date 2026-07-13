@@ -10,7 +10,7 @@ three public source/cache exports for callers that have not migrated yet.
 ## Core Logic
 
 1. **Broker 원천 조회 위임**: `infrastructure.portfolio.kis_source`와
-   `infrastructure.toss.toss_portfolio`가 각 API 데이터를 표준 source
+   `infrastructure.toss.portfolio`가 각 API 데이터를 표준 source
    포맷으로 변환해
    제공합니다.
 2. **GSheet 원천 캐시**: `infrastructure.gsheet`을 통해 읽은 수동/외부 자산 source를
@@ -79,7 +79,7 @@ broker 원천 가격이 없는 holding에 Toss 현재가를 채웁니다. Toss �
 ### `replace_account_source`
 
 GSheet에서 읽은 특정 계정의 holdings/cash/account metadata를 다른 표준
-source 데이터로 대체합니다. 현재는 `infrastructure.toss.toss_portfolio`가 Toss API
+source 데이터로 대체합니다. 현재는 `infrastructure.toss.portfolio`가 Toss API
 데이터를 성공적으로 읽었을 때 `토스` 계정에 사용합니다.
 
 ### `merge_portfolio_sources`

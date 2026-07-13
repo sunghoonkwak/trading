@@ -21,4 +21,4 @@
 - `StrategyOrder` 주문 접수를 선택된 broker 구현으로 위임합니다.
 
 KIS API 세부 필드명과 주문 변환은 `kis_broker.py`가 담당합니다. Toss API
-세부 필드명과 주문 변환은 `infrastructure.toss.toss_broker`가 담당합니다.
+세부 필드명과 주문 변환은 `infrastructure.toss.broker`가 담당합니다.

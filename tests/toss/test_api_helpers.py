@@ -340,7 +340,7 @@ class TossOrderApiTest(unittest.TestCase):
         self.assertEqual(result["orderId"], "order-1")
 
     def test_toss_broker_reads_usd_buying_power(self):
-        from infrastructure.toss import toss_broker
+        from infrastructure.toss import broker as toss_broker
 
         calls = {}
 
@@ -373,7 +373,7 @@ class TossOrderApiTest(unittest.TestCase):
         )
 
     def test_toss_broker_rejects_malformed_buying_power(self):
-        from infrastructure.toss import toss_broker
+        from infrastructure.toss import broker as toss_broker
 
         original_load = toss_broker.load_access_token
         original_account = toss_broker.get_default_account_seq
@@ -395,7 +395,7 @@ class TossOrderApiTest(unittest.TestCase):
     def test_toss_broker_maps_strategy_limit_order(self):
         from domain.strategy.base import OrderSide, StrategyOrder
         from domain.strategy.constants import ORDER_TYPE_LIMIT
-        from infrastructure.toss import toss_broker
+        from infrastructure.toss import broker as toss_broker
 
         calls = {}
 
@@ -439,7 +439,7 @@ class TossOrderApiTest(unittest.TestCase):
     def test_toss_broker_maps_strategy_loc_order(self):
         from domain.strategy.base import OrderSide, StrategyOrder
         from domain.strategy.constants import ORDER_TYPE_LOC
-        from infrastructure.toss import toss_broker
+        from infrastructure.toss import broker as toss_broker
 
         calls = {}
 
@@ -475,7 +475,7 @@ class TossOrderApiTest(unittest.TestCase):
 
     def test_toss_broker_rejects_unknown_order_type_without_request(self):
         from domain.strategy.base import OrderSide, StrategyOrder
-        from infrastructure.toss import toss_broker
+        from infrastructure.toss import broker as toss_broker
 
         original_load = toss_broker.load_access_token
         original_account = toss_broker.get_default_account_seq

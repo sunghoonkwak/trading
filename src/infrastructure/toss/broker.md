@@ -1,7 +1,7 @@
 # Toss Strategy Trading Adapter
 
-`infrastructure.toss.toss_broker` adapts strategy trading operations to the
-Toss Invest Open API.
+`infrastructure.toss.broker` adapts strategy trading operations to the Toss
+Invest Open API.
 
 ## Responsibilities
 

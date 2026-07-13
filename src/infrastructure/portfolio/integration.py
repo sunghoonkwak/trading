@@ -139,7 +139,7 @@ def fetch_toss_exchange_rate() -> Tuple[Optional[float], Optional[str]]:
 
 def fetch_toss_portfolio_source() -> Tuple[Dict[str, Any], Optional[str]]:
     """Fetch Toss source data and emit portfolio alerts."""
-    from infrastructure.toss.toss_portfolio import fetch_toss_portfolio
+    from infrastructure.toss.portfolio import fetch_toss_portfolio
 
     try:
         _publish_alert("[Toss] Fetching Toss API data...", "INFO")
@@ -401,7 +401,7 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
                 _publish_alert(f"Toss Exchange Warning: {exchange_error}", "WARN")
 
     elif scope == PORTFOLIO_SCOPE_ALL:
-        from infrastructure.toss.toss_portfolio import TOSS_ACCOUNT_KEY
+        from infrastructure.toss.portfolio import TOSS_ACCOUNT_KEY
 
         _publish_alert("[Data] Loading cached GSheet data...", "INFO")
         gsheet_data, gsheet_error = get_cached_gsheet_portfolio()
