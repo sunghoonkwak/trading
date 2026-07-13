@@ -221,6 +221,32 @@ def test_runtime_runs_strategy_suite_from_its_own_dependencies():
     assert va_report["status"].value == "disabled"
 
 
+def test_runtime_prepares_cash_funding_from_its_own_dependencies():
+    buy_order = StrategyOrder("TQQQ", OrderSide.BUY, 10, 100.0)
+    dependencies = StrategyExecutionDependencies(
+        load_strategy_config=lambda: {"cash_ticker": "BIL"},
+        load_history=lambda: [],
+        save_history=lambda _history: True,
+        fetch_prices=lambda _tickers: {},
+        strategy_broker_name=lambda: "kis",
+        get_orderable_usd=lambda _symbol, _price: 100.0,
+        execute_order=lambda _order: (True, "accepted"),
+        portfolio_reader_factory=lambda: None,
+        get_market_status=lambda _date: {"is_market_open": True, "message": "open"},
+    )
+
+    order, info = StrategyExecutionRuntime(dependencies).prepare_cash_funding({
+        "pending_orders": [buy_order],
+        "info": {
+            "holdings": {"BIL": {"qty": 20, "cur_price": 100.0}},
+            "current_prices": {"BIL": 100.0},
+        },
+    })
+
+    assert info["required"] is True
+    assert order.symbol == "BIL"
+
+
 def test_market_data_service_uses_injected_portfolio_config_and_price_ports():
     requested = []
     service = StrategyMarketDataService(

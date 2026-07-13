@@ -118,6 +118,103 @@ class StrategyExecutionRuntime:
             self.run_value_averaging(execute=execute, context=context),
         )
 
+    def clear_history(self, target_date: str = "") -> Dict[str, Any]:
+        target_date = normalize_strategy_history_date(target_date)
+        return self.history_service().clear_date(target_date)
+
+    def prepare_cash_funding(
+        self,
+        raoeo_report: Optional[Dict] = None,
+        context: Optional["StrategyRunContext"] = None,
+    ) -> Tuple[Any, Dict]:
+        if raoeo_report is None:
+            raoeo_report = self.run_raoeo(execute=False)
+
+        pending_orders = raoeo_report.get("pending_orders", [])
+        reference_buy = next(
+            (order for order in pending_orders if order.side == OrderSide.BUY),
+            None,
+        )
+        report_info = raoeo_report.get("info", {})
+        holdings = report_info.get("holdings")
+        prices = report_info.get("current_prices", {})
+        if holdings is None:
+            run_context = context or self._build_run_context()
+            holdings, prices = run_context.get_market_data(
+                force_refresh=True,
+                include_cash_ticker=True,
+            )
+
+        orderable_usd = self._report_orderable_usd(report_info)
+        if orderable_usd is None:
+            orderable_usd = (
+                self.dependencies.get_orderable_usd(
+                    reference_buy.symbol, reference_buy.price
+                )
+                if reference_buy
+                else 0.0
+            )
+        return raoeo.calculate_cash_funding_order(
+            orders=pending_orders,
+            portfolio=holdings,
+            current_prices=prices,
+            cash_ticker=self.dependencies.load_strategy_config().get("cash_ticker", ""),
+            orderable_usd=orderable_usd,
+        )
+
+    def execute_cash_funding(
+        self,
+        raoeo_report: Optional[Dict] = None,
+        context: Optional["StrategyRunContext"] = None,
+    ) -> Tuple[Any, Dict]:
+        order, info = self.prepare_cash_funding(raoeo_report, context=context)
+        if not info.get("required") or order is None:
+            return None, info
+
+        success, message = self.dependencies.execute_order(order)
+        result = {"order": order, "success": success, "message": message}
+        if success:
+            logging.info("Cash funding sale accepted. Waiting 5s before strategy execution...")
+            time.sleep(5)
+        return result, info
+
+    def save_cash_funding_result(self, today_str: str, result: Dict) -> List[Dict]:
+        order = result.get("order") if result else None
+        if order is None:
+            return []
+
+        history = self.history_service().load_history()
+        today_entry = _get_today_entry(history, today_str)
+        if today_entry is None:
+            today_entry = {"date": today_str}
+            history.insert(0, today_entry)
+
+        raoeo_data = today_entry.setdefault("raoeo", {"orders": []})
+        results = raoeo_data.setdefault("cash_funding_results", [])
+        results.append({
+            "ticker": order.symbol,
+            "side": order.side.name,
+            "qty": order.quantity,
+            "price": order.price,
+            "order_type": order.order_type,
+            "reason": order.reason,
+            "success": result["success"],
+            "message": result["message"],
+        })
+        self.dependencies.save_history(history[:200])
+        return results
+
+    def _report_orderable_usd(self, report_info: Dict) -> Any:
+        if self.dependencies.strategy_broker_name() != "toss":
+            return None
+        usd_cash = report_info.get("holdings", {}).get("USD cash", {})
+        if usd_cash.get("type") != "CASH":
+            return None
+        try:
+            return float(usd_cash.get("qty", 0.0))
+        except (TypeError, ValueError):
+            return None
+
     def _build_run_context(self) -> "StrategyRunContext":
         return StrategyRunContext(
             get_market_data=lambda **kwargs: self.market_data_service().get_market_data(
