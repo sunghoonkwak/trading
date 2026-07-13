@@ -436,6 +436,22 @@ def test_retired_utils_logger_module_has_no_active_python_consumers():
     assert consumers == []
 
 
+def test_retired_core_thread_comm_module_has_no_active_python_consumers():
+    assert not (SRC_DIR / "core/thread_comm.py").exists()
+    assert not (SRC_DIR / "core/thread_comm.md").exists()
+
+    roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
+    consumers = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            if "core.thread_comm" in path.read_text(encoding="utf-8"):
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
+
+
 def test_retired_data_compatibility_modules_are_removed():
     for relative_path in (
         "data/__init__.py",

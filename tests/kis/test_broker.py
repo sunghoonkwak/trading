@@ -840,8 +840,8 @@ def test_current_price_uses_toss_batch_prices(monkeypatch):
 
 
 def test_kis_worker_blocks_rest_auth_when_rest_api_disabled(monkeypatch):
-    from core.thread_comm import RequestType, ThreadRequest
     from infrastructure.kis import worker as kis_worker
+    from infrastructure.kis.worker_protocol import RequestType, ThreadRequest
 
     monkeypatch.setattr(
         kis_worker.RESTClient,
@@ -859,18 +859,6 @@ def test_kis_worker_blocks_rest_auth_when_rest_api_disabled(monkeypatch):
 
     assert response.success is False
     assert response.error == "KIS REST API is disabled"
-
-
-def test_kis_thread_comm_compatibility_exports_worker_protocol():
-    from core import thread_comm
-    from infrastructure.kis import worker_protocol
-
-    assert thread_comm.RequestType is worker_protocol.RequestType
-    assert thread_comm.ThreadRequest is worker_protocol.ThreadRequest
-    assert thread_comm.ThreadResponse is worker_protocol.ThreadResponse
-    assert thread_comm.kis_request_queue is worker_protocol.kis_request_queue
-    assert thread_comm.kis_response_queue is worker_protocol.kis_response_queue
-
 
 def test_kis_worker_publishes_event_pipe_alert_through_injected_callback(monkeypatch):
     from infrastructure.kis import worker as kis_worker

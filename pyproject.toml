@@ -18,7 +18,6 @@ files = [
     "src/infrastructure/http_defaults.py",
     "src/core/lock_manager.py",
     "src/application/runtime_service.py",
-    "src/core/thread_comm.py",
     "src/core/trading_config.py",
     "src/interfaces/web/server.py",
     "src/utils/__init__.py",
