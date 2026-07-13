@@ -1,9 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-Configuration Manager Module
+"""File-backed configuration adapter."""
 
-Handles loading and saving of JSON configuration and history files.
-"""
 import json
 import logging
 import os
@@ -14,10 +10,6 @@ from core.constants import CONFIG_ROOT
 
 
 class ConfigFile(Enum):
-    """
-    Enum for configuration and history files.
-    Value is a tuple of (filename, read_only).
-    """
     PORTFOLIO = ("portfolio.json", False)
     MEMO = ("memo.json", False)
     STRATEGY_HISTORY = ("strategy_history.json", False)
@@ -32,38 +24,35 @@ class ConfigFile(Enum):
     def read_only(self) -> bool:
         return self.value[1]
 
+
 def _get_config_path(file_type: ConfigFile) -> str:
-    """Get full absolute path for a config file."""
     return os.path.join(CONFIG_ROOT, file_type.filename)
 
+
 def load_json(file_type: ConfigFile, default: Any = None) -> Union[Dict, list]:
-    """Load JSON data from a config file."""
     path = _get_config_path(file_type)
     if default is None:
         default = {}
-
     try:
         if not os.path.exists(path):
             logging.warning(f"[ConfigManager] File not found: {path}")
             return default
-
-        with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logging.error(f"[ConfigManager] Failed to load {file_type.filename}: {e}")
+        with open(path, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except Exception as error:
+        logging.error(f"[ConfigManager] Failed to load {file_type.filename}: {error}")
         return default
 
+
 def save_json(file_type: ConfigFile, data: Any) -> bool:
-    """Save data to a JSON config file."""
     if file_type.read_only:
         raise ValueError(f"File {file_type.name} is read-only.")
-
     path = _get_config_path(file_type)
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(data, file, ensure_ascii=False, indent=2)
         return True
-    except Exception as e:
-        logging.error(f"[ConfigManager] Failed to save {file_type.filename}: {e}")
+    except Exception as error:
+        logging.error(f"[ConfigManager] Failed to save {file_type.filename}: {error}")
         return False

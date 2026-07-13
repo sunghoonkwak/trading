@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from data.calculate_weights import (
+from domain.portfolio.weights import (
     calculate_current_group_weights,
     calculate_target_weights,
     get_cash_weight,

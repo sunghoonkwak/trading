@@ -404,6 +404,15 @@ def test_retired_legacy_sidecars_are_removed():
         assert not (SRC_DIR / relative_path).exists()
 
 
+def test_retired_data_compatibility_modules_are_removed():
+    for relative_path in (
+        "data/__init__.py",
+        "data/calculate_weights.py",
+        "data/config_manager.py",
+    ):
+        assert not (SRC_DIR / relative_path).exists()
+
+
 def test_no_active_python_consumer_uses_retired_toss_broker_modules():
     roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
     consumers = []
@@ -522,6 +531,25 @@ def test_retired_data_gsheet_has_no_active_python_consumers():
             if path == Path(__file__):
                 continue
             if "data.gsheet" in path.read_text(encoding="utf-8"):
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
+
+
+def test_no_active_python_consumer_uses_retired_data_modules():
+    roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
+    consumers = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            source = path.read_text(encoding="utf-8")
+            if (
+                "data.config_manager" in source
+                or "data.calculate_weights" in source
+                or "from data import config_manager" in source
+                or "from data import calculate_weights" in source
+            ):
                 consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
 
     assert consumers == []

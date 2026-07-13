@@ -57,8 +57,8 @@ class TradingSystem:
 
     def _build_portfolio_service(self):
         """Compose the portfolio use case from runtime adapters."""
-        from data.calculate_weights import calculate_target_weights
-        from data.config_manager import ConfigFile, load_json, save_json
+        from domain.portfolio.weights import calculate_target_weights
+        from infrastructure.config import ConfigFile, load_json, save_json
         from infrastructure.portfolio.composition import (
             PortfolioServiceDependencies,
             build_portfolio_service,
@@ -106,8 +106,8 @@ class TradingSystem:
         """Compose strategy execution collaborators from runtime adapters."""
         from application.strategy_broker import StrategyBrokerService
         from application.strategy_execution import StrategyExecutionDependencies
-        from data.config_manager import ConfigFile, load_json, save_json
         from infrastructure import market_data
+        from infrastructure.config import ConfigFile, load_json, save_json
         from infrastructure.kis import broker as kis_broker
         from infrastructure.strategy_execution import configure_strategy_execution_service
         from infrastructure.toss import broker as toss_broker
@@ -148,9 +148,9 @@ class TradingSystem:
             prepare_raoeo_cash_funding,
             save_raoeo_cash_funding_result,
         )
-        from data.calculate_weights import get_cash_weight
-        from data.config_manager import ConfigFile, load_json, save_json
+        from domain.portfolio.weights import get_cash_weight
         from infrastructure import market_data, order_admin
+        from infrastructure.config import ConfigFile, load_json, save_json
         from infrastructure.portfolio import refresh_gsheet_cache
         from infrastructure.portfolio.weight_diffs import (
             WeightDiffDependencies,
@@ -501,8 +501,8 @@ class TradingSystem:
         try:
             from core import event_pipe
             from core.constants import ENV_TRUE_VALUES
-            from data.config_manager import ConfigFile, load_json, save_json
             from infrastructure import order_admin
+            from infrastructure.config import ConfigFile, load_json, save_json
             from interfaces.scheduler.portfolio_runner import (
                 SchedulerPortfolioRunner,
                 SchedulerReportDependencies,

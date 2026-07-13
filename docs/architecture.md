@@ -37,6 +37,9 @@ sidecar) have zero production, test, script, and documentation consumers. The
 retired `strategy.report_formatter` sidecar now documents the Telegram
 formatter at its interface destination.
 
+The retired `data.config_manager` and `data.calculate_weights` modules now
+live at `infrastructure.config` and `domain.portfolio.weights` respectively.
+
 `interfaces.web.create_web_app()` is a factory: each application owns its
 dependencies, connection manager, event-loop callback, and lifespan. The
 production composition root passes that exact application instance to
