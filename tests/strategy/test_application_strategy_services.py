@@ -163,6 +163,24 @@ def test_runtime_runs_raoeo_from_its_own_dependencies():
     assert report["status"].value == "disabled"
 
 
+def test_runtime_runs_value_averaging_from_its_own_dependencies():
+    dependencies = StrategyExecutionDependencies(
+        load_strategy_config=lambda: {"value_averaging": {"enabled": False}},
+        load_history=lambda: [],
+        save_history=lambda _history: True,
+        fetch_prices=lambda _tickers: {},
+        strategy_broker_name=lambda: "kis",
+        get_orderable_usd=lambda _symbol, _price: 0.0,
+        execute_order=lambda _order: (True, "accepted"),
+        portfolio_reader_factory=lambda: None,
+        get_market_status=lambda _date: {"is_market_open": True, "message": "open"},
+    )
+
+    report = StrategyExecutionRuntime(dependencies).run_value_averaging(execute=False)
+
+    assert report["status"].value == "disabled"
+
+
 def test_market_data_service_uses_injected_portfolio_config_and_price_ports():
     requested = []
     service = StrategyMarketDataService(

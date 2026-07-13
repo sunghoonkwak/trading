@@ -95,7 +95,12 @@ class StrategyExecutionRuntime:
     def run_value_averaging(
         self, *, execute: bool = False, **kwargs: Any
     ) -> Dict[str, Any]:
-        return run_va_strategy(execute=execute, **kwargs)
+        return _run_va_strategy(
+            dependencies=self.dependencies,
+            execute=execute,
+            market_snapshot=kwargs.get("market_snapshot"),
+            context=kwargs.get("context"),
+        )
 
     def run_rebalancing(
         self, *, execute: bool = False, **kwargs: Any
@@ -747,6 +752,8 @@ def _handle_va_history(
     execute: bool,
     market_status: Dict,
     today_str: str,
+    order_report_service: Optional[OrderReportService] = None,
+    history_service: Optional[StrategyHistoryService] = None,
 ) -> None:
     logging.info(f"VA: Found today's history at {va_hist.get('time', '?')}")
     succeeded, failed = _restore_history_orders(report, va_hist)
@@ -783,6 +790,8 @@ def _handle_va_history(
         extra_fields={
             "targets_context": va_hist.get("targets_context", {}),
         },
+        order_report_service=order_report_service,
+        history_service=history_service,
     )
 
 
@@ -991,21 +1000,32 @@ def run_raoeo_strategy(
 # Value Averaging Execution
 # -------------------------------------------------------------------------
 
-def run_va_strategy(
+def _run_va_strategy(
+    *,
+    dependencies: StrategyExecutionDependencies,
     execute: bool = False,
     market_snapshot: Optional[Tuple[Dict, Dict]] = None,
     context: Optional[StrategyRunContext] = None,
+    history_service: Optional[StrategyHistoryService] = None,
 ) -> Dict[str, Any]:
     """
     Run Value Averaging strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = _require_dependencies().get_market_status(today_str)
+    market_status = dependencies.get_market_status(today_str)
     report = _build_base_report(today_str, market_status)
+    history_service = history_service or StrategyHistoryService(
+        load=dependencies.load_history,
+        save=dependencies.save_history,
+    )
+    order_report_service = OrderReportService(
+        execute_order=dependencies.execute_order,
+        sleep=time.sleep,
+    )
 
     try:
         # Step 1: Check enabled
-        strategy_config = _require_dependencies().load_strategy_config()
+        strategy_config = dependencies.load_strategy_config()
         va_section = strategy_config.get('value_averaging', {})
 
         if not va_section.get('enabled', True):
@@ -1025,7 +1045,7 @@ def run_va_strategy(
         # Step 2: Market status (already determined)
 
         # Step 3: Check today's history
-        hist_data = _load_history()
+        hist_data = history_service.load_history()
         today_entry = _get_today_entry(hist_data, today_str)
         va_hist = today_entry.get("va") if today_entry else None
 
@@ -1036,6 +1056,8 @@ def run_va_strategy(
                 execute,
                 market_status,
                 today_str,
+                order_report_service=order_report_service,
+                history_service=history_service,
             )
             return report
 
@@ -1047,7 +1069,13 @@ def run_va_strategy(
         if market_snapshot is not None:
             holdings, prices = market_snapshot
         else:
-            run_context = context or _build_strategy_run_context()
+            run_context = context or StrategyRunContext(
+                get_market_data=StrategyExecutionRuntime(dependencies)
+                .market_data_service()
+                .get_market_data,
+                load_strategy_config=dependencies.load_strategy_config,
+                fetch_prices=dependencies.fetch_prices,
+            )
             holdings, prices = run_context.get_market_data(force_refresh=True)
 
         # VA needs history for day_count calculation
@@ -1074,7 +1102,9 @@ def run_va_strategy(
             report["status"] = StrategyStatus.NON_MARKET_TIME
         else:
             # Execute
-            results = _execute_orders(orders)
+            results = _execute_orders(
+                orders, order_report_service=order_report_service
+            )
             _apply_execution_results(report, orders, results)
 
         # Save history (always save for VA — day_count tracking)
@@ -1083,7 +1113,9 @@ def run_va_strategy(
         }
         save_data = _build_strategy_history_data(report, "va",
             extra_fields={"targets_context": targets_context})
-        _save_strategy_to_history(today_str, "va", save_data)
+        _save_strategy_to_history(
+            today_str, "va", save_data, history_service=history_service
+        )
 
     except requests.exceptions.Timeout as e:
         logging.error(f"[API Timeout] VA Service Timeout Error: {e}", exc_info=True)
@@ -1095,6 +1127,24 @@ def run_va_strategy(
         report["error"] = str(e)
 
     return report
+
+
+def run_va_strategy(
+    execute: bool = False,
+    market_snapshot: Optional[Tuple[Dict, Dict]] = None,
+    context: Optional[StrategyRunContext] = None,
+) -> Dict[str, Any]:
+    """Compatibility entry point for callers not yet composed with a runtime."""
+    return _run_va_strategy(
+        dependencies=_require_dependencies(),
+        execute=execute,
+        market_snapshot=market_snapshot,
+        context=context or _build_strategy_run_context(),
+        history_service=StrategyHistoryService(
+            load=_load_history,
+            save=_require_dependencies().save_history,
+        ),
+    )
 
 
 def run_strategy_suite(
