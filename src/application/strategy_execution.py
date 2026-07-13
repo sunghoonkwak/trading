@@ -112,11 +112,17 @@ class StrategyExecutionRuntime:
         )
 
     def run_suite(self, *, execute: bool = False) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        return run_strategy_suite(execute=execute)
+        context = self._build_run_context()
+        return (
+            self.run_raoeo(execute=execute, context=context),
+            self.run_value_averaging(execute=execute, context=context),
+        )
 
     def _build_run_context(self) -> "StrategyRunContext":
         return StrategyRunContext(
-            get_market_data=self.market_data_service().get_market_data,
+            get_market_data=lambda **kwargs: self.market_data_service().get_market_data(
+                **kwargs
+            ),
             load_strategy_config=self.dependencies.load_strategy_config,
             fetch_prices=self.dependencies.fetch_prices,
         )
