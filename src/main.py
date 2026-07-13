@@ -265,7 +265,12 @@ class TradingSystem:
                 configure_state_publisher as configure_ws_state_publisher,
             )
             from infrastructure.kis.vendor_callbacks import configure_runtime_collaborators
-            from state.system_state import AuthStatus, WebSocketStatus, update_kis_state
+            from state.system_state import (
+                AuthStatus,
+                ThreadStatus,
+                WebSocketStatus,
+                update_kis_state,
+            )
 
             status_by_phase = {
                 "authenticating": AuthStatus.AUTHENTICATING,
@@ -299,6 +304,16 @@ class TradingSystem:
                         ws_status=status,
                         **({"last_error": error} if error else {}),
                     )
+
+            worker_thread_status_by_name = {
+                "running": ThreadStatus.RUNNING,
+                "stopped": ThreadStatus.STOPPED,
+            }
+
+            def publish_worker_thread_state(status_name: str) -> None:
+                status = worker_thread_status_by_name.get(status_name)
+                if status is not None:
+                    update_kis_state(thread_status=status)
 
             from broker.kis_event_handler import on_result
 
@@ -335,6 +350,9 @@ class TradingSystem:
                 configure_rest_api_enabled as configure_kis_worker_rest_api_enabled,
             )
             from infrastructure.kis.worker import (
+                configure_state_publisher as configure_kis_worker_state_publisher,
+            )
+            from infrastructure.kis.worker import (
                 initialize_websocket_and_pipe,
                 is_kis_thread_running,
                 request_kis_auth,
@@ -347,6 +365,7 @@ class TradingSystem:
             configure_kis_worker_rest_api_enabled(
                 trading_config.is_kis_rest_api_enabled
             )
+            configure_kis_worker_state_publisher(publish_worker_thread_state)
 
             if not is_kis_thread_running():
                 if start_kis_thread():

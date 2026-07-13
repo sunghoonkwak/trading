@@ -16,13 +16,13 @@ from core.thread_comm import (
 )
 from infrastructure.kis.kis_rest_client import RESTClient
 from infrastructure.kis.kis_ws_manager import WSManager
-from state.system_state import ThreadStatus, update_kis_state
 
 _kis_thread: Optional[threading.Thread] = None
 _stop_event = threading.Event()
 _ws_manager = WSManager()
 _alert_publisher: Optional[Callable[[str, str], None]] = None
 _rest_api_enabled: Optional[Callable[[], bool]] = None
+_state_publisher: Optional[Callable[[str], None]] = None
 
 
 def configure_alert_publisher(publisher: Optional[Callable[[str, str], None]]) -> None:
@@ -35,6 +35,12 @@ def configure_rest_api_enabled(enabled: Optional[Callable[[], bool]]) -> None:
     """Inject the KIS REST feature flag at composition time."""
     global _rest_api_enabled
     _rest_api_enabled = enabled
+
+
+def configure_state_publisher(publisher: Optional[Callable[[str], None]]) -> None:
+    """Inject KIS worker lifecycle state delivery at composition time."""
+    global _state_publisher
+    _state_publisher = publisher
 
 
 def _is_rest_api_enabled() -> bool:
@@ -54,6 +60,15 @@ def _publish_alert(message: str, level: str) -> None:
         _alert_publisher(message, level)
     except Exception as error:
         logging.warning("[KISWorker] Alert publication failed: %s", error)
+
+
+def _publish_lifecycle_state(status: str) -> None:
+    if _state_publisher is None:
+        return
+    try:
+        _state_publisher(status)
+    except Exception as error:
+        logging.warning("[KISWorker] State publication failed: %s", error)
 
 
 def _handle_request(request: ThreadRequest) -> ThreadResponse:
@@ -87,7 +102,7 @@ def _handle_request(request: ThreadRequest) -> ThreadResponse:
 def _kis_thread_loop():
     """Main execution loop for the KIS worker thread."""
     logging.info("[KISWorker] Starting main loop")
-    update_kis_state(thread_status=ThreadStatus.RUNNING)
+    _publish_lifecycle_state("running")
 
     while not _stop_event.is_set():
         try:
@@ -100,7 +115,7 @@ def _kis_thread_loop():
             logging.error("[KISWorker] Loop error: %s", error)
 
     logging.info("[KISWorker] Loop stopped")
-    update_kis_state(thread_status=ThreadStatus.STOPPED)
+    _publish_lifecycle_state("stopped")
 
 
 def start_kis_thread() -> bool:

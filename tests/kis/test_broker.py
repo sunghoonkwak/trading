@@ -885,6 +885,33 @@ def test_kis_worker_publishes_event_pipe_alert_through_injected_callback(monkeyp
     assert alerts == [("[KIS] Event pipe linked", "SUCCESS")]
 
 
+def test_kis_worker_publishes_lifecycle_state_through_injected_callback(monkeypatch):
+    from broker import kis_worker
+
+    class StopAfterOnePoll:
+        def __init__(self):
+            self.polls = 0
+
+        def is_set(self):
+            self.polls += 1
+            return self.polls > 1
+
+    class EmptyRequestQueue:
+        def get(self, timeout):
+            raise kis_worker.Empty
+
+    states = []
+    monkeypatch.setattr(kis_worker, "_stop_event", StopAfterOnePoll())
+    monkeypatch.setattr(kis_worker, "kis_request_queue", EmptyRequestQueue())
+    kis_worker.configure_state_publisher(states.append)
+    try:
+        kis_worker._kis_thread_loop()
+    finally:
+        kis_worker.configure_state_publisher(None)
+
+    assert states == ["running", "stopped"]
+
+
 import sys
 from pathlib import Path
 

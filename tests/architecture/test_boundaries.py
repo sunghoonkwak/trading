@@ -285,6 +285,12 @@ def test_kis_worker_does_not_import_legacy_trading_config():
     assert "core.trading_config" not in imports
 
 
+def test_kis_worker_does_not_import_legacy_system_state():
+    imports = _imports_in(SRC_DIR / "infrastructure/kis/worker.py")
+
+    assert "state.system_state" not in imports
+
+
 def test_kis_worker_compatibility_module_forwards_to_infrastructure(tmp_path):
     result = _run_import_check(
         tmp_path,

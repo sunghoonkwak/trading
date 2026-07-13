@@ -520,6 +520,7 @@ def _install_fake_kis_thread(
     fake_kis_thread.is_kis_thread_running = lambda: False
     fake_kis_thread.configure_alert_publisher = lambda _publisher: None
     fake_kis_thread.configure_rest_api_enabled = lambda _enabled: None
+    fake_kis_thread.configure_state_publisher = lambda _publisher: None
     fake_kis_thread.request_kis_auth = request_kis_auth
     fake_kis_thread.request_kis_ws_auth = request_kis_ws_auth
     fake_kis_thread.wait_for_response = wait_for_response
