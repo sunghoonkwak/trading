@@ -256,9 +256,10 @@ def _build_base_report(today_str: str, market_status: Dict) -> Dict:
 # Unified History Management
 # -------------------------------------------------------------------------
 
-def _load_history() -> list:
+def _load_history(history_service: Optional[StrategyHistoryService] = None) -> list:
     """Load unified strategy history."""
-    return get_strategy_history_service().load_history()
+    service = history_service or get_strategy_history_service()
+    return service.load_history()
 
 
 def get_strategy_history_service() -> StrategyHistoryService:
@@ -455,13 +456,15 @@ def _has_ambiguous_history_order(strategy_hist: Dict) -> bool:
 def _save_strategy_to_history(
     today_str: str,
     strategy_key: str,
-    strategy_data: Dict
+    strategy_data: Dict,
+    history_service: Optional[StrategyHistoryService] = None,
 ):
     """Save a strategy's result to the unified history file."""
-    StrategyHistoryService(
+    service = history_service or StrategyHistoryService(
         load=_load_history,
         save=_require_dependencies().save_history,
-    ).save_strategy(
+    )
+    service.save_strategy(
         today_str,
         strategy_key,
         strategy_data,
