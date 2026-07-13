@@ -85,8 +85,17 @@ def configure_portfolio_reader_factory(factory) -> None:
 class StrategyRunContext:
     """Share expensive market data across one strategy execution bundle."""
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        get_market_data: Callable[..., Tuple[Dict, Dict]],
+        load_strategy_config: Callable[[], Dict[str, Any]],
+        fetch_prices: Callable[[List[str]], Dict[str, float]],
+    ):
         self._market_snapshot: Optional[Tuple[Dict, Dict]] = None
+        self._get_market_data = get_market_data
+        self._load_strategy_config = load_strategy_config
+        self._fetch_prices = fetch_prices
 
     def get_market_data(
         self,
@@ -95,12 +104,12 @@ class StrategyRunContext:
     ) -> Tuple[Dict, Dict]:
         if self._market_snapshot is None:
             if include_cash_ticker:
-                self._market_snapshot = get_market_data(
+                self._market_snapshot = self._get_market_data(
                     force_refresh=force_refresh,
                     include_cash_ticker=True,
                 )
             else:
-                self._market_snapshot = get_market_data(
+                self._market_snapshot = self._get_market_data(
                     force_refresh=force_refresh,
                 )
         elif include_cash_ticker:
@@ -111,7 +120,7 @@ class StrategyRunContext:
         if self._market_snapshot is None:
             return
 
-        strategy_config = _require_dependencies().load_strategy_config()
+        strategy_config = self._load_strategy_config()
         cash_ticker = strategy_config.get("cash_ticker", "")
         if not cash_ticker:
             return
@@ -125,7 +134,17 @@ class StrategyRunContext:
             prices[cash_ticker] = holding_price
             return
 
-        prices.update(_require_dependencies().fetch_prices([cash_ticker]))
+        prices.update(self._fetch_prices([cash_ticker]))
+
+
+def _build_strategy_run_context() -> StrategyRunContext:
+    """Build one execution context from the configured application ports."""
+    dependencies = _require_dependencies()
+    return StrategyRunContext(
+        get_market_data=get_market_data,
+        load_strategy_config=dependencies.load_strategy_config,
+        fetch_prices=dependencies.fetch_prices,
+    )
 
 
 # -------------------------------------------------------------------------
@@ -510,7 +529,7 @@ def prepare_raoeo_cash_funding(
     holdings = report_info.get("holdings")
     prices = report_info.get("current_prices", {})
     if holdings is None:
-        run_context = context or StrategyRunContext()
+        run_context = context or _build_strategy_run_context()
         holdings, prices = run_context.get_market_data(
             force_refresh=True,
             include_cash_ticker=True,
@@ -807,7 +826,7 @@ def run_raoeo_strategy(
             report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
-        run_context = context or StrategyRunContext()
+        run_context = context or _build_strategy_run_context()
         holdings, prices = run_context.get_market_data(force_refresh=True)
         report["info"]["holdings"] = holdings
         report["info"]["current_prices"] = prices
@@ -921,7 +940,7 @@ def run_va_strategy(
         if market_snapshot is not None:
             holdings, prices = market_snapshot
         else:
-            run_context = context or StrategyRunContext()
+            run_context = context or _build_strategy_run_context()
             holdings, prices = run_context.get_market_data(force_refresh=True)
 
         # VA needs history for day_count calculation
@@ -976,7 +995,7 @@ def run_strategy_suite(
     context: Optional[StrategyRunContext] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Run RAOEO and Value Averaging with shared market data."""
-    run_context = context or StrategyRunContext()
+    run_context = context or _build_strategy_run_context()
     raoeo_report = run_raoeo_strategy(execute=execute, context=run_context)
     va_report = run_va_strategy(execute=execute, context=run_context)
     return raoeo_report, va_report
