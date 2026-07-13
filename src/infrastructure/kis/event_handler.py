@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Packet handling event logic for KIS WebSocket.
-Moves on_result logic out of main.py to solve circular dependencies.
-"""
+"""Packet handling infrastructure for KIS WebSocket events."""
 import logging
 from collections import OrderedDict
 from datetime import datetime

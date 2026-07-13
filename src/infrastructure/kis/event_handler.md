@@ -1,9 +1,9 @@
-# KIS Event Handler (`src/broker/kis_event_handler.py`)
+# KIS Event Handler (`src/infrastructure/kis/event_handler.py`)
 
 이 모듈은 KIS WebSocket으로부터 수신된 실시간 데이터를 처리하는 로직을 포함합니다.
 
 ## Purpose (목적)
-원래 `main.py`에 있던 로직을 분리하여 다음과 같은 목적을 달성했습니다:
+원래 `main.py`에 있던 로직을 infrastructure로 분리하여 다음 목적을 달성합니다:
 1.  **순환 참조 해결 (Resolve Circular Dependencies)**: 이벤트 처리 로직을 메인 애플리케이션 진입점과 분리합니다.
 2.  **모듈화 개선 (Improve Modularity)**: KIS 데이터 포맷 파싱을 위한 구체적인 로직을 캡슐화합니다.
 
@@ -23,7 +23,6 @@ KIS WebSocket 클라이언트가 메시지를 수신할 때마다 실행되는 �
     *   호가(Ask/Bid) 및 현재가(Price) 패킷을 파싱합니다.
     *   **Data Validation**: 손상된 패킷이나 비정상적인 값(비정상적으로 긴 종목 코드 등)을 감지하고 필터링합니다.
     *   수신한 WebSocket row만 사용해 `event_pipe`로 Event Viewer 로그를 포맷팅하여 전송합니다.
-    *   현재가 조회는 WebSocket 캐시가 아니라 `broker.market_data`의 Toss 우선 조회 경로를 사용합니다.
 
 2.  **Order Execution/Modifications (주문 체결/정정 - `H0STCNI0`, `H0GSCNI0`)**:
     *   체결 통보(접수, 정정, 취소, 체결, 거부)를 파싱합니다.

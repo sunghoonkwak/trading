@@ -23,7 +23,7 @@ vendor tree에 새 파일을 추가하지 않기 위해, `kis_auth.py`가 반드
 
 ### `mask_dict_for_log(data)`
 
-`broker.kis_event_handler`의 주문 통보 `FULL DUMP`처럼 이름이 붙은 dict 형태의 record에서
+`infrastructure.kis.event_handler`의 주문 통보 `FULL DUMP`처럼 이름이 붙은 dict 형태의 record에서
 동일한 민감 필드를 `********`로 치환합니다.
 
 ## Operational Notes (운영 메모)

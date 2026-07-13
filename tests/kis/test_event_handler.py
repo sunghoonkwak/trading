@@ -5,7 +5,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from broker import kis_event_handler
+from infrastructure.kis import event_handler as kis_event_handler
 
 
 def _domestic_execution_row(quantity="1", time="091500"):

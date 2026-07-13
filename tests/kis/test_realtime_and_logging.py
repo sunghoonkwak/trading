@@ -28,7 +28,7 @@ def _load_event_handler(monkeypatch):
 
     spec = importlib.util.spec_from_file_location(
         "event_handler_under_test",
-        SRC_DIR / "broker" / "kis_event_handler.py",
+        SRC_DIR / "infrastructure" / "kis" / "event_handler.py",
     )
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None

@@ -196,7 +196,7 @@ class TradingSystem:
             credentials_loader=self.load_telegram_credentials,
             add_alert=display.add_alert,
         ):
-            from broker.kis_event_handler import (
+            from infrastructure.kis.event_handler import (
                 configure_notification_sender as configure_kis_event_notification_sender,
             )
             from infrastructure.kis.vendor_callbacks import (
@@ -315,7 +315,7 @@ class TradingSystem:
                 if status is not None:
                     update_kis_state(thread_status=status)
 
-            from broker.kis_event_handler import on_result
+            from infrastructure.kis.event_handler import on_result
 
             configure_subscription_provider(
                 domestic_enabled=trading_config.is_kis_domestic_enabled,

@@ -82,7 +82,7 @@ files = [
     "src/broker/order_admin.py",
     "src/broker/kis_worker.py",
     "src/broker/kis_ws_manager.py",
-    "src/broker/kis_event_handler.py",
+    "src/infrastructure/kis/event_handler.py",
     "src/broker/kis_portfolio.py",
     "src/broker/kis_logger.py",
     "src/state/__init__.py",
