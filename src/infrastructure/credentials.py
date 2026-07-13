@@ -10,7 +10,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from core.constants import CONFIG_ROOT
+from infrastructure.runtime_settings import CONFIG_ROOT
 
 DEFAULT_CONFIG_ROOT = Path(CONFIG_ROOT)
 PASSWORD_FILE = "password.txt"

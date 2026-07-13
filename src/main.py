@@ -24,10 +24,10 @@ except ImportError:
 
 from application.runtime_service import RuntimeCommandResult, RuntimeController
 from core import display, event_pipe
-from core.constants import CONFIG_ROOT
 from infrastructure import lock_manager
 from infrastructure import trading_configuration as trading_config
 from infrastructure.logger import LogManager
+from infrastructure.runtime_settings import CONFIG_ROOT
 
 
 class TradingSystem:
@@ -473,8 +473,8 @@ class TradingSystem:
         print("[Startup] Step 4: Starting Scheduler Service...")
         try:
             from application.strategy_execution import get_strategy_run_service
-            from core.constants import DEFAULT_USD_KRW_EXCHANGE_RATE
             from infrastructure import market_signals
+            from infrastructure.runtime_settings import DEFAULT_USD_KRW_EXCHANGE_RATE
             from interfaces.scheduler.order_runner import SchedulerOrderRunner
             from interfaces.scheduler.portfolio_runner import (
                 SchedulerPortfolioRunner,
@@ -510,12 +510,16 @@ class TradingSystem:
             print("[Startup] - Web Event Viewer already started")
             return
         print("[Startup] Step 5: Starting Web Event Viewer...")
-        from core.constants import DEFAULT_HOST, DEFAULT_USD_KRW_EXCHANGE_RATE, DEFAULT_WEB_PORT
+        from infrastructure.runtime_settings import (
+            DEFAULT_HOST,
+            DEFAULT_USD_KRW_EXCHANGE_RATE,
+            DEFAULT_WEB_PORT,
+        )
         try:
             from core import event_pipe
-            from core.constants import ENV_TRUE_VALUES
             from infrastructure import market_signals, order_admin
             from infrastructure.config import ConfigFile, load_json, save_json
+            from infrastructure.runtime_settings import ENV_TRUE_VALUES
             from interfaces.scheduler.portfolio_runner import (
                 SchedulerPortfolioRunner,
                 SchedulerReportDependencies,

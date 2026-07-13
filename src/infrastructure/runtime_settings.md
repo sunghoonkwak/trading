@@ -1,4 +1,4 @@
-# Core Constants (`src/core/constants.py`)
+# Runtime Settings (`src/infrastructure/runtime_settings.py`)
 
 애플리케이션 공통 런타임 기본값을 관리하는 모듈입니다. 도메인별 계약값은 각 패키지의 constants 모듈이 소유합니다.
 
@@ -20,7 +20,7 @@
 ## Usage Example (사용 예시)
 
 ```python
-from core.constants import CONFIG_ROOT
+from infrastructure.runtime_settings import CONFIG_ROOT
 
 config_path = os.path.join(CONFIG_ROOT, "strategy_config.json")
 ```

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Global Constants Module
+Runtime Settings Adapter
 
 Application-wide runtime defaults shared across packages.
 """

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from core.constants import ENV_FALSE_VALUES, ENV_TRUE_VALUES
+from infrastructure.runtime_settings import ENV_FALSE_VALUES, ENV_TRUE_VALUES
 
 STOCK_CONFIGURATION_PATH = Path(__file__).resolve().parent / "stock_configuration.json"
 

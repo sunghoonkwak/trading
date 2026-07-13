@@ -6,7 +6,7 @@ import os
 from enum import Enum
 from typing import Any, Dict, Union
 
-from core.constants import CONFIG_ROOT
+from infrastructure.runtime_settings import CONFIG_ROOT
 
 
 class ConfigFile(Enum):

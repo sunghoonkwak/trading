@@ -4,7 +4,7 @@
 from functools import wraps
 from typing import Any, cast
 
-from core.constants import API_TIMEOUT_SHORT
+from infrastructure.runtime_settings import API_TIMEOUT_SHORT
 
 
 def install_requests_default_timeout(
