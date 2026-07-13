@@ -10,8 +10,8 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from broker import kis_broker
 from domain.strategy.base import OrderSide, StrategyOrder
+from infrastructure.kis import broker as kis_broker
 
 
 class _FakeTREnv:

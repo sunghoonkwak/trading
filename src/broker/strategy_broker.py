@@ -39,7 +39,7 @@ def get_orderable_usd(symbol: str, order_price: float) -> float:
 
         return toss_broker.get_orderable_usd(symbol, order_price)
 
-    from broker import kis_broker
+    from infrastructure.kis import broker as kis_broker
 
     return kis_broker.get_orderable_usd(symbol, order_price)
 
@@ -52,6 +52,6 @@ def place_order(order: StrategyOrder) -> Tuple[bool, str]:
 
         return toss_broker.place_order(order)
 
-    from broker import kis_broker
+    from infrastructure.kis import broker as kis_broker
 
     return kis_broker.place_overseas_order(order)

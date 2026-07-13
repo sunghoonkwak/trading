@@ -161,12 +161,12 @@ def test_strategy_modules_do_not_import_kis_infrastructure_constants():
     assert offenders == []
 
 
-def test_broker_package_import_does_not_touch_kis_config(tmp_path):
+def test_kis_broker_adapter_import_does_not_touch_kis_config(tmp_path):
     result = _run_import_check(
         tmp_path,
         """
 import pathlib
-import broker.kis_broker
+import infrastructure.kis.broker
 assert not (pathlib.Path.home() / "KIS_config").exists()
 """,
     )
@@ -380,6 +380,10 @@ def test_retired_toss_prefixed_adapter_modules_are_removed():
         assert not (SRC_DIR / relative_path).exists()
 
 
+def test_retired_kis_broker_compatibility_module_is_removed():
+    assert not (SRC_DIR / "broker/kis_broker.py").exists()
+
+
 def test_no_active_python_consumer_uses_retired_toss_broker_modules():
     roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
     consumers = []
@@ -394,6 +398,20 @@ def test_no_active_python_consumer_uses_retired_toss_broker_modules():
                 or "from broker import toss_broker" in source
                 or "from broker import toss_portfolio" in source
             ):
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
+
+
+def test_no_active_python_consumer_uses_retired_kis_broker_module():
+    roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
+    consumers = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            source = path.read_text(encoding="utf-8")
+            if "broker.kis_broker" in source or "from broker import kis_broker" in source:
                 consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
 
     assert consumers == []

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Application-owned facade for KIS trading operations."""
+"""KIS adapter for strategy trading operations."""
 
 import logging
 from typing import Tuple
@@ -131,5 +131,5 @@ def place_overseas_order(order: StrategyOrder) -> Tuple[bool, str]:
         )
         logging.error(error_msg)
         return False, error_msg
-    except Exception as e:
-        return False, str(e)
+    except Exception as exc:
+        return False, str(exc)
