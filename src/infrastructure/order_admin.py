@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Application-owned runtime for open-order administration."""
+"""Infrastructure adapter for cross-broker open-order administration."""
 
 import logging
 from datetime import datetime

@@ -20,7 +20,7 @@ class _FakeTREnv:
 
 
 def _sync_order(monkeypatch, order_row):
-    from broker import order_admin
+    from infrastructure import order_admin
 
     captured = {}
 
@@ -179,7 +179,7 @@ def test_place_overseas_order_rejects_unknown_order_type(monkeypatch):
 
 
 def test_order_admin_fetches_open_orders_without_domestic_by_default(monkeypatch):
-    from broker import order_admin
+    from infrastructure import order_admin
 
     calls = {}
 
@@ -220,7 +220,7 @@ def test_order_admin_fetches_open_orders_without_domestic_by_default(monkeypatch
 
 
 def test_order_admin_skips_kis_open_orders_when_rest_api_disabled(monkeypatch):
-    from broker import order_admin
+    from infrastructure import order_admin
 
     monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
     monkeypatch.setattr(
@@ -250,7 +250,7 @@ def test_order_admin_skips_kis_open_orders_when_rest_api_disabled(monkeypatch):
 
 
 def test_order_admin_blocks_kis_cancel_when_rest_api_disabled(monkeypatch):
-    from broker import order_admin
+    from infrastructure import order_admin
 
     monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
     monkeypatch.setattr(
@@ -272,7 +272,7 @@ def test_order_admin_blocks_kis_cancel_when_rest_api_disabled(monkeypatch):
 
 
 def test_order_admin_allows_toss_cancel_when_kis_rest_api_disabled(monkeypatch):
-    from broker import order_admin
+    from infrastructure import order_admin
 
     calls = {}
     monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
@@ -301,7 +301,7 @@ def test_order_admin_allows_toss_cancel_when_kis_rest_api_disabled(monkeypatch):
 
 
 def test_order_admin_fetches_domestic_open_orders_when_enabled(monkeypatch):
-    from broker import order_admin
+    from infrastructure import order_admin
 
     calls = {}
 
@@ -336,7 +336,7 @@ def test_order_admin_fetches_domestic_open_orders_when_enabled(monkeypatch):
 
 
 def test_order_admin_fetches_open_orders_from_toss(monkeypatch):
-    from broker import order_admin
+    from infrastructure import order_admin
 
     monkeypatch.setattr(
         order_admin,
@@ -388,7 +388,7 @@ def test_toss_order_time(monkeypatch):
 
 
 def test_kis_order_time():
-    from broker import order_admin
+    from infrastructure import order_admin
 
     assert order_admin._format_order_for_display(
         "US",
@@ -412,7 +412,7 @@ def test_kis_order_time():
 
 
 def test_order_admin_executes_toss_cancel_through_toss_endpoint(monkeypatch):
-    from broker import order_admin
+    from infrastructure import order_admin
 
     calls = {}
 
@@ -438,7 +438,7 @@ def test_order_admin_executes_toss_cancel_through_toss_endpoint(monkeypatch):
 
 
 def test_order_admin_executes_overseas_cancel_through_kis_endpoint(monkeypatch):
-    from broker import order_admin
+    from infrastructure import order_admin
 
     calls = {}
 
@@ -480,7 +480,7 @@ def test_order_admin_executes_overseas_cancel_through_kis_endpoint(monkeypatch):
 
 
 def test_order_admin_executes_domestic_cancel_through_kis_endpoint(monkeypatch):
-    from broker import order_admin
+    from infrastructure import order_admin
 
     calls = {}
 

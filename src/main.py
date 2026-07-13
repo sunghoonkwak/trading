@@ -135,9 +135,10 @@ class TradingSystem:
             prepare_raoeo_cash_funding,
             save_raoeo_cash_funding_result,
         )
-        from broker import market_data, order_admin
+        from broker import market_data
         from data.calculate_weights import get_cash_weight
         from data.config_manager import ConfigFile, load_json, save_json
+        from infrastructure import order_admin
         from infrastructure.portfolio import refresh_gsheet_cache
         from infrastructure.portfolio.weight_diffs import (
             WeightDiffDependencies,
@@ -410,7 +411,7 @@ class TradingSystem:
                 return False
             print("[Startup] ✓ KIS fully initialized")
 
-            from broker.order_admin import sync_open_orders
+            from infrastructure.order_admin import sync_open_orders
             sync_open_orders()
             print("[Startup] ✓ Orders synced")
             return True
@@ -486,10 +487,10 @@ class TradingSystem:
         print("[Startup] Step 5: Starting Web Event Viewer...")
         from core.constants import DEFAULT_HOST, DEFAULT_USD_KRW_EXCHANGE_RATE, DEFAULT_WEB_PORT
         try:
-            from broker import order_admin
             from core import event_pipe
             from core.constants import ENV_TRUE_VALUES
             from data.config_manager import ConfigFile, load_json, save_json
+            from infrastructure import order_admin
             from interfaces.scheduler.portfolio_runner import (
                 SchedulerPortfolioRunner,
                 SchedulerReportDependencies,

@@ -1,4 +1,4 @@
-# Order Admin (`src/broker/order_admin.py`)
+# Order Admin (`src/infrastructure/order_admin.py`)
 
 이 모듈은 앱 소유 영역에서 미체결 주문 조회와 주문 관리 액션 런타임을
 제공합니다.
@@ -38,6 +38,7 @@ KIS 해외 helper에서 각각 변환합니다. Toss는 국내/해외 시장 구
 ## Import Boundary
 
 공식 KIS auth와 endpoint wrapper, Toss 주문 조회 helper는 함수 호출
-시점에 lazy-load합니다. 웹 서버와 텔레그램 명령은 `broker.order_admin`만
+시점에 lazy-load합니다. 웹 서버와 텔레그램 명령은
+`infrastructure.order_admin`만
 호출하고, 주문 관리 정책과 화면 동기화는 KIS vendor tree 바깥의 앱 소유
 영역에 둡니다.
