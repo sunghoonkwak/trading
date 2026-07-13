@@ -105,7 +105,11 @@ class StrategyExecutionRuntime:
     def run_rebalancing(
         self, *, execute: bool = False, **kwargs: Any
     ) -> Dict[str, Any]:
-        return run_rebalancing_strategy(execute=execute, **kwargs)
+        return _run_rebalancing_strategy(
+            dependencies=self.dependencies,
+            execute=execute,
+            orderable_cache_key=kwargs.get("orderable_cache_key", ""),
+        )
 
     def run_suite(self, *, execute: bool = False) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         return run_strategy_suite(execute=execute)
@@ -257,6 +261,21 @@ def _get_rebalancing_orderable_usd(
     if cache_key not in cache:
         cache.clear()
         cache[cache_key] = get_orderable_usd(symbol, order_price)
+    return cache[cache_key]
+
+
+def _get_runtime_rebalancing_orderable_usd(
+    dependencies: StrategyExecutionDependencies,
+    symbol: str,
+    order_price: float,
+    cache_key: str = "",
+) -> float:
+    if not cache_key:
+        return dependencies.get_orderable_usd(symbol, order_price)
+    cache = dependencies.orderable_usd_cache
+    if cache_key not in cache:
+        cache.clear()
+        cache[cache_key] = dependencies.get_orderable_usd(symbol, order_price)
     return cache[cache_key]
 
 
@@ -1162,20 +1181,33 @@ def run_strategy_suite(
 # Rebalancing Execution
 # -------------------------------------------------------------------------
 
-def run_rebalancing_strategy(
+def _run_rebalancing_strategy(
+    *,
+    dependencies: StrategyExecutionDependencies,
     execute: bool = False,
     orderable_cache_key: str = "",
+    history_service: Optional[StrategyHistoryService] = None,
+    market_data_service: Optional[Any] = None,
+    get_orderable_usd_port: Optional[Callable[[str, float], float]] = None,
 ) -> Dict[str, Any]:
     """
     Run Rebalancing strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = _require_dependencies().get_market_status(today_str)
+    market_status = dependencies.get_market_status(today_str)
     report = _build_base_report(today_str, market_status)
+    history_service = history_service or StrategyHistoryService(
+        load=dependencies.load_history,
+        save=dependencies.save_history,
+    )
+    order_report_service = OrderReportService(
+        execute_order=dependencies.execute_order,
+        sleep=time.sleep,
+    )
 
     try:
         # Step 1: Check enabled
-        strategy_config = _require_dependencies().load_strategy_config()
+        strategy_config = dependencies.load_strategy_config()
         reb_conf = strategy_config.get('rebalancing', {})
 
         if not reb_conf.get('enabled', False):
@@ -1185,7 +1217,7 @@ def run_rebalancing_strategy(
         # Step 2: Market status (already determined)
 
         # Step 3: Check today's history
-        hist_data = _load_history()
+        hist_data = history_service.load_history()
         today_entry = _get_today_entry(hist_data, today_str)
         reb_hist = today_entry.get("rebalancing") if today_entry else None
 
@@ -1199,7 +1231,10 @@ def run_rebalancing_strategy(
             return report
 
         # Load market data (portfolio + prices)
-        holdings, prices = get_market_data(force_refresh=True)
+        market_data_service = market_data_service or StrategyExecutionRuntime(
+            dependencies
+        ).market_data_service()
+        holdings, prices = market_data_service.get_market_data(force_refresh=True)
 
         # RAOEO budget reservation
         raoeo_daily_total = _calculate_raoeo_reserved_cash(strategy_config)
@@ -1209,10 +1244,15 @@ def run_rebalancing_strategy(
             prices,
         )
         orderable_usd = (
-            _get_rebalancing_orderable_usd(
-                reference_asset,
-                reference_price,
-                cache_key=orderable_cache_key,
+            (
+                _get_runtime_rebalancing_orderable_usd(
+                    dependencies,
+                    reference_asset,
+                    reference_price,
+                    cache_key=orderable_cache_key,
+                )
+                if get_orderable_usd_port is None
+                else get_orderable_usd_port(reference_asset, reference_price)
             )
             if reference_asset and reference_price > 0
             else 0.0
@@ -1244,13 +1284,20 @@ def run_rebalancing_strategy(
             report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
-        results = _execute_orders(orders, sell_first=True, sell_wait_seconds=60)
+        results = _execute_orders(
+            orders,
+            sell_first=True,
+            sell_wait_seconds=60,
+            order_report_service=order_report_service,
+        )
         _apply_execution_results(report, orders, results)
 
         # Save history
         save_data = _build_strategy_history_data(report, "rebalancing",
             extra_fields={"context": _rebalancing_history_context(calc_info)})
-        _save_strategy_to_history(today_str, "rebalancing", save_data)
+        _save_strategy_to_history(
+            today_str, "rebalancing", save_data, history_service=history_service
+        )
 
     except requests.exceptions.Timeout as e:
         logging.error(f"[API Timeout] Rebalancing Service Timeout Error: {e}", exc_info=True)
@@ -1262,3 +1309,22 @@ def run_rebalancing_strategy(
         report["error"] = str(e)
 
     return report
+
+
+def run_rebalancing_strategy(
+    execute: bool = False,
+    orderable_cache_key: str = "",
+) -> Dict[str, Any]:
+    """Compatibility entry point for callers not yet composed with a runtime."""
+    dependencies = _require_dependencies()
+    return _run_rebalancing_strategy(
+        dependencies=dependencies,
+        execute=execute,
+        orderable_cache_key=orderable_cache_key,
+        history_service=StrategyHistoryService(
+            load=_load_history,
+            save=dependencies.save_history,
+        ),
+        market_data_service=_build_strategy_run_context(),
+        get_orderable_usd_port=get_orderable_usd,
+    )
