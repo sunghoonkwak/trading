@@ -537,6 +537,7 @@ class TradingSystem:
             DEFAULT_WEB_PORT,
         )
         try:
+            from application.order_report_service import OrderManagementService
             from infrastructure import market_signals, order_admin
             from infrastructure.config import ConfigFile, load_json, save_json
             from infrastructure.runtime_settings import ENV_TRUE_VALUES
@@ -563,9 +564,11 @@ class TradingSystem:
                     load_memos=lambda: load_json(ConfigFile.MEMO, default={}),
                     save_memos=lambda memos: save_json(ConfigFile.MEMO, memos),
                     portfolio_reader=portfolio_reader,
-                    sync_open_orders=order_admin.sync_open_orders,
-                    fetch_open_orders=order_admin.fetch_open_orders,
-                    execute_manage_action=order_admin.execute_manage_action,
+                    order_service=OrderManagementService(
+                        sync_open_orders=order_admin.sync_open_orders,
+                        fetch_open_orders=order_admin.fetch_open_orders,
+                        execute_manage_action=order_admin.execute_manage_action,
+                    ),
                     run_portfolio_report=portfolio_runner.run_daily_portfolio_report,
                     run_order_report=self._run_manual_order_report,
                     env_flag=lambda name, default=False: os.environ.get(name, "").strip().lower()

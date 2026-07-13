@@ -8,6 +8,35 @@ from application.ports import StrategyOrderExecutor
 from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
 
 
+class OrderManagementService:
+    """Application facade for channel-neutral open-order controls."""
+
+    def __init__(
+        self,
+        *,
+        sync_open_orders: Callable[[], bool],
+        fetch_open_orders: Callable[[], tuple[Any, int, int, int | None]],
+        execute_manage_action: Callable[[str, str, Any, Any], tuple[Any, str | None]],
+    ) -> None:
+        self._sync_open_orders = sync_open_orders
+        self._fetch_open_orders = fetch_open_orders
+        self._execute_manage_action = execute_manage_action
+
+    def sync_open_orders(self) -> bool:
+        """Synchronize the established cross-broker open-order view."""
+        return self._sync_open_orders()
+
+    def fetch_open_orders(self) -> tuple[Any, int, int, int | None]:
+        """Return the established cross-broker open-order report data."""
+        return self._fetch_open_orders()
+
+    def execute_manage_action(
+        self, market: str, action_type: str, order_data: Any, new_price: Any
+    ) -> tuple[Any, str | None]:
+        """Submit one explicit cancel or correction action."""
+        return self._execute_manage_action(market, action_type, order_data, new_price)
+
+
 class OrderReportService:
     """Execute one domain order through an injected order port."""
 
@@ -16,9 +45,11 @@ class OrderReportService:
         *,
         execute_order: Callable[[StrategyOrder], tuple[bool, str]] | StrategyOrderExecutor,
         sleep: Callable[[int], None] | None = None,
+        reconcile_order: Callable[[str], bool] | None = None,
     ) -> None:
         self._execute_order = execute_order
         self._sleep = sleep
+        self._reconcile_order = reconcile_order
 
     def execute(self, order: StrategyOrder) -> dict[str, Any]:
         """Return channel-neutral execution result data."""
@@ -29,11 +60,18 @@ class OrderReportService:
         else:
             success, message = self._execute_order.execute(order)
         ambiguous = message.startswith("[AMBIGUOUS]")
+        reconciled = False
+        if ambiguous and self._reconcile_order is not None:
+            reconciled = self._reconcile_order(order.correlation_id)
+            if reconciled:
+                success = True
+                ambiguous = False
         return {
             "order": order,
             "success": success,
             "message": message,
             "ambiguous": ambiguous,
+            "reconciled": reconciled,
             "correlation_id": order.correlation_id,
         }
 

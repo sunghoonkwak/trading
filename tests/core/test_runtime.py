@@ -234,6 +234,7 @@ from fastapi import BackgroundTasks
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from application.order_report_service import OrderManagementService
 from interfaces.web import server as web_server
 
 
@@ -255,9 +256,11 @@ def web_dependencies(monkeypatch):
             load_memos=lambda: {},
             save_memos=lambda _memos: True,
             portfolio_reader=SimpleNamespace(get_portfolio_data=lambda: {}),
-            sync_open_orders=lambda: web_server.order_admin.sync_open_orders(),
-            fetch_open_orders=lambda: web_server.order_admin.fetch_open_orders(),
-            execute_manage_action=lambda *args: web_server.order_admin.execute_manage_action(*args),
+            order_service=OrderManagementService(
+                sync_open_orders=lambda: web_server.order_admin.sync_open_orders(),
+                fetch_open_orders=lambda: web_server.order_admin.fetch_open_orders(),
+                execute_manage_action=lambda *args: web_server.order_admin.execute_manage_action(*args),
+            ),
             run_portfolio_report=lambda _reader: None,
             run_order_report=lambda: None,
             env_flag=lambda name, default=False: os.environ.get(name, "").lower()
@@ -293,9 +296,11 @@ def test_web_factory_keeps_independent_compositions():
                 load_memos=lambda: {},
                 save_memos=lambda _memos: True,
                 portfolio_reader=SimpleNamespace(get_portfolio_data=lambda: {}),
-                sync_open_orders=lambda: None,
-                fetch_open_orders=lambda: (pd.DataFrame(), 0, 0, 0),
-                execute_manage_action=lambda *_args: (pd.DataFrame(), None),
+                order_service=OrderManagementService(
+                    sync_open_orders=lambda: True,
+                    fetch_open_orders=lambda: (pd.DataFrame(), 0, 0, 0),
+                    execute_manage_action=lambda *_args: (pd.DataFrame(), None),
+                ),
                 run_portfolio_report=lambda _reader: None,
                 run_order_report=lambda: None,
                 env_flag=lambda _name, default=False: default,

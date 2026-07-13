@@ -18,6 +18,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from application.order_report_service import OrderManagementService
+
 
 @dataclass(frozen=True)
 class WebDependencies:
@@ -28,9 +30,7 @@ class WebDependencies:
     load_memos: Callable[[], dict[str, list[str]]]
     save_memos: Callable[[dict[str, list[str]]], bool]
     portfolio_reader: Any
-    sync_open_orders: Callable[[], None]
-    fetch_open_orders: Callable[[], tuple[Any, Any, Any, Any]]
-    execute_manage_action: Callable[[str, str, Any, Any], tuple[Any, str]]
+    order_service: OrderManagementService
     run_portfolio_report: Callable[[Any], None]
     run_order_report: Callable[[], None]
     env_flag: Callable[[str, bool], bool]
@@ -361,7 +361,9 @@ async def _sync_orders_for_client():
         return _runtime_off_response()
 
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _require_dependencies().sync_open_orders)
+    await loop.run_in_executor(
+        None, _require_dependencies().order_service.sync_open_orders
+    )
     return {"success": True}
 
 
@@ -441,7 +443,7 @@ def _cancel_order_sync(order_id: str):
         return ""
 
     try:
-        df, _, _, _ = _require_dependencies().fetch_open_orders()
+        df, _, _, _ = _require_dependencies().order_service.fetch_open_orders()
         if df.empty:
             logging.warning(
                 "[WebServer] cancel requested for %s but no open orders were returned",
@@ -475,7 +477,7 @@ def _cancel_order_sync(order_id: str):
         )
 
         # Execute cancellation (action_type='2' means cancel)
-        df_res, err_msg = _require_dependencies().execute_manage_action(
+        df_res, err_msg = _require_dependencies().order_service.execute_manage_action(
             str(market or "US"), '2', target_order, None
         )
 

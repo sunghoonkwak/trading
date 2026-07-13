@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from application.order_report_service import OrderReportService
+from application.order_report_service import OrderManagementService, OrderReportService
 from application.strategy_run_service import (
     StrategyHistoryService,
     StrategyMarketDataService,
@@ -97,6 +97,39 @@ def test_order_report_service_assigns_correlation_id_to_ambiguous_outcome():
     assert result["ambiguous"] is True
     assert result["correlation_id"]
     assert order.correlation_id == result["correlation_id"]
+
+
+def test_order_report_service_reconciles_ambiguous_order_without_resubmitting():
+    order = StrategyOrder("SOXL", OrderSide.BUY, 1, 10.0)
+    calls = []
+    service = OrderReportService(
+        execute_order=lambda received: calls.append(received) or (False, "[AMBIGUOUS] timeout"),
+        reconcile_order=lambda correlation_id: calls.append(correlation_id) or True,
+    )
+
+    result = service.execute(order)
+
+    assert result["success"] is True
+    assert result["ambiguous"] is False
+    assert result["reconciled"] is True
+    assert calls == [order, order.correlation_id]
+
+
+def test_order_management_service_delegates_control_operations():
+    calls = []
+    service = OrderManagementService(
+        sync_open_orders=lambda: calls.append("sync") or True,
+        fetch_open_orders=lambda: ("orders", 1, 2, 3),
+        execute_manage_action=lambda *args: calls.append(args) or ("result", None),
+    )
+
+    assert service.sync_open_orders() is True
+    assert service.fetch_open_orders() == ("orders", 1, 2, 3)
+    assert service.execute_manage_action("TOSS", "2", {"id": "1"}, None) == (
+        "result",
+        None,
+    )
+    assert calls == ["sync", ("TOSS", "2", {"id": "1"}, None)]
 
 
 def test_application_execution_exposes_application_use_case_facade(monkeypatch):
