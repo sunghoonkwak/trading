@@ -116,6 +116,9 @@ class TradingSystem:
         from data.calculate_weights import get_cash_weight
         from data.config_manager import ConfigFile, load_json, save_json
         from infrastructure.portfolio import refresh_gsheet_cache
+        from infrastructure.portfolio.kis_source import (
+            configure_alert_publisher as configure_kis_portfolio_alert_publisher,
+        )
         from infrastructure.portfolio.weight_diffs import (
             WeightDiffDependencies,
             get_weight_diffs,
@@ -128,6 +131,7 @@ class TradingSystem:
         from utils.market_utils import get_fear_and_greed
 
         self._configure_strategy_execution_service()
+        configure_kis_portfolio_alert_publisher(display.add_alert)
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram(
             portfolio_dependencies=PortfolioCommandDependencies(

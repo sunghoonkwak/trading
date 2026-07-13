@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Application-owned facade for KIS portfolio retrieval."""
 import logging
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Callable, Dict, List, Optional, TypedDict
 
 import pandas as pd
 
@@ -31,6 +31,26 @@ class _OverseasAccountResult(TypedDict):
     exchange_rate: float
     usd_orderable: Optional[float]
     error: Optional[str]
+
+
+_alert_publisher: Optional[Callable[[str, str], None]] = None
+
+
+def configure_alert_publisher(
+    publisher: Optional[Callable[[str, str], None]],
+) -> None:
+    """Inject KIS portfolio alert delivery at composition time."""
+    global _alert_publisher
+    _alert_publisher = publisher
+
+
+def _publish_alert(message: str, level: str) -> None:
+    if _alert_publisher is None:
+        return
+    try:
+        _alert_publisher(message, level)
+    except Exception as error:
+        logging.warning("[KIS] Portfolio alert publication failed: %s", error)
 
 
 class KisPortfolioSourceAdapter:
@@ -338,17 +358,15 @@ def _empty_source():
 
 def fetch_kis_portfolio_source():
     """Fetch KIS holdings and convert them to the standard source format."""
-    from core.display import add_alert
-
-    add_alert("[KIS] Fetching KIS API data...", "INFO")
+    _publish_alert("[KIS] Fetching KIS API data...", "INFO")
     kis_raw_data = KisPortfolioSourceAdapter._fetch_kis_account_data()
 
     if kis_raw_data.get("error"):
-        add_alert(f"KIS Error: {kis_raw_data['error']}", "WARN")
+        _publish_alert(f"KIS Error: {kis_raw_data['error']}", "WARN")
         return _empty_source(), kis_raw_data
 
     kis_portfolio = KisPortfolioSourceAdapter._convert_kis_to_standard(kis_raw_data)
-    add_alert(
+    _publish_alert(
         f"[KIS] {len(kis_portfolio.get('holdings', []))} holdings loaded",
         "SUCCESS",
     )

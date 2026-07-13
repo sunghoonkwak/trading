@@ -6,3 +6,7 @@ the existing fail-safe empty-source result when KIS reports an error.
 
 `broker.kis_portfolio` remains a forwarding-only compatibility export for
 external callers and tests while its remaining consumers migrate.
+
+Local KIS portfolio alerts are supplied by the composition root through
+`configure_alert_publisher()`. Publication is best-effort and cannot change a
+portfolio retrieval result.
