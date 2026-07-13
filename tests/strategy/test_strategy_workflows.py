@@ -16,15 +16,25 @@ def test_strategy_execution_composition_uses_injected_portfolio_factory(monkeypa
 
     captured = {}
     portfolio_factory = lambda: object()
+    dependencies = StrategyExecutionDependencies(
+        load_strategy_config=lambda: {},
+        load_history=lambda: [],
+        save_history=lambda _history: True,
+        fetch_prices=lambda _tickers: {},
+        strategy_broker_name=lambda: "kis",
+        get_orderable_usd=lambda _symbol, _price: 0.0,
+        execute_order=lambda _order: (True, "Success"),
+        portfolio_reader_factory=portfolio_factory,
+    )
     monkeypatch.setattr(
         composition,
         "configure_strategy_execution",
         lambda dependencies: captured.setdefault("dependencies", dependencies),
     )
 
-    composition.configure_strategy_execution_service(portfolio_factory)
+    composition.configure_strategy_execution_service(dependencies)
 
-    assert captured["dependencies"].portfolio_reader_factory is portfolio_factory
+    assert captured["dependencies"] is dependencies
 from domain.strategy import raoeo, rebalancing
 from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
 from domain.strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC

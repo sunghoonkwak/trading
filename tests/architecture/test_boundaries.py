@@ -252,6 +252,14 @@ def test_portfolio_integration_uses_kis_source_adapter():
     assert "broker.kis_portfolio" not in imports
 
 
+def test_strategy_execution_composition_uses_injected_dependencies():
+    imports = _imports_in(SRC_DIR / "infrastructure/strategy_execution.py")
+
+    assert "broker.market_data" not in imports
+    assert "broker.strategy_broker" not in imports
+    assert "data.config_manager" not in imports
+
+
 def test_market_utils_status_api_uses_market_open_contract(tmp_path):
     result = _run_import_check(
         tmp_path,

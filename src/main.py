@@ -79,6 +79,28 @@ class TradingSystem:
             )
         )
 
+    def _configure_strategy_execution_service(self):
+        """Compose strategy execution collaborators from runtime adapters."""
+        from application.strategy_execution import StrategyExecutionDependencies
+        from broker import market_data, strategy_broker
+        from data.config_manager import ConfigFile, load_json, save_json
+        from infrastructure.strategy_execution import configure_strategy_execution_service
+
+        configure_strategy_execution_service(
+            StrategyExecutionDependencies(
+                load_strategy_config=lambda: load_json(
+                    ConfigFile.STRATEGY_CONFIG, default={}
+                ),
+                load_history=lambda: load_json(ConfigFile.STRATEGY_HISTORY, default=[]),
+                save_history=lambda history: save_json(ConfigFile.STRATEGY_HISTORY, history),
+                fetch_prices=market_data.fetch_prices,
+                strategy_broker_name=strategy_broker.get_strategy_broker_name,
+                get_orderable_usd=strategy_broker.get_orderable_usd,
+                execute_order=strategy_broker.place_order,
+                portfolio_reader_factory=self._build_portfolio_service,
+            )
+        )
+
     def initialize_telegram(self):
         """Initializes the Telegram bot thread."""
         print("[Startup] Step 1: Initializing Telegram Bot...")
@@ -98,7 +120,6 @@ class TradingSystem:
             WeightDiffDependencies,
             get_weight_diffs,
         )
-        from infrastructure.strategy_execution import configure_strategy_execution_service
         from interfaces.telegram.bot import initialize_telegram
         from interfaces.telegram.memo import MemoStore
         from interfaces.telegram.portfolio import PortfolioCommandDependencies
@@ -106,7 +127,7 @@ class TradingSystem:
         from state.system_state import ThreadStatus, update_telegram_state
         from utils.market_utils import get_fear_and_greed
 
-        configure_strategy_execution_service(self._build_portfolio_service)
+        self._configure_strategy_execution_service()
         update_telegram_state(thread_status=ThreadStatus.STARTING)
         if initialize_telegram(
             portfolio_dependencies=PortfolioCommandDependencies(
@@ -292,7 +313,6 @@ class TradingSystem:
         try:
             from application.strategy_execution import get_strategy_run_service
             from core.constants import DEFAULT_USD_KRW_EXCHANGE_RATE
-            from infrastructure.strategy_execution import configure_strategy_execution_service
             from interfaces.scheduler.order_runner import SchedulerOrderRunner
             from interfaces.scheduler.portfolio_runner import (
                 SchedulerPortfolioRunner,
@@ -301,7 +321,7 @@ class TradingSystem:
             from interfaces.scheduler.runner import SchedulerRunner
             from interfaces.telegram.utils import send_notification
 
-            configure_strategy_execution_service(self._build_portfolio_service)
+            self._configure_strategy_execution_service()
             self._scheduler_runner = SchedulerRunner(
                 portfolio_reader=self._build_portfolio_service(),
                 order_runner=SchedulerOrderRunner(
