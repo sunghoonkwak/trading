@@ -149,7 +149,7 @@ class TradingSystem:
             save_raoeo_cash_funding_result,
         )
         from domain.portfolio.weights import get_cash_weight
-        from infrastructure import market_data, order_admin
+        from infrastructure import market_data, order_admin, stock_configuration
         from infrastructure.config import ConfigFile, load_json, save_json
         from infrastructure.portfolio import refresh_gsheet_cache
         from infrastructure.portfolio.weight_diffs import (
@@ -186,6 +186,7 @@ class TradingSystem:
                     ),
                 ),
                 refresh_gsheet_cache=refresh_gsheet_cache,
+                load_stock_configuration=stock_configuration.load_stock_configuration,
             ),
             strategy_dependencies=StrategyCommandDependencies(
                 strategy_run_service=get_strategy_run_service(),

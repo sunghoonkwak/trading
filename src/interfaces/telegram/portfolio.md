@@ -51,6 +51,8 @@ GSheet source 캐시만 갱신하고 성공/경고 요약을 응답합니다. �
   source만 `infrastructure.portfolio.integration`에서 메모리 캐시합니다.
 - **Dependency Ownership**: 차단형 의존성 호출을 포함한 모든 명령은 handler
   인스턴스가 보유한 collaborators를 직접 사용하므로, 별도 Telegram factory
-  composition끼리 의존성을 공유하지 않습니다.
+  composition끼리 의존성을 공유하지 않습니다. 종목 버튼 설정도 composition
+  root가 주입한 loader를 사용하므로 interface가 infrastructure를 import하지
+  않습니다.
 - **Exception Resilience**: 주요 명령 핸들러는 오류 발생 시 사용자에게 메시지를 보내고 `ConversationHandler.END` 또는 기존 상태를 반환해 대화 상태 꼬임을 줄입니다.
 - **Retry on Timeout**: `wrap_reply`/`wrap_edit`는 `TimedOut`/`NetworkError` 발생 시 최대 2회 재시도합니다 (1초 간격).

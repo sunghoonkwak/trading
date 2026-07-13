@@ -14,7 +14,7 @@ from telegram.warnings import PTBUserWarning
 
 warnings.filterwarnings("ignore", category=PTBUserWarning)
 import asyncio
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 from telegram import (
     CallbackQuery,
@@ -50,6 +50,7 @@ class PortfolioCommandDependencies:
     order_reader: OpenOrderReader
     get_weight_diffs: Any
     refresh_gsheet_cache: Any
+    load_stock_configuration: Callable[[], dict]
 
 
 async def _run_in_executor(func, *args):
@@ -273,7 +274,10 @@ def format_ticker_not_in_portfolio(
     return "\n".join(lines)
 
 
-def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
+def build_ticker_keyboard(
+    portfolio_data: dict,
+    load_stock_configuration: Callable[[], dict],
+) -> InlineKeyboardMarkup:
     """
     Build InlineKeyboard with tickers from stock_configuration.json
     where telegram_button is True.
@@ -284,8 +288,6 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
     Returns:
         InlineKeyboardMarkup with ticker buttons
     """
-    from infrastructure.stock_configuration import load_stock_configuration
-
     button_tickers = []
 
     try:
@@ -339,7 +341,9 @@ async def _cmd_portfolio(
         msg = format_portfolio_summary(data)
 
         # Build keyboard
-        keyboard = build_ticker_keyboard(data)
+        keyboard = build_ticker_keyboard(
+            data, dependencies.load_stock_configuration
+        )
 
         sent_msg = await wrap_reply(update, msg, parse_mode='HTML', reply_markup=keyboard)
         if sent_msg:
@@ -394,7 +398,9 @@ async def _handle_ticker_callback(
             detail_msg = format_ticker_not_in_portfolio(
                 ticker, portfolio_data, dependencies.market_reader
             )
-            keyboard = build_ticker_keyboard(portfolio_data)
+            keyboard = build_ticker_keyboard(
+                portfolio_data, dependencies.load_stock_configuration
+            )
             await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
             return SELECT_TICKER
 
@@ -405,7 +411,9 @@ async def _handle_ticker_callback(
         )
 
         # Edit message to show detail
-        keyboard = build_ticker_keyboard(portfolio_data)
+        keyboard = build_ticker_keyboard(
+            portfolio_data, dependencies.load_stock_configuration
+        )
         sent_msg = await wrap_edit(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
         if sent_msg:
             user_data['last_port_msg_id'] = sent_msg.message_id
@@ -443,7 +451,9 @@ async def _handle_ticker_text(
             detail_msg = format_ticker_not_in_portfolio(
                 ticker_input, portfolio_data, dependencies.market_reader
             )
-            keyboard = build_ticker_keyboard(portfolio_data)
+            keyboard = build_ticker_keyboard(
+                portfolio_data, dependencies.load_stock_configuration
+            )
             sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
             if sent_msg:
                 user_data['last_port_msg_id'] = sent_msg.message_id
@@ -455,7 +465,9 @@ async def _handle_ticker_text(
             found_ticker, ticker_data, portfolio_data, dependencies.market_reader
         )
 
-        keyboard = build_ticker_keyboard(portfolio_data)
+        keyboard = build_ticker_keyboard(
+            portfolio_data, dependencies.load_stock_configuration
+        )
         sent_msg = await wrap_reply(update, detail_msg, parse_mode='HTML', reply_markup=keyboard)
         if sent_msg:
             user_data['last_port_msg_id'] = sent_msg.message_id

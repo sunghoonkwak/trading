@@ -23,6 +23,7 @@ def _portfolio_dependencies(**overrides):
         "order_reader": SimpleNamespace(fetch_open_orders=lambda: (None, 0, 0, 0)),
         "get_weight_diffs": lambda _scope: ([], 0.0, {}),
         "refresh_gsheet_cache": lambda: {},
+        "load_stock_configuration": lambda: {"KR": [], "US": []},
     }
     defaults.update(overrides)
     return telegram_portfolio.PortfolioCommandDependencies(**defaults)
@@ -551,7 +552,9 @@ def test_portfolio_command_preserves_dependencies_in_executor(monkeypatch):
 
     monkeypatch.setattr(telegram_portfolio, "wrap_reply", fake_reply)
     monkeypatch.setattr(telegram_portfolio, "format_portfolio_summary", lambda _data: "summary")
-    monkeypatch.setattr(telegram_portfolio, "build_ticker_keyboard", lambda _data: None)
+    monkeypatch.setattr(
+        telegram_portfolio, "build_ticker_keyboard", lambda _data, _loader: None
+    )
 
     class Update:
         pass
@@ -570,20 +573,20 @@ def test_portfolio_command_preserves_dependencies_in_executor(monkeypatch):
     assert replies == ["summary"]
 
 
-def test_ticker_keyboard_loads_stock_config_from_src_root(monkeypatch):
-    monkeypatch.setattr(
-        "infrastructure.stock_configuration.load_stock_configuration",
+def test_ticker_keyboard_uses_injected_stock_configuration():
+    keyboard = telegram_portfolio.build_ticker_keyboard(
+        {"merged_data": {}},
         lambda: {"KR": [], "US": [{"ticker": "QQQ", "telegram_button": True}]},
     )
-
-    keyboard = telegram_portfolio.build_ticker_keyboard({"merged_data": {}})
 
     assert keyboard.inline_keyboard[0][0].text == "QQQ"
 
 
 def test_portfolio_handlers_keep_factory_dependencies_isolated(monkeypatch):
     monkeypatch.setattr(telegram_portfolio, "format_portfolio_summary", lambda data: data["name"])
-    monkeypatch.setattr(telegram_portfolio, "build_ticker_keyboard", lambda _data: None)
+    monkeypatch.setattr(
+        telegram_portfolio, "build_ticker_keyboard", lambda _data, _loader: None
+    )
 
     replies = []
 
