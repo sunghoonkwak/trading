@@ -16,7 +16,7 @@ and commands.
 - Run all three checks for pushes and pull requests in GitHub Actions.
 - Document the local commands.
 
-The official KIS distribution under `src/kis/kis_api/**`, private runtime
+The official KIS distribution under `src/infrastructure/kis/kis_api/**`, private runtime
 configuration, generated data, and external mounts are excluded from Ruff and
 mypy. Existing pytest tests may continue to import KIS modules as needed.
 
@@ -34,10 +34,10 @@ CI gate.
 ## mypy Policy
 
 mypy targets application-owned modules with existing typing value, beginning
-with `src/strategy`, `src/broker`, and `src/state`. It checks bodies of
-untyped functions but does not initially require every function to be
-annotated. Missing third-party stubs are tolerated so adoption is not blocked
-by external packages.
+with `src/domain/strategy`, `src/application`, and `src/state`. It checks
+bodies of untyped functions but does not initially require every function to
+be annotated. Missing third-party stubs are tolerated so adoption is not
+blocked by external packages.
 
 The target list may expand after additional application modules are annotated.
 The official KIS distribution remains outside the type-checking boundary.

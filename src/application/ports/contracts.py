@@ -1,10 +1,78 @@
 """Shared, dependency-free conventions for application port contracts."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Generic, NewType, TypeVar
+from typing import Any, Generic, NewType, Protocol, TypeVar
 
 CorrelationId = NewType("CorrelationId", str)
 T = TypeVar("T")
+
+
+class PortfolioSource(Protocol):
+    """Read normalized portfolio data from infrastructure adapters."""
+
+    def fetch(self, *, scope: str) -> dict[str, Any]:
+        """Return the established raw portfolio shape for a scope."""
+
+
+class SerializedKisOperations(Protocol):
+    """Execute a read-only KIS operation through the serialized worker."""
+
+    def execute(
+        self,
+        operation: Callable[[], T],
+        *,
+        timeout: float = 30.0,
+        correlation_id: CorrelationId | None = None,
+    ) -> "OperationResult[T]":
+        """Return one complete response or a safe, redacted failure."""
+
+
+class PortfolioReader(Protocol):
+    """Application use case consumed by transport adapters."""
+
+    def get_portfolio_data(
+        self,
+        force_refresh: bool = False,
+        scope: str = "all",
+    ) -> dict[str, Any]:
+        """Return the established processed portfolio result."""
+
+
+class StrategyOrderExecutor(Protocol):
+    """Execute one domain order through the configured broker adapter."""
+
+    def execute(self, order: Any) -> tuple[bool, str]:
+        """Return the established accepted/rejected order result."""
+
+
+class MarketPriceReader(Protocol):
+    """Read current prices for transport adapters without a broker import."""
+
+    def get_current_price(self, ticker: str) -> float:
+        """Return a cached or current market price."""
+
+    def fetch_price(self, ticker: str) -> float:
+        """Fetch a current market price when no cached value exists."""
+
+
+class OpenOrderReader(Protocol):
+    """Read the established open-order report for a transport adapter."""
+
+    def fetch_open_orders(self) -> tuple[Any, int, int, int | None]:
+        """Return open orders and the established broker count breakdown."""
+
+
+class OrderControlService(OpenOrderReader, Protocol):
+    """Application use case for explicit open-order controls."""
+
+    def sync_open_orders(self) -> bool:
+        """Synchronize the cross-broker open-order view."""
+
+    def execute_manage_action(
+        self, market: str, action_type: str, order_data: Any, new_price: Any
+    ) -> tuple[Any, str | None]:
+        """Submit one explicit cancel or correction action."""
 
 
 @dataclass(frozen=True)

@@ -4,6 +4,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from application.ports import PortfolioSource
 from domain.portfolio.processing import PortfolioProcessor
 from domain.portfolio.scope import (
     PORTFOLIO_SCOPE_ALL,
@@ -19,8 +20,7 @@ class PortfolioService:
         self,
         *,
         is_kis_ready: Callable[[], bool],
-        request_portfolio: Callable[..., str],
-        wait_for_response: Callable[..., Any],
+        portfolio_source: PortfolioSource,
         save_portfolio: Callable[[dict[str, Any]], None],
         load_weights: Callable[[], dict[str, Any]],
         calculate_targets: Callable[..., tuple[dict[str, float], Any, Any]],
@@ -28,8 +28,7 @@ class PortfolioService:
         publish_alert: Callable[[str, str], None],
     ) -> None:
         self._is_kis_ready = is_kis_ready
-        self._request_portfolio = request_portfolio
-        self._wait_for_response = wait_for_response
+        self._portfolio_source = portfolio_source
         self._save_portfolio = save_portfolio
         self._load_weights = load_weights
         self._calculate_targets = calculate_targets
@@ -42,12 +41,7 @@ class PortfolioService:
             return {"error": "KIS Thread not ready"}
 
         self._publish_alert("[Data] Fetching portfolio...", "INFO")
-        request_id = self._request_portfolio(force_refresh=force_refresh, scope=scope)
-        response = self._wait_for_response(request_id, timeout=60.0)
-        if not response or not response.success:
-            return {"error": response.error if response else "Timeout"}
-
-        raw_portfolio = response.result
+        raw_portfolio = self._portfolio_source.fetch(scope=scope)
         self._save_portfolio(raw_portfolio)
         processor = PortfolioProcessor()
         merged_data, total_usd = processor.merge_holdings(raw_portfolio)

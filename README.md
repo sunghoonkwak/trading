@@ -72,14 +72,10 @@ venv/bin/ruff check src tests --fix
 trading/
 ├── src/
 │   ├── main.py                  # Docker 런타임 엔트리포인트
-│   ├── core/                    # 상수, 설정, 웹 서버, 락, 표시 상태
-│   ├── kis/                     # KIS REST/WebSocket, 공식 API 래퍼
-│   ├── toss/                    # Toss Invest Open API helper
-│   ├── broker/                  # KIS/Toss facade와 전략 broker 선택
-│   ├── strategy/                # RAOEO, VA, 리밸런싱, 실행 서비스
-│   ├── scheduler/               # 정기 리포트와 주기적 리밸런싱 작업
-│   ├── telegram_bot/            # Telegram 명령어와 알림
-│   ├── data/                    # 설정/포트폴리오 데이터 로딩과 비중 계산
+│   ├── interfaces/              # Telegram/scheduler/web transport adapter
+│   ├── application/             # portfolio·strategy·order use case와 ports
+│   ├── domain/                  # 전략 규칙, portfolio 변환, 값 타입
+│   ├── infrastructure/          # KIS, Toss, portfolio source/cache adapter
 │   ├── state/                   # 시장/시스템 상태 캐시
 │   ├── utils/                   # 로깅, 포맷, 시장 시간 유틸리티
 │   └── web/                     # 웹 대시보드 정적 파일과 인증서 위치
@@ -168,7 +164,7 @@ docker logs -f my-trading-bot
 http://localhost:8080
 ```
 
-`src/web/certs/cert.pem`과 `src/web/certs/key.pem`이 있으면 HTTPS로
+`src/interfaces/web/certs/cert.pem`과 `src/interfaces/web/certs/key.pem`이 있으면 HTTPS로
 시작합니다.
 
 ```text
@@ -295,7 +291,7 @@ venv/bin/pytest --cov=src --cov-report=term-missing tests
 Hypothesis 기반 전략 속성 테스트만 빠르게 실행하려면 다음 명령을 사용합니다.
 
 ```bash
-venv/bin/pytest tests/strategy/test_raoeo_properties.py
+venv/bin/pytest tests/domain/test_raoeo_properties.py
 ```
 
 런타임 의존성 보안 감사:
@@ -304,15 +300,15 @@ venv/bin/pytest tests/strategy/test_raoeo_properties.py
 venv/bin/pip-audit -r requirements.txt
 ```
 
-mutation test는 `pyproject.toml`에 지정된 `src/strategy/`와 `src/broker/`만
-대상으로 하며, 공식 KIS 배포 코드인
+mutation test는 `pyproject.toml`에 지정된 domain, application, 선택된
+infrastructure 모듈을 대상으로 하며, 공식 KIS 배포 코드인
 `src/infrastructure/kis/kis_api/`는 포함하지 않습니다. 기존
-`src/kis/kis_api/`는 호환 import shim입니다.
+KIS 공식 배포 코드는 `src/infrastructure/kis/kis_api/`에 격리합니다.
 먼저 다음의 제한된 plumbing smoke로 mutation 생성, 테스트 수집, 단일 mutant
 실행이 정상인지 확인합니다.
 
 ```bash
-venv/bin/mutmut run --max-children 1 strategy.raoeo.x_calculate_cash_funding_order__mutmut_1
+venv/bin/mutmut run --max-children 1 domain.strategy.raoeo.x_calculate_cash_funding_order__mutmut_1
 venv/bin/mutmut results
 ```
 
@@ -368,7 +364,8 @@ venv/bin/python scripts/backtest/raoeo/batch_backtest.py
 - 설정 변경 후에는 `scripts/validate_config.py`, 단위 테스트, 모의투자 또는
   소액 운용으로 검증하세요.
 - 이 저장소에는 개인 운영 환경에 맞춘 값이 남아 있을 수 있습니다. 새 환경에
-  배포하기 전 `docker-compose.yml`, `templates/`, `src/stock_configuration.json`
+  배포하기 전 `docker-compose.yml`, `templates/`,
+  `src/infrastructure/stock_configuration.json`
   내용을 반드시 검토하세요.
 
 ## 알려진 특이점

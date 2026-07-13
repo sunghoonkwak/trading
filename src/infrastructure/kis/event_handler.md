@@ -1,0 +1,55 @@
+# KIS Event Handler (`src/infrastructure/kis/event_handler.py`)
+
+이 모듈은 KIS WebSocket으로부터 수신된 실시간 데이터를 처리하는 로직을 포함합니다.
+
+## Purpose (목적)
+원래 `main.py`에 있던 로직을 infrastructure로 분리하여 다음 목적을 달성합니다:
+1.  **순환 참조 해결 (Resolve Circular Dependencies)**: 이벤트 처리 로직을 메인 애플리케이션 진입점과 분리합니다.
+2.  **모듈화 개선 (Improve Modularity)**: KIS 데이터 포맷 파싱을 위한 구체적인 로직을 캡슐화합니다.
+
+## Key Function (주요 기능)
+
+### `on_result(ws, tr_id, df, dm)`
+KIS WebSocket 클라이언트가 메시지를 수신할 때마다 실행되는 콜백 함수입니다.
+
+#### Parameters:
+*   `ws`: WebSocket 인스턴스.
+*   `tr_id`: 트랜잭션 ID (예: 호가 `H0UNASP0`, 체결 `H0STCNI0`).
+*   `df`: 파싱된 데이터를 담은 Pandas DataFrame (해당되는 경우).
+*   `dm`: Raw 데이터 딕셔너리 (해당되는 경우).
+
+#### Responsibilities (역할):
+1.  **Market Data (시세 데이터 - `H0UNASP0`, `H0UNCNT0`, 등)**:
+    *   호가(Ask/Bid) 및 현재가(Price) 패킷을 파싱합니다.
+    *   **Data Validation**: 손상된 패킷이나 비정상적인 값(비정상적으로 긴 종목 코드 등)을 감지하고 필터링합니다.
+    *   수신한 WebSocket row만 사용해 `event_pipe`로 Event Viewer 로그를 포맷팅하여 전송합니다.
+
+2.  **Order Execution/Modifications (주문 체결/정정 - `H0STCNI0`, `H0GSCNI0`)**:
+    *   체결 통보(접수, 정정, 취소, 체결, 거부)를 파싱합니다.
+    *   같은 프로세스에서 같은 TR ID, 주문번호, 종목, 시각, 상태, 체결 수량,
+        체결 단가를 가진 재전송 이벤트는 최대 최근 1,000개까지 한 번만
+        처리합니다. 주문번호가 같아도 시각·수량·단가·상태가 다른 부분 체결은
+        별도 이벤트로 처리합니다. 이 중복 기록은 메모리 전용이며 재시작 후에는
+        유지되지 않습니다.
+    *   상세 체결 정보를 로그로 남깁니다.
+    *   **전체 데이터 덤프**: 모든 주문 알림(ODR/EXE/CAN/REJ 등)에 대해 WebSocket 메시지 전체 내용을 **`INFO`** 레벨로 기록하여, 주문 거절 원인 등을 분석할 수 있도록 합니다.
+    *   메인 UI에 `add_alert`를 보냅니다.
+    *   **Telegram 알림**: 체결 완료 시 `send_notification()`을 호출하여 원격 알림 전송.
+    *   `sync_open_orders()`를 호출하여 주문 동기화를 자동 트리거합니다.
+
+3.  **System Messages (시스템 메시지)**:
+    *   연결 유지를 위한 PINGPONG 메시지를 처리합니다 (시스템 로깅 타임스탬프 사용).
+
+## Dependencies (의존성)
+*   **`infrastructure.event_pipe`**: 외부 뷰어로 로그를 스트리밍합니다.
+*   **`infrastructure.display`**: 주문 상태와 알림을 터미널 및 이벤트 뷰어에
+    전달합니다.
+*   **주입된 notification sender**: 주문 체결 시 Telegram 알림을 전송합니다.
+
+## MKT 메시지 형식
+Event Viewer로 전송되는 시세 데이터 형식:
+```
+Name|Ticker|Bid|Last(Vol)|Diff(Rate%)|Ask
+```
+- 시간(time)과 레이블(Bid:, Last:, Diff:, Ask:)이 제거된 간결한 형식
+- 시간은 WebSocket 메시지의 `time` 필드로 별도 전송

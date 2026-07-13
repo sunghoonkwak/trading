@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
-from core.constants import CONFIG_ROOT
-from core.credentials import CREDENTIALS_FILE, PASSWORD_FILE, generate_key_from_password
+from infrastructure.runtime_settings import CONFIG_ROOT
+from infrastructure.credentials import CREDENTIALS_FILE, PASSWORD_FILE, generate_key_from_password
 
 
 def main() -> None:

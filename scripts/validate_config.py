@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG_PATH = Path.home() / "KIS_config" / "strategy_config.json"
 FALLBACK_CONFIG_PATH = REPO_ROOT / "templates" / "strategy_config.json"
-DEFAULT_STOCKS_PATH = REPO_ROOT / "src" / "stock_configuration.json"
+DEFAULT_STOCKS_PATH = REPO_ROOT / "src" / "infrastructure" / "stock_configuration.json"
 
 ALLOWED_BUY_TYPES = {"normal", "average", "filling"}
 ALLOWED_SELL_TYPES = {"LOC", "Limit"}

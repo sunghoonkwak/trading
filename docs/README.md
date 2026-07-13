@@ -33,3 +33,12 @@ created it. Store new documents in the following directories.
 - [Testing records](testing/)
 - [Developer references](reference/)
 - [Guides](guides/)
+- [Layered architecture](architecture.md)
+
+## Architecture Map
+
+Production dependencies flow from `interfaces` to `application` and domain
+ports. `infrastructure` implements those ports, while `src/main.py` is the
+single composition root. `interfaces/web`, `interfaces/telegram`, and
+`interfaces/scheduler` own transport behavior; strategy execution lives in
+`application`, and KIS/Toss/file adapters remain in `infrastructure`.

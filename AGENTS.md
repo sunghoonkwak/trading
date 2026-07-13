@@ -5,14 +5,12 @@
 This is a Python 3.11+ KIS real-time trading system. Runtime entry point:
 `src/main.py`.
 
-- `src/core/`: configuration and web support
-- `src/kis/`: Korea Investment Securities API integration and official KIS
-  sample/vendor-like code
-- `src/strategy/`: RAOEO, value averaging, rebalancing, and execution
-- `src/scheduler/`, `src/telegram_bot/`, `src/data/`, `src/state/`,
-  `src/utils/`: supporting services
-- `src/broker/`: application-owned broker facades around external trading APIs
-- `src/web/static/`: web assets
+- `src/interfaces/`: web, Telegram, and scheduler transport adapters
+- `src/application/`: portfolio, strategy, order, and runtime use cases
+- `src/domain/`: strategy rules, portfolio transformations, and value types
+- `src/infrastructure/`: KIS, Toss, portfolio, and external-service adapters
+- `src/core/`, `src/state/`, `src/utils/`: retained technical, state, and
+  dependency-free helper modules
 - `templates/`: sample configuration only
 - `scripts/backtest/raoeo/`: backtest tooling
 
@@ -61,8 +59,8 @@ For Toss Invest Open API work, consult the checked-in OpenAPI reference first:
 dummy examples only; runtime credentials and account data still belong only in
 `KIS_config/` or external mounts.
 
-- Implement Toss helpers under `src/toss/` and keep orchestration in app-owned
-  modules such as `src/broker/`.
+- Implement Toss helpers under `src/infrastructure/toss/` and keep orchestration in
+  app-owned `src/application/` modules.
 - Use the schema to confirm paths, methods, request body `Content-Type`,
   required headers such as `X-Tossinvest-Account`, and response field names
   before changing Toss API calls.
@@ -85,20 +83,20 @@ behavior or operational expectations change. Do not hand-edit generated or
 vendor-like KIS endpoint wrappers unless intentionally scoped.
 
 Treat `src/infrastructure/kis/kis_api/**` as the official Korea Investment
-Securities API distribution boundary. `src/kis/kis_api/**` is a compatibility
-import shim only. Keep application policy, orchestration, and testing seams
-outside the vendor tree, preferably in `src/broker/`, `src/strategy/`,
-`src/data/`, or other app-owned modules. Changes inside the official KIS tree
-should be limited to deliberate compatibility/security patches that are worth
-reapplying during upstream updates.
+Securities API distribution boundary. Keep application policy, orchestration,
+and testing seams outside the vendor tree, preferably in `src/application/`,
+`src/domain/`, or other app-owned modules. Changes inside the
+official KIS tree should be limited to deliberate compatibility/security
+patches that are worth reapplying during upstream updates.
 
 ## Testing
 
-Keep durable regression tests under module-oriented directories such as
-`tests/kis/`, `tests/toss/`, `tests/raoeo/`, `tests/telegram/`, `tests/data/`,
-`tests/core/`, and `tests/scheduler/`. Use descriptive `test_*.py` filenames
-inside those directories, and avoid splitting one behavior area into many tiny
-files.
+Keep durable regression tests aligned with production ownership:
+`tests/application/`, `tests/domain/`, `tests/infrastructure/`,
+`tests/interfaces/`, and `tests/architecture/`. Keep KIS, Toss, portfolio,
+Telegram, and scheduler tests below their owning layer directory. Use
+descriptive `test_*.py` filenames and avoid splitting one behavior area into
+many tiny files.
 
 When creating temporary tests only to guide an implementation or debug a
 one-off issue, put them under `tests/tmp/`. Treat that directory as scratch

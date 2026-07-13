@@ -8,6 +8,26 @@ The assessment is static: it reads test contracts, seams, and matching
 application-owned code. It does not treat line count, assertion count, or
 coverage lines as a reason to remove a test.
 
+## Layered Architecture Test Layout (2026-07-14)
+
+The refactoring follow-up reorganized the retained regression tests to match
+the production layer that owns the behavior:
+
+- `tests/application/`: application use cases, ports, and orchestration.
+- `tests/domain/`: portfolio and strategy rules with in-memory inputs.
+- `tests/infrastructure/`: KIS, Toss, portfolio, GSheet, and technical
+  adapters, with provider-specific suites nested below the owning adapter.
+- `tests/interfaces/`: Telegram and scheduler transport behavior.
+- `tests/architecture/`: only durable import-direction and import-safety
+  contracts.
+
+The previous path-absence, legacy-consumer, compatibility-shim, and
+duck-typed port tests were removed. They described the migration process,
+not runtime behavior. The architecture suite now retains only the layer
+dependency rules, diagnostic quality, vendor isolation, and domain/port
+import-safety contracts. `tests/conftest.py` owns the shared `src` import path
+so a test's physical location does not affect imports.
+
 ## Decision Rules
 
 | Rule | Decision outcome |
@@ -35,8 +55,9 @@ tests can still be simplified in U2.
 | Test module | Protected contract / matching area | Setup or overlap observation | Action |
 | --- | --- | --- | --- |
 | `tests/architecture/test_boundaries.py` | Importing app packages does not initialize KIS configuration, runtime modules, Telegram bot modules, or prohibited legacy dependencies; market status uses the public contract. | Ten subprocess/import checks cover different forbidden side effects and already share `_run_import_check`. | Retain. Do not merge solely for shared subprocess setup. |
-| `tests/core/test_event_pipe.py` | Unix-socket log forwarding handles queue limits, disconnects, reset scheduling, send/receive buffering, and socket failures. | Autouse module-state reset is justified by module globals; fake socket centralizes I/O behavior. | Retain; review only whether reset fields track current state. |
-| `tests/core/test_http_defaults.py` | Default HTTP timeout is supplied without overwriting an explicit caller timeout for module and session requests. | One focused fake-request contract. | Retain. |
+| `tests/infrastructure/test_event_pipe.py` | Unix-socket log forwarding handles queue limits, disconnects, reset scheduling, send/receive buffering, and socket failures. | Autouse module-state reset is justified by module globals; fake socket centralizes I/O behavior. | Retain; review only whether reset fields track current state. |
+| `tests/infrastructure/test_http_defaults.py` | Default HTTP timeout is supplied without overwriting an explicit caller timeout for module and session requests. | One focused fake-request contract. | Retain. |
+| `tests/infrastructure/test_logger.py` | Log archive timestamps and rotation filenames preserve the current storage contract. | Two focused file-system contracts. | Retain. |
 | `tests/core/test_runtime.py` | Credentials parse current and legacy values; config validation fails safely; web actions are gated; KIS/runtime lifecycle fails closed and remains controllable. | Two credential tests manually manage fixed `tests/.tmp-*` paths; lifecycle tests cover separate transitions. | Simplify temporary-path setup; retain lifecycle branches. |
 | `tests/core/test_system_state.py` | KIS readiness requires both worker and auth state. | `test_unused_public_state_helpers_are_removed` asserts deleted names rather than behavior. | **Delete candidate C1**; retain readiness state test. |
 | `tests/core/test_trading_config.py` | Market-prefix mapping and JSON event escaping preserve public configuration/web contracts. | Independent small contracts. | Retain. |
@@ -152,9 +173,19 @@ the current suite,” not “production behavior is known faulty.”
 - `venv/bin/pytest tests/toss/test_api_helpers.py tests/kis/test_broker.py
   tests/core/test_runtime.py tests/strategy/test_value_averaging.py` passed:
   106 tests.
-- `venv/bin/ruff check src/broker/toss_broker.py src/broker/kis_broker.py
+- `venv/bin/ruff check src/infrastructure/toss/broker.py src/infrastructure/kis/broker.py
   tests/toss/test_api_helpers.py tests/kis/test_broker.py
   tests/core/test_runtime.py tests/strategy/test_value_averaging.py` passed.
 - `venv/bin/pytest tests` passed: 272 tests.
 - `docker compose build test && docker compose run --rm test` passed: 272
   tests on Python 3.11.
+
+## Layered Architecture Follow-up Verification
+
+- `venv/bin/pytest tests` passed: 303 tests after the interface/application
+  migration slices.
+- `venv/bin/ruff check src tests` passed.
+- Architecture checks now import scheduler and Telegram adapters from
+  `src/interfaces/` and retain subprocess import-safety coverage.
+- `docker compose run --rm test` passed: 303 tests on Python 3.11 after the
+  current interface/application migration slices.
