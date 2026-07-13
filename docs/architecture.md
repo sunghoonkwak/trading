@@ -23,7 +23,8 @@ allowing an interface or application module to construct those adapters.
 | `infrastructure/kis/kis_api/` | The isolated KIS vendor distribution. |
 
 `infrastructure.event_pipe` owns Unix-socket event delivery and its bounded
-writer queue. `utils/` remains limited to dependency-free helpers.
+writer queue. Dependency-free text formatting belongs to
+`infrastructure.text_format`.
 
 ## Compatibility register
 

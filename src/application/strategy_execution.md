@@ -12,7 +12,8 @@
      시간을 확인하고, 이를 모든 전략 실행에 반영합니다.
 
 3. **Unified Data Fetching (데이터 조회 통합)**:
-   - `get_market_data`는 전략 대상의 보유 수량과 현재가를 조회합니다.
+   - `StrategyExecutionRuntime`이 구성한 market-data service는 전략 대상의
+     보유 수량과 현재가를 조회합니다.
    - 현재가는 보유 잔고의 `cur_price`를 먼저 사용하고, 없는 종목만 Toss
      다건 현재가 API로 조회합니다. Toss에서 누락되거나 실패한 종목만 KIS
      단건 가격 조회로 보완합니다.
@@ -37,12 +38,19 @@
 
 ## Key Functions (주요 함수)
 
-### `run_strategy_suite`
+### `StrategyExecutionRuntime`
+`src/main.py`가 `StrategyExecutionDependencies`를 조립해 하나의 runtime
+인스턴스를 만듭니다. Telegram과 scheduler에는 이 인스턴스의
+`strategy_run_service()`, `prepare_cash_funding()`, `execute_cash_funding()`,
+`save_cash_funding_result()`, `clear_history()`만 주입됩니다. application과
+interface는 broker/configuration adapter를 직접 구성하지 않습니다.
+
+### `runtime.run_suite`
 RAOEO와 Value Averaging을 같은 `StrategyRunContext`로 실행하여 포트폴리오와
 가격 스냅샷을 공유합니다. Telegram `/strategy`와 scheduler 일일 주문 실행은
-이 함수를 사용합니다.
+이 runtime 메서드를 사용합니다.
 
-### `run_raoeo_strategy`, `run_va_strategy`, `run_rebalancing_strategy`
+### `runtime.run_raoeo`, `runtime.run_value_averaging`, `runtime.run_rebalancing`
 각 전략을 실행하고 결과를 반환합니다.
 
 - **입력 (Input)**:
@@ -57,7 +65,7 @@ RAOEO와 Value Averaging을 같은 `StrategyRunContext`로 실행하여 포트�
   - `pending_orders`: 체결 필요한(대기 중인) 주문 목록
   - `market_status`: 시장 상태 정보 (`is_market_open`, `message`)
 
-### `get_market_data`
+### Runtime market-data service
 현재 포트폴리오 잔고와 전략 대상 종목들의 현재가를 조회합니다.
 - **입력**: `force_refresh` (bool)
 - **출력**: `holdings` (잔고 딕셔너리), `current_prices` (현재가 딕셔너리)
@@ -67,7 +75,7 @@ RAOEO와 Value Averaging을 같은 `StrategyRunContext`로 실행하여 포트�
 - 같은 실행 묶음에서는 `StrategyRunContext`가 포트폴리오/가격 스냅샷을
   재사용해 중복 포트폴리오 조회를 줄입니다.
 
-### `get_orderable_usd`
+### Runtime buying-power port
 대표 매수 주문의 종목과 주문 가격으로 선택된 전략 broker의
 매수가능금액조회를 수행합니다.
 
@@ -90,7 +98,7 @@ RAOEO와 Value Averaging을 같은 `StrategyRunContext`로 실행하여 포트�
   예상 금액, 주문 타입, 주문 사유가 포함됩니다. 시장가처럼 주문가가 없는
   경우 예상 금액은 `unknown`으로 기록합니다.
 
-### `prepare_raoeo_cash_funding`, `execute_raoeo_cash_funding`
+### `runtime.prepare_cash_funding`, `runtime.execute_cash_funding`
 `/strategy` 수동 실행에서만 사용하는 현금 조달 단계입니다.
 
 - 현재 대기 중인 RAOEO 매수 주문에 대해 `get_orderable_usd`로 조회한
@@ -102,7 +110,7 @@ RAOEO와 Value Averaging을 같은 `StrategyRunContext`로 실행하여 포트�
 - 사용자가 조달 매도를 선택한 경우에만 매도 주문을 접수하며, 접수 성공 후 5초 대기하고 후속 전략 실행으로 진행합니다.
 - 조달 주문을 만들 수 없거나 주문 접수가 실패하면 호출자는 RAOEO와 Value Averaging 실행 모두를 중단합니다.
 
-### `clear_strategy_history_for_date`
+### `runtime.clear_history`
 지정한 ET 날짜의 `strategy_history.json` 날짜 항목 전체를 삭제합니다. 텔레그램
 `/clear_strategy_history` 같은 운영 UI는 이 함수를 호출해, 실패 주문 재테스트
 전에 RAOEO/VA/rebalancing 이력을 한 번에 제거합니다.
@@ -132,13 +140,19 @@ Value Averaging은 오늘 history가 있으면 `orders`가 비어 있어도 저�
 ## Usage Example (사용 예시)
 
 ```python
-from application.strategy_execution import run_raoeo_strategy
+from application.strategy_execution import (
+    StrategyExecutionDependencies,
+    StrategyExecutionRuntime,
+)
+
+# composition root가 infrastructure adapter를 이 dataclass에 주입한다.
+runtime = StrategyExecutionRuntime(StrategyExecutionDependencies(...))
 
 # 1. 단순 계산 및 리포트 확인 (주문 전송 X)
-report = run_raoeo_strategy(execute=False)
+report = runtime.run_raoeo(execute=False)
 print(report['status'])
 
 # 2. 실제 주문 실행
 if report['status'] == 'skipped' or report['status'] == 'partial':
-    result = run_raoeo_strategy(execute=True)
+    result = runtime.run_raoeo(execute=True)
 ```
