@@ -118,11 +118,15 @@ class TradingSystem:
             from infrastructure.kis.vendor_callbacks import (
                 configure_notification_sender as configure_kis_vendor_notification_sender,
             )
-            from infrastructure.portfolio.integration import configure_warning_notifier
+            from infrastructure.portfolio.integration import (
+                configure_alert_publisher,
+                configure_warning_notifier,
+            )
             from interfaces.telegram.utils import send_notification
 
             configure_kis_event_notification_sender(send_notification)
             configure_kis_vendor_notification_sender(send_notification)
+            configure_alert_publisher(display.add_alert)
             configure_warning_notifier(send_notification)
             update_telegram_state(thread_status=ThreadStatus.RUNNING, bot_connected=True)
             logging.info("[Startup] Telegram Bot initialized")

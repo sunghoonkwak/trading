@@ -5,7 +5,7 @@ import logging
 import threading
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
 from domain.portfolio.scope import (
     PORTFOLIO_SCOPE_ALL,
@@ -138,23 +138,22 @@ def fetch_toss_exchange_rate() -> Tuple[Optional[float], Optional[str]]:
 
 def fetch_toss_portfolio_source() -> Tuple[Dict[str, Any], Optional[str]]:
     """Fetch Toss source data and emit portfolio alerts."""
-    from core.display import add_alert
     from infrastructure.toss.toss_portfolio import fetch_toss_portfolio
 
     try:
-        add_alert("[Toss] Fetching Toss API data...", "INFO")
+        _publish_alert("[Toss] Fetching Toss API data...", "INFO")
         toss_data, toss_error = fetch_toss_portfolio()
         if toss_error:
-            add_alert(f"Toss Warning: {toss_error}", "WARN")
+            _publish_alert(f"Toss Warning: {toss_error}", "WARN")
         else:
-            add_alert(
+            _publish_alert(
                 f"[Toss] {len(toss_data.get('holdings', []))} holdings loaded",
                 "SUCCESS",
             )
         return toss_data, toss_error
     except Exception as e:
         toss_error = str(e)
-        add_alert(f"Toss Warning: {toss_error}", "WARN")
+        _publish_alert(f"Toss Warning: {toss_error}", "WARN")
         return _empty_source(), toss_error
 
 
@@ -198,6 +197,24 @@ def fetch_toss_prices(tickers: Iterable[str]) -> Dict[str, float]:
 
 
 _warning_notifier = None
+_alert_publisher: Optional[Callable[[str, str], None]] = None
+
+
+def configure_alert_publisher(
+    publisher: Optional[Callable[[str, str], None]],
+) -> None:
+    """Inject local portfolio alert delivery at composition time."""
+    global _alert_publisher
+    _alert_publisher = publisher
+
+
+def _publish_alert(message: str, level: str) -> None:
+    if _alert_publisher is None:
+        return
+    try:
+        _alert_publisher(message, level)
+    except Exception as error:
+        logging.warning("[Portfolio] Alert publication failed: %s", error)
 
 
 def configure_warning_notifier(notifier) -> None:
@@ -208,9 +225,7 @@ def configure_warning_notifier(notifier) -> None:
 
 def send_telegram_warning(message: str) -> None:
     """Send a portfolio warning to Telegram and the local alert stream."""
-    from core.display import add_alert
-
-    add_alert(message, "WARNING")
+    _publish_alert(message, "WARNING")
     if _warning_notifier is not None:
         try:
             _warning_notifier(message)
@@ -363,8 +378,6 @@ def merge_portfolio_sources(
 
 def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]:
     """Fetch and merge portfolio sources for application data consumers."""
-    from core.display import add_alert
-
     scope = normalize_portfolio_scope(scope)
 
     kis_portfolio = _empty_source()
@@ -386,16 +399,16 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
             exchange_rate, exchange_error = fetch_toss_exchange_rate()
             if exchange_error:
                 toss_error = " | ".join(filter(None, [toss_error, exchange_error]))
-                add_alert(f"Toss Exchange Warning: {exchange_error}", "WARN")
+                _publish_alert(f"Toss Exchange Warning: {exchange_error}", "WARN")
 
     elif scope == PORTFOLIO_SCOPE_ALL:
         from infrastructure.toss.toss_portfolio import TOSS_ACCOUNT_KEY
 
-        add_alert("[Data] Loading cached GSheet data...", "INFO")
+        _publish_alert("[Data] Loading cached GSheet data...", "INFO")
         gsheet_data, gsheet_error = get_cached_gsheet_portfolio()
         discard_source_current_prices(gsheet_data)
         if gsheet_error:
-            add_alert(f"GSheet Warning: {gsheet_error}", "WARN")
+            _publish_alert(f"GSheet Warning: {gsheet_error}", "WARN")
         toss_data, toss_error = fetch_toss_portfolio_source()
         if not toss_error:
             gsheet_data = replace_account_source(

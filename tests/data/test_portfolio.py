@@ -11,8 +11,10 @@ def reset_gsheet_cache():
     from infrastructure.portfolio import integration as portfolio_integration
 
     portfolio_integration.invalidate_gsheet_cache()
+    portfolio_integration.configure_alert_publisher(None)
     yield
     portfolio_integration.invalidate_gsheet_cache()
+    portfolio_integration.configure_alert_publisher(None)
 
 
 def test_data_integration_skips_gsheet_and_toss_for_kis_scope(monkeypatch):
@@ -56,6 +58,30 @@ def test_data_integration_skips_gsheet_and_toss_for_kis_scope(monkeypatch):
     assert result["metadata"]["exchange_rate"] == 1375.0
     assert "gsheet_error" not in result["metadata"]
     assert "toss_error" not in result["metadata"]
+
+
+def test_data_integration_uses_injected_alert_publisher(monkeypatch):
+    from infrastructure.portfolio import integration as portfolio_integration
+    from infrastructure.toss import toss_portfolio
+
+    alerts = []
+    portfolio_integration.configure_alert_publisher(
+        lambda message, level: alerts.append((message, level))
+    )
+    monkeypatch.setattr(
+        toss_portfolio,
+        "fetch_toss_portfolio",
+        lambda: (portfolio_integration._empty_source(), "offline"),
+    )
+
+    source, error = portfolio_integration.fetch_toss_portfolio_source()
+
+    assert source == portfolio_integration._empty_source()
+    assert error == "offline"
+    assert alerts == [
+        ("[Toss] Fetching Toss API data...", "INFO"),
+        ("Toss Warning: offline", "WARN"),
+    ]
 
 
 def test_data_integration_fetches_only_toss_for_toss_scope(monkeypatch):
