@@ -248,10 +248,14 @@ class TradingSystem:
         print("[Startup] Step 4: Starting Scheduler Service...")
         try:
             from application.strategy_execution import get_strategy_run_service
+            from core.constants import DEFAULT_USD_KRW_EXCHANGE_RATE
             from infrastructure.portfolio import build_portfolio_service
             from infrastructure.strategy_execution import configure_strategy_execution_service
             from interfaces.scheduler.order_runner import SchedulerOrderRunner
-            from interfaces.scheduler.portfolio_runner import SchedulerPortfolioRunner
+            from interfaces.scheduler.portfolio_runner import (
+                SchedulerPortfolioRunner,
+                SchedulerReportDependencies,
+            )
             from interfaces.scheduler.runner import SchedulerRunner
             from interfaces.telegram.utils import send_notification
 
@@ -262,7 +266,13 @@ class TradingSystem:
                     strategy_run_service=get_strategy_run_service(),
                     notify=send_notification,
                 ),
-                portfolio_runner=SchedulerPortfolioRunner(send_notification),
+                portfolio_runner=SchedulerPortfolioRunner(
+                    send_notification,
+                    SchedulerReportDependencies(
+                        history_dir=os.path.join(CONFIG_ROOT, "portfolio_history"),
+                        default_exchange_rate=DEFAULT_USD_KRW_EXCHANGE_RATE,
+                    ),
+                ),
             )
             self._scheduler_runner.start()
             print("[Startup] ✓ Scheduler started")
@@ -275,19 +285,28 @@ class TradingSystem:
             print("[Startup] - Web Event Viewer already started")
             return
         print("[Startup] Step 5: Starting Web Event Viewer...")
-        from core.constants import DEFAULT_HOST, DEFAULT_WEB_PORT
+        from core.constants import DEFAULT_HOST, DEFAULT_USD_KRW_EXCHANGE_RATE, DEFAULT_WEB_PORT
         try:
             from broker import order_admin
             from core import event_pipe
             from core.constants import ENV_TRUE_VALUES
             from data.config_manager import ConfigFile, load_json, save_json
             from infrastructure.portfolio import build_portfolio_service
-            from interfaces.scheduler.portfolio_runner import SchedulerPortfolioRunner
+            from interfaces.scheduler.portfolio_runner import (
+                SchedulerPortfolioRunner,
+                SchedulerReportDependencies,
+            )
             from interfaces.telegram.utils import send_notification
             from interfaces.web import WebDependencies, create_web_app, start_web_server
 
             portfolio_reader = build_portfolio_service()
-            portfolio_runner = SchedulerPortfolioRunner(send_notification)
+            portfolio_runner = SchedulerPortfolioRunner(
+                send_notification,
+                SchedulerReportDependencies(
+                    history_dir=os.path.join(CONFIG_ROOT, "portfolio_history"),
+                    default_exchange_rate=DEFAULT_USD_KRW_EXCHANGE_RATE,
+                ),
+            )
             web_app = create_web_app(
                 WebDependencies(
                     runtime_is_running=self.is_trading_runtime_running,

@@ -9,25 +9,24 @@ import logging
 import os
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
 
 from application.ports import PortfolioReader
-from core.constants import CONFIG_ROOT, DEFAULT_USD_KRW_EXCHANGE_RATE
 from interfaces.telegram.portfolio_formatter import format_portfolio_summary
 
-# Configuration
-HISTORY_DIR = os.path.join(CONFIG_ROOT, "portfolio_history")
-# User requested to keep reports in the same folder as history
-REPORTS_DIR = HISTORY_DIR
+REPORTS_DIR = os.path.join(os.path.expanduser("~"), "KIS_config", "portfolio_history")
 
-# Ensure directories exist
-os.makedirs(HISTORY_DIR, exist_ok=True)
+@dataclass(frozen=True)
+class SchedulerReportDependencies:
+    history_dir: str
+    default_exchange_rate: float
 
 
-def load_historical_data(target_date: str) -> Optional[dict]:
+def load_historical_data(history_dir: str, target_date: str) -> Optional[dict]:
     """Load portfolio data for a specific date (YYYYMMDD)."""
-    file_path = os.path.join(HISTORY_DIR, f"portfolio_{target_date}.json")
+    file_path = os.path.join(history_dir, f"portfolio_{target_date}.json")
     if os.path.exists(file_path):
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -37,9 +36,9 @@ def load_historical_data(target_date: str) -> Optional[dict]:
     return None
 
 
-def get_sorted_history_files() -> list[str]:
+def get_sorted_history_files(history_dir: str) -> list[str]:
     """Return sorted list of portfolio history file paths."""
-    pattern = os.path.join(HISTORY_DIR, "portfolio_*.json")
+    pattern = os.path.join(history_dir, "portfolio_*.json")
     files = glob.glob(pattern)
     files.sort()  # Sort by filename (date)
     return files
@@ -54,7 +53,12 @@ def calculate_diff(current: float, previous: float) -> tuple[float, float]:
     return diff, pct
 
 
-def get_comparison_stats(current_data: dict, history_files: list[str], current_file_path: str) -> str:
+def get_comparison_stats(
+    current_data: dict,
+    history_files: list[str],
+    current_file_path: str,
+    default_exchange_rate: float,
+) -> str:
     """
     Generate comparison statistics text.
 
@@ -99,7 +103,7 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
         # Prefer metadata exchange rate, then the legacy top-level field.
         exchange_rate = data.get('metadata', {}).get('exchange_rate')
         if not exchange_rate:
-            exchange_rate = data.get('exchange_rate', DEFAULT_USD_KRW_EXCHANGE_RATE)
+            exchange_rate = data.get('exchange_rate', default_exchange_rate)
 
         merged_data = data.get('merged_data', {})
 
@@ -146,7 +150,7 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
         total_krw = get_total_equity(data)
         exchange_rate = data.get('metadata', {}).get('exchange_rate')
         if not exchange_rate:
-            exchange_rate = data.get('exchange_rate', DEFAULT_USD_KRW_EXCHANGE_RATE)
+            exchange_rate = data.get('exchange_rate', default_exchange_rate)
 
         if exchange_rate > 0:
             return total_krw / exchange_rate
@@ -251,16 +255,23 @@ def get_comparison_stats(current_data: dict, history_files: list[str], current_f
 class SchedulerPortfolioRunner:
     """Factory-owned daily portfolio report job."""
 
-    def __init__(self, notify: Callable[[str], None]) -> None:
+    def __init__(
+        self,
+        notify: Callable[[str], None],
+        dependencies: SchedulerReportDependencies,
+    ) -> None:
         self._notify = notify
+        self._dependencies = dependencies
+        os.makedirs(dependencies.history_dir, exist_ok=True)
 
     def run_daily_portfolio_report(self, portfolio_reader: PortfolioReader) -> None:
-        run_daily_portfolio_report(portfolio_reader, self._notify)
+        run_daily_portfolio_report(portfolio_reader, self._notify, self._dependencies)
 
 
 def run_daily_portfolio_report(
     portfolio_reader: PortfolioReader,
     notify: Callable[[str], None],
+    dependencies: SchedulerReportDependencies,
 ):
     """
     Execute daily portfolio reporting routine (typically scheduled for morning).
@@ -284,7 +295,7 @@ def run_daily_portfolio_report(
     # Monday (0): Load most recent saved file (Friday's data) for week-start review
     # No new data fetch, just resend Friday's report
     if weekday == 0:
-        history_files = get_sorted_history_files()
+        history_files = get_sorted_history_files(dependencies.history_dir)
         if history_files:
             # Load the most recent file (should be Friday's data)
             latest_file = history_files[-1]
@@ -306,7 +317,7 @@ def run_daily_portfolio_report(
         # For file naming, 7AM today = "Yesterday's Close"
         yesterday = now - timedelta(days=1)
         date_str = yesterday.strftime("%Y%m%d")
-        current_file_path = os.path.join(HISTORY_DIR, f"portfolio_{date_str}.json")
+        current_file_path = os.path.join(dependencies.history_dir, f"portfolio_{date_str}.json")
 
         # Check if file already exists (avoid duplicate fetch on manual trigger)
         if os.path.exists(current_file_path):
@@ -346,8 +357,13 @@ def run_daily_portfolio_report(
             summary_text = format_portfolio_summary(portfolio_data)
 
             # Generate History Comparison
-            history_files = get_sorted_history_files()
-            comparison_text = get_comparison_stats(portfolio_data, history_files, current_file_path)
+            history_files = get_sorted_history_files(dependencies.history_dir)
+            comparison_text = get_comparison_stats(
+                portfolio_data,
+                history_files,
+                current_file_path,
+                dependencies.default_exchange_rate,
+            )
 
             final_message = f"{summary_text}\n{comparison_text}"
 
@@ -357,7 +373,7 @@ def run_daily_portfolio_report(
             date_str = match.group(1) if match else datetime.now().strftime("%Y%m%d")
 
             # Backup Report
-            report_file = os.path.join(REPORTS_DIR, f"report_{date_str}.txt")
+            report_file = os.path.join(dependencies.history_dir, f"report_{date_str}.txt")
             with open(report_file, 'w', encoding='utf-8') as f:
                 f.write(final_message)
 
