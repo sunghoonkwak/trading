@@ -248,6 +248,26 @@ def test_kis_portfolio_source_does_not_import_legacy_broker():
     assert "core.trading_config" not in imports
 
 
+def test_kis_source_has_no_integrated_portfolio_compatibility_shim():
+    source = (SRC_DIR / "infrastructure/portfolio/kis_source.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "def get_integrated_portfolio" not in source
+    assert "def _manager_get_integrated_portfolio" not in source
+
+    consumers = []
+    for root in [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            path_source = path.read_text(encoding="utf-8")
+            if "kis_source import get_integrated_portfolio" in path_source:
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
+
+
 def test_gsheet_source_does_not_import_legacy_config():
     imports = _imports_in(SRC_DIR / "infrastructure/gsheet/portfolio_source.py")
 

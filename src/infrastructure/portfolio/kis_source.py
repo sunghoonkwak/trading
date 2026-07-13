@@ -383,14 +383,3 @@ def fetch_kis_portfolio_source():
         "SUCCESS",
     )
     return kis_portfolio, kis_raw_data
-
-
-def _manager_get_integrated_portfolio(scope: str = "all"):
-    from infrastructure.portfolio import get_integrated_portfolio
-
-    return get_integrated_portfolio(scope=scope)
-
-
-def get_integrated_portfolio(scope: str = "all"):
-    """Fetch the integrated portfolio through the data integration layer."""
-    return _manager_get_integrated_portfolio(scope=scope)
