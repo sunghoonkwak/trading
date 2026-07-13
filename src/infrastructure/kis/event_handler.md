@@ -42,7 +42,8 @@ KIS WebSocket 클라이언트가 메시지를 수신할 때마다 실행되는 �
 
 ## Dependencies (의존성)
 *   **`core.event_pipe`**: 외부 뷰어로 로그를 스트리밍하는 데 사용됩니다.
-*   **`display`**: UI 알림을 표시합니다.
+*   **`infrastructure.display`**: 주문 상태와 알림을 터미널 및 이벤트 뷰어에
+    전달합니다.
 *   **주입된 notification sender**: 주문 체결 시 Telegram 알림을 전송합니다.
 
 ## MKT 메시지 형식

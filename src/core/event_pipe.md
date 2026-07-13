@@ -19,7 +19,7 @@
 ### Message Types
 *   **MKT**: Market Data (Quotes, Prices - displayed in Quotes & Log panels)
 *   **ODR**: Order Notifications (Execution, Updates - displayed in Orders panel)
-*   **ALT**: Application alerts from `core.display.add_alert`
+*   **ALT**: Application alerts from `infrastructure.display.add_alert`
 *   **SYS**: System Messages (Errors, PINGPONG - displayed in Log panel in Red)
 *   **CLR**: Control Commands (e.g., clearing order list)
 

@@ -8,7 +8,7 @@ event-pipe callback을 가집니다.
 
 ## Core Logic (핵심 로직)
 1. **WebSocket Streaming**: `/ws` 엔드포인트를 통해 클라이언트와 연결하고 실시간 데이터(주문, 시세, 로그)를 전송합니다.
-2. **Event Broadcasting**: `core.event_pipe`로부터 수신한 메시지를 연결된 모든 웹 클라이언트에게 브로드캐스트합니다.
+2. **Event Broadcasting**: `core.event_pipe`로부터 수신한 메시지를 연결된 모든 웹 클라이언트에게 브로드캐스트합니다. 터미널 및 주문 알림은 `infrastructure.display`가 이 파이프로 전달합니다.
 3. **Static File Serving**: `src/interfaces/web/` 디렉토리의 정적 파일(`favicon.ico`, `index.html`, `styles.css`, `app.js`)을 제공합니다.
 4. **Log Redirection**: Uvicorn 서버의 로그를 표준 출력으로 리다이렉트하여 컨테이너 로그 시스템과 통합합니다.
 5. **HTTPS 지원**: `src/interfaces/web/certs/` 폴더의 인증서를 통한 SSL/TLS 암호화 연결을 지원합니다.

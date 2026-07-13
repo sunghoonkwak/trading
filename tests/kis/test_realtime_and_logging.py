@@ -14,6 +14,12 @@ def _load_event_handler(monkeypatch):
     fake_kis = types.ModuleType("infrastructure.kis")
     fake_event_pipe = types.ModuleType("core.event_pipe")
     fake_event_pipe.print_viewer = lambda *args, **kwargs: None
+    fake_display = types.ModuleType("infrastructure.display")
+    fake_display.add_alert = lambda *args, **kwargs: None
+    fake_display.remove_order_state = lambda *args, **kwargs: None
+    fake_trading_config = types.ModuleType("infrastructure.trading_configuration")
+    fake_trading_config.get_stock_info = lambda _code: None
+    fake_trading_config.strip_market_prefix = lambda value: value
     fake_ws_parser = types.ModuleType("infrastructure.kis.ws_parser")
     fake_ws_parser.mask_dict_for_log = lambda value: value
     fake_kis.ws_parser = fake_ws_parser
@@ -24,6 +30,12 @@ def _load_event_handler(monkeypatch):
     monkeypatch.setitem(sys.modules, "infrastructure", fake_infrastructure)
     monkeypatch.setitem(sys.modules, "infrastructure.kis", fake_kis)
     monkeypatch.setitem(sys.modules, "core.event_pipe", fake_event_pipe)
+    monkeypatch.setitem(sys.modules, "infrastructure.display", fake_display)
+    monkeypatch.setitem(
+        sys.modules,
+        "infrastructure.trading_configuration",
+        fake_trading_config,
+    )
     monkeypatch.setitem(sys.modules, "infrastructure.kis.ws_parser", fake_ws_parser)
     monkeypatch.setitem(sys.modules, "infrastructure.order_admin", fake_order_admin)
 

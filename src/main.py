@@ -23,8 +23,8 @@ except ImportError:
     pass
 
 from application.runtime_service import RuntimeCommandResult, RuntimeController
-from core import display, event_pipe
-from infrastructure import lock_manager
+from core import event_pipe
+from infrastructure import display, lock_manager
 from infrastructure import trading_configuration as trading_config
 from infrastructure.logger import LogManager
 from infrastructure.runtime_settings import CONFIG_ROOT
