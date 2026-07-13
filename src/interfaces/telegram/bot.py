@@ -10,7 +10,7 @@ import logging
 import os
 import threading
 import uuid
-from typing import Optional, cast
+from typing import Callable, Optional, cast
 
 # Telegram imports
 import requests
@@ -18,8 +18,6 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, Updater
 
 from application.runtime_service import RuntimeController
-from core import display
-from core.constants import CONFIG_ROOT
 from interfaces.telegram.portfolio import (
     PortfolioCommandDependencies,
     register_portfolio_handlers,
@@ -41,22 +39,6 @@ _chat_id: Optional[str] = None
 _session_id: str = str(uuid.uuid4())[:8]  # Unique session ID (first 8 chars)
 _init_lock = threading.Lock()
 _is_initialized = False
-
-
-def load_telegram_credentials() -> tuple[Optional[str], Optional[str]]:
-    """Load Telegram bot token and chat ID."""
-    try:
-        telegram_file_info = os.path.join(CONFIG_ROOT, "telegram.txt")
-        if not os.path.exists(telegram_file_info):
-            logging.error(f"telegram.txt not found at {telegram_file_info}")
-            return None, None
-
-        with open(telegram_file_info, "r") as file:
-            bot_token, chat_id = file.read().split(',')[:2]
-        return bot_token.strip(), chat_id.strip()
-    except Exception as e:
-        logging.error(f"Error loading Telegram credentials: {e}")
-        return None, None
 
 
 async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -109,6 +91,8 @@ def initialize_telegram(
     strategy_run_service,
     memo_store: MemoStore,
     runtime_controller: RuntimeController,
+    credentials_loader: Callable[[], tuple[Optional[str], Optional[str]]],
+    add_alert: Callable[[str, str], None],
 ):
     """
     Initialize Telegram bot and start polling in a background thread.
@@ -124,7 +108,7 @@ def initialize_telegram(
 
     logging.info(f"[Telegram] Initializing bot... (Session: {_session_id})")
 
-    _bot_token, _chat_id = load_telegram_credentials()
+    _bot_token, _chat_id = credentials_loader()
     if not _bot_token or not _chat_id:
         logging.error("Failed to load Telegram credentials. Bot not started.")
         return False
@@ -143,7 +127,7 @@ def initialize_telegram(
                 from telegram.error import BadRequest
                 if isinstance(context.error, BadRequest) and "Message is not modified" in str(context.error):
                     return
-                display.add_alert(f"[TG] ERR: {str(context.error)[:100]}", "ERROR")
+                add_alert(f"[TG] ERR: {str(context.error)[:100]}", "ERROR")
                 logging.error(f"Telegram Exception: {context.error}", exc_info=context.error)
 
             # Build Application
@@ -196,7 +180,7 @@ def initialize_telegram(
         try:
             loop.run_until_complete(main())
         except Exception as e:
-            display.add_alert(f"[TG] CRITICAL ERROR: {str(e)[:40]}", "ERROR")
+            add_alert(f"[TG] CRITICAL ERROR: {str(e)[:40]}", "ERROR")
             logging.error(f"Telegram bot error: {e}")
         finally:
             loop.close()

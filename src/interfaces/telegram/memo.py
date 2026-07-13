@@ -14,8 +14,6 @@ from zoneinfo import ZoneInfo
 from telegram import Message, Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-from core import display
-
 from .utils import wrap_reply
 
 
@@ -23,6 +21,7 @@ from .utils import wrap_reply
 class MemoStore:
     load: Callable[[], dict]
     save: Callable[[dict], bool]
+    add_alert: Callable[[str], None]
 
 
 async def _handle_text_message(
@@ -60,7 +59,7 @@ async def _handle_text_message(
     weekly_total = sum(len(messages.get(d, [])) for d in week_dates)
 
     logging.info(f"[Memo] Saved: {text[:50]}...")
-    display.add_alert(f'[TG] <= "{text[:60]}"')
+    store.add_alert(f'[TG] <= "{text[:60]}"')
     await wrap_reply(update, f"📝 Saved (today: {today_count}, total: {weekly_total})")
 
 

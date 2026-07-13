@@ -24,6 +24,7 @@ except ImportError:
 
 from application.runtime_service import RuntimeCommandResult, RuntimeController
 from core import display, event_pipe, lock_manager, trading_config
+from core.constants import CONFIG_ROOT
 from utils.logger import LogManager
 
 
@@ -42,6 +43,17 @@ class TradingSystem:
         """Configures system-wide logging via LogManager."""
         log_file = LogManager.setup(self.base_dir)
         display.log_file_path = log_file
+
+    def load_telegram_credentials(self) -> tuple[str | None, str | None]:
+        """Load private Telegram credentials from the composition root."""
+        try:
+            path = os.path.join(CONFIG_ROOT, "telegram.txt")
+            with open(path, "r") as file:
+                token, chat_id = file.read().split(",")[:2]
+            return token.strip(), chat_id.strip()
+        except Exception as error:
+            logging.error("Error loading Telegram credentials: %s", error)
+            return None, None
 
     def initialize_telegram(self):
         """Initializes the Telegram bot thread."""
@@ -90,12 +102,15 @@ class TradingSystem:
             memo_store=MemoStore(
                 load=lambda: load_json(ConfigFile.MEMO, default={}),
                 save=lambda memos: save_json(ConfigFile.MEMO, memos),
+                add_alert=display.add_alert,
             ),
             runtime_controller=RuntimeController(
                 start=self.start_trading_runtime,
                 stop=self.stop_trading_runtime,
                 is_running=self.is_trading_runtime_running,
             ),
+            credentials_loader=self.load_telegram_credentials,
+            add_alert=display.add_alert,
         ):
             from broker.kis_event_handler import (
                 configure_notification_sender as configure_kis_event_notification_sender,

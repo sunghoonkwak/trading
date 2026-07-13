@@ -76,7 +76,9 @@ def test_memo_handler_uses_its_own_store(monkeypatch):
 
     monkeypatch.setattr(telegram_memo, "wrap_reply", fake_reply)
     handler = telegram_memo.MemoCommandHandler(
-        telegram_memo.MemoStore(load=lambda: {}, save=lambda _memos: True)
+        telegram_memo.MemoStore(
+            load=lambda: {}, save=lambda _memos: True, add_alert=lambda _message: None
+        )
     )
 
     class Update:
