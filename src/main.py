@@ -128,6 +128,9 @@ class TradingSystem:
 
     def _configure_strategy_execution_service(self):
         """Compose strategy execution collaborators from runtime adapters."""
+        if self._strategy_runtime is not None:
+            return
+
         from application.strategy_broker import StrategyBrokerService
         from application.strategy_execution import (
             StrategyExecutionDependencies,
