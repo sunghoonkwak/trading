@@ -29,8 +29,8 @@ from domain.strategy.constants import (
     STRATEGY_HISTORY_DATE_RE,
     TZ_ET,
 )
+from domain.strategy.pricing import resolve_current_price
 from utils.market_utils import get_us_market_status
-from utils.price_utils import resolve_current_price
 
 _orderable_usd_cache: Dict[str, float] = {}
 

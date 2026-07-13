@@ -25,7 +25,6 @@ files = [
     "src/utils/format_utils.py",
     "src/utils/logger.py",
     "src/utils/market_utils.py",
-    "src/utils/price_utils.py",
     "src/domain/portfolio/weights.py",
     "src/infrastructure/config.py",
     "src/domain/portfolio/processing.py",
