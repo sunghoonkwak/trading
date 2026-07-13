@@ -1,29 +1,31 @@
 """Portfolio-weight calculation adapter used by Telegram composition."""
-from typing import Dict, List, Tuple
-
-from broker import market_data
-from data.calculate_weights import get_cash_weight
-from data.config_manager import ConfigFile, load_json
-from infrastructure.portfolio.composition import build_portfolio_service
-from utils.market_utils import get_fear_and_greed
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Tuple
 
 
-def get_portfolio_data(force_refresh: bool = False, scope: str = "all") -> Dict:
-    return build_portfolio_service().get_portfolio_data(
-        force_refresh=force_refresh,
-        scope=scope,
-    )
+@dataclass(frozen=True)
+class WeightDiffDependencies:
+    """Concrete collaborators supplied by the composition root."""
+
+    get_portfolio_data: Callable[[str], Dict[str, Any]]
+    load_weights: Callable[[], Dict[str, Any]]
+    get_cash_weight: Callable[[Any, Dict[str, Any]], float]
+    get_fear_and_greed: Callable[[], Any]
+    fetch_price: Callable[[str], float]
 
 
-def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
+def get_weight_diffs(
+    scope: str,
+    dependencies: WeightDiffDependencies,
+) -> Tuple[List[Dict], float, Dict]:
     """Calculate group-aware portfolio weight differences."""
-    portfolio = get_portfolio_data(scope=scope)
+    portfolio = dependencies.get_portfolio_data(scope)
     merged = portfolio.get("merged_data", {})
     total_usd = portfolio.get("total_value_usd", 0.0)
     targets = portfolio.get("targets", {})
     ex_rate = portfolio.get("exchange_rate", 1.0)
     try:
-        config = load_json(ConfigFile.PORTFOLIO_WEIGHTS)
+        config = dependencies.load_weights()
         items = config.get("core", []) + config.get("satellites", [])
         groups = [item for item in items if item.get("type") == "group"]
         group_map = {item["main_ticker"]: item.get("constituents", []) for item in groups}
@@ -52,7 +54,7 @@ def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
         target_weight = targets.get(ticker, 0.0)
         difference = target_weight - current_weight
         holding = merged.get(ticker, {})
-        price = holding.get("cur_price", 0.0) or market_data.fetch_price(ticker)
+        price = holding.get("cur_price", 0.0) or dependencies.fetch_price(ticker)
         quantity_difference = 0
         if price > 0:
             native_value = difference * total_usd
@@ -74,7 +76,9 @@ def get_weight_diffs(scope: str = "all") -> Tuple[List[Dict], float, Dict]:
     diffs.sort(key=lambda item: item["abs_diff"], reverse=True)
     current_cash = sum(item["current_value_usd"] for item in merged.values() if item["type"] == "CASH")
     current_cash += sum(group_values.get(ticker, 0.0) for ticker in cash_groups)
-    target_cash = get_cash_weight(get_fear_and_greed(), config.get("cash_strategy", {}))
+    target_cash = dependencies.get_cash_weight(
+        dependencies.get_fear_and_greed(), config.get("cash_strategy", {})
+    )
     return diffs, total_usd, {
         "current": current_cash / total_usd if total_usd > 0 else 0,
         "target": target_cash,

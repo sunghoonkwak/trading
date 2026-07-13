@@ -67,18 +67,23 @@ class TradingSystem:
             save_raoeo_cash_funding_result,
         )
         from broker import market_data, order_admin
+        from data.calculate_weights import get_cash_weight
         from data.config_manager import ConfigFile, load_json, save_json
         from infrastructure.portfolio import (
             build_portfolio_service,
             refresh_gsheet_cache,
         )
-        from infrastructure.portfolio.weight_diffs import get_weight_diffs
+        from infrastructure.portfolio.weight_diffs import (
+            WeightDiffDependencies,
+            get_weight_diffs,
+        )
         from infrastructure.strategy_execution import configure_strategy_execution_service
         from interfaces.telegram.bot import initialize_telegram
         from interfaces.telegram.memo import MemoStore
         from interfaces.telegram.portfolio import PortfolioCommandDependencies
         from interfaces.telegram.strategy import StrategyCommandDependencies
         from state.system_state import ThreadStatus, update_telegram_state
+        from utils.market_utils import get_fear_and_greed
 
         configure_strategy_execution_service()
         update_telegram_state(thread_status=ThreadStatus.STARTING)
@@ -87,7 +92,20 @@ class TradingSystem:
                 reader=build_portfolio_service(),
                 market_reader=market_data,
                 order_reader=order_admin,
-                get_weight_diffs=get_weight_diffs,
+                get_weight_diffs=lambda scope="all": get_weight_diffs(
+                    scope,
+                    WeightDiffDependencies(
+                        get_portfolio_data=lambda requested_scope: (
+                            build_portfolio_service().get_portfolio_data(
+                                scope=requested_scope
+                            )
+                        ),
+                        load_weights=lambda: load_json(ConfigFile.PORTFOLIO_WEIGHTS),
+                        get_cash_weight=get_cash_weight,
+                        get_fear_and_greed=get_fear_and_greed,
+                        fetch_price=market_data.fetch_price,
+                    ),
+                ),
                 refresh_gsheet_cache=refresh_gsheet_cache,
             ),
             strategy_dependencies=StrategyCommandDependencies(

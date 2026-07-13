@@ -215,6 +215,15 @@ assert "kis.kis_thread" not in sys.modules
     assert result.returncode == 0, result.stderr
 
 
+def test_weight_diff_adapter_uses_composed_dependencies():
+    imports = _imports_in(SRC_DIR / "infrastructure/portfolio/weight_diffs.py")
+
+    assert "broker.market_data" not in imports
+    assert "data.calculate_weights" not in imports
+    assert "data.config_manager" not in imports
+    assert "infrastructure.portfolio.composition" not in imports
+
+
 def test_portfolio_integration_does_not_import_legacy_display():
     imports = _imports_in(SRC_DIR / "infrastructure/portfolio/integration.py")
 
