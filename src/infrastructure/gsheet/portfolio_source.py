@@ -52,8 +52,8 @@ def connect_google_sheet(sheet_name: str):
 def parse_worksheet_data(worksheet: Any, currency: str) -> dict[str, Any]:
     """Parse a worksheet into the established normalized portfolio source."""
     holdings = []
-    accounts = {}
-    asset_info = {}
+    accounts: dict[str, dict[str, str]] = {}
+    asset_info: dict[str, dict[str, str]] = {}
     cash_holdings = []
 
     for row in worksheet.get_all_values()[2:]:
@@ -168,10 +168,10 @@ def refresh_portfolio_cache(
 
     try:
         source, error = fetcher()
-    except Exception as error:
-        logging.warning("[Portfolio] GSheet cache refresh failed: %s", error)
+    except Exception as refresh_error:
+        logging.warning("[Portfolio] GSheet cache refresh failed: %s", refresh_error)
         with _portfolio_cache_lock:
-            _portfolio_cache_error = str(error)
+            _portfolio_cache_error = str(refresh_error)
             if _portfolio_cache is None:
                 _portfolio_cache = _empty_source()
             cached = deepcopy(_portfolio_cache)
@@ -181,7 +181,7 @@ def refresh_portfolio_cache(
             "holdings_count": len(cached.get("holdings", [])),
             "cash_count": len(cached.get("cash_holdings", [])),
             "accounts_count": len(cached.get("accounts", {})),
-            "error": str(error),
+            "error": str(refresh_error),
             "last_updated": cached_at.isoformat() if cached_at else None,
         }
 
