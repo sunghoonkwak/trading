@@ -392,10 +392,18 @@ class TradingSystem:
         """Initializes Toss access token for today's trading session."""
         print("[Startup] Step 3: Initializing Toss API...")
         try:
+            from core.credentials import load_credentials
+            from infrastructure.toss.auth import (
+                configure_auth_configuration,
+                ensure_daily_token,
+            )
             from infrastructure.toss.client import configure_failure_notifier
             from interfaces.telegram.utils import send_notification
-            from toss.auth import ensure_daily_token
 
+            configure_auth_configuration(
+                config_root=CONFIG_ROOT,
+                credentials_loader=load_credentials,
+            )
             configure_failure_notifier(send_notification)
             token_path = ensure_daily_token()
             logging.info(f"[Startup] Toss token ready: {token_path}")

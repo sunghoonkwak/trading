@@ -266,6 +266,13 @@ def test_gsheet_source_does_not_import_legacy_config():
     assert "core.constants" not in imports
 
 
+def test_toss_auth_does_not_import_legacy_config():
+    imports = _imports_in(SRC_DIR / "infrastructure/toss/auth.py")
+
+    assert "core.constants" not in imports
+    assert "core.credentials" not in imports
+
+
 def test_kis_rest_client_does_not_import_legacy_state():
     imports = _imports_in(SRC_DIR / "infrastructure/kis/kis_rest_client.py")
 

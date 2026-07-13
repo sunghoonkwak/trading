@@ -29,7 +29,9 @@ schema에서 다음 항목을 확인합니다.
 
 - 토큰은 `toss.auth.load_access_token()`을 통해 로드합니다. 이 함수는
   저장된 토큰의 `expires_at`을 확인하고, 만료된 경우 다음 API 요청 전에 새
-  토큰을 발급해 반환합니다.
+  토큰을 발급해 반환합니다. 이 legacy path는 기존 scripts/tests를 위해
+  private configuration collaborator를 등록합니다. Production composition은
+  `infrastructure.toss.auth`를 직접 조립합니다.
 - 기본 계좌 sequence는
   `toss.account_cache.get_default_account_seq(access_token)`로 확인합니다.
   이 값은 같은 프로세스 안에서 `access_token`과 Toss base URL별로 캐시되어

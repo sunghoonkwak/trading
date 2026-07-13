@@ -11,18 +11,35 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Mapping, cast
+from typing import Any, Callable, Mapping, Optional, cast
 from urllib import parse, request
 
-from core.constants import CONFIG_ROOT
-from core.credentials import load_credentials
 from infrastructure.toss.client import request_json
 
 DEFAULT_BASE_URL = "https://openapi.tossinvest.com"
 DEFAULT_TIMEOUT = 10.0
-CONFIG_ROOT_PATH = Path(CONFIG_ROOT)
-TOKEN_DIR = CONFIG_ROOT_PATH
 TOKEN_EXPIRY_SAFETY_MARGIN = timedelta(minutes=1)
+
+_config_root: Optional[Path] = None
+_credentials_loader: Optional[Callable[..., Any]] = None
+
+
+def configure_auth_configuration(
+    *,
+    config_root: Optional[Path | str],
+    credentials_loader: Optional[Callable[..., Any]],
+) -> None:
+    """Inject private Toss credential storage at composition time."""
+    global _config_root, _credentials_loader
+    _config_root = Path(config_root) if config_root is not None else None
+    _credentials_loader = credentials_loader
+
+
+def _configured_root(config_root: Path | str | None) -> Path:
+    root = Path(config_root) if config_root is not None else _config_root
+    if root is None:
+        raise RuntimeError("Toss credential storage is not configured")
+    return root
 
 
 @dataclass(frozen=True)
@@ -39,8 +56,10 @@ class TossToken:
     expires_in: int
 
 
-def load_config(config_root: Path | str = CONFIG_ROOT_PATH) -> TossAuthConfig:
-    credentials = load_credentials(config_root=Path(config_root))
+def load_config(config_root: Path | str | None = None) -> TossAuthConfig:
+    if _credentials_loader is None:
+        raise RuntimeError("Toss credential loader is not configured")
+    credentials = _credentials_loader(config_root=_configured_root(config_root))
     config = TossAuthConfig(
         client_id=credentials.toss_client_id,
         client_secret=credentials.toss_client_secret,
@@ -100,11 +119,12 @@ def issue_token(
 def save_token(
     token: TossToken,
     *,
-    token_dir: Path = TOKEN_DIR,
+    token_dir: Path | None = None,
     issued_at: datetime | None = None,
 ) -> Path:
     issued_at = issued_at or datetime.now().astimezone()
     expires_at = issued_at + timedelta(seconds=token.expires_in)
+    token_dir = _configured_root(token_dir)
     token_dir.mkdir(parents=True, exist_ok=True)
 
     token_path = token_dir / f"TOSS{issued_at.strftime('%Y%m%d_%H%M%S')}.json"
@@ -122,7 +142,8 @@ def save_token(
     return token_path
 
 
-def load_latest_token(token_dir: Path = TOKEN_DIR) -> dict[str, object] | None:
+def load_latest_token(token_dir: Path | None = None) -> dict[str, object] | None:
+    token_dir = _configured_root(token_dir)
     token_files = sorted(token_dir.glob("TOSS*.json"))
     if not token_files:
         return None
@@ -166,10 +187,11 @@ def is_token_expired(
 def ensure_valid_token(
     config: TossAuthConfig | None = None,
     *,
-    token_dir: Path = TOKEN_DIR,
+    token_dir: Path | None = None,
     now: datetime | None = None,
     issue_token_func: Callable[[TossAuthConfig], TossToken] = issue_token,
 ) -> dict[str, object]:
+    token_dir = _configured_root(token_dir)
     token_payload = load_latest_token(token_dir)
     if not token_payload:
         raise RuntimeError("No saved Toss token found. Run src/toss/auth.py first.")
@@ -192,7 +214,7 @@ def ensure_valid_token(
 
 
 def load_access_token(
-    token_dir: Path = TOKEN_DIR,
+    token_dir: Path | None = None,
     *,
     config: TossAuthConfig | None = None,
     now: datetime | None = None,
@@ -213,10 +235,11 @@ def load_access_token(
 def ensure_daily_token(
     config: TossAuthConfig | None = None,
     *,
-    token_dir: Path = TOKEN_DIR,
+    token_dir: Path | None = None,
     now: datetime | None = None,
     issue_token_func: Callable[[TossAuthConfig], TossToken] = issue_token,
 ) -> Path:
+    token_dir = _configured_root(token_dir)
     issued_at = now or datetime.now().astimezone()
     today_pattern = f"TOSS{issued_at.strftime('%Y%m%d')}_*.json"
     today_tokens = sorted(token_dir.glob(today_pattern))
