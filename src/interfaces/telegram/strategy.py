@@ -5,9 +5,10 @@ Telegram Strategy Module (Refactored)
 Handles the /strategy command to view and execute all active strategies.
 """
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from html import escape
-from typing import Any, Optional, cast
+from typing import Any, Callable, Optional, cast
 
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -19,14 +20,7 @@ from telegram.ext import (
     TypeHandler,
 )
 
-from application.strategy_execution import (
-    clear_strategy_history_for_date,
-    execute_raoeo_cash_funding,
-    get_strategy_run_service,
-    normalize_strategy_history_date,
-    prepare_raoeo_cash_funding,
-    save_raoeo_cash_funding_result,
-)
+from application.strategy_run_service import StrategyRunService
 from domain.strategy.base import StrategyStatus
 from domain.strategy.constants import TZ_ET
 from interfaces.telegram.report_formatter import format_strategy_report
@@ -41,9 +35,14 @@ from .utils import wrap_edit, wrap_edit_message, wrap_reply
 STRATEGY_CONFIRM = 0
 
 
-def run_strategy_suite(execute: bool = False):
-    """Compatibility seam for the shared application strategy use case."""
-    return get_strategy_run_service().run_suite(execute=execute)
+@dataclass(frozen=True)
+class StrategyCommandDependencies:
+    strategy_run_service: StrategyRunService
+    clear_history: Callable[[str], dict]
+    normalize_history_date: Callable[[str], str]
+    prepare_cash_funding: Callable[[dict], tuple[Any, dict]]
+    execute_cash_funding: Callable[[dict | None], tuple[Any, dict]]
+    save_cash_funding_result: Callable[[str, dict], None]
 
 def build_confirm_keyboard(
     has_orders: bool,
@@ -71,13 +70,17 @@ def build_confirm_keyboard(
     ])
     return InlineKeyboardMarkup(keyboard)
 
-async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _cmd_strategy(
+    dependencies: StrategyCommandDependencies,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     """Handler for /strategy command."""
     logging.info("[TG] /strategy from user")
     user_data = cast(dict[Any, Any], context.user_data)
 
     try:
-        raoeo_rep, va_rep = run_strategy_suite(execute=False)
+        raoeo_rep, va_rep = dependencies.strategy_run_service.run_suite(execute=False)
     except Exception as e:
         logging.error(f"Strategy Calc Error: {e}", exc_info=True)
         await wrap_reply(update, f"⚠️ Error calculating strategies: {e}")
@@ -95,7 +98,7 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cash_funding_required = False
     if raoeo_has_orders:
         try:
-            funding_order, funding_info = prepare_raoeo_cash_funding(raoeo_rep)
+            funding_order, funding_info = dependencies.prepare_cash_funding(raoeo_rep)
             raoeo_rep["cash_funding"] = {
                 **funding_info,
                 "order": funding_order,
@@ -122,10 +125,14 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STRATEGY_CONFIRM if has_orders else ConversationHandler.END
 
 
-async def cmd_clear_strategy_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _cmd_clear_strategy_history(
+    dependencies: StrategyCommandDependencies,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     raw_date = context.args[0] if context.args else ""
     try:
-        target_date = normalize_strategy_history_date(raw_date)
+        target_date = dependencies.normalize_history_date(raw_date)
     except ValueError as e:
         escaped_date = escape(raw_date)
         await wrap_reply(
@@ -162,7 +169,8 @@ async def cmd_clear_strategy_history(update: Update, context: ContextTypes.DEFAU
     mark_runtime_confirmation_pending(context, "clear_strategy_history")
 
 
-async def handle_clear_strategy_history_callback(
+async def _handle_clear_strategy_history_callback(
+    dependencies: StrategyCommandDependencies,
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
 ):
@@ -180,7 +188,7 @@ async def handle_clear_strategy_history_callback(
 
     target_date = data.split(":", 1)[1]
     try:
-        result = clear_strategy_history_for_date(target_date)
+        result = dependencies.clear_history(target_date)
         if result["removed"]:
             message = f"✅ Cleared all strategy history for {result['date']}."
         else:
@@ -196,7 +204,11 @@ async def handle_clear_strategy_history_callback(
     finally:
         clear_runtime_confirmation_pending(context)
 
-async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _handle_strategy_callback(
+    dependencies: StrategyCommandDependencies,
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+):
     query = cast(CallbackQuery, update.callback_query)
     user_data = cast(dict[Any, Any], context.user_data)
     await query.answer()
@@ -216,7 +228,7 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
             funding_result = None
             if data == "strategy_with_cash_sale":
                 stored_raoeo_report = user_data.get('strategy_raoeo')
-                funding_result, funding_info = execute_raoeo_cash_funding(
+                funding_result, funding_info = dependencies.execute_cash_funding(
                     stored_raoeo_report
                 )
                 funding_failed = (
@@ -227,7 +239,7 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
                     report_date = user_data.get(
                         'strategy_raoeo', {}
                     ).get('date', datetime.now(TZ_ET).strftime("%Y-%m-%d"))
-                    save_raoeo_cash_funding_result(report_date, funding_result)
+                    dependencies.save_cash_funding_result(report_date, funding_result)
                 if funding_failed:
                     reason = funding_info.get("error")
                     if funding_result is not None:
@@ -242,7 +254,7 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
                     clear_runtime_confirmation_pending(context)
                     return ConversationHandler.END
 
-            raoeo_res, va_res = run_strategy_suite(execute=True)
+            raoeo_res, va_res = dependencies.strategy_run_service.run_suite(execute=True)
             if funding_result is not None:
                 raoeo_res["cash_funding_results"] = [funding_result]
 
@@ -258,7 +270,7 @@ async def handle_strategy_callback(update: Update, context: ContextTypes.DEFAULT
         clear_runtime_confirmation_pending(context)
         return ConversationHandler.END
 
-async def strategy_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _strategy_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = cast(dict[Any, Any], context.user_data)
     if 'strategy_msg_id' in user_data:
         try:
@@ -277,19 +289,56 @@ async def strategy_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clear_runtime_confirmation_pending(context)
     return ConversationHandler.END
 
-def register_strategy_handlers(app: Application):
+
+class StrategyCommandHandler:
+    """Telegram strategy handlers with explicit application use cases."""
+
+    def __init__(self, dependencies: StrategyCommandDependencies):
+        self._dependencies = dependencies
+
+    def run_strategy_suite(self, execute: bool = False):
+        return self._dependencies.strategy_run_service.run_suite(execute=execute)
+
+    async def cmd_strategy(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _cmd_strategy(self._dependencies, update, context)
+
+    async def cmd_clear_strategy_history(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        return await _cmd_clear_strategy_history(self._dependencies, update, context)
+
+    async def handle_clear_strategy_history_callback(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        return await _handle_clear_strategy_history_callback(
+            self._dependencies, update, context
+        )
+
+    async def handle_strategy_callback(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ):
+        return await _handle_strategy_callback(self._dependencies, update, context)
+
+    async def strategy_timeout(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return await _strategy_timeout(update, context)
+
+
+def register_strategy_handlers(
+    app: Application, dependencies: StrategyCommandDependencies
+):
+    handler = StrategyCommandHandler(dependencies)
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("strategy", cmd_strategy)],
+        entry_points=[CommandHandler("strategy", handler.cmd_strategy)],
         states={
-            STRATEGY_CONFIRM: [CallbackQueryHandler(handle_strategy_callback, pattern=r'^strategy_')],
-            ConversationHandler.TIMEOUT: [TypeHandler(Update, strategy_timeout)]
+            STRATEGY_CONFIRM: [CallbackQueryHandler(handler.handle_strategy_callback, pattern=r'^strategy_')],
+            ConversationHandler.TIMEOUT: [TypeHandler(Update, handler.strategy_timeout)]
         },
         fallbacks=[],
         conversation_timeout=60
     )
     app.add_handler(conv_handler)
-    app.add_handler(CommandHandler("clear_strategy_history", cmd_clear_strategy_history))
+    app.add_handler(CommandHandler("clear_strategy_history", handler.cmd_clear_strategy_history))
     app.add_handler(CallbackQueryHandler(
-        handle_clear_strategy_history_callback,
+        handler.handle_clear_strategy_history_callback,
         pattern=r'^clear_strategy_history_',
     ))

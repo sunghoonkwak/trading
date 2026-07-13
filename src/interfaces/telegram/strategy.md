@@ -1,6 +1,7 @@
 # Telegram Strategy Handler (`src/interfaces/telegram/strategy.py`)
 
 `/strategy` 명령어를 처리하여 RAOEO 및 Value Averaging 전략의 현황을 확인하거나 수동으로 실행하는 핸들러입니다.
+`StrategyCommandHandler`는 `main.py`가 주입한 application use case를 직접 사용합니다.
 
 ## Core Logic (핵심 로직)
 

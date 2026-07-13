@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -27,14 +28,34 @@ def _portfolio_dependencies(**overrides):
     return telegram_portfolio.PortfolioCommandDependencies(**defaults)
 
 
-def test_telegram_strategy_suite_uses_application_facade(monkeypatch):
+def _strategy_dependencies(**overrides):
+    def normalize_date(value):
+        if len(value) == 8 and value.isdigit():
+            value = f"{value[:4]}-{value[4:6]}-{value[6:]}"
+        return datetime.strptime(value, "%Y-%m-%d").strftime("%Y-%m-%d")
+
+    defaults = {
+        "strategy_run_service": SimpleNamespace(run_suite=lambda *, execute: ({}, {})),
+        "clear_history": lambda _date: {"removed": False, "date": _date},
+        "normalize_history_date": normalize_date,
+        "prepare_cash_funding": lambda _report: (None, {"required": False}),
+        "execute_cash_funding": lambda _report: (None, {"required": False}),
+        "save_cash_funding_result": lambda _date, _result: None,
+    }
+    defaults.update(overrides)
+    return telegram_strategy.StrategyCommandDependencies(**defaults)
+
+
+def test_telegram_strategy_handler_uses_application_service(monkeypatch):
     class Service:
         def run_suite(self, *, execute):
             return ({"execute": execute}, {})
 
-    monkeypatch.setattr(telegram_strategy, "get_strategy_run_service", lambda: Service())
+    handler = telegram_strategy.StrategyCommandHandler(
+        _strategy_dependencies(strategy_run_service=Service())
+    )
 
-    assert telegram_strategy.run_strategy_suite(execute=True) == ({"execute": True}, {})
+    assert handler.run_strategy_suite(execute=True) == ({"execute": True}, {})
 
 
 def test_telegram_rebalancing_uses_application_facade(monkeypatch):
@@ -86,15 +107,11 @@ def test_strategy_command_shows_cash_funding_summary(monkeypatch):
         "pending_orders": [],
         "info": {},
     }
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_strategy_suite",
-        lambda execute=False: (raoeo_report, va_report),
-    )
-    monkeypatch.setattr(
-        telegram_strategy,
-        "prepare_raoeo_cash_funding",
-        lambda report: (
+    handler = telegram_strategy.StrategyCommandHandler(_strategy_dependencies(
+        strategy_run_service=SimpleNamespace(
+            run_suite=lambda *, execute: (raoeo_report, va_report)
+        ),
+        prepare_cash_funding=lambda report: (
             funding_order,
             {
                 "buy_budget": 1000.0,
@@ -104,7 +121,7 @@ def test_strategy_command_shows_cash_funding_summary(monkeypatch):
                 "error": None,
             },
         ),
-    )
+    ))
 
     replies = []
 
@@ -124,7 +141,7 @@ def test_strategy_command_shows_cash_funding_summary(monkeypatch):
     class Context:
         user_data = {}
 
-    result = asyncio.run(telegram_strategy.cmd_strategy(Update(), Context()))
+    result = asyncio.run(handler.cmd_strategy(Update(), Context()))
 
     assert result == telegram_strategy.STRATEGY_CONFIRM
     assert "Buy needed: $1,000.00" in replies[0]
@@ -163,16 +180,12 @@ def test_strategy_confirmation_guides_before_system_off(monkeypatch):
         "pending_orders": [],
         "info": {},
     }
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_strategy_suite",
-        lambda execute=False: (raoeo_report, va_report),
-    )
-    monkeypatch.setattr(
-        telegram_strategy,
-        "prepare_raoeo_cash_funding",
-        lambda report: (None, {"required": False, "error": None}),
-    )
+    handler = telegram_strategy.StrategyCommandHandler(_strategy_dependencies(
+        strategy_run_service=SimpleNamespace(
+            run_suite=lambda *, execute: (raoeo_report, va_report)
+        ),
+        prepare_cash_funding=lambda report: (None, {"required": False, "error": None}),
+    ))
     replies = []
 
     async def fake_reply(update, text, **kwargs):
@@ -191,7 +204,7 @@ def test_strategy_confirmation_guides_before_system_off(monkeypatch):
     class Context:
         user_data = {}
 
-    result = asyncio.run(telegram_strategy.cmd_strategy(Update(), Context()))
+    result = asyncio.run(handler.cmd_strategy(Update(), Context()))
 
     assert result == telegram_strategy.STRATEGY_CONFIRM
     assert "/system_off" in replies[0]
@@ -280,25 +293,14 @@ def test_failed_cash_funding_stops_all_strategy_execution(monkeypatch):
         "success": False,
         "message": "rejected",
     }
-    monkeypatch.setattr(
-        telegram_strategy,
-        "execute_raoeo_cash_funding",
-        lambda report=None: (funding_result, {"required": True}),
-        raising=False,
-    )
-    monkeypatch.setattr(
-        telegram_strategy,
-        "save_raoeo_cash_funding_result",
-        lambda today, result: None,
-        raising=False,
-    )
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_strategy_suite",
-        lambda execute=False: (_ for _ in ()).throw(
-            AssertionError("strategies must stop")
+    handler = telegram_strategy.StrategyCommandHandler(_strategy_dependencies(
+        strategy_run_service=SimpleNamespace(
+            run_suite=lambda *, execute: (_ for _ in ()).throw(
+                AssertionError("strategies must stop")
+            )
         ),
-    )
+        execute_cash_funding=lambda report=None: (funding_result, {"required": True}),
+    ))
 
     edits = []
 
@@ -319,7 +321,7 @@ def test_failed_cash_funding_stops_all_strategy_execution(monkeypatch):
     class Context:
         user_data = {}
 
-    asyncio.run(telegram_strategy.handle_strategy_callback(Update(), Context()))
+    asyncio.run(handler.handle_strategy_callback(Update(), Context()))
 
     assert "Cash funding failed" in edits[-1]
 
@@ -330,26 +332,17 @@ def test_successful_cash_funding_runs_strategies_and_reports_sale(monkeypatch):
         "success": True,
         "message": "Success",
     }
-    monkeypatch.setattr(
-        telegram_strategy,
-        "execute_raoeo_cash_funding",
-        lambda report=None: (funding_result, {"required": True}),
-    )
     saved = []
-    monkeypatch.setattr(
-        telegram_strategy,
-        "save_raoeo_cash_funding_result",
-        lambda today, result: saved.append((today, result)),
-    )
     calls = []
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_strategy_suite",
-        lambda execute=False: calls.append(("suite", execute)) or (
-            {"date": "2026-05-27"},
-            {},
+    handler = telegram_strategy.StrategyCommandHandler(_strategy_dependencies(
+        strategy_run_service=SimpleNamespace(
+            run_suite=lambda *, execute: calls.append(("suite", execute)) or (
+                {"date": "2026-05-27"}, {}
+            )
         ),
-    )
+        execute_cash_funding=lambda report=None: (funding_result, {"required": True}),
+        save_cash_funding_result=lambda today, result: saved.append((today, result)),
+    ))
     formatted = []
     monkeypatch.setattr(
         telegram_strategy,
@@ -374,7 +367,7 @@ def test_successful_cash_funding_runs_strategies_and_reports_sale(monkeypatch):
     class Context:
         user_data = {"strategy_raoeo": {"date": "2026-05-27"}}
 
-    asyncio.run(telegram_strategy.handle_strategy_callback(Update(), Context()))
+    asyncio.run(handler.handle_strategy_callback(Update(), Context()))
 
     assert calls == [("suite", True)]
     assert saved == [("2026-05-27", funding_result)]
@@ -382,22 +375,17 @@ def test_successful_cash_funding_runs_strategies_and_reports_sale(monkeypatch):
 
 
 def test_execute_without_cash_sale_skips_funding_and_runs_strategies(monkeypatch):
-    monkeypatch.setattr(
-        telegram_strategy,
-        "execute_raoeo_cash_funding",
-        lambda: (_ for _ in ()).throw(
+    calls = []
+    handler = telegram_strategy.StrategyCommandHandler(_strategy_dependencies(
+        strategy_run_service=SimpleNamespace(
+            run_suite=lambda *, execute: calls.append(("suite", execute)) or (
+                {"date": "2026-05-27"}, {}
+            )
+        ),
+        execute_cash_funding=lambda: (_ for _ in ()).throw(
             AssertionError("cash funding must be skipped")
         ),
-    )
-    calls = []
-    monkeypatch.setattr(
-        telegram_strategy,
-        "run_strategy_suite",
-        lambda execute=False: calls.append(("suite", execute)) or (
-            {"date": "2026-05-27"},
-            {},
-        ),
-    )
+    ))
     formatted = []
     monkeypatch.setattr(
         telegram_strategy,
@@ -422,7 +410,7 @@ def test_execute_without_cash_sale_skips_funding_and_runs_strategies(monkeypatch
     class Context:
         user_data = {"strategy_raoeo": {"date": "2026-05-27"}}
 
-    asyncio.run(telegram_strategy.handle_strategy_callback(Update(), Context()))
+    asyncio.run(handler.handle_strategy_callback(Update(), Context()))
 
     assert calls == [("suite", True)]
     assert len(formatted) == 1
@@ -442,7 +430,8 @@ def test_clear_strategy_history_accepts_compact_date(monkeypatch):
     class Context:
         args = ["20260630"]
 
-    asyncio.run(telegram_strategy.cmd_clear_strategy_history(Update(), Context()))
+    handler = telegram_strategy.StrategyCommandHandler(_strategy_dependencies())
+    asyncio.run(handler.cmd_clear_strategy_history(Update(), Context()))
 
     text, kwargs = replies[0]
     assert "2026-06-30" in text
@@ -459,11 +448,6 @@ def test_clear_strategy_history_rejects_invalid_date(monkeypatch):
         replies.append((text, kwargs))
 
     monkeypatch.setattr(telegram_strategy, "wrap_reply", fake_reply)
-    monkeypatch.setattr(
-        telegram_strategy,
-        "clear_strategy_history_for_date",
-        lambda target_date: cleared.append(target_date),
-    )
 
     class Update:
         pass
@@ -471,7 +455,10 @@ def test_clear_strategy_history_rejects_invalid_date(monkeypatch):
     class Context:
         args = ["<bad&date>" * 20]
 
-    asyncio.run(telegram_strategy.cmd_clear_strategy_history(Update(), Context()))
+    handler = telegram_strategy.StrategyCommandHandler(_strategy_dependencies(
+        clear_history=lambda target_date: cleared.append(target_date)
+    ))
+    asyncio.run(handler.cmd_clear_strategy_history(Update(), Context()))
 
     text, kwargs = replies[0]
     assert "Invalid date" in text
@@ -494,7 +481,8 @@ def test_clear_strategy_history_rejects_impossible_date(monkeypatch):
     class Context:
         args = ["2026-99-99"]
 
-    asyncio.run(telegram_strategy.cmd_clear_strategy_history(Update(), Context()))
+    handler = telegram_strategy.StrategyCommandHandler(_strategy_dependencies())
+    asyncio.run(handler.cmd_clear_strategy_history(Update(), Context()))
 
     text, kwargs = replies[0]
     assert "Invalid date" in text

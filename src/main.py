@@ -46,7 +46,14 @@ class TradingSystem:
     def initialize_telegram(self):
         """Initializes the Telegram bot thread."""
         print("[Startup] Step 1: Initializing Telegram Bot...")
-        from application.strategy_execution import get_strategy_run_service
+        from application.strategy_execution import (
+            clear_strategy_history_for_date,
+            execute_raoeo_cash_funding,
+            get_strategy_run_service,
+            normalize_strategy_history_date,
+            prepare_raoeo_cash_funding,
+            save_raoeo_cash_funding_result,
+        )
         from broker import market_data, order_admin
         from data.config_manager import ConfigFile, load_json, save_json
         from infrastructure.portfolio import (
@@ -58,6 +65,7 @@ class TradingSystem:
         from interfaces.telegram.bot import initialize_telegram
         from interfaces.telegram.memo import MemoStore
         from interfaces.telegram.portfolio import PortfolioCommandDependencies
+        from interfaces.telegram.strategy import StrategyCommandDependencies
         from state.system_state import ThreadStatus, update_telegram_state
 
         configure_strategy_execution_service()
@@ -69,6 +77,14 @@ class TradingSystem:
                 order_reader=order_admin,
                 get_weight_diffs=get_weight_diffs,
                 refresh_gsheet_cache=refresh_gsheet_cache,
+            ),
+            strategy_dependencies=StrategyCommandDependencies(
+                strategy_run_service=get_strategy_run_service(),
+                clear_history=clear_strategy_history_for_date,
+                normalize_history_date=normalize_strategy_history_date,
+                prepare_cash_funding=prepare_raoeo_cash_funding,
+                execute_cash_funding=execute_raoeo_cash_funding,
+                save_cash_funding_result=save_raoeo_cash_funding_result,
             ),
             strategy_run_service=get_strategy_run_service(),
             memo_store=MemoStore(

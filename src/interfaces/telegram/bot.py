@@ -25,7 +25,10 @@ from interfaces.telegram.portfolio import (
     register_portfolio_handlers,
 )
 from interfaces.telegram.rebalancing import register_rebalancing_handlers
-from interfaces.telegram.strategy import register_strategy_handlers
+from interfaces.telegram.strategy import (
+    StrategyCommandDependencies,
+    register_strategy_handlers,
+)
 
 from .memo import MemoStore, register_memo_handler
 from .system import get_initial_control_guide, register_system_handlers
@@ -102,6 +105,7 @@ async def cmd_daily_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def initialize_telegram(
     *,
     portfolio_dependencies: PortfolioCommandDependencies,
+    strategy_dependencies: StrategyCommandDependencies,
     strategy_run_service,
     memo_store: MemoStore,
     runtime_controller: RuntimeController,
@@ -157,7 +161,7 @@ def initialize_telegram(
             set_telegram_bot(_app.bot, _chat_id)
             register_system_handlers(_app, runtime_controller)
             register_portfolio_handlers(_app, portfolio_dependencies)
-            register_strategy_handlers(_app)
+            register_strategy_handlers(_app, strategy_dependencies)
             register_rebalancing_handlers(_app, strategy_run_service)
             register_memo_handler(_app, memo_store)
             _app.add_handler(CommandHandler("daily_report", cmd_daily_report))
