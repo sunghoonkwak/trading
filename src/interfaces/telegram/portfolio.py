@@ -9,6 +9,7 @@ import logging
 import warnings
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 from telegram.warnings import PTBUserWarning
 
@@ -285,10 +286,8 @@ def build_ticker_keyboard(portfolio_data: dict) -> InlineKeyboardMarkup:
         InlineKeyboardMarkup with ticker buttons
     """
     import json
-    import os
-
     # Load stock configuration
-    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "stock_configuration.json")
+    config_path = Path(__file__).resolve().parents[2] / "stock_configuration.json"
     button_tickers = []
 
     try:

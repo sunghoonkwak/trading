@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -568,6 +569,21 @@ def test_portfolio_command_preserves_dependencies_in_executor(monkeypatch):
 
     assert result == telegram_portfolio.SELECT_TICKER
     assert replies == ["summary"]
+
+
+def test_ticker_keyboard_loads_stock_config_from_src_root(monkeypatch, tmp_path):
+    module_path = tmp_path / "src" / "interfaces" / "telegram" / "portfolio.py"
+    module_path.parent.mkdir(parents=True)
+    module_path.touch()
+    (tmp_path / "src" / "stock_configuration.json").write_text(
+        json.dumps({"KR": [], "US": [{"ticker": "QQQ", "telegram_button": True}]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(telegram_portfolio, "__file__", str(module_path))
+
+    keyboard = telegram_portfolio.build_ticker_keyboard({"merged_data": {}})
+
+    assert keyboard.inline_keyboard[0][0].text == "QQQ"
 
 
 def test_portfolio_handlers_keep_factory_dependencies_isolated(monkeypatch):
