@@ -248,6 +248,20 @@ def test_kis_portfolio_source_does_not_import_legacy_broker():
     assert "core.trading_config" not in imports
 
 
+def test_kis_portfolio_source_has_no_worker_serialization_consumer():
+    imports = _imports_in(SRC_DIR / "infrastructure/portfolio/kis_source.py")
+
+    assert "infrastructure.kis.worker" not in imports
+    assert "infrastructure.kis.worker_protocol" not in imports
+
+    protocol = (SRC_DIR / "infrastructure/kis/worker_protocol.py").read_text(
+        encoding="utf-8"
+    )
+    assert "KIS_AUTH" in protocol
+    assert "KIS_WS_AUTH" in protocol
+    assert "GET_PORTFOLIO" not in protocol
+
+
 def test_kis_source_has_no_integrated_portfolio_compatibility_shim():
     source = (SRC_DIR / "infrastructure/portfolio/kis_source.py").read_text(
         encoding="utf-8"

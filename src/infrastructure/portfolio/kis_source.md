@@ -12,3 +12,14 @@ The composition root also supplies the KIS REST and domestic-account feature
 flags through `configure_feature_flags()`. Without a REST flag collaborator,
 the adapter returns the existing disabled empty result before authentication or
 an account API call.
+
+## Current worker boundary
+
+The KIS worker currently serializes only REST and WebSocket authentication.
+This source calls the vendor balance wrappers synchronously, so portfolio reads
+do not currently have worker request IDs, response-queue correlation, or
+worker-level cancellation. The worker's matching-response wait preserves
+unmatched authentication responses and returns `None` on timeout; it does not
+cancel an in-flight operation. A future `SerializedKisOperations` migration
+must characterize and explicitly introduce those portfolio-read contracts
+rather than treating this adapter move as a behavior-preserving relocation.

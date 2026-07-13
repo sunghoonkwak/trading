@@ -863,6 +863,25 @@ def test_kis_worker_blocks_rest_auth_when_rest_api_disabled(monkeypatch):
     assert response.success is False
     assert response.error == "KIS REST API is disabled"
 
+
+def test_kis_worker_response_wait_preserves_unmatched_response(monkeypatch):
+    from queue import Queue
+
+    from infrastructure.kis import worker as kis_worker
+    from infrastructure.kis.worker_protocol import ThreadResponse
+
+    responses = Queue()
+    unrelated = ThreadResponse("other", success=True)
+    expected = ThreadResponse("expected", success=True)
+    responses.put(unrelated)
+    responses.put(expected)
+    monkeypatch.setattr(kis_worker, "kis_response_queue", responses)
+
+    assert kis_worker.wait_for_response("expected", timeout=0.1) is expected
+    assert responses.get_nowait() is unrelated
+    assert kis_worker.wait_for_response("missing", timeout=0.0) is None
+
+
 def test_kis_worker_publishes_event_pipe_alert_through_injected_callback(monkeypatch):
     from infrastructure.kis import worker as kis_worker
 
