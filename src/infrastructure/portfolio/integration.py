@@ -13,6 +13,7 @@ from domain.portfolio.scope import (
     PORTFOLIO_SCOPE_TOSS,
     normalize_portfolio_scope,
 )
+from infrastructure.portfolio.kis_source import fetch_kis_portfolio_source
 
 _gsheet_cache_lock = threading.Lock()
 _gsheet_cache: Optional[Dict[str, Any]] = None
@@ -383,9 +384,7 @@ def get_integrated_portfolio(scope: str = PORTFOLIO_SCOPE_ALL) -> Dict[str, Any]
     kis_portfolio = _empty_source()
     kis_raw_data = {"exchange_rate": None, "error": None}
     if scope in {PORTFOLIO_SCOPE_ALL, PORTFOLIO_SCOPE_KIS}:
-        from broker.kis_portfolio import fetch_kis_portfolio
-
-        kis_portfolio, kis_raw_data = fetch_kis_portfolio()
+        kis_portfolio, kis_raw_data = fetch_kis_portfolio_source()
 
     gsheet_data = _empty_source()
     gsheet_error = None
