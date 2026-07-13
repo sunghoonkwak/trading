@@ -1,9 +1,10 @@
 # Google Sheets Portfolio Source Adapter
 
 `portfolio_source.py` owns the Google Sheets connection and worksheet parsing
-used by the portfolio infrastructure integration. It reads the existing
-service-account file through `CONFIG_ROOT` and returns the established
-normalized holdings, accounts, asset-info, and cash-holdings shape.
+used by the portfolio infrastructure integration. The composition root injects
+the private service-account file path through `configure_service_account_file()`.
+The adapter returns the established normalized holdings, accounts, asset-info,
+and cash-holdings shape.
 
 The adapter is read-only. Connection failures retain the historical `None`
 result and console message so portfolio integration can produce its normal
@@ -11,8 +12,7 @@ safe partial result.
 
 ## Responsibilities
 
-1. Authenticate with the service-account file at
-   `CONFIG_ROOT/service-account.json`.
+1. Authenticate with the service-account file selected by the composition root.
 2. Open the configured `financial portfolio` spreadsheet and its `USD` or
    `KRW` worksheet.
 3. Normalize worksheet rows into `holdings`, `accounts`, `asset_info`, and

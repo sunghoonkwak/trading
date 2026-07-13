@@ -260,6 +260,12 @@ def test_kis_portfolio_source_does_not_import_legacy_broker():
     assert "core.trading_config" not in imports
 
 
+def test_gsheet_source_does_not_import_legacy_config():
+    imports = _imports_in(SRC_DIR / "infrastructure/gsheet/portfolio_source.py")
+
+    assert "core.constants" not in imports
+
+
 def test_kis_rest_client_does_not_import_legacy_state():
     imports = _imports_in(SRC_DIR / "infrastructure/kis/kis_rest_client.py")
 

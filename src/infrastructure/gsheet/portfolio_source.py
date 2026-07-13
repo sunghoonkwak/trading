@@ -1,19 +1,22 @@
 """Google Sheets source adapter for external portfolio holdings."""
 
-import os
-from typing import Any
+from typing import Any, Optional
 
 import gspread
 from google.oauth2.service_account import Credentials
 
-from core.constants import CONFIG_ROOT
-
-SERVICE_ACCOUNT_FILE = os.path.join(CONFIG_ROOT, "service-account.json")
+_service_account_file: Optional[str] = None
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.readonly",
 ]
 SPREADSHEET_NAME = "financial portfolio"
+
+
+def configure_service_account_file(path: Optional[str]) -> None:
+    """Inject the private Google service-account file path."""
+    global _service_account_file
+    _service_account_file = path
 
 
 def _normalize_account_name(raw_name: str) -> str:
@@ -24,8 +27,10 @@ def _normalize_account_name(raw_name: str) -> str:
 def connect_google_sheet(sheet_name: str):
     """Connect to a configured Google Sheets worksheet."""
     try:
+        if _service_account_file is None:
+            raise RuntimeError("Google service-account file is not configured")
         credentials = Credentials.from_service_account_file(
-            SERVICE_ACCOUNT_FILE,
+            _service_account_file,
             scopes=SCOPES,
         )
         client = gspread.authorize(credentials)

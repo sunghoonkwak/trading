@@ -67,6 +67,7 @@ class TradingSystem:
         from state.system_state import is_kis_ready
         from utils.market_utils import get_fear_and_greed
 
+        self._configure_gsheet_source()
         self._configure_kis_portfolio_source()
         return build_portfolio_service(
             PortfolioServiceDependencies(
@@ -92,6 +93,14 @@ class TradingSystem:
             domestic_enabled=trading_config.is_kis_domestic_enabled,
         )
         configure_alert_publisher(display.add_alert)
+
+    def _configure_gsheet_source(self):
+        """Compose the private Google Sheets credential path."""
+        from infrastructure.gsheet import configure_service_account_file
+
+        configure_service_account_file(
+            os.path.join(CONFIG_ROOT, "service-account.json")
+        )
 
     def _configure_strategy_execution_service(self):
         """Compose strategy execution collaborators from runtime adapters."""
@@ -219,6 +228,7 @@ class TradingSystem:
         try:
             from infrastructure.portfolio import refresh_gsheet_cache
 
+            self._configure_gsheet_source()
             result = refresh_gsheet_cache()
             if result["success"]:
                 logging.info(

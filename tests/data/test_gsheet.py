@@ -3,6 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from infrastructure.gsheet import portfolio_source
 from infrastructure.gsheet.portfolio_source import parse_worksheet_data
 
 
@@ -12,6 +13,39 @@ class FakeWorksheet:
 
     def get_all_values(self):
         return self.rows
+
+
+def test_gsheet_connection_uses_composition_supplied_credential_path(monkeypatch):
+    calls = {}
+
+    class FakeClient:
+        def open(self, name):
+            calls["spreadsheet"] = name
+            return self
+
+        def worksheet(self, name):
+            calls["worksheet"] = name
+            return name
+
+    monkeypatch.setattr(
+        portfolio_source.Credentials,
+        "from_service_account_file",
+        lambda path, scopes: calls.update(path=path, scopes=scopes) or "credentials",
+    )
+    monkeypatch.setattr(
+        portfolio_source.gspread,
+        "authorize",
+        lambda credentials: calls.update(credentials=credentials) or FakeClient(),
+    )
+
+    portfolio_source.configure_service_account_file("/private/service-account.json")
+    assert portfolio_source.connect_google_sheet("USD") == "USD"
+    portfolio_source.configure_service_account_file(None)
+
+    assert calls["path"] == "/private/service-account.json"
+    assert calls["credentials"] == "credentials"
+    assert calls["spreadsheet"] == "financial portfolio"
+    assert calls["worksheet"] == "USD"
 
 
 def test_cash_only_gsheet_accounts_get_account_ids():
