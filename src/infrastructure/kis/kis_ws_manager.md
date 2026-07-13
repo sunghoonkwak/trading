@@ -11,6 +11,3 @@
 
 Collaborator가 조립되지 않은 상태에서는 초기화가 실패한다. 이 fail-closed
 동작은 WebSocket lifecycle, 구독, stop timeout의 기존 동작을 바꾸지 않는다.
-
-`broker.kis_ws_manager`는 기존 worker와 KIS compatibility test를 위한
-forwarding-only import surface다.

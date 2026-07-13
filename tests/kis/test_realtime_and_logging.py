@@ -306,7 +306,7 @@ def test_build_schema_drift_alert_has_summary_without_raw_record():
 
 
 def test_ws_manager_keeps_thread_reference_when_stop_times_out(monkeypatch):
-    from broker.kis_ws_manager import WSManager
+    from infrastructure.kis.kis_ws_manager import WSManager
 
     class FakeThread:
         join_timeout = None

@@ -35,7 +35,6 @@ Production code must not introduce new imports from them.
 | `toss/` | Toss tests/backtest compatibility | Migrate remaining legacy callers. |
 | `broker/kis_*` forwarding modules | KIS compatibility tests and external imports | Migrate remaining callers, then remove each shim. |
 | `broker/kis_worker` | External compatibility imports | The worker now lives at `infrastructure.kis.worker`; remove after external consumers migrate. |
-| `broker/kis_ws_manager` | KIS stop-timeout test | Migrate the remaining test import, then remove the shim. |
 | `broker/kis_portfolio` | KIS compatibility tests | Migrate the remaining public test import, then remove the shim. |
 
 The removed `data.data_service`, `strategy.execution_service`, `core.runtime_control`,
