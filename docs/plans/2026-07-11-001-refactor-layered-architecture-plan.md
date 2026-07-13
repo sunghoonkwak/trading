@@ -17,6 +17,27 @@ execution: code
 - **Stop conditions:** Do not change strategy algorithms, order policy, vendor endpoint-wrapper behavior, or live account state. Stop and resolve any characterization-test mismatch before migrating the affected flow.
 - **Execution profile:** Incremental vertical migration with temporary compatibility re-exports; no big-bang directory move.
 
+## Implementation Status (2026-07-13)
+
+Completed: U1, U2, U3, U4, U6, U7, and U9.
+
+U5 is complete for production composition: `main.py` composes one
+`StrategyExecutionRuntime`, and Telegram/scheduler receive its application
+services rather than global configuration. RAOEO, VA, rebalancing, shared
+suite execution, funding, history, and order reporting run through injected
+dependencies. The remaining free-function surfaces are test-only legacy
+wrappers and are not imported by production code.
+
+U8 is substantially complete: obsolete strategy infrastructure shims and the
+empty `utils` package were removed; architecture and module documentation were
+updated; architecture checks, focused host checks, and the Docker test service
+pass. Final optional cleanup is removal or migration of the remaining
+test-only strategy wrappers after their workflow tests are rewritten against
+the runtime API.
+
+Latest verification: `docker compose run --rm test` passed 396 tests on the
+current source image. No live trading calls were made.
+
 ---
 
 ## Product Contract
@@ -378,9 +399,7 @@ Completed commits:
 - 857ea8c refactor(portfolio): add application service
 - 8b13c46 refactor(portfolio): remove worker callback
 
-Completed units: U1, U2, U3, U9; U4 is partially complete.
-
-Key decisions already implemented:
+Historical implementation notes (superseded by the status above):
 - The vendor distribution is at src/infrastructure/kis/kis_api/.
   src/kis/kis_api/ is a compatibility import shim only.
 - Do not add files under the vendor tree. WebSocket helper code is at
@@ -393,9 +412,5 @@ Key decisions already implemented:
 - PortfolioService exists at src/application/portfolio_service.py and the
   KIS worker no longer dispatches GET_PORTFOLIO to application/data code.
 
-Resume order: finish U4 source/cache adapters and direct application ports,
-then U5, U6, U7, and U8. Preserve fail-closed startup, order policy, public
-monkeypatch seams, and no live calls. Last full offline verification before
-the U4 follow-up was venv/bin/pytest tests: 285 passed. Re-run it before the
-next commit because U4 follow-up changed portfolio retrieval afterward.
--->
+The former U4-to-U8 resume order is complete. Any later wrapper deletion must
+retain the verified fail-closed lifecycle and order policy.
