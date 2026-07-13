@@ -4,6 +4,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from application.order_report_service import OrderManagementService, OrderReportService
+from application.strategy_execution import (
+    StrategyExecutionDependencies,
+    StrategyExecutionRuntime,
+)
 from application.strategy_run_service import (
     StrategyHistoryService,
     StrategyMarketDataService,
@@ -139,6 +143,24 @@ def test_application_execution_exposes_application_use_case_facade(monkeypatch):
     service = strategy_execution.get_strategy_run_service()
 
     assert service.run_raoeo() == {"strategy": "raoeo"}
+
+
+def test_runtime_runs_raoeo_from_its_own_dependencies():
+    dependencies = StrategyExecutionDependencies(
+        load_strategy_config=lambda: {"raoeo": {"enabled": False}},
+        load_history=lambda: [],
+        save_history=lambda _history: True,
+        fetch_prices=lambda _tickers: {},
+        strategy_broker_name=lambda: "kis",
+        get_orderable_usd=lambda _symbol, _price: 0.0,
+        execute_order=lambda _order: (True, "accepted"),
+        portfolio_reader_factory=lambda: None,
+        get_market_status=lambda _date: {"is_market_open": True, "message": "open"},
+    )
+
+    report = StrategyExecutionRuntime(dependencies).run_raoeo(execute=False)
+
+    assert report["status"].value == "disabled"
 
 
 def test_market_data_service_uses_injected_portfolio_config_and_price_ports():

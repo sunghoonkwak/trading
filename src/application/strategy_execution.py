@@ -86,7 +86,11 @@ class StrategyExecutionRuntime:
         )
 
     def run_raoeo(self, *, execute: bool = False, **kwargs: Any) -> Dict[str, Any]:
-        return run_raoeo_strategy(execute=execute, **kwargs)
+        return _run_raoeo_strategy(
+            dependencies=self.dependencies,
+            execute=execute,
+            context=kwargs.get("context"),
+        )
 
     def run_value_averaging(
         self, *, execute: bool = False, **kwargs: Any
@@ -100,6 +104,13 @@ class StrategyExecutionRuntime:
 
     def run_suite(self, *, execute: bool = False) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         return run_strategy_suite(execute=execute)
+
+    def _build_run_context(self) -> "StrategyRunContext":
+        return StrategyRunContext(
+            get_market_data=self.market_data_service().get_market_data,
+            load_strategy_config=self.dependencies.load_strategy_config,
+            fetch_prices=self.dependencies.fetch_prices,
+        )
 
 
 _dependencies: Optional[StrategyExecutionDependencies] = None
@@ -472,8 +483,11 @@ def _retry_failed_history_orders(
     extra_fields: Optional[Dict] = None,
     sell_first: bool = False,
     sell_wait_seconds: int = 0,
+    order_report_service: Optional[OrderReportService] = None,
+    history_service: Optional[StrategyHistoryService] = None,
 ) -> None:
-    retry_result = get_order_report_service().retry_failed(
+    service = order_report_service or get_order_report_service()
+    retry_result = service.retry_failed(
         failed,
         sell_first=sell_first,
         sell_wait_seconds=sell_wait_seconds,
@@ -488,7 +502,9 @@ def _retry_failed_history_orders(
         extra_fields=extra_fields,
     )
     save_data["orders"] = _build_merged_history_entries(succeeded, results)
-    _save_strategy_to_history(today_str, strategy_key, save_data)
+    _save_strategy_to_history(
+        today_str, strategy_key, save_data, history_service=history_service
+    )
 
 
 def _has_ambiguous_history_order(strategy_hist: Dict) -> bool:
@@ -686,6 +702,8 @@ def _handle_raoeo_history(
     execute: bool,
     market_status: Dict,
     today_str: str,
+    order_report_service: Optional[OrderReportService] = None,
+    history_service: Optional[StrategyHistoryService] = None,
 ) -> None:
     logging.info(f"RAOEO: Found today's history at {raoeo_hist.get('time', '?')}")
     succeeded, failed = _restore_history_orders(report, raoeo_hist)
@@ -718,6 +736,8 @@ def _handle_raoeo_history(
         failed,
         sell_first=True,
         sell_wait_seconds=5,
+        order_report_service=order_report_service,
+        history_service=history_service,
     )
 
 
@@ -821,7 +841,9 @@ def _rebalancing_history_context(calc_info: Dict) -> Dict:
 # RAOEO Execution
 # -------------------------------------------------------------------------
 
-def run_raoeo_strategy(
+def _run_raoeo_strategy(
+    *,
+    dependencies: StrategyExecutionDependencies,
     execute: bool = False,
     context: Optional[StrategyRunContext] = None,
 ) -> Dict[str, Any]:
@@ -829,12 +851,20 @@ def run_raoeo_strategy(
     Run RAOEO strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = _require_dependencies().get_market_status(today_str)
+    market_status = dependencies.get_market_status(today_str)
     report = _build_base_report(today_str, market_status)
+    history_service = StrategyHistoryService(
+        load=dependencies.load_history,
+        save=dependencies.save_history,
+    )
+    order_report_service = OrderReportService(
+        execute_order=dependencies.execute_order,
+        sleep=time.sleep,
+    )
 
     try:
         # Step 1: Check enabled
-        strategy_config = _require_dependencies().load_strategy_config()
+        strategy_config = dependencies.load_strategy_config()
         raoeo_section = strategy_config.get('raoeo', {})
 
         if not raoeo_section.get('enabled', True):
@@ -855,7 +885,7 @@ def run_raoeo_strategy(
         # Step 2: Market status (already determined above)
 
         # Step 3: Check today's history
-        hist_data = _load_history()
+        hist_data = history_service.load_history()
         today_entry = _get_today_entry(hist_data, today_str)
         raoeo_hist = today_entry.get("raoeo") if today_entry else None
 
@@ -866,6 +896,8 @@ def run_raoeo_strategy(
                 execute,
                 market_status,
                 today_str,
+                order_report_service=order_report_service,
+                history_service=history_service,
             )
             return report
 
@@ -874,7 +906,13 @@ def run_raoeo_strategy(
             report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
-        run_context = context or _build_strategy_run_context()
+        run_context = context or StrategyRunContext(
+            get_market_data=StrategyExecutionRuntime(dependencies)
+            .market_data_service()
+            .get_market_data,
+            load_strategy_config=dependencies.load_strategy_config,
+            fetch_prices=dependencies.fetch_prices,
+        )
         holdings, prices = run_context.get_market_data(force_refresh=True)
         report["info"]["holdings"] = holdings
         report["info"]["current_prices"] = prices
@@ -894,7 +932,9 @@ def run_raoeo_strategy(
             report["status"] = StrategyStatus.SKIPPED
             if execute and report["info"].get("skipped_buy_budgets"):
                 save_data = _build_strategy_history_data(report, "raoeo")
-                _save_strategy_to_history(today_str, "raoeo", save_data)
+                _save_strategy_to_history(
+                    today_str, "raoeo", save_data, history_service=history_service
+                )
             return report
 
         # Step 6: Execute if requested
@@ -909,12 +949,19 @@ def run_raoeo_strategy(
             report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
-        results = _execute_orders(orders, sell_first=True, sell_wait_seconds=5)
+        results = _execute_orders(
+            orders,
+            sell_first=True,
+            sell_wait_seconds=5,
+            order_report_service=order_report_service,
+        )
         _apply_execution_results(report, orders, results)
 
         # Save history
         save_data = _build_strategy_history_data(report, "raoeo")
-        _save_strategy_to_history(today_str, "raoeo", save_data)
+        _save_strategy_to_history(
+            today_str, "raoeo", save_data, history_service=history_service
+        )
 
     except requests.exceptions.Timeout as e:
         logging.error(f"[API Timeout] RAOEO Service Timeout Error: {e}", exc_info=True)
@@ -926,6 +973,18 @@ def run_raoeo_strategy(
         report["error"] = str(e)
 
     return report
+
+
+def run_raoeo_strategy(
+    execute: bool = False,
+    context: Optional[StrategyRunContext] = None,
+) -> Dict[str, Any]:
+    """Compatibility entry point for callers not yet composed with a runtime."""
+    return _run_raoeo_strategy(
+        dependencies=_require_dependencies(),
+        execute=execute,
+        context=context or _build_strategy_run_context(),
+    )
 
 
 # -------------------------------------------------------------------------
