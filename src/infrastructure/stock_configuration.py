@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-STOCK_CONFIGURATION_PATH = Path(__file__).resolve().parents[1] / "stock_configuration.json"
+STOCK_CONFIGURATION_PATH = Path(__file__).resolve().parent / "stock_configuration.json"
 
 
 def load_stock_configuration() -> dict[str, Any]:

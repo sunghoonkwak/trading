@@ -24,6 +24,15 @@ def test_market_prefix_helpers_use_shared_market_mapping(monkeypatch):
     assert trading_config.get_kis_market_prefix("DNYSIBM") == "DNYSIBM"
 
 
+def test_stock_configuration_is_owned_by_infrastructure():
+    from infrastructure import stock_configuration
+
+    assert stock_configuration.STOCK_CONFIGURATION_PATH == (
+        Path(stock_configuration.__file__).resolve().parent
+        / "stock_configuration.json"
+    )
+
+
 def test_event_message_json_preserves_message_text():
     from interfaces.web import server as web_server
 

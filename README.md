@@ -365,7 +365,8 @@ venv/bin/python scripts/backtest/raoeo/batch_backtest.py
 - 설정 변경 후에는 `scripts/validate_config.py`, 단위 테스트, 모의투자 또는
   소액 운용으로 검증하세요.
 - 이 저장소에는 개인 운영 환경에 맞춘 값이 남아 있을 수 있습니다. 새 환경에
-  배포하기 전 `docker-compose.yml`, `templates/`, `src/stock_configuration.json`
+  배포하기 전 `docker-compose.yml`, `templates/`,
+  `src/infrastructure/stock_configuration.json`
   내용을 반드시 검토하세요.
 
 ## 알려진 특이점
