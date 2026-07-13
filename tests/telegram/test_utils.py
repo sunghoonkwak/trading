@@ -54,11 +54,7 @@ class FakeBot:
 @pytest.fixture(autouse=True)
 def reset_telegram_utils(monkeypatch):
     alerts = []
-    monkeypatch.setattr(
-        telegram_utils.display,
-        "add_alert",
-        lambda *args: alerts.append(args),
-    )
+    monkeypatch.setattr(telegram_utils, "_add_alert", lambda *args: alerts.append(args))
     monkeypatch.setattr(telegram_utils, "_bot", None)
     monkeypatch.setattr(telegram_utils, "_chat_id", None)
     monkeypatch.setattr(telegram_utils, "_main_loop", None)

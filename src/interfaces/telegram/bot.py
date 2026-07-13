@@ -142,7 +142,7 @@ def initialize_telegram(
             )
 
             # Register Handlers
-            set_telegram_bot(_app.bot, _chat_id)
+            set_telegram_bot(_app.bot, _chat_id, add_alert)
             register_system_handlers(_app, runtime_controller)
             register_portfolio_handlers(_app, portfolio_dependencies)
             register_strategy_handlers(_app, strategy_dependencies)

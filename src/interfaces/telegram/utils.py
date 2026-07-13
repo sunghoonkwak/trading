@@ -4,12 +4,10 @@ Telegram transport utilities.
 """
 import asyncio
 import logging
-from typing import Optional, cast
+from typing import Callable, Optional, cast
 
 from telegram import Bot, Message, Update
 from telegram.error import NetworkError, TimedOut
-
-from core import display
 
 MAX_RETRIES = 2
 RETRY_DELAY = 1.0  # seconds
@@ -22,7 +20,7 @@ async def wrap_reply(update: Update, text: str, **kwargs):
     """
     if not text: return
     first_line = text.split('\n')[0][:80]  # First line, max 80 chars
-    display.add_alert(f"[TG] {first_line}", "INFO")
+    _alert(f"[TG] {first_line}", "INFO")
 
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -39,7 +37,7 @@ async def wrap_reply(update: Update, text: str, **kwargs):
                 logging.warning(f"[TG] wrap_reply retry {attempt + 1}/{MAX_RETRIES}: {e}")
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                display.add_alert(f"[TG] ERR: {e}", "ERROR")
+                _alert(f"[TG] ERR: {e}", "ERROR")
                 raise
 
 async def wrap_edit(update: Update, text: str, **kwargs):
@@ -50,7 +48,7 @@ async def wrap_edit(update: Update, text: str, **kwargs):
     """
     if not text: return
     first_line = text.split('\n')[0][:80]
-    display.add_alert(f"[TG] {first_line}", "INFO")
+    _alert(f"[TG] {first_line}", "INFO")
 
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -64,19 +62,32 @@ async def wrap_edit(update: Update, text: str, **kwargs):
                 logging.warning(f"[TG] wrap_edit retry {attempt + 1}/{MAX_RETRIES}: {e}")
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                display.add_alert(f"[TG] ERR: {e}", "ERROR")
+                _alert(f"[TG] ERR: {e}", "ERROR")
                 raise
 
 # Global reference for wrap_send
 _bot: Optional[Bot] = None
 _chat_id: Optional[str] = None
 _main_loop: Optional[asyncio.AbstractEventLoop] = None
+_add_alert: Optional[Callable[[str, str], None]] = None
 
-def set_telegram_bot(bot: Bot, chat_id: str):
+
+def _alert(message: str, level: str) -> None:
+    if _add_alert is not None:
+        _add_alert(message, level)
+
+
+def set_telegram_bot(
+    bot: Bot,
+    chat_id: str,
+    add_alert: Callable[[str, str], None] | None = None,
+):
     """Set the global bot and chat_id for utility functions."""
-    global _bot, _chat_id, _main_loop
+    global _bot, _chat_id, _main_loop, _add_alert
     _bot = bot
     _chat_id = chat_id
+    if add_alert is not None:
+        _add_alert = add_alert
     try:
         _main_loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -95,7 +106,7 @@ async def wrap_send(text: str, **kwargs):
 
     if not text: return
     first_line = text.split('\n')[0][:80]
-    display.add_alert(f"[TG] {first_line}", "INFO")
+    _alert(f"[TG] {first_line}", "INFO")
 
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -105,7 +116,7 @@ async def wrap_send(text: str, **kwargs):
                 logging.warning(f"[TG] wrap_send retry {attempt + 1}/{MAX_RETRIES}: {e}")
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                display.add_alert(f"[TG] ERR: {e}", "ERROR")
+                _alert(f"[TG] ERR: {e}", "ERROR")
                 raise
 
 
@@ -122,7 +133,7 @@ async def wrap_edit_message(chat_id: str, message_id: int, text: str, **kwargs):
 
     if not text: return
     first_line = text.split('\n')[0][:80]
-    display.add_alert(f"[TG] {first_line}", "INFO")
+    _alert(f"[TG] {first_line}", "INFO")
 
     for attempt in range(MAX_RETRIES + 1):
         try:
@@ -132,7 +143,7 @@ async def wrap_edit_message(chat_id: str, message_id: int, text: str, **kwargs):
                 logging.warning(f"[TG] wrap_edit_message retry {attempt + 1}/{MAX_RETRIES}: {e}")
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                display.add_alert(f"[TG] ERR: {e}", "ERROR")
+                _alert(f"[TG] ERR: {e}", "ERROR")
                 raise
 
 
@@ -163,7 +174,7 @@ def send_notification(text: str, parse_mode: str = 'HTML'):
                     parse_mode=parse_mode
                 )
                 first_line = text.split('\n')[0][:80]
-                display.add_alert(f"[TG] {first_line}", "INFO")
+                _alert(f"[TG] {first_line}", "INFO")
                 return
             except (TimedOut, NetworkError) as e:
                 if attempt < MAX_RETRIES:
