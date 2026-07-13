@@ -273,6 +273,12 @@ def test_toss_auth_does_not_import_legacy_config():
     assert "core.credentials" not in imports
 
 
+def test_kis_worker_does_not_import_legacy_display():
+    imports = _imports_in(SRC_DIR / "broker/kis_worker.py")
+
+    assert "core.display" not in imports
+
+
 def test_kis_rest_client_does_not_import_legacy_state():
     imports = _imports_in(SRC_DIR / "infrastructure/kis/kis_rest_client.py")
 

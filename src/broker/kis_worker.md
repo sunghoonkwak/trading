@@ -14,7 +14,8 @@ KIS 런타임 요청을 앱 소유 큐/스레드에서 직렬 처리하는 worke
 3. **포트폴리오 요청**: `infrastructure.portfolio.integration`에서 KIS/GSheet
    통합 raw 포트폴리오를 조회합니다.
 4. **WebSocket 초기화**: `broker.kis_ws_manager.WSManager`를 호출해 KIS
-   WebSocket 구독을 시작합니다.
+   WebSocket 구독을 시작합니다. Event-pipe 연결 alert는 composition root가
+   주입하는 best-effort publisher를 사용합니다.
 
 ## Key Functions
 

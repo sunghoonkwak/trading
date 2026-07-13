@@ -867,6 +867,21 @@ def test_kis_worker_blocks_rest_auth_when_rest_api_disabled(monkeypatch):
     assert response.error == "KIS REST API is disabled"
 
 
+def test_kis_worker_publishes_event_pipe_alert_through_injected_callback(monkeypatch):
+    from broker import kis_worker
+
+    alerts = []
+    monkeypatch.setattr(kis_worker._ws_manager, "initialize", lambda: True)
+    kis_worker.configure_alert_publisher(
+        lambda message, level: alerts.append((message, level))
+    )
+
+    assert kis_worker.initialize_websocket_and_pipe() is True
+    kis_worker.configure_alert_publisher(None)
+
+    assert alerts == [("[KIS] Event pipe linked", "SUCCESS")]
+
+
 import sys
 from pathlib import Path
 

@@ -5,7 +5,7 @@ import logging
 import threading
 import time
 from queue import Empty
-from typing import Optional
+from typing import Callable, Optional
 
 from broker.kis_rest_client import RESTClient
 from broker.kis_ws_manager import WSManager
@@ -22,6 +22,22 @@ from state.system_state import ThreadStatus, update_kis_state
 _kis_thread: Optional[threading.Thread] = None
 _stop_event = threading.Event()
 _ws_manager = WSManager()
+_alert_publisher: Optional[Callable[[str, str], None]] = None
+
+
+def configure_alert_publisher(publisher: Optional[Callable[[str, str], None]]) -> None:
+    """Inject event-pipe alert delivery at composition time."""
+    global _alert_publisher
+    _alert_publisher = publisher
+
+
+def _publish_alert(message: str, level: str) -> None:
+    if _alert_publisher is None:
+        return
+    try:
+        _alert_publisher(message, level)
+    except Exception as error:
+        logging.warning("[KISWorker] Alert publication failed: %s", error)
 
 
 def _handle_request(request: ThreadRequest) -> ThreadResponse:
@@ -101,11 +117,9 @@ def is_kis_thread_running() -> bool:
 
 def initialize_websocket_and_pipe() -> bool:
     """Initialize KIS websocket subscriptions and link the event pipe."""
-    from core.display import add_alert
-
     success = _ws_manager.initialize()
     if success:
-        add_alert("[KIS] Event pipe linked", "SUCCESS")
+        _publish_alert("[KIS] Event pipe linked", "SUCCESS")
     return success
 
 

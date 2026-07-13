@@ -329,6 +329,9 @@ class TradingSystem:
 
             configure_kis_vendor_hooks()
             from broker.kis_worker import (
+                configure_alert_publisher as configure_kis_worker_alert_publisher,
+            )
+            from broker.kis_worker import (
                 initialize_websocket_and_pipe,
                 is_kis_thread_running,
                 request_kis_auth,
@@ -336,6 +339,8 @@ class TradingSystem:
                 start_kis_thread,
                 wait_for_response,
             )
+
+            configure_kis_worker_alert_publisher(display.add_alert)
 
             if not is_kis_thread_running():
                 if start_kis_thread():
