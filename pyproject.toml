@@ -50,8 +50,6 @@ files = [
     "src/broker/kis_broker.py",
     "src/broker/market_data.py",
     "src/broker/strategy_broker.py",
-    "src/broker/toss_broker.py",
-    "src/broker/toss_portfolio.py",
     "src/broker/order_admin.py",
     "src/infrastructure/kis/event_handler.py",
     "src/state/__init__.py",

@@ -34,10 +34,11 @@ Production code must not introduce new imports from them.
 | --- | --- | --- |
 | `broker/kis_broker.py` facade | `broker.strategy_broker` and KIS facade tests | Migrate its public facade and patch seams together. |
 
-The removed `data.data_service`, `strategy.execution_service`, `core.runtime_control`,
-`core.web_server`, `scheduler` forwarding modules, `telegram_bot`, `toss`, and
-data portfolio forwarding surfaces (including `data.gsheet`) have zero
-production, test, script, and documentation consumers.
+The removed `broker.toss_broker`, `broker.toss_portfolio`, `data.data_service`,
+`strategy.execution_service`, `core.runtime_control`, `core.web_server`,
+`scheduler` forwarding modules, `telegram_bot`, `toss`, and data portfolio
+forwarding surfaces (including `data.gsheet`) have zero production, test,
+script, and documentation consumers.
 
 `interfaces.web.create_web_app()` is a factory: each application owns its
 dependencies, connection manager, event-loop callback, and lifespan. The

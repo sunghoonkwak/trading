@@ -364,6 +364,33 @@ def test_retired_toss_compatibility_package_is_removed():
     assert list((SRC_DIR / "toss").glob("*.py")) == []
 
 
+def test_retired_toss_broker_compatibility_modules_are_removed():
+    for relative_path in (
+        "broker/toss_broker.py",
+        "broker/toss_portfolio.py",
+    ):
+        assert not (SRC_DIR / relative_path).exists()
+
+
+def test_no_active_python_consumer_uses_retired_toss_broker_modules():
+    roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
+    consumers = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            source = path.read_text(encoding="utf-8")
+            if (
+                "broker.toss_broker" in source
+                or "broker.toss_portfolio" in source
+                or "from broker import toss_broker" in source
+                or "from broker import toss_portfolio" in source
+            ):
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
+
+
 def test_kis_rest_client_does_not_import_legacy_state():
     imports = _imports_in(SRC_DIR / "infrastructure/kis/rest_client.py")
 
