@@ -1,6 +1,8 @@
-# KIS portfolio source adapter
+# KIS Portfolio Source Adapter
 
-`kis_source.py` isolates the portfolio merge adapter from the temporary
-`broker.kis_portfolio` compatibility surface. It preserves the normalized KIS
-source and metadata contract while callers migrate to the infrastructure KIS
-adapter.
+`kis_source.py` is the infrastructure-owned KIS portfolio source adapter. It
+reads KIS REST balances, normalizes holdings and orderable cash, and preserves
+the existing fail-safe empty-source result when KIS reports an error.
+
+`broker.kis_portfolio` remains a forwarding-only compatibility export for
+external callers and tests while its remaining consumers migrate.

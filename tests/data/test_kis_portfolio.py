@@ -5,8 +5,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def test_fetch_kis_portfolio_returns_empty_source_on_error(monkeypatch):
-    from broker import kis_portfolio
-    from broker.kis_portfolio import KisPortfolioSourceAdapter
+    from infrastructure.portfolio import kis_source
+    from infrastructure.portfolio.kis_source import KisPortfolioSourceAdapter
 
     raw_data = {"exchange_rate": None, "error": "KIS unavailable"}
     monkeypatch.setattr(
@@ -24,7 +24,7 @@ def test_fetch_kis_portfolio_returns_empty_source_on_error(monkeypatch):
         ),
     )
 
-    source, metadata = kis_portfolio.fetch_kis_portfolio()
+    source, metadata = kis_source.fetch_kis_portfolio_source()
 
     assert source == {
         "accounts": {},

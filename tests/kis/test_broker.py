@@ -706,7 +706,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from kis.kis_api.overseas_stock.price import price as price_module
 
 from broker import market_data
-from broker.kis_portfolio import KisPortfolioSourceAdapter
+from infrastructure.portfolio.kis_source import KisPortfolioSourceAdapter
 from kis.kis_api import kis_auth as ka
 
 
@@ -729,11 +729,11 @@ def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch)
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_balance",
+        "infrastructure.portfolio.kis_source.inquire_balance",
         fake_inquire_balance,
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_present_balance",
+        "infrastructure.portfolio.kis_source.inquire_present_balance",
         fake_inquire_present_balance,
     )
 
@@ -747,13 +747,13 @@ def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch)
 def test_portfolio_fetch_is_blocked_when_kis_rest_api_disabled(monkeypatch):
     monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
     monkeypatch.setattr(
-        "broker.kis_portfolio.ka.getTREnv",
+        "infrastructure.portfolio.kis_source.ka.getTREnv",
         lambda: (_ for _ in ()).throw(
             AssertionError("KIS auth must not be touched")
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_present_balance",
+        "infrastructure.portfolio.kis_source.inquire_present_balance",
         lambda **kwargs: (_ for _ in ()).throw(
             AssertionError("KIS REST endpoint must not be called")
         ),
@@ -906,17 +906,17 @@ def test_inquire_present_balance_raises_api_error_instead_of_empty_data(monkeypa
 
 def test_fetch_portfolio_reads_exchange_rate_from_overseas_holdings(monkeypatch):
     monkeypatch.setattr(
-        "broker.kis_portfolio.ka.getTREnv",
+        "infrastructure.portfolio.kis_source.ka.getTREnv",
         lambda: _FakeTREnv(),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_balance",
+        "infrastructure.portfolio.kis_source.inquire_balance",
         lambda **kwargs: (_ for _ in ()).throw(
             AssertionError("domestic balance lookup must be disabled by default")
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_present_balance",
+        "infrastructure.portfolio.kis_source.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame([{"pdno": "QQQ", "bass_exrt": "1375.50"}]),
             pd.DataFrame([{"frcr_drwg_psbl_amt_1": "100.00"}]),
@@ -931,17 +931,17 @@ def test_fetch_portfolio_reads_exchange_rate_from_overseas_holdings(monkeypatch)
 
 def test_fetch_portfolio_reads_exchange_rate_from_psamount_when_holdings_empty(monkeypatch):
     monkeypatch.setattr(
-        "broker.kis_portfolio.ka.getTREnv",
+        "infrastructure.portfolio.kis_source.ka.getTREnv",
         lambda: _FakeTREnv(),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_balance",
+        "infrastructure.portfolio.kis_source.inquire_balance",
         lambda **kwargs: (_ for _ in ()).throw(
             AssertionError("domestic balance lookup must be disabled by default")
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_present_balance",
+        "infrastructure.portfolio.kis_source.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame(),
             pd.DataFrame([{"frcr_drwg_psbl_amt_1": "0"}]),
@@ -949,7 +949,7 @@ def test_fetch_portfolio_reads_exchange_rate_from_psamount_when_holdings_empty(m
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_psamount",
+        "infrastructure.portfolio.kis_source.inquire_psamount",
         lambda **kwargs: pd.DataFrame(
             [{"ovrs_ord_psbl_amt": "0", "exrt": "1,512.80"}]
         ),
@@ -963,17 +963,17 @@ def test_fetch_portfolio_reads_exchange_rate_from_psamount_when_holdings_empty(m
 
 def test_fetch_portfolio_skips_domestic_balance_by_default(monkeypatch):
     monkeypatch.setattr(
-        "broker.kis_portfolio.ka.getTREnv",
+        "infrastructure.portfolio.kis_source.ka.getTREnv",
         lambda: _FakeTREnv(),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_balance",
+        "infrastructure.portfolio.kis_source.inquire_balance",
         lambda **kwargs: (_ for _ in ()).throw(
             AssertionError("domestic balance lookup must be disabled by default")
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_present_balance",
+        "infrastructure.portfolio.kis_source.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1,375.50"}]),
             pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
@@ -981,7 +981,7 @@ def test_fetch_portfolio_skips_domestic_balance_by_default(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_psamount",
+        "infrastructure.portfolio.kis_source.inquire_psamount",
         lambda **kwargs: pd.DataFrame([{"ovrs_ord_psbl_amt": "3,023.49"}]),
         raising=False,
     )
@@ -999,17 +999,17 @@ def test_kis_portfolio_uses_orderable_usd_as_cash(monkeypatch):
     calls = {}
 
     monkeypatch.setattr(
-        "broker.kis_portfolio.ka.getTREnv",
+        "infrastructure.portfolio.kis_source.ka.getTREnv",
         lambda: _FakeTREnv(),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_balance",
+        "infrastructure.portfolio.kis_source.inquire_balance",
         lambda **kwargs: (_ for _ in ()).throw(
             AssertionError("domestic balance lookup must be disabled by default")
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_present_balance",
+        "infrastructure.portfolio.kis_source.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
             pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
@@ -1022,7 +1022,7 @@ def test_kis_portfolio_uses_orderable_usd_as_cash(monkeypatch):
         return pd.DataFrame([{"ovrs_ord_psbl_amt": "3023.49"}])
 
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_psamount",
+        "infrastructure.portfolio.kis_source.inquire_psamount",
         fake_inquire_psamount,
         raising=False,
     )
@@ -1043,17 +1043,17 @@ def test_kis_portfolio_uses_orderable_usd_as_cash(monkeypatch):
 
 def test_kis_portfolio_falls_back_to_balance_cash_when_orderable_usd_fails(monkeypatch):
     monkeypatch.setattr(
-        "broker.kis_portfolio.ka.getTREnv",
+        "infrastructure.portfolio.kis_source.ka.getTREnv",
         lambda: _FakeTREnv(),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_balance",
+        "infrastructure.portfolio.kis_source.inquire_balance",
         lambda **kwargs: (_ for _ in ()).throw(
             AssertionError("domestic balance lookup must be disabled by default")
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_present_balance",
+        "infrastructure.portfolio.kis_source.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
             pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
@@ -1061,7 +1061,7 @@ def test_kis_portfolio_falls_back_to_balance_cash_when_orderable_usd_fails(monke
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_psamount",
+        "infrastructure.portfolio.kis_source.inquire_psamount",
         lambda **kwargs: (_ for _ in ()).throw(RuntimeError("orderable failed")),
         raising=False,
     )
@@ -1079,17 +1079,17 @@ def test_kis_portfolio_falls_back_to_balance_cash_when_orderable_usd_fails(monke
 
 def test_kis_portfolio_keeps_zero_orderable_usd(monkeypatch):
     monkeypatch.setattr(
-        "broker.kis_portfolio.ka.getTREnv",
+        "infrastructure.portfolio.kis_source.ka.getTREnv",
         lambda: _FakeTREnv(),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_balance",
+        "infrastructure.portfolio.kis_source.inquire_balance",
         lambda **kwargs: (_ for _ in ()).throw(
             AssertionError("domestic balance lookup must be disabled by default")
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_present_balance",
+        "infrastructure.portfolio.kis_source.inquire_present_balance",
         lambda **kwargs: (
             pd.DataFrame([{"pdno": "QQQM", "bass_exrt": "1375.50"}]),
             pd.DataFrame([{"frcr_drwg_psbl_amt_1": "999.00"}]),
@@ -1097,7 +1097,7 @@ def test_kis_portfolio_keeps_zero_orderable_usd(monkeypatch):
         ),
     )
     monkeypatch.setattr(
-        "broker.kis_portfolio.inquire_psamount",
+        "infrastructure.portfolio.kis_source.inquire_psamount",
         lambda **kwargs: pd.DataFrame([{"ovrs_ord_psbl_amt": "0"}]),
         raising=False,
     )

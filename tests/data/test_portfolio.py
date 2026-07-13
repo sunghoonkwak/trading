@@ -18,12 +18,12 @@ def reset_gsheet_cache():
 
 
 def test_data_integration_skips_gsheet_and_toss_for_kis_scope(monkeypatch):
-    from broker import kis_portfolio, toss_portfolio
+    from broker import toss_portfolio
     from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio_integration,
+        "fetch_kis_portfolio_source",
         lambda: (
             {
                 "holdings": [],
@@ -85,12 +85,12 @@ def test_data_integration_uses_injected_alert_publisher(monkeypatch):
 
 
 def test_data_integration_fetches_only_toss_for_toss_scope(monkeypatch):
-    from broker import kis_portfolio, toss_portfolio
+    from broker import toss_portfolio
     from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio_integration,
+        "fetch_kis_portfolio_source",
         lambda: (_ for _ in ()).throw(AssertionError("KIS must be skipped")),
     )
     monkeypatch.setattr(
@@ -151,12 +151,12 @@ def test_data_integration_fetches_only_toss_for_toss_scope(monkeypatch):
 
 
 def test_data_integration_does_not_use_gsheet_fallback_for_toss_scope(monkeypatch):
-    from broker import kis_portfolio, toss_portfolio
+    from broker import toss_portfolio
     from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio_integration,
+        "fetch_kis_portfolio_source",
         lambda: (_ for _ in ()).throw(AssertionError("KIS must be skipped")),
     )
     monkeypatch.setattr(
@@ -179,15 +179,15 @@ def test_data_integration_does_not_use_gsheet_fallback_for_toss_scope(monkeypatc
 
 
 def test_data_integration_reuses_cached_gsheet_source(monkeypatch):
-    from broker import kis_portfolio, toss_portfolio
+    from broker import toss_portfolio
     from infrastructure.portfolio import integration as portfolio_integration
 
     portfolio_integration.invalidate_gsheet_cache()
     calls = []
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio_integration,
+        "fetch_kis_portfolio_source",
         lambda: (
             {
                 "holdings": [],
@@ -309,12 +309,12 @@ def test_cached_gsheet_source_reports_initial_refresh_exception(monkeypatch):
 
 
 def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
-    from broker import kis_portfolio, toss_portfolio
+    from broker import toss_portfolio
     from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio_integration,
+        "fetch_kis_portfolio_source",
         lambda: (
             {
                 "holdings": [
@@ -415,14 +415,14 @@ def test_data_integration_merges_kis_and_gsheet_sources(monkeypatch):
 
 
 def test_data_integration_sets_missing_gsheet_prices_to_zero_and_notifies(monkeypatch):
-    from broker import kis_portfolio, toss_portfolio
+    from broker import toss_portfolio
     from infrastructure.portfolio import integration as portfolio_integration
 
     notifications = []
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio_integration,
+        "fetch_kis_portfolio_source",
         lambda: (
             {
                 "holdings": [],
@@ -490,12 +490,12 @@ def test_data_integration_sets_missing_gsheet_prices_to_zero_and_notifies(monkey
 
 
 def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
-    from broker import kis_portfolio, toss_portfolio
+    from broker import toss_portfolio
     from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio_integration,
+        "fetch_kis_portfolio_source",
         lambda: (
             {
                 "holdings": [],
@@ -616,12 +616,12 @@ def test_data_integration_replaces_toss_gsheet_account_with_api(monkeypatch):
 
 
 def test_data_integration_keeps_gsheet_toss_when_toss_api_fails(monkeypatch):
-    from broker import kis_portfolio, toss_portfolio
+    from broker import toss_portfolio
     from infrastructure.portfolio import integration as portfolio_integration
 
     monkeypatch.setattr(
-        kis_portfolio,
-        "fetch_kis_portfolio",
+        portfolio_integration,
+        "fetch_kis_portfolio_source",
         lambda: (
             {
                 "holdings": [],

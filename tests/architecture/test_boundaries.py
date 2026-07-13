@@ -252,6 +252,12 @@ def test_portfolio_integration_uses_kis_source_adapter():
     assert "broker.kis_portfolio" not in imports
 
 
+def test_kis_portfolio_source_does_not_import_legacy_broker():
+    imports = _imports_in(SRC_DIR / "infrastructure/portfolio/kis_source.py")
+
+    assert "broker.kis_portfolio" not in imports
+
+
 def test_strategy_execution_composition_uses_injected_dependencies():
     imports = _imports_in(SRC_DIR / "infrastructure/strategy_execution.py")
 
