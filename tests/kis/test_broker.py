@@ -849,8 +849,8 @@ def test_current_price_uses_toss_batch_prices(monkeypatch):
 
 
 def test_kis_worker_blocks_rest_auth_when_rest_api_disabled(monkeypatch):
-    from broker import kis_worker
     from core.thread_comm import RequestType, ThreadRequest
+    from infrastructure.kis import worker as kis_worker
 
     monkeypatch.setattr(
         kis_worker.RESTClient,
@@ -882,7 +882,7 @@ def test_kis_thread_comm_compatibility_exports_worker_protocol():
 
 
 def test_kis_worker_publishes_event_pipe_alert_through_injected_callback(monkeypatch):
-    from broker import kis_worker
+    from infrastructure.kis import worker as kis_worker
 
     alerts = []
     monkeypatch.setattr(kis_worker._ws_manager, "initialize", lambda: True)
@@ -897,7 +897,7 @@ def test_kis_worker_publishes_event_pipe_alert_through_injected_callback(monkeyp
 
 
 def test_kis_worker_publishes_lifecycle_state_through_injected_callback(monkeypatch):
-    from broker import kis_worker
+    from infrastructure.kis import worker as kis_worker
 
     class StopAfterOnePoll:
         def __init__(self):
