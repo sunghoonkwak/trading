@@ -6,9 +6,9 @@ from typing import Tuple
 
 import requests
 
-from core import trading_config
 from domain.strategy.base import OrderSide, StrategyOrder
 from domain.strategy.constants import ORDER_TYPE_LIMIT, ORDER_TYPE_LOC
+from infrastructure import trading_configuration as trading_config
 from infrastructure.kis.constants import (
     EXCHANGE_CODE_MAP,
     ORDER_TYPE_US_LIMIT,

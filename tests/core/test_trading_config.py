@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 
 def test_market_prefix_helpers_use_shared_market_mapping(monkeypatch):
-    from core import trading_config
+    from infrastructure import trading_configuration as trading_config
 
     monkeypatch.setattr(
         trading_config,
@@ -25,7 +25,7 @@ def test_market_prefix_helpers_use_shared_market_mapping(monkeypatch):
 
 
 def test_stock_configuration_is_owned_by_infrastructure():
-    from infrastructure import stock_configuration
+    from infrastructure import trading_configuration as stock_configuration
 
     assert stock_configuration.STOCK_CONFIGURATION_PATH == (
         Path(stock_configuration.__file__).resolve().parent

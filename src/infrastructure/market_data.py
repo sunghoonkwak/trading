@@ -4,7 +4,7 @@
 import logging
 from typing import Dict, Iterable, Optional
 
-from core import trading_config
+from infrastructure import trading_configuration as trading_config
 
 
 def _get_price_module():

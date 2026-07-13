@@ -708,8 +708,11 @@ class _FakeTREnv:
 
 @pytest.fixture(autouse=True)
 def configure_kis_portfolio_feature_flags():
-    from core.trading_config import is_kis_domestic_enabled, is_kis_rest_api_enabled
     from infrastructure.portfolio.kis_source import configure_feature_flags
+    from infrastructure.trading_configuration import (
+        is_kis_domestic_enabled,
+        is_kis_rest_api_enabled,
+    )
 
     configure_feature_flags(
         rest_api_enabled=is_kis_rest_api_enabled,

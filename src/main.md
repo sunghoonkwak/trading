@@ -6,7 +6,7 @@ composition root 역할, 그리고 안정적인 실행을 위한 메인 루프�
 
 ## Core Logic (핵심 로직)
 
-1. **로깅 및 환경 설정**: `infrastructure.logger.LogManager`와 `core.trading_config`를 통해 로그 설정 및 종목 데이터를 로드합니다.
+1. **로깅 및 환경 설정**: `infrastructure.logger.LogManager`와 `infrastructure.trading_configuration`를 통해 로그 설정 및 종목 데이터를 로드합니다.
 2. **시스템 기동 (`run`)**: Docker 컨테이너 시작 시에는 Telegram과
    Event Viewer control plane만 초기화합니다. 실제 trading runtime은
    Telegram `/system_on` 명령을 받은 뒤 시작합니다.

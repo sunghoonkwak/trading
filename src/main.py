@@ -23,9 +23,10 @@ except ImportError:
     pass
 
 from application.runtime_service import RuntimeCommandResult, RuntimeController
-from core import display, event_pipe, trading_config
+from core import display, event_pipe
 from core.constants import CONFIG_ROOT
 from infrastructure import lock_manager
+from infrastructure import trading_configuration as trading_config
 from infrastructure.logger import LogManager
 
 
@@ -155,7 +156,9 @@ class TradingSystem:
             market_data,
             market_signals,
             order_admin,
-            stock_configuration,
+        )
+        from infrastructure import (
+            trading_configuration as stock_configuration,
         )
         from infrastructure.config import ConfigFile, load_json, save_json
         from infrastructure.portfolio import refresh_gsheet_cache

@@ -18,7 +18,7 @@ files = [
     "src/infrastructure/http_defaults.py",
     "src/infrastructure/lock_manager.py",
     "src/application/runtime_service.py",
-    "src/core/trading_config.py",
+    "src/infrastructure/trading_configuration.py",
     "src/interfaces/web/server.py",
     "src/utils/__init__.py",
     "src/utils/format_utils.py",

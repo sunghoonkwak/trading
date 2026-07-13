@@ -64,7 +64,7 @@ class CredentialsTest(unittest.TestCase):
 
 
 def test_kis_rest_api_flag_defaults_to_enabled(monkeypatch):
-    from core import trading_config
+    from infrastructure import trading_configuration as trading_config
 
     monkeypatch.delenv("KIS_ENABLE_REST_API", raising=False)
 
@@ -72,7 +72,7 @@ def test_kis_rest_api_flag_defaults_to_enabled(monkeypatch):
 
 
 def test_kis_rest_api_flag_can_be_disabled(monkeypatch):
-    from core import trading_config
+    from infrastructure import trading_configuration as trading_config
 
     for value in ["0", "false", "no", "off"]:
         monkeypatch.setenv("KIS_ENABLE_REST_API", value)

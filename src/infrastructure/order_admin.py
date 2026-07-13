@@ -8,8 +8,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 
-from core import trading_config
 from core.display import add_alert, clear_order_states, update_order_state
+from infrastructure import trading_configuration as trading_config
 
 
 def _get_trenv():
