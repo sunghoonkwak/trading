@@ -82,7 +82,7 @@ sys.path.insert(0, str(SRC))
 
 
 def test_kis_logger_logs_response_headers_and_body(caplog):
-    from broker.kis_logger import wrap_http_request_for_kis_logging
+    from infrastructure.kis.kis_logger import wrap_http_request_for_kis_logging
 
     calls = []
 
@@ -118,7 +118,7 @@ def test_kis_logger_logs_response_headers_and_body(caplog):
 
 
 def test_kis_logger_masks_json_string_payloads(caplog):
-    from broker.kis_logger import wrap_http_request_for_kis_logging
+    from infrastructure.kis.kis_logger import wrap_http_request_for_kis_logging
 
     def fake_request(method, url, **kwargs):
         return FakeResponse(
@@ -145,7 +145,7 @@ def test_kis_logger_masks_json_string_payloads(caplog):
 
 
 def test_sanitize_for_log_masks_existing_kis_sensitive_shapes():
-    from broker.kis_logger import sanitize_for_log
+    from infrastructure.kis.kis_logger import sanitize_for_log
 
     payload = {
         "authorization": "Bearer token",
@@ -179,7 +179,7 @@ def test_sanitize_for_log_masks_existing_kis_sensitive_shapes():
 
 
 def test_kis_logger_logs_websocket_send_with_sanitized_payload(caplog):
-    from broker.kis_logger import log_ws_send
+    from infrastructure.kis.kis_logger import log_ws_send
 
     message = {
         "header": {"approval_key": "approval"},
