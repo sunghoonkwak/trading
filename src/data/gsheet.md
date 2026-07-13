@@ -1,4 +1,8 @@
-# Google Sheets Data Source (`src/data/gsheet.py`)
+# Google Sheets Compatibility Module (`src/data/gsheet.py`)
+
+The implementation lives in
+`infrastructure.gsheet.portfolio_source`. This module remains a forwarding-only
+compatibility surface for historical `data.gsheet` imports.
 
 Google Sheets API를 사용하여 외부 포트폴리오 데이터를 읽어오는 데이터 소스입니다.
 

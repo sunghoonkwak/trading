@@ -48,7 +48,7 @@ def invalidate_gsheet_cache() -> None:
 
 def fetch_gsheet_portfolio() -> Tuple[Dict[str, Any], Optional[str]]:
     """Fetch passive portfolio holdings from Google Sheets."""
-    from data.gsheet import connect_google_sheet, parse_worksheet_data
+    from infrastructure.gsheet import connect_google_sheet, parse_worksheet_data
 
     gs_data = _empty_source()
     errors = []

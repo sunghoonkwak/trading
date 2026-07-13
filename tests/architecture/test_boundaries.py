@@ -240,6 +240,12 @@ def test_portfolio_integration_does_not_import_legacy_display():
     assert "core.display" not in imports
 
 
+def test_portfolio_integration_does_not_import_legacy_gsheet():
+    imports = _imports_in(SRC_DIR / "infrastructure/portfolio/integration.py")
+
+    assert "data.gsheet" not in imports
+
+
 def test_market_utils_status_api_uses_market_open_contract(tmp_path):
     result = _run_import_check(
         tmp_path,
