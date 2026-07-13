@@ -14,7 +14,6 @@ from core.thread_comm import (
     kis_request_queue,
     kis_response_queue,
 )
-from core.trading_config import is_kis_rest_api_enabled
 from infrastructure.kis.kis_rest_client import RESTClient
 from infrastructure.kis.kis_ws_manager import WSManager
 from state.system_state import ThreadStatus, update_kis_state
@@ -23,12 +22,29 @@ _kis_thread: Optional[threading.Thread] = None
 _stop_event = threading.Event()
 _ws_manager = WSManager()
 _alert_publisher: Optional[Callable[[str, str], None]] = None
+_rest_api_enabled: Optional[Callable[[], bool]] = None
 
 
 def configure_alert_publisher(publisher: Optional[Callable[[str, str], None]]) -> None:
     """Inject event-pipe alert delivery at composition time."""
     global _alert_publisher
     _alert_publisher = publisher
+
+
+def configure_rest_api_enabled(enabled: Optional[Callable[[], bool]]) -> None:
+    """Inject the KIS REST feature flag at composition time."""
+    global _rest_api_enabled
+    _rest_api_enabled = enabled
+
+
+def _is_rest_api_enabled() -> bool:
+    if _rest_api_enabled is None:
+        return False
+    try:
+        return _rest_api_enabled()
+    except Exception as error:
+        logging.error("[KISWorker] REST feature flag failed: %s", error)
+        return False
 
 
 def _publish_alert(message: str, level: str) -> None:
@@ -45,7 +61,7 @@ def _handle_request(request: ThreadRequest) -> ThreadResponse:
     try:
         result = None
         if request.request_type == RequestType.KIS_AUTH:
-            if not is_kis_rest_api_enabled():
+            if not _is_rest_api_enabled():
                 return ThreadResponse(
                     request.request_id,
                     success=False,

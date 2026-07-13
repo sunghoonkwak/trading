@@ -12,7 +12,7 @@ composition root 역할, 그리고 안정적인 실행을 위한 메인 루프�
    Telegram `/system_on` 명령을 받은 뒤 시작합니다.
    - **텔레그램 봇**: 원격 제어 및 상태 보고용 독립 스레드. 초기화에
      실패하면 거래 런타임을 시작하지 않습니다.
-   - **KIS 엔진**: `broker.kis_worker`를 통한 REST 인증 및 실시간 WebSocket 파이프라인 구축.
+   - **KIS 엔진**: `infrastructure.kis.worker`를 통한 REST 인증 및 실시간 WebSocket 파이프라인 구축.
      `KIS_ENABLE_REST_API=false`이면 REST 인증은 건너뛰고 WebSocket 인증과
      구독 초기화만 수행합니다.
    - **Toss API**: `toss.auth.ensure_daily_token()`으로 당일 Toss access

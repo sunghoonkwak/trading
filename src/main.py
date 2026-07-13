@@ -332,6 +332,9 @@ class TradingSystem:
                 configure_alert_publisher as configure_kis_worker_alert_publisher,
             )
             from infrastructure.kis.worker import (
+                configure_rest_api_enabled as configure_kis_worker_rest_api_enabled,
+            )
+            from infrastructure.kis.worker import (
                 initialize_websocket_and_pipe,
                 is_kis_thread_running,
                 request_kis_auth,
@@ -341,6 +344,9 @@ class TradingSystem:
             )
 
             configure_kis_worker_alert_publisher(display.add_alert)
+            configure_kis_worker_rest_api_enabled(
+                trading_config.is_kis_rest_api_enabled
+            )
 
             if not is_kis_thread_running():
                 if start_kis_thread():

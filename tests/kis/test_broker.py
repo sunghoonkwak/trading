@@ -852,7 +852,6 @@ def test_kis_worker_blocks_rest_auth_when_rest_api_disabled(monkeypatch):
     from broker import kis_worker
     from core.thread_comm import RequestType, ThreadRequest
 
-    monkeypatch.setenv("KIS_ENABLE_REST_API", "false")
     monkeypatch.setattr(
         kis_worker.RESTClient,
         "authenticate",
@@ -861,7 +860,11 @@ def test_kis_worker_blocks_rest_auth_when_rest_api_disabled(monkeypatch):
         ),
     )
 
-    response = kis_worker._handle_request(ThreadRequest(RequestType.KIS_AUTH))
+    kis_worker.configure_rest_api_enabled(lambda: False)
+    try:
+        response = kis_worker._handle_request(ThreadRequest(RequestType.KIS_AUTH))
+    finally:
+        kis_worker.configure_rest_api_enabled(None)
 
     assert response.success is False
     assert response.error == "KIS REST API is disabled"

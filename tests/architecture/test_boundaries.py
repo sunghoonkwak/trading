@@ -279,6 +279,12 @@ def test_kis_worker_does_not_import_legacy_display():
     assert "core.display" not in imports
 
 
+def test_kis_worker_does_not_import_legacy_trading_config():
+    imports = _imports_in(SRC_DIR / "infrastructure/kis/worker.py")
+
+    assert "core.trading_config" not in imports
+
+
 def test_kis_worker_compatibility_module_forwards_to_infrastructure(tmp_path):
     result = _run_import_check(
         tmp_path,
