@@ -7,6 +7,7 @@ from application.ports.contracts import (
     OperationResult,
     PortfolioReader,
     PortfolioSource,
+    SerializedKisOperations,
     StrategyOrderExecutor,
     redact_value,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "OperationResult",
     "PortfolioReader",
     "PortfolioSource",
+    "SerializedKisOperations",
     "StrategyOrderExecutor",
     "redact_value",
 ]

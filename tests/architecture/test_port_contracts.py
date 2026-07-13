@@ -10,6 +10,7 @@ from application.ports import (
     OperationResult,
     PortfolioReader,
     PortfolioSource,
+    SerializedKisOperations,
     StrategyOrderExecutor,
     redact_value,
 )
@@ -44,6 +45,28 @@ def test_portfolio_source_contract_requires_only_normalized_fetch():
 
     source: PortfolioSource = FakeSource()
     assert source.fetch(scope="all") == {"metadata": {}, "scope": "all"}
+
+
+def test_serialized_kis_operations_preserve_correlation_and_safe_failure():
+    class FakeOperations:
+        def execute(self, operation, *, timeout=30.0, correlation_id=None):
+            assert timeout == 1.0
+            assert correlation_id == "portfolio-1"
+            return OperationResult(
+                error="KIS operation timed out",
+                correlation_id=CorrelationId("portfolio-1"),
+            )
+
+    operations: SerializedKisOperations = FakeOperations()
+    result = operations.execute(
+        lambda: {"account": "secret"},
+        timeout=1.0,
+        correlation_id=CorrelationId("portfolio-1"),
+    )
+
+    assert result.success is False
+    assert result.error == "KIS operation timed out"
+    assert result.correlation_id == "portfolio-1"
 
 
 def test_portfolio_reader_contract_accepts_the_application_service():

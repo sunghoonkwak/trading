@@ -4,9 +4,10 @@
 import logging
 import threading
 import time
-from queue import Empty
-from typing import Callable, Optional
+from queue import Empty, Queue
+from typing import Callable, Optional, TypeVar
 
+from application.ports import CorrelationId, OperationResult
 from infrastructure.kis.rest_client import RESTClient
 from infrastructure.kis.worker_protocol import (
     RequestType,
@@ -23,6 +24,7 @@ _ws_manager = WSManager()
 _alert_publisher: Optional[Callable[[str, str], None]] = None
 _rest_api_enabled: Optional[Callable[[], bool]] = None
 _state_publisher: Optional[Callable[[str], None]] = None
+T = TypeVar("T")
 
 
 def configure_alert_publisher(publisher: Optional[Callable[[str, str], None]]) -> None:
@@ -74,6 +76,8 @@ def _publish_lifecycle_state(status: str) -> None:
 def _handle_request(request: ThreadRequest) -> ThreadResponse:
     """Process incoming worker requests."""
     try:
+        if request.cancelled:
+            return None
         result = None
         if request.request_type == RequestType.KIS_AUTH:
             if not _is_rest_api_enabled():
@@ -85,6 +89,15 @@ def _handle_request(request: ThreadRequest) -> ThreadResponse:
             result = RESTClient.authenticate()
         elif request.request_type == RequestType.KIS_WS_AUTH:
             result = RESTClient.authenticate_ws()
+        elif request.request_type == RequestType.KIS_READ:
+            if request.operation is None:
+                return ThreadResponse(
+                    request.request_id,
+                    success=False,
+                    error="KIS read operation is missing",
+                    correlation_id=request.correlation_id,
+                )
+            result = request.operation()
         else:
             return ThreadResponse(
                 request.request_id,
@@ -92,11 +105,21 @@ def _handle_request(request: ThreadRequest) -> ThreadResponse:
                 error=f"Unsupported: {request.request_type}",
             )
 
-        return ThreadResponse(request.request_id, success=True, result=result)
+        return ThreadResponse(
+            request.request_id,
+            success=True,
+            result=result,
+            correlation_id=request.correlation_id,
+        )
 
     except Exception as error:
         logging.error("[KISWorker] Request %s failed: %s", request.request_id, error)
-        return ThreadResponse(request.request_id, success=False, error=str(error))
+        return ThreadResponse(
+            request.request_id,
+            success=False,
+            error=str(error),
+            correlation_id=request.correlation_id,
+        )
 
 
 def _kis_thread_loop():
@@ -108,7 +131,14 @@ def _kis_thread_loop():
         try:
             request = kis_request_queue.get(timeout=0.5)
             response = _handle_request(request)
-            kis_response_queue.put(response)
+            if response is None:
+                continue
+            if request.cancelled:
+                logging.info("[KISWorker] Discarded late response %s", request.request_id)
+            elif request.response_queue is not None:
+                request.response_queue.put(response)
+            else:
+                kis_response_queue.put(response)
         except Empty:
             continue
         except Exception as error:
@@ -183,3 +213,48 @@ def wait_for_response(request_id: str, timeout: float = 30.0) -> Optional[Thread
     for item in stashed:
         kis_response_queue.put(item)
     return None
+
+
+class WorkerSerializedKisOperations:
+    """Serialized KIS read adapter with per-request response correlation."""
+
+    def execute(
+        self,
+        operation: Callable[[], T],
+        *,
+        timeout: float = 30.0,
+        correlation_id: CorrelationId | None = None,
+    ) -> OperationResult[T]:
+        response_queue: Queue[ThreadResponse] = Queue(maxsize=1)
+        request = ThreadRequest(
+            RequestType.KIS_READ,
+            operation=operation,
+            correlation_id=str(correlation_id) if correlation_id else None,
+            response_queue=response_queue,
+        )
+        kis_request_queue.put(request)
+        request_correlation = CorrelationId(
+            request.correlation_id or request.request_id
+        )
+        try:
+            response = response_queue.get(timeout=timeout)
+        except Empty:
+            request.cancelled = True
+            return OperationResult(
+                error="KIS operation timed out",
+                correlation_id=request_correlation,
+            )
+
+        if not response.success:
+            return OperationResult(
+                error=response.error or "KIS operation failed",
+                correlation_id=CorrelationId(
+                    response.correlation_id or request_correlation
+                ),
+            )
+        return OperationResult(
+            value=response.result,
+            correlation_id=CorrelationId(
+                response.correlation_id or request_correlation
+            ),
+        )

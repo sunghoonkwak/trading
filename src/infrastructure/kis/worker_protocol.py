@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from queue import Queue
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 
 class RequestType(Enum):
@@ -13,6 +13,7 @@ class RequestType(Enum):
 
     KIS_AUTH = "kis_auth"
     KIS_WS_AUTH = "kis_ws_auth"
+    KIS_READ = "kis_read"
 
 
 @dataclass
@@ -23,6 +24,10 @@ class ThreadRequest:
     func_name: str = ""
     args: tuple = field(default_factory=tuple)
     kwargs: dict = field(default_factory=dict)
+    operation: Optional[Callable[[], Any]] = None
+    correlation_id: Optional[str] = None
+    response_queue: Any = None
+    cancelled: bool = False
     request_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     timestamp: datetime = field(default_factory=datetime.now)
 
@@ -35,6 +40,7 @@ class ThreadResponse:
     success: bool
     result: Any = None
     error: Optional[str] = None
+    correlation_id: Optional[str] = None
     timestamp: datetime = field(default_factory=datetime.now)
 
 

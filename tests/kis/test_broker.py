@@ -708,7 +708,11 @@ class _FakeTREnv:
 
 @pytest.fixture(autouse=True)
 def configure_kis_portfolio_feature_flags():
-    from infrastructure.portfolio.kis_source import configure_feature_flags
+    from application.ports import OperationResult
+    from infrastructure.portfolio.kis_source import (
+        configure_feature_flags,
+        configure_serialized_operations,
+    )
     from infrastructure.trading_configuration import (
         is_kis_domestic_enabled,
         is_kis_rest_api_enabled,
@@ -718,8 +722,16 @@ def configure_kis_portfolio_feature_flags():
         rest_api_enabled=is_kis_rest_api_enabled,
         domestic_enabled=is_kis_domestic_enabled,
     )
+    configure_serialized_operations(
+        type(
+            "ImmediateOperations",
+            (),
+            {"execute": lambda _self, operation, **_kwargs: OperationResult(value=operation())},
+        )()
+    )
     yield
     configure_feature_flags(rest_api_enabled=None, domestic_enabled=None)
+    configure_serialized_operations(None)
 
 
 def test_portfolio_fetch_uses_real_env_even_when_paper_flag_is_true(monkeypatch):
@@ -880,6 +892,27 @@ def test_kis_worker_response_wait_preserves_unmatched_response(monkeypatch):
     assert kis_worker.wait_for_response("expected", timeout=0.1) is expected
     assert responses.get_nowait() is unrelated
     assert kis_worker.wait_for_response("missing", timeout=0.0) is None
+
+
+def test_serialized_kis_operations_discards_late_read_response(monkeypatch):
+    from queue import Queue
+
+    from infrastructure.kis import worker as kis_worker
+
+    operations = kis_worker.WorkerSerializedKisOperations()
+    monkeypatch.setattr(kis_worker, "kis_request_queue", Queue())
+
+    result = operations.execute(
+        lambda: (_ for _ in ()).throw(AssertionError("late read must not run")),
+        timeout=0.0,
+    )
+
+    assert result.success is False
+    assert result.error == "KIS operation timed out"
+    request = kis_worker.kis_request_queue.get_nowait()
+    request.cancelled = True
+    response = kis_worker._handle_request(request)
+    assert response is None
 
 
 def test_kis_worker_publishes_event_pipe_alert_through_injected_callback(monkeypatch):

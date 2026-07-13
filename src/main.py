@@ -58,6 +58,7 @@ class TradingSystem:
 
     def _build_portfolio_service(self):
         """Compose the portfolio use case from runtime adapters."""
+        from application.portfolio_retrieval_service import PortfolioRetrievalService
         from domain.portfolio.weights import calculate_target_weights
         from infrastructure.config import ConfigFile, load_json, save_json
         from infrastructure.market_signals import get_fear_and_greed
@@ -65,15 +66,33 @@ class TradingSystem:
             PortfolioServiceDependencies,
             build_portfolio_service,
         )
-        from infrastructure.portfolio.integration import IntegratedPortfolioSource
+        from infrastructure.portfolio.integration import (
+            fetch_toss_exchange_rate,
+            fetch_toss_portfolio_source,
+            fetch_toss_prices,
+            get_cached_gsheet_portfolio,
+            send_telegram_warning,
+        )
+        from infrastructure.portfolio.kis_source import fetch_kis_portfolio_source
         from infrastructure.system_state import is_kis_ready
+        from infrastructure.toss.portfolio import TOSS_ACCOUNT_KEY
 
         self._configure_gsheet_source()
         self._configure_kis_portfolio_source()
+        portfolio_source = PortfolioRetrievalService(
+            fetch_kis=fetch_kis_portfolio_source,
+            fetch_toss=fetch_toss_portfolio_source,
+            get_cached_gsheet=get_cached_gsheet_portfolio,
+            fetch_toss_exchange_rate=fetch_toss_exchange_rate,
+            fetch_toss_prices=fetch_toss_prices,
+            publish_alert=display.add_alert,
+            publish_warning=send_telegram_warning,
+            toss_account_key=TOSS_ACCOUNT_KEY,
+        )
         return build_portfolio_service(
             PortfolioServiceDependencies(
                 is_kis_ready=is_kis_ready,
-                portfolio_source=IntegratedPortfolioSource(),
+                portfolio_source=portfolio_source,
                 save_portfolio=lambda value: save_json(ConfigFile.PORTFOLIO, value),
                 load_weights=lambda: load_json(ConfigFile.PORTFOLIO_WEIGHTS),
                 calculate_targets=calculate_target_weights,
@@ -84,9 +103,11 @@ class TradingSystem:
 
     def _configure_kis_portfolio_source(self):
         """Compose KIS portfolio source runtime collaborators."""
+        from infrastructure.kis.worker import WorkerSerializedKisOperations
         from infrastructure.portfolio.kis_source import (
             configure_alert_publisher,
             configure_feature_flags,
+            configure_serialized_operations,
         )
 
         configure_feature_flags(
@@ -94,6 +115,7 @@ class TradingSystem:
             domestic_enabled=trading_config.is_kis_domestic_enabled,
         )
         configure_alert_publisher(display.add_alert)
+        configure_serialized_operations(WorkerSerializedKisOperations())
 
     def _configure_gsheet_source(self):
         """Compose the private Google Sheets credential path."""

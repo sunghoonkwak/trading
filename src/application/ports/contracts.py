@@ -1,5 +1,6 @@
 """Shared, dependency-free conventions for application port contracts."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Generic, NewType, Protocol, TypeVar
 
@@ -12,6 +13,19 @@ class PortfolioSource(Protocol):
 
     def fetch(self, *, scope: str) -> dict[str, Any]:
         """Return the established raw portfolio shape for a scope."""
+
+
+class SerializedKisOperations(Protocol):
+    """Execute a read-only KIS operation through the serialized worker."""
+
+    def execute(
+        self,
+        operation: Callable[[], T],
+        *,
+        timeout: float = 30.0,
+        correlation_id: CorrelationId | None = None,
+    ) -> "OperationResult[T]":
+        """Return one complete response or a safe, redacted failure."""
 
 
 class PortfolioReader(Protocol):

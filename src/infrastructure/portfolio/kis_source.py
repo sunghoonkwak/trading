@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, TypedDict
 
 import pandas as pd
 
+from application.ports import SerializedKisOperations
 from infrastructure.kis.kis_api import kis_auth as ka
 from infrastructure.kis.kis_api.domestic_stock.inquire_balance.inquire_balance import (
     inquire_balance,
@@ -35,6 +36,7 @@ class _OverseasAccountResult(TypedDict):
 _alert_publisher: Optional[Callable[[str, str], None]] = None
 _rest_api_enabled: Optional[Callable[[], bool]] = None
 _domestic_enabled: Optional[Callable[[], bool]] = None
+_serialized_operations: Optional[SerializedKisOperations] = None
 
 
 def configure_feature_flags(
@@ -54,6 +56,14 @@ def configure_alert_publisher(
     """Inject KIS portfolio alert delivery at composition time."""
     global _alert_publisher
     _alert_publisher = publisher
+
+
+def configure_serialized_operations(
+    operations: Optional[SerializedKisOperations],
+) -> None:
+    """Inject the KIS worker's read-only serialization adapter."""
+    global _serialized_operations
+    _serialized_operations = operations
 
 
 def _publish_alert(message: str, level: str) -> None:
@@ -116,21 +126,32 @@ class KisPortfolioSourceAdapter:
     @classmethod
     def _fetch_kis_account_data(cls) -> Dict[str, Any]:
         """Fetch both domestic and overseas balances from KIS."""
-        # TODO(U4, next context): Route this read through SerializedKisOperations.
-        # Characterize request IDs, timeout/late-response handling, and the
-        # existing fail-safe empty-source result before changing this path.
         if _rest_api_enabled is None or not _rest_api_enabled():
-            return {
-                "domestic_stocks": [],
-                "overseas_stocks": [],
-                "domestic_asset": {},
-                "overseas_asset": {},
-                "exchange_rate": 0.0,
-                "krw_orderable": 0,
-                "usd_orderable": None,
-                "error": "KIS REST API is disabled",
-            }
+            return cls._empty_account_data("KIS REST API is disabled")
 
+        if _serialized_operations is None:
+            return cls._empty_account_data("KIS operations are not configured")
+        result = _serialized_operations.execute(cls._fetch_kis_account_data_from_api)
+        if not result.success or result.value is None:
+            return cls._empty_account_data(result.error or "KIS operation failed")
+        return result.value
+
+    @staticmethod
+    def _empty_account_data(error: str) -> Dict[str, Any]:
+        return {
+            "domestic_stocks": [],
+            "overseas_stocks": [],
+            "domestic_asset": {},
+            "overseas_asset": {},
+            "exchange_rate": 0.0,
+            "krw_orderable": 0,
+            "usd_orderable": None,
+            "error": error,
+        }
+
+    @classmethod
+    def _fetch_kis_account_data_from_api(cls) -> Dict[str, Any]:
+        """Perform vendor reads after the worker has serialized the request."""
         trenv = ka.getTREnv()
         cano = trenv.my_acct
         prod = trenv.my_prod

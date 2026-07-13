@@ -526,7 +526,7 @@ def test_portfolio_weight_command_uses_valid_portfolio_scope(monkeypatch):
     monkeypatch.setattr(
         telegram_portfolio,
         "format_weight_diffs",
-        lambda diffs, total_usd, cash_info: "weights",
+        lambda diffs, total_usd, cash_info, get_fear_and_greed: "weights",
     )
     monkeypatch.setattr(telegram_portfolio, "wrap_reply", fake_reply)
 

@@ -3,6 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+from application.portfolio_retrieval_service import PortfolioRetrievalService
 from application.portfolio_service import PortfolioService
 
 
@@ -70,3 +71,29 @@ def test_portfolio_service_fails_closed_before_request_when_kis_is_not_ready():
     )
 
     assert service.get_portfolio_data() == {"error": "KIS Thread not ready"}
+
+
+def test_portfolio_retrieval_service_owns_all_scope_source_policy():
+    alerts = []
+    service = PortfolioRetrievalService(
+        fetch_kis=lambda: (
+            {"accounts": {"kis": {"name": "한국투자증권"}}, "holdings": [], "asset_info": {}, "cash_holdings": []},
+            {"exchange_rate": 1300.0, "error": None},
+        ),
+        fetch_toss=lambda: (
+            {"accounts": {"toss": {"name": "토스"}}, "holdings": [], "asset_info": {}, "cash_holdings": []},
+            None,
+        ),
+        get_cached_gsheet=lambda: ({"accounts": {}, "holdings": [], "asset_info": {}, "cash_holdings": []}, None),
+        fetch_toss_exchange_rate=lambda: (None, None),
+        fetch_toss_prices=lambda _tickers: {},
+        publish_alert=lambda message, level: alerts.append((message, level)),
+        publish_warning=lambda _message: None,
+        toss_account_key="toss",
+    )
+
+    result = service.fetch(scope="all")
+
+    assert [account["name"] for account in result["accounts"]] == ["한국투자증권", "토스"]
+    assert result["metadata"]["exchange_rate"] == 1300.0
+    assert alerts == [("[Data] Loading cached GSheet data...", "INFO")]
