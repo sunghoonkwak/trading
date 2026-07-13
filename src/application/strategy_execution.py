@@ -48,6 +48,60 @@ class StrategyExecutionDependencies:
     orderable_usd_cache: Dict[str, float] = field(default_factory=dict)
 
 
+class StrategyExecutionRuntime:
+    """Instance-owned collaborators for one configured strategy execution."""
+
+    def __init__(self, dependencies: StrategyExecutionDependencies) -> None:
+        self.dependencies = dependencies
+
+    def market_data_service(self) -> StrategyMarketDataService:
+        reader = self.dependencies.portfolio_reader_factory()
+        return StrategyMarketDataService(
+            load_portfolio=reader.get_portfolio_data,
+            load_strategy_config=self.dependencies.load_strategy_config,
+            fetch_prices=self.dependencies.fetch_prices,
+            resolve_price=resolve_current_price,
+            strategy_broker_name=self.dependencies.strategy_broker_name,
+        )
+
+    def order_report_service(self) -> OrderReportService:
+        return OrderReportService(
+            execute_order=self.dependencies.execute_order,
+            sleep=time.sleep,
+        )
+
+    def history_service(self) -> StrategyHistoryService:
+        return StrategyHistoryService(
+            load=self.dependencies.load_history,
+            save=self.dependencies.save_history,
+        )
+
+    def strategy_run_service(self) -> StrategyRunService:
+        """Expose this runtime's execution entry points without global lookup."""
+        return StrategyRunService(
+            run_raoeo=self.run_raoeo,
+            run_value_averaging=self.run_value_averaging,
+            run_rebalancing=self.run_rebalancing,
+            run_suite=self.run_suite,
+        )
+
+    def run_raoeo(self, *, execute: bool = False, **kwargs: Any) -> Dict[str, Any]:
+        return run_raoeo_strategy(execute=execute, **kwargs)
+
+    def run_value_averaging(
+        self, *, execute: bool = False, **kwargs: Any
+    ) -> Dict[str, Any]:
+        return run_va_strategy(execute=execute, **kwargs)
+
+    def run_rebalancing(
+        self, *, execute: bool = False, **kwargs: Any
+    ) -> Dict[str, Any]:
+        return run_rebalancing_strategy(execute=execute, **kwargs)
+
+    def run_suite(self, *, execute: bool = False) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        return run_strategy_suite(execute=execute)
+
+
 _dependencies: Optional[StrategyExecutionDependencies] = None
 
 
@@ -167,16 +221,7 @@ def get_market_data(
 
 def get_strategy_market_data_service() -> StrategyMarketDataService:
     """Build the application market-data service from legacy adapters."""
-    dependencies = _require_dependencies()
-    load_portfolio = dependencies.portfolio_reader_factory().get_portfolio_data
-
-    return StrategyMarketDataService(
-        load_portfolio=load_portfolio,
-        load_strategy_config=dependencies.load_strategy_config,
-        fetch_prices=dependencies.fetch_prices,
-        resolve_price=resolve_current_price,
-        strategy_broker_name=dependencies.strategy_broker_name,
-    )
+    return StrategyExecutionRuntime(_require_dependencies()).market_data_service()
 
 
 def get_orderable_usd(symbol: str, order_price: float) -> float:
@@ -265,10 +310,7 @@ def _load_history(history_service: Optional[StrategyHistoryService] = None) -> l
 
 def get_strategy_history_service() -> StrategyHistoryService:
     """Build the application history service from the legacy JSON adapter."""
-    return StrategyHistoryService(
-        load=_require_dependencies().load_history,
-        save=_require_dependencies().save_history,
-    )
+    return StrategyExecutionRuntime(_require_dependencies()).history_service()
 
 
 def normalize_strategy_history_date(raw: str = "") -> str:

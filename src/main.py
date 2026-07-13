@@ -39,6 +39,7 @@ class TradingSystem:
         self._runtime_running = False
         self._web_server_started = False
         self._scheduler_runner = None
+        self._strategy_runtime = None
 
     def setup_logging(self):
         """Configures system-wide logging via LogManager."""
@@ -128,11 +129,14 @@ class TradingSystem:
     def _configure_strategy_execution_service(self):
         """Compose strategy execution collaborators from runtime adapters."""
         from application.strategy_broker import StrategyBrokerService
-        from application.strategy_execution import StrategyExecutionDependencies
+        from application.strategy_execution import (
+            StrategyExecutionDependencies,
+            StrategyExecutionRuntime,
+            configure_strategy_execution,
+        )
         from infrastructure import market_data, market_signals
         from infrastructure.config import ConfigFile, load_json, save_json
         from infrastructure.kis import broker as kis_broker
-        from infrastructure.strategy_execution import configure_strategy_execution_service
         from infrastructure.toss import broker as toss_broker
 
         strategy_broker = StrategyBrokerService(
@@ -145,8 +149,7 @@ class TradingSystem:
             toss_place_order=toss_broker.place_order,
         )
 
-        configure_strategy_execution_service(
-            StrategyExecutionDependencies(
+        dependencies = StrategyExecutionDependencies(
                 load_strategy_config=lambda: load_json(
                     ConfigFile.STRATEGY_CONFIG, default={}
                 ),
@@ -158,8 +161,9 @@ class TradingSystem:
                 execute_order=strategy_broker.place_order,
                 portfolio_reader_factory=self._build_portfolio_service,
                 get_market_status=market_signals.get_us_market_status,
-            )
         )
+        configure_strategy_execution(dependencies)
+        self._strategy_runtime = StrategyExecutionRuntime(dependencies)
 
     def initialize_telegram(self):
         """Initializes the Telegram bot thread."""
@@ -167,7 +171,6 @@ class TradingSystem:
         from application.strategy_execution import (
             clear_strategy_history_for_date,
             execute_raoeo_cash_funding,
-            get_strategy_run_service,
             normalize_strategy_history_date,
             prepare_raoeo_cash_funding,
             save_raoeo_cash_funding_result,
@@ -220,14 +223,14 @@ class TradingSystem:
                 get_fear_and_greed=market_signals.get_fear_and_greed,
             ),
             strategy_dependencies=StrategyCommandDependencies(
-                strategy_run_service=get_strategy_run_service(),
+                strategy_run_service=self._strategy_runtime.strategy_run_service(),
                 clear_history=clear_strategy_history_for_date,
                 normalize_history_date=normalize_strategy_history_date,
                 prepare_cash_funding=prepare_raoeo_cash_funding,
                 execute_cash_funding=execute_raoeo_cash_funding,
                 save_cash_funding_result=save_raoeo_cash_funding_result,
             ),
-            strategy_run_service=get_strategy_run_service(),
+            strategy_run_service=self._strategy_runtime.strategy_run_service(),
             memo_store=MemoStore(
                 load=lambda: load_json(ConfigFile.MEMO, default={}),
                 save=lambda memos: save_json(ConfigFile.MEMO, memos),
@@ -493,7 +496,6 @@ class TradingSystem:
         """Starts the background task scheduler."""
         print("[Startup] Step 4: Starting Scheduler Service...")
         try:
-            from application.strategy_execution import get_strategy_run_service
             from infrastructure import market_signals
             from infrastructure.runtime_settings import DEFAULT_USD_KRW_EXCHANGE_RATE
             from interfaces.scheduler.order_runner import SchedulerOrderRunner
@@ -513,7 +515,7 @@ class TradingSystem:
             self._scheduler_runner = SchedulerRunner(
                 portfolio_reader=self._build_portfolio_service(),
                 order_runner=SchedulerOrderRunner(
-                    strategy_run_service=get_strategy_run_service(),
+                    strategy_run_service=self._strategy_runtime.strategy_run_service(),
                     notify=send_notification,
                     format_strategy_report=format_strategy_report,
                     format_rebalancing_report=format_rebalancing_report,
