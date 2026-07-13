@@ -116,6 +116,9 @@ class KisPortfolioSourceAdapter:
     @classmethod
     def _fetch_kis_account_data(cls) -> Dict[str, Any]:
         """Fetch both domestic and overseas balances from KIS."""
+        # TODO(U4, next context): Route this read through SerializedKisOperations.
+        # Characterize request IDs, timeout/late-response handling, and the
+        # existing fail-safe empty-source result before changing this path.
         if _rest_api_enabled is None or not _rest_api_enabled():
             return {
                 "domestic_stocks": [],
