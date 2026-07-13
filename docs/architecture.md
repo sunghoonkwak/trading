@@ -32,8 +32,8 @@ Production code must not introduce new imports from them.
 
 | Surface | Current consumers | Removal condition |
 | --- | --- | --- |
-| `toss/` | Toss tests/backtest compatibility | Migrate remaining legacy callers. |
-| `broker/kis_*` forwarding modules | KIS compatibility tests and external imports | Migrate remaining callers, then remove each shim. |
+| `toss/` | Toss tests and mypy compatibility coverage | Migrate remaining legacy test/config callers. |
+| `broker/kis_broker.py` facade | `broker.strategy_broker` and KIS facade tests | Migrate its public facade and patch seams together. |
 
 The removed `data.data_service`, `strategy.execution_service`, `core.runtime_control`,
 `core.web_server`, `scheduler` forwarding modules, `telegram_bot`, and data

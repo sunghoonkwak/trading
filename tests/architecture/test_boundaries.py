@@ -273,6 +273,15 @@ def test_toss_auth_does_not_import_legacy_config():
     assert "core.credentials" not in imports
 
 
+def test_production_broker_modules_do_not_import_toss_compatibility_package():
+    offenders = []
+    for path in (SRC_DIR / "broker").glob("*.py"):
+        if any(_is_package_or_child(module, "toss") for module in _imports_in(path)):
+            offenders.append(path.name)
+
+    assert offenders == []
+
+
 def test_kis_worker_does_not_import_legacy_display():
     imports = _imports_in(SRC_DIR / "infrastructure/kis/worker.py")
 

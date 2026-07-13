@@ -48,8 +48,8 @@ def fetch_prices(tickers: Iterable[str]) -> Dict[str, float]:
 
     prices: Dict[str, float] = {}
     try:
-        from toss.auth import load_access_token
-        from toss.get_prices import get_prices
+        from infrastructure.toss.auth import load_access_token
+        from infrastructure.toss.get_prices import get_prices
 
         for start in range(0, len(symbols), 200):
             batch = symbols[start:start + 200]
