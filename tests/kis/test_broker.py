@@ -659,43 +659,35 @@ def test_place_overseas_order_reports_timeout(monkeypatch):
     assert "[AMBIGUOUS]" in message
 
 
-def test_strategy_broker_defaults_to_kis(monkeypatch):
-    from broker import strategy_broker
+def test_strategy_broker_defaults_to_kis():
+    from application.strategy_broker import StrategyBrokerService
 
-    monkeypatch.setattr(
-        strategy_broker,
-        "load_json",
-        lambda file_type, default=None: {},
+    broker = StrategyBrokerService(load_strategy_config=lambda: {})
+
+    assert broker.get_strategy_broker_name() == "kis"
+    assert broker.get_strategy_account_name() == "한국투자증권"
+
+
+def test_strategy_broker_selects_toss_from_strategy_config():
+    from application.strategy_broker import StrategyBrokerService
+
+    broker = StrategyBrokerService(
+        load_strategy_config=lambda: {"strategy_broker": "toss"}
     )
 
-    assert strategy_broker.get_strategy_broker_name() == "kis"
-    assert strategy_broker.get_strategy_account_name() == "한국투자증권"
+    assert broker.get_strategy_broker_name() == "toss"
+    assert broker.get_strategy_account_name() == "토스"
 
 
-def test_strategy_broker_selects_toss_from_strategy_config(monkeypatch):
-    from broker import strategy_broker
+def test_strategy_broker_rejects_unknown_broker():
+    from application.strategy_broker import StrategyBrokerService
 
-    monkeypatch.setattr(
-        strategy_broker,
-        "load_json",
-        lambda file_type, default=None: {"strategy_broker": "toss"},
-    )
-
-    assert strategy_broker.get_strategy_broker_name() == "toss"
-    assert strategy_broker.get_strategy_account_name() == "토스"
-
-
-def test_strategy_broker_rejects_unknown_broker(monkeypatch):
-    from broker import strategy_broker
-
-    monkeypatch.setattr(
-        strategy_broker,
-        "load_json",
-        lambda file_type, default=None: {"strategy_broker": "other"},
+    broker = StrategyBrokerService(
+        load_strategy_config=lambda: {"strategy_broker": "other"}
     )
 
     with pytest.raises(ValueError, match="strategy_broker"):
-        strategy_broker.get_strategy_broker_name()
+        broker.get_strategy_broker_name()
 
 
 import sys
@@ -703,7 +695,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from broker import market_data
+from infrastructure import market_data
 from infrastructure.kis.kis_api import kis_auth as ka
 from infrastructure.kis.kis_api.overseas_stock.price import price as price_module
 from infrastructure.portfolio.kis_source import KisPortfolioSourceAdapter

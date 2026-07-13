@@ -11,7 +11,6 @@ This is a Python 3.11+ KIS real-time trading system. Runtime entry point:
 - `src/strategy/`: RAOEO, value averaging, rebalancing, and execution
 - `src/scheduler/`, `src/telegram_bot/`, `src/data/`, `src/state/`,
   `src/utils/`: supporting services
-- `src/broker/`: application-owned broker facades around external trading APIs
 - `src/interfaces/web/`: Event Viewer adapter and web assets
 - `templates/`: sample configuration only
 - `scripts/backtest/raoeo/`: backtest tooling
@@ -61,8 +60,8 @@ For Toss Invest Open API work, consult the checked-in OpenAPI reference first:
 dummy examples only; runtime credentials and account data still belong only in
 `KIS_config/` or external mounts.
 
-- Implement Toss helpers under `src/infrastructure/toss/` and keep orchestration in app-owned
-  modules such as `src/broker/`.
+- Implement Toss helpers under `src/infrastructure/toss/` and keep orchestration in
+  app-owned `src/application/` modules.
 - Use the schema to confirm paths, methods, request body `Content-Type`,
   required headers such as `X-Tossinvest-Account`, and response field names
   before changing Toss API calls.
@@ -85,12 +84,11 @@ behavior or operational expectations change. Do not hand-edit generated or
 vendor-like KIS endpoint wrappers unless intentionally scoped.
 
 Treat `src/infrastructure/kis/kis_api/**` as the official Korea Investment
-Securities API distribution boundary. `src/kis/kis_api/**` is a compatibility
-import shim only. Keep application policy, orchestration, and testing seams
-outside the vendor tree, preferably in `src/broker/`, `src/strategy/`,
-`src/data/`, or other app-owned modules. Changes inside the official KIS tree
-should be limited to deliberate compatibility/security patches that are worth
-reapplying during upstream updates.
+Securities API distribution boundary. Keep application policy, orchestration,
+and testing seams outside the vendor tree, preferably in `src/application/`,
+`src/strategy/`, `src/data/`, or other app-owned modules. Changes inside the
+official KIS tree should be limited to deliberate compatibility/security
+patches that are worth reapplying during upstream updates.
 
 ## Testing
 

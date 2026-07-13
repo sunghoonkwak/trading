@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Application-owned facade for market data lookups."""
+"""Provider-neutral adapter for Toss-first market data lookups."""
 
 import logging
 from typing import Dict, Iterable, Optional

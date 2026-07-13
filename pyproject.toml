@@ -46,10 +46,9 @@ files = [
     "src/interfaces/scheduler/portfolio_runner.py",
     "src/infrastructure/kis/constants.py",
     "src/application/strategy_execution.py",
-    "src/broker/__init__.py",
     "src/infrastructure/kis/broker.py",
-    "src/broker/market_data.py",
-    "src/broker/strategy_broker.py",
+    "src/infrastructure/market_data.py",
+    "src/application/strategy_broker.py",
     "src/infrastructure/order_admin.py",
     "src/infrastructure/kis/event_handler.py",
     "src/state/__init__.py",
@@ -72,7 +71,11 @@ show_missing = true
 skip_covered = true
 
 [tool.mutmut]
-source_paths = ["src/strategy/", "src/broker/"]
+source_paths = [
+    "src/strategy/",
+    "src/application/strategy_broker.py",
+    "src/infrastructure/market_data.py",
+]
 also_copy = [
     "src/main.py",
     "src/core/",

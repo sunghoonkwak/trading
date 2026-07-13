@@ -388,6 +388,14 @@ def test_retired_order_admin_compatibility_module_is_removed():
     assert not (SRC_DIR / "broker/order_admin.py").exists()
 
 
+def test_retired_market_data_broker_module_is_removed():
+    assert not (SRC_DIR / "broker/market_data.py").exists()
+
+
+def test_retired_strategy_broker_module_is_removed():
+    assert not (SRC_DIR / "broker/strategy_broker.py").exists()
+
+
 def test_no_active_python_consumer_uses_retired_toss_broker_modules():
     roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
     consumers = []
@@ -430,6 +438,25 @@ def test_no_active_python_consumer_uses_retired_order_admin_module():
                 continue
             source = path.read_text(encoding="utf-8")
             if "broker.order_admin" in source or "from broker import order_admin" in source:
+                consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
+
+    assert consumers == []
+
+
+def test_no_active_python_consumer_uses_retired_broker_modules():
+    roots = [SRC_DIR, SRC_DIR.parent / "tests", SRC_DIR.parent / "scripts"]
+    consumers = []
+    for root in roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            source = path.read_text(encoding="utf-8")
+            if (
+                "broker.market_data" in source
+                or "broker.strategy_broker" in source
+                or "from broker import market_data" in source
+                or "from broker import strategy_broker" in source
+            ):
                 consumers.append(path.relative_to(SRC_DIR.parent).as_posix())
 
     assert consumers == []

@@ -17,7 +17,7 @@ allowing an interface or application module to construct those adapters.
 | Package | Owns |
 | --- | --- |
 | `interfaces/` | Web, Telegram, and scheduler transport behavior. |
-| `application/` | Portfolio, strategy execution, order reporting, and ports. |
+| `application/` | Portfolio, strategy execution, account selection, order reporting, and ports. |
 | `domain/` | Strategy rules, portfolio transformations, and value types. |
 | `infrastructure/` | KIS, Toss, file, cache, and external-service adapters. |
 | `infrastructure/kis/kis_api/` | The isolated KIS vendor distribution. |
@@ -27,9 +27,10 @@ to dependency-free helpers.
 
 ## Compatibility register
 
-No compatibility module remains. The removed `broker.kis_broker`,
-`broker.toss_broker`, `broker.toss_portfolio`, `data.data_service`,
-`strategy.execution_service`, `core.runtime_control`, `core.web_server`,
+No compatibility module remains. The removed `broker.market_data`,
+`broker.strategy_broker`, `broker.kis_broker`, `broker.toss_broker`,
+`broker.toss_portfolio`, `data.data_service`, `strategy.execution_service`,
+`core.runtime_control`, `core.web_server`,
 `scheduler` forwarding modules, `telegram_bot`, `toss`, and data portfolio
 forwarding surfaces (including `data.gsheet`) have zero production, test,
 script, and documentation consumers.

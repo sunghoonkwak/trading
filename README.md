@@ -77,7 +77,7 @@ trading/
 │   ├── domain/                  # 전략 규칙, portfolio 변환, 값 타입
 │   ├── infrastructure/          # KIS, Toss, portfolio source/cache adapter
 │   ├── core/                    # 런타임 기술 유틸리티
-│   ├── broker/, data/, strategy/ # 단계적으로 축소 중인 legacy adapter surface
+│   ├── data/, strategy/          # 단계적으로 축소 중인 legacy adapter surface
 │   ├── state/                   # 시장/시스템 상태 캐시
 │   ├── utils/                   # 로깅, 포맷, 시장 시간 유틸리티
 │   └── web/                     # 웹 대시보드 정적 파일과 인증서 위치
@@ -302,7 +302,7 @@ venv/bin/pytest tests/strategy/test_raoeo_properties.py
 venv/bin/pip-audit -r requirements.txt
 ```
 
-mutation test는 `pyproject.toml`에 지정된 `src/strategy/`와 `src/broker/`만
+mutation test는 `pyproject.toml`에 지정된 `src/strategy/`와 `src/application/`만
 대상으로 하며, 공식 KIS 배포 코드인
 `src/infrastructure/kis/kis_api/`는 포함하지 않습니다. 기존
 KIS 공식 배포 코드는 `src/infrastructure/kis/kis_api/`에 격리합니다.

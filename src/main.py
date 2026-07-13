@@ -104,10 +104,23 @@ class TradingSystem:
 
     def _configure_strategy_execution_service(self):
         """Compose strategy execution collaborators from runtime adapters."""
+        from application.strategy_broker import StrategyBrokerService
         from application.strategy_execution import StrategyExecutionDependencies
-        from broker import market_data, strategy_broker
         from data.config_manager import ConfigFile, load_json, save_json
+        from infrastructure import market_data
+        from infrastructure.kis import broker as kis_broker
         from infrastructure.strategy_execution import configure_strategy_execution_service
+        from infrastructure.toss import broker as toss_broker
+
+        strategy_broker = StrategyBrokerService(
+            load_strategy_config=lambda: load_json(
+                ConfigFile.STRATEGY_CONFIG, default={}
+            ),
+            kis_orderable_usd=kis_broker.get_orderable_usd,
+            toss_orderable_usd=toss_broker.get_orderable_usd,
+            kis_place_order=kis_broker.place_overseas_order,
+            toss_place_order=toss_broker.place_order,
+        )
 
         configure_strategy_execution_service(
             StrategyExecutionDependencies(
@@ -135,10 +148,9 @@ class TradingSystem:
             prepare_raoeo_cash_funding,
             save_raoeo_cash_funding_result,
         )
-        from broker import market_data
         from data.calculate_weights import get_cash_weight
         from data.config_manager import ConfigFile, load_json, save_json
-        from infrastructure import order_admin
+        from infrastructure import market_data, order_admin
         from infrastructure.portfolio import refresh_gsheet_cache
         from infrastructure.portfolio.weight_diffs import (
             WeightDiffDependencies,
