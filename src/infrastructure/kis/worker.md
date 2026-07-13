@@ -9,10 +9,10 @@ worker입니다. KIS API adapter와 worker orchestration은 infrastructure에
 1. **스레드 루프**: `kis_request_queue`를 감시하고 요청별 응답을
    `kis_response_queue`에 넣습니다.
 2. **인증 요청**: REST/WebSocket 인증은
-   `infrastructure.kis.kis_rest_client.RESTClient`에 위임합니다.
+   `infrastructure.kis.rest_client.RESTClient`에 위임합니다.
    `KIS_ENABLE_REST_API=false`이면 REST 인증 요청은 disabled 응답을
    반환하지만 WebSocket 인증 요청은 계속 허용합니다.
-3. **WebSocket 초기화**: `infrastructure.kis.kis_ws_manager.WSManager`를
+3. **WebSocket 초기화**: `infrastructure.kis.ws_manager.WSManager`를
    호출해 KIS WebSocket 구독을 시작합니다. Event-pipe 연결 alert는
    composition root가 주입하는 best-effort publisher를 사용합니다.
 

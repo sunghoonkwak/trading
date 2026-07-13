@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-KIS REST Client Module (Advanced)
-
-Handles REST API requests with retry logic, error handling, and timeout management.
-"""
+"""KIS REST client with retry, error handling, and timeout management."""
 import logging
 import time
 from functools import wraps

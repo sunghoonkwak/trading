@@ -1,6 +1,6 @@
 # KIS WebSocket Notifications
 
-`kis_ws_notifications.py` owns the KIS WebSocket reconnection notification
+`ws_notifications.py` owns the KIS WebSocket reconnection notification
 policy used by `vendor_callbacks.py`.
 
 - A disconnect alone sends no Telegram notification.

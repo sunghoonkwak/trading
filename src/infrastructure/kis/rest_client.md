@@ -1,4 +1,4 @@
-# KIS REST Client (`src/infrastructure/kis/kis_rest_client.py`)
+# KIS REST Client (`src/infrastructure/kis/rest_client.py`)
 
 This infrastructure adapter authenticates KIS REST and WebSocket clients with
 the existing bounded retry policy. It publishes authentication phase changes

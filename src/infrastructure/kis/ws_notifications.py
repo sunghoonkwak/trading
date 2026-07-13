@@ -1,4 +1,4 @@
-"""WebSocket reconnection notification policy."""
+"""KIS WebSocket reconnection notification policy."""
 
 RECONNECTION_ALERT_THRESHOLD = 3
 

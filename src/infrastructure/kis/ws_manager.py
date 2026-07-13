@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-KIS WebSocket Manager Module
-
-Handles WebSocket connection, subscriptions, and event loop.
-"""
+"""KIS WebSocket connection, subscription, and event-loop manager."""
 import logging
 import threading
 from typing import Callable, Optional, cast

@@ -7,8 +7,7 @@ import time
 from queue import Empty
 from typing import Callable, Optional
 
-from infrastructure.kis.kis_rest_client import RESTClient
-from infrastructure.kis.kis_ws_manager import WSManager
+from infrastructure.kis.rest_client import RESTClient
 from infrastructure.kis.worker_protocol import (
     RequestType,
     ThreadRequest,
@@ -16,6 +15,7 @@ from infrastructure.kis.worker_protocol import (
     kis_request_queue,
     kis_response_queue,
 )
+from infrastructure.kis.ws_manager import WSManager
 
 _kis_thread: Optional[threading.Thread] = None
 _stop_event = threading.Event()

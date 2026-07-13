@@ -329,14 +329,26 @@ def test_retired_kis_logger_module_is_removed():
     assert not (SRC_DIR / "infrastructure/kis/kis_logger.py").exists()
 
 
+def test_retired_kis_rest_client_module_is_removed():
+    assert not (SRC_DIR / "infrastructure/kis/kis_rest_client.py").exists()
+
+
+def test_retired_kis_ws_manager_module_is_removed():
+    assert not (SRC_DIR / "infrastructure/kis/kis_ws_manager.py").exists()
+
+
+def test_retired_kis_ws_notifications_module_is_removed():
+    assert not (SRC_DIR / "infrastructure/kis/kis_ws_notifications.py").exists()
+
+
 def test_kis_rest_client_does_not_import_legacy_state():
-    imports = _imports_in(SRC_DIR / "infrastructure/kis/kis_rest_client.py")
+    imports = _imports_in(SRC_DIR / "infrastructure/kis/rest_client.py")
 
     assert "state.system_state" not in imports
 
 
 def test_kis_ws_manager_does_not_import_legacy_runtime_modules():
-    imports = _imports_in(SRC_DIR / "infrastructure/kis/kis_ws_manager.py")
+    imports = _imports_in(SRC_DIR / "infrastructure/kis/ws_manager.py")
 
     assert "core.trading_config" not in imports
     assert "core.display" not in imports

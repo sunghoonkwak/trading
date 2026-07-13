@@ -253,18 +253,18 @@ class TradingSystem:
         try:
             from core.credentials import get_secrets_from_password
             from infrastructure.kis import configure_kis_vendor_hooks
-            from infrastructure.kis.kis_rest_client import configure_state_publisher
-            from infrastructure.kis.kis_ws_manager import (
+            from infrastructure.kis.rest_client import configure_state_publisher
+            from infrastructure.kis.vendor_callbacks import configure_runtime_collaborators
+            from infrastructure.kis.ws_manager import (
                 configure_alert_publisher as configure_ws_alert_publisher,
             )
-            from infrastructure.kis.kis_ws_manager import (
+            from infrastructure.kis.ws_manager import (
                 configure_event_handler,
                 configure_subscription_provider,
             )
-            from infrastructure.kis.kis_ws_manager import (
+            from infrastructure.kis.ws_manager import (
                 configure_state_publisher as configure_ws_state_publisher,
             )
-            from infrastructure.kis.vendor_callbacks import configure_runtime_collaborators
             from state.system_state import (
                 AuthStatus,
                 ThreadStatus,

@@ -1,6 +1,6 @@
 # KIS WebSocket Manager
 
-`infrastructure.kis.kis_ws_manager`는 KIS WebSocket 연결, 구독, 시작과
+`infrastructure.kis.ws_manager`는 KIS WebSocket 연결, 구독, 시작과
 종료 timeout을 관리하는 infrastructure adapter다.
 
 `src/main.py`가 시작 전에 다음 runtime collaborator를 주입한다.
