@@ -9,7 +9,7 @@ This module handles the orchestration of strategy execution:
 """
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -31,8 +31,6 @@ from domain.strategy.constants import (
 )
 from domain.strategy.pricing import resolve_current_price
 
-_orderable_usd_cache: Dict[str, float] = {}
-
 
 @dataclass(frozen=True)
 class StrategyExecutionDependencies:
@@ -47,6 +45,7 @@ class StrategyExecutionDependencies:
     execute_order: Callable[[StrategyOrder], Tuple[bool, str]]
     portfolio_reader_factory: Callable[[], Any]
     get_market_status: Callable[[str], Dict[str, Any]]
+    orderable_usd_cache: Dict[str, float] = field(default_factory=dict)
 
 
 _dependencies: Optional[StrategyExecutionDependencies] = None
@@ -78,6 +77,7 @@ def configure_portfolio_reader_factory(factory) -> None:
             execute_order=dependencies.execute_order,
             portfolio_reader_factory=factory,
             get_market_status=dependencies.get_market_status,
+            orderable_usd_cache=dependencies.orderable_usd_cache,
         )
     )
 
@@ -192,10 +192,11 @@ def _get_rebalancing_orderable_usd(
     """Reuse buying power during one automatic trading-day check cycle."""
     if not cache_key:
         return get_orderable_usd(symbol, order_price)
-    if cache_key not in _orderable_usd_cache:
-        _orderable_usd_cache.clear()
-        _orderable_usd_cache[cache_key] = get_orderable_usd(symbol, order_price)
-    return _orderable_usd_cache[cache_key]
+    cache = _require_dependencies().orderable_usd_cache
+    if cache_key not in cache:
+        cache.clear()
+        cache[cache_key] = get_orderable_usd(symbol, order_price)
+    return cache[cache_key]
 
 
 def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
