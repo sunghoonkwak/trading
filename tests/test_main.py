@@ -590,7 +590,7 @@ def test_initialize_kis_skips_rest_auth_when_rest_api_disabled(monkeypatch):
     assert "wait_for_response:rest" not in calls
     assert "request_kis_ws_auth" in calls
     assert "initialize_websocket_and_pipe" in calls
-    assert "sync_open_orders" in calls
+    assert "sync_open_orders" not in calls
 
 
 def test_initialize_kis_fails_closed_when_ws_auth_fails(monkeypatch):
@@ -648,12 +648,16 @@ def test_runtime_on_starts_trading_dependencies(monkeypatch):
     monkeypatch.setattr(system, "initialize_toss", lambda: calls.append("toss") or True)
     monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
 
+    fake_order_admin = types.ModuleType("infrastructure.order_admin")
+    fake_order_admin.sync_open_orders = lambda: calls.append("sync_open_orders")
+    monkeypatch.setitem(sys.modules, "infrastructure.order_admin", fake_order_admin)
+
     result = system.start_trading_runtime()
 
     assert result.success is True
     assert result.already_in_state is False
     assert system.is_trading_runtime_running() is True
-    assert calls == ["gsheet", "kis", "toss", "scheduler"]
+    assert calls == ["gsheet", "kis", "toss", "sync_open_orders", "scheduler"]
 
 
 def test_runtime_on_failure_keeps_process_alive_and_off(monkeypatch):
@@ -725,6 +729,11 @@ def test_runtime_off_waits_for_in_progress_runtime_on(monkeypatch):
     monkeypatch.setattr(system, "initialize_toss", lambda: True)
     monkeypatch.setattr(system, "start_scheduler", lambda: None)
     monkeypatch.setattr(main.time, "sleep", lambda _seconds: None)
+
+    fake_order_admin = types.ModuleType("infrastructure.order_admin")
+    fake_order_admin.sync_open_orders = lambda: None
+    monkeypatch.setitem(sys.modules, "infrastructure.order_admin", fake_order_admin)
+
     monkeypatch.setattr(
         system,
         "_stop_runtime_dependencies",

@@ -44,9 +44,10 @@ factory에 주입한 뒤 daemon loop에 진입합니다. Docker 시작 직후 tr
 runtime 상태는 OFF입니다.
 
 ### `TradingSystem.start_trading_runtime`
-Telegram `/system_on` 명령에서 호출됩니다. GSheet cache, KIS, Toss,
-scheduler 순서로 trading runtime을 시작합니다. Web dashboard는 이미
-control plane으로 떠 있으므로 중복 시작하지 않습니다. KIS 또는 Toss
+Telegram `/system_on` 명령에서 호출됩니다. GSheet cache, KIS, Toss 인증,
+미체결 주문 동기화, scheduler 순서로 trading runtime을 시작합니다. 주문
+동기화는 Toss 인증 구성 이후에 실행되어 KIS·Toss 주문을 함께 조회합니다.
+Web dashboard는 이미 control plane으로 떠 있으므로 중복 시작하지 않습니다. KIS 또는 Toss
 초기화 실패 시 Telegram 알림을 시도하고 runtime을 OFF로 유지하지만,
 Telegram/web control plane과 컨테이너 프로세스는 계속 살아 있습니다.
 

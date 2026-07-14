@@ -455,10 +455,6 @@ class TradingSystem:
                 print("[Startup] ✗ KIS WebSocket initialization failed")
                 return False
             print("[Startup] ✓ KIS fully initialized")
-
-            from infrastructure.order_admin import sync_open_orders
-            sync_open_orders()
-            print("[Startup] ✓ Orders synced")
             return True
         except Exception as e:
             logging.error(f"[Startup] KIS error: {e}")
@@ -665,6 +661,10 @@ class TradingSystem:
                     message="Toss initialization failed. Trading runtime remains OFF.",
                 )
 
+            from infrastructure.order_admin import sync_open_orders
+
+            sync_open_orders()
+            print("[Startup] ✓ Orders synced")
             time.sleep(0.5)
             self.start_scheduler()
             self._runtime_running = True
