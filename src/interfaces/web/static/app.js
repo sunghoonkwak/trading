@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initElements();
     initMktToggle();
     initOrdersAutoToggle();
+    initTickerLinkHandler();
     updateQuotesPanel(); // Initial draw for placeholders
     connectWebSocket();
     fetchMemos(); // New
@@ -119,6 +120,16 @@ function initOrdersAutoToggle() {
             addLog(`Orders auto-refresh: ${autoRefreshOrders ? 'ON' : 'OFF'}`, 'info');
         });
     }
+}
+
+function initTickerLinkHandler() {
+    if (!elements.quotesPanel) return;
+
+    elements.quotesPanel.addEventListener('click', event => {
+        if (!(event.target instanceof Element)) return;
+        const tickerLink = event.target.closest('[data-ticker]');
+        if (tickerLink) openTickerModal(tickerLink.dataset.ticker);
+    });
 }
 
 // WebSocket Connection
@@ -289,26 +300,41 @@ function updateOrdersPanel() {
     if (!elements.ordersPanel) return;
 
     if (orders.size === 0) {
-        elements.ordersPanel.innerHTML = '<div class="empty-state">No orders</div>';
+        renderEmptyState(elements.ordersPanel, 'No orders');
     } else {
         const entries = Array.from(orders.entries()).reverse();
-        elements.ordersPanel.innerHTML = entries.map(([id, order]) => {
+        const fragment = document.createDocumentFragment();
+        entries.forEach(([id, order]) => {
             const sideClass = order.side.toUpperCase().includes('BUY') ? 'buy' : 'sell';
-            const cancelLink = order.state === 'PLACED'
-                ? `<span class="cancel-link" onclick="showCancelConfirm('${id}', '${order.ticker}')">Cancel</span>`
-                : '';
-            return `
-                <div class="order-entry ${sideClass}">
-                    <span class="time" style="margin-right:8px">${order.time}</span>
-                    <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block">${order.name}</span>
-                    <span style="width:55px;display:inline-block" class="ticker-link" onclick="openTickerModal('${order.ticker}')">${order.ticker}</span>
-                    <span style="width:70px;display:inline-block;color:${sideClass === 'buy' ? 'var(--accent-success)' : 'var(--accent-danger)'}">${order.side}</span>
-                    <span style="width:70px;text-align:right;display:inline-block">${formatNumber(order.price)}</span>
-                    <span style="width:72px;text-align:right;display:inline-block">${order.qty}</span>
-                    <span style="width:48px;text-align:center;display:inline-block;color:var(--text-dim)">${order.broker || 'KIS'}</span>
-                    <span style="margin-left:auto;color:var(--text-dim)">${order.state}${cancelLink}</span>
-                </div>`;
-        }).join('');
+            const entry = document.createElement('div');
+            entry.className = `order-entry ${sideClass}`;
+            entry.append(
+                createTextSpan(order.time, 'time', 'margin-right:8px'),
+                createTextSpan(order.name, '', 'width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block'),
+                createTickerLink(order.ticker, 'width:55px;display:inline-block'),
+                createTextSpan(
+                    order.side,
+                    '',
+                    `width:70px;display:inline-block;color:${sideClass === 'buy' ? 'var(--accent-success)' : 'var(--accent-danger)'}`,
+                ),
+                createTextSpan(formatNumber(order.price), '', 'width:70px;text-align:right;display:inline-block'),
+                createTextSpan(order.qty, '', 'width:72px;text-align:right;display:inline-block'),
+                createTextSpan(order.broker || 'KIS', '', 'width:48px;text-align:center;display:inline-block;color:var(--text-dim)'),
+            );
+
+            const state = createTextSpan(order.state, '', 'margin-left:auto;color:var(--text-dim)');
+            if (order.state === 'PLACED') {
+                const cancelLink = document.createElement('button');
+                cancelLink.className = 'cancel-link';
+                cancelLink.type = 'button';
+                cancelLink.textContent = 'Cancel';
+                cancelLink.addEventListener('click', () => showCancelConfirm(id, order.ticker));
+                state.appendChild(cancelLink);
+            }
+            entry.appendChild(state);
+            fragment.appendChild(entry);
+        });
+        elements.ordersPanel.replaceChildren(fragment);
     }
 
     if (elements.ordersCount) {
@@ -335,7 +361,7 @@ function updateQuotesPanel() {
     const finalTickers = [...displayedTickers, ...extraTickers];
 
     if (finalTickers.length === 0) {
-        elements.quotesPanel.innerHTML = '<div class="empty-state">Waiting for quotes...</div>';
+        renderEmptyState(elements.quotesPanel, 'Waiting for quotes...');
     } else {
         elements.quotesPanel.innerHTML = finalTickers.map(ticker => {
             const quote = quotes.get(ticker);
@@ -358,8 +384,8 @@ function formatPlaceholderQuote(name, ticker) {
     const displayName = truncateName(name, 25);
     return `
         <span class="time" style="margin-right:8px">--:--:--</span>
-        <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block;color:var(--text-dim)" title="${escapeHtml(name)}">${escapeHtml(displayName)}</span>
-        <span style="width:55px;display:inline-block" class="ticker-link" onclick="openTickerModal('${escapeHtml(ticker)}')">${escapeHtml(ticker)}</span>
+        <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block;color:var(--text-dim)" title="${escapeAttribute(name)}">${escapeHtml(displayName)}</span>
+        <span style="width:55px;display:inline-block" class="ticker-link" data-ticker="${escapeAttribute(ticker)}">${escapeHtml(ticker)}</span>
         <span style="width:80px;display:inline-block;color:var(--text-dim)">---</span>
         <span style="width:140px;display:inline-block;color:var(--text-dim)">---</span>
         <span style="width:140px;display:inline-block;color:var(--text-dim)">---</span>
@@ -375,7 +401,7 @@ function formatQuoteColumns(content, time) {
     }
 
     const name = parts[0]?.trim() || '';
-    const ticker = escapeHtml(parts[1]?.trim() || '');
+    const ticker = parts[1]?.trim() || '';
     const bid = parts[2]?.trim() || '';
     const last = parts[3]?.trim() || '';
     const diff = parts[4]?.trim() || '';
@@ -395,9 +421,9 @@ function formatQuoteColumns(content, time) {
     let lastHtml = `<span class="value-neutral">${escapeHtml(last)}</span>`;
 
     return `
-        <span class="time" style="margin-right:8px">${time}</span>
-        <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block" title="${escapeHtml(name)}">${escapeHtml(displayName)}</span>
-        <span style="width:55px;display:inline-block" class="ticker-link" onclick="openTickerModal('${escapeHtml(ticker)}')">${escapeHtml(ticker)}</span>
+        <span class="time" style="margin-right:8px">${escapeHtml(time)}</span>
+        <span style="width:220px;overflow:hidden;text-overflow:ellipsis;display:inline-block" title="${escapeAttribute(name)}">${escapeHtml(displayName)}</span>
+        <span style="width:55px;display:inline-block" class="ticker-link" data-ticker="${escapeAttribute(ticker)}">${escapeHtml(ticker)}</span>
         <span style="width:80px;display:inline-block">${escapeHtml(bid)}</span>
         <span style="width:140px;display:inline-block">${lastHtml}</span>
         <span style="width:140px;display:inline-block">${diffHtml}</span>
@@ -463,7 +489,7 @@ function addLog(message, level = 'info', time = null) {
         ? formatLogContent(message)
         : escapeHtml(message);
 
-    entry.innerHTML = `<span class="time">${timestamp}</span>${formattedContent}`;
+    entry.innerHTML = `<span class="time">${escapeHtml(timestamp)}</span>${formattedContent}`;
 
     elements.logPanel.appendChild(entry);
 
@@ -511,10 +537,35 @@ function refreshOrders(isAuto = false) {
 }
 
 // Utilities
+function renderEmptyState(container, message) {
+    const emptyState = document.createElement('div');
+    emptyState.className = 'empty-state';
+    emptyState.textContent = message;
+    container.replaceChildren(emptyState);
+}
+
+function createTextSpan(value, className = '', style = '') {
+    const span = document.createElement('span');
+    span.className = className;
+    span.style.cssText = style;
+    span.textContent = value ?? '';
+    return span;
+}
+
+function createTickerLink(ticker, style = '') {
+    const tickerLink = createTextSpan(ticker, 'ticker-link', style);
+    tickerLink.addEventListener('click', () => openTickerModal(ticker));
+    return tickerLink;
+}
+
 function escapeHtml(text) {
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = text ?? '';
     return div.innerHTML;
+}
+
+function escapeAttribute(text) {
+    return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function formatNumber(value) {
@@ -596,7 +647,7 @@ async function loadHoldingsData(ticker) {
     container.innerHTML = '<div class="loading-holdings">Loading holdings data...</div>';
 
     try {
-        const response = await fetch(`/api/holdings/${ticker}`);
+        const response = await fetch(`/api/holdings/${encodeURIComponent(ticker)}`);
         const data = await response.json();
 
         if (data.error || !data.found) {
@@ -624,10 +675,10 @@ async function loadHoldingsData(ticker) {
         html += `
             <tr class="summary-row">
                 <td>Total</td>
-                <td>${formatPrice(data.total_val, data.currency)}</td>
-                <td>${formatPrice(data.avg_price, data.currency)}</td>
-                <td>${data.qty}</td>
-                <td><span style="color:${pnlColor}">${formatPrice(data.pnl, data.currency)} (${data.pnl_rate.toFixed(2)}%)</span></td>
+                <td>${escapeHtml(formatPrice(data.total_val, data.currency))}</td>
+                <td>${escapeHtml(formatPrice(data.avg_price, data.currency))}</td>
+                <td>${escapeHtml(data.qty)}</td>
+                <td><span style="color:${pnlColor}">${escapeHtml(formatPrice(data.pnl, data.currency))} (${escapeHtml(data.pnl_rate.toFixed(2))}%)</span></td>
             </tr>
         `;
 
@@ -646,11 +697,11 @@ async function loadHoldingsData(ticker) {
 
                 html += `
                     <tr>
-                        <td>${acc.account_name || acc.account_id || 'Unknown'}</td>
-                        <td>${formatPrice(val, data.currency)}</td>
-                        <td>${formatPrice(avg, data.currency)}</td>
-                        <td>${qty}</td>
-                        <td><span style="color:${accPnlColor}">${formatPrice(pnl, data.currency)} (${pnlRate.toFixed(2)}%)</span></td>
+                        <td>${escapeHtml(acc.account_name || acc.account_id || 'Unknown')}</td>
+                        <td>${escapeHtml(formatPrice(val, data.currency))}</td>
+                        <td>${escapeHtml(formatPrice(avg, data.currency))}</td>
+                        <td>${escapeHtml(qty)}</td>
+                        <td><span style="color:${accPnlColor}">${escapeHtml(formatPrice(pnl, data.currency))} (${escapeHtml(pnlRate.toFixed(2))}%)</span></td>
                     </tr>
                 `;
             });
@@ -664,7 +715,7 @@ async function loadHoldingsData(ticker) {
         container.innerHTML = html;
 
     } catch (e) {
-        container.innerHTML = `<div class="log-entry error">Error loading data: ${e.message}</div>`;
+        container.innerHTML = `<div class="log-entry error">Error loading data: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -766,7 +817,7 @@ async function fetchMemos() {
         const data = await response.json();
         renderMemos(data);
     } catch (e) {
-        elements.memosPanel.innerHTML = `<div class="log-entry error">Error: ${e.message}</div>`;
+        elements.memosPanel.innerHTML = `<div class="log-entry error">Error: ${escapeHtml(e.message)}</div>`;
     }
 }
 
@@ -774,120 +825,79 @@ function renderMemos(data) {
     if (!elements.memosPanel) return;
 
     if (!data || Object.keys(data).length === 0) {
-        elements.memosPanel.innerHTML = '<div class="empty-state">No memos found.</div>';
+        renderEmptyState(elements.memosPanel, 'No memos found.');
         return;
     }
 
-    let html = '';
-    // Sort dates descending (newest first)
+    const fragment = document.createDocumentFragment();
     const dates = Object.keys(data).sort().reverse();
 
     dates.forEach(date => {
-        html += `<div class="memo-date-group">
-            <div class="memo-date-header">${date}</div>`;
-
+        const group = document.createElement('div');
+        group.className = 'memo-date-group';
+        const header = document.createElement('div');
+        header.className = 'memo-date-header';
+        header.textContent = date;
+        group.appendChild(header);
         const msgs = data[date];
-        // Reverse messages to show newest first? Or keep chronological?
-        // Usually chronological within a day is better for chat logs, but for memos maybe newest first?
-        // Let's keep original order (chronological) as per user request "date order" (implicit)
-        // actually user said "날짜순으로 표시하고" which usually means sorted by date
+        if (!Array.isArray(msgs)) return;
 
-        msgs.forEach((msg, index) => {
-            // format: "HH:MM:SS : message text"
-            // We need to be careful with splitting if the text contains " : "
-            const firstColon = msg.indexOf(' : ');
+        msgs.forEach(msg => {
+            const memo = String(msg);
+            const firstColon = memo.indexOf(' : ');
             let time = '';
-            let text = msg;
+            let text = memo;
 
             if (firstColon !== -1) {
-                time = msg.substring(0, firstColon);
-                text = msg.substring(firstColon + 3);
+                time = memo.substring(0, firstColon);
+                text = memo.substring(firstColon + 3);
             }
 
-            // Truncate logic
             const maxLen = 60;
             let displayHeader = text;
-            let isTruncated = false;
-
             if (text.length > maxLen) {
                 displayHeader = text.substring(0, maxLen) + '...';
-                isTruncated = true;
             }
 
-            const safeTime = escapeHtml(time);
-            const safeText = escapeHtml(text).replace(/\n/g, '<br>');
-            const safeHeader = escapeHtml(displayHeader);
+            const entry = document.createElement('div');
+            entry.className = 'memo-entry';
+            const timeSpan = createTextSpan(time, 'memo-time');
+            const textSpan = createTextSpan(displayHeader, 'memo-text clickable');
+            textSpan.title = 'Click to copy';
+            textSpan.addEventListener('click', () => copyMemoToClipboard(memo));
+            const actions = document.createElement('div');
+            actions.className = 'memo-actions';
 
-            // Use encodeURIComponent for safe passing to functions, replacing single quotes
-            const encodedText = encodeURIComponent(msg).replace(/'/g, "%27");
-            const entryId = `memo-${date.replace(/-/g, '')}-${index}`;
+            if (text.length > maxLen) {
+                const toggleButton = document.createElement('button');
+                toggleButton.className = 'memo-toggle-btn';
+                toggleButton.type = 'button';
+                toggleButton.textContent = '🔽';
+                toggleButton.addEventListener('click', () => {
+                    const isExpanded = entry.classList.toggle('expanded');
+                    textSpan.textContent = isExpanded ? text : displayHeader;
+                    toggleButton.textContent = isExpanded ? '🔼' : '🔽';
+                });
+                actions.appendChild(toggleButton);
+            }
 
-            // Click action: Copy to clipboard
-            const clickAttr = `onclick="copyMemoToClipboard('${encodedText}')"`;
-            const cursorClass = 'clickable';
-
-            // Toggle Button
-            const toggleBtn = isTruncated
-                ? `<button class="memo-toggle-btn" onclick="toggleMemo('${entryId}', '${encodedText}', '${safeHeader.replace(/'/g, "\\'")}')">🔽</button>`
-                : '';
-
-            html += `
-                <div class="memo-entry" id="${entryId}">
-                    <span class="memo-time">${safeTime}</span>
-                    <span class="memo-text ${cursorClass}" ${clickAttr} title="Click to copy">
-                        ${safeHeader}
-                    </span>
-                    <div class="memo-actions">
-                        ${toggleBtn}
-                        <button class="memo-delete-btn" onclick="deleteMemo('${date}', '${encodedText}')" title="Delete">🗑️</button>
-                    </div>
-                </div>`;
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'memo-delete-btn';
+            deleteButton.type = 'button';
+            deleteButton.title = 'Delete';
+            deleteButton.textContent = '🗑️';
+            deleteButton.addEventListener('click', () => deleteMemo(date, memo));
+            actions.appendChild(deleteButton);
+            entry.append(timeSpan, textSpan, actions);
+            group.appendChild(entry);
         });
-
-        html += `</div>`;
+        fragment.appendChild(group);
     });
 
-    elements.memosPanel.innerHTML = html;
+    elements.memosPanel.replaceChildren(fragment);
 }
 
-function toggleMemo(elementId, encodedText, shortHeader) {
-    const entry = document.getElementById(elementId);
-    if (!entry) return;
-
-    const textSpan = entry.querySelector('.memo-text');
-    const toggleBtn = entry.querySelector('.memo-toggle-btn');
-
-    const isExpanded = entry.classList.contains('expanded');
-    // Actually msg includes timestamp. Let's start clean
-
-    // We need just the text part
-    // The encodedText passed to toggleMemo is the FULL msg (Time : Text)
-    // But we usually want to toggle the TEXT part
-    // In render loop, we extracted `text`. We should pass THAT or re-extract
-    // Simpler: Just toggle CSS class and use data attribute?
-    // Or swap content
-
-    if (isExpanded) {
-        // Collapse
-        textSpan.innerHTML = shortHeader; // Revert to truncated
-        entry.classList.remove('expanded');
-        toggleBtn.textContent = '🔽';
-    } else {
-        // Expand
-        // We need the full text without timestamp
-        const fullMsg = decodeURIComponent(encodedText);
-        const firstColon = fullMsg.indexOf(' : ');
-        let content = fullMsg;
-        if (firstColon !== -1) content = fullMsg.substring(firstColon + 3);
-
-        textSpan.innerHTML = escapeHtml(content).replace(/\n/g, '<br>');
-        entry.classList.add('expanded');
-        toggleBtn.textContent = '🔼';
-    }
-}
-
-async function copyMemoToClipboard(encodedText) {
-    const text = decodeURIComponent(encodedText);
+async function copyMemoToClipboard(text) {
     try {
         await navigator.clipboard.writeText(text);
         addLog('✅ Memo copied to clipboard', 'success');
@@ -907,10 +917,8 @@ async function copyMemoToClipboard(encodedText) {
     }
 }
 
-async function deleteMemo(date, encodedText) {
+async function deleteMemo(date, text) {
     if (!confirm('Delete this memo?')) return;
-
-    const text = decodeURIComponent(encodedText);
 
     try {
         const response = await fetch('/api/memos/delete', {

@@ -588,6 +588,10 @@ body {
 
 /* Cancel Link Styles */
 .cancel-link {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
     color: var(--accent-danger);
     cursor: pointer;
     font-size: 0.7rem;
