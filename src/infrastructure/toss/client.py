@@ -39,7 +39,7 @@ def request_json(
             )
             with response_context as response:
                 raw_body = response.read().decode("utf-8")
-                payload = json.loads(raw_body)
+                payload = json.loads(raw_body) if raw_body else {}
                 headers = getattr(response, "headers", {})
                 rate_limiter.update_from_headers(group, headers)
                 status = int(getattr(response, "status", 200))
