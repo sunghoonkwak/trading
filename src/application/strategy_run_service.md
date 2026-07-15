@@ -10,6 +10,8 @@ binding callers to concrete brokers, configuration, or persistence adapters.
 - `StrategyMarketDataService` loads the configured broker-scoped portfolio and
   fills missing strategy prices through an injected reader.
 - `StrategyHistoryService` validates the list-shaped history document, clears a
-  date entry, and upserts one strategy result while retaining the newest 200
-  dates. A failed save raises `StrategyHistoryPersistenceError`, so callers
-  cannot treat an unrecorded order result as durable state.
+  date entry, and upserts strategy or manual cash-funding results while
+  retaining the newest 200 dates. Cash-funding records with a correlation ID
+  replace their prior intent record. A failed save raises
+  `StrategyHistoryPersistenceError`, so callers cannot treat an unrecorded
+  order result as durable state.

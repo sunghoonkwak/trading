@@ -33,6 +33,9 @@ from application.strategy_history_repository import (
     build_strategy_history_data as _build_strategy_history_data,
 )
 from application.strategy_history_repository import (
+    save_cash_funding_result as _save_cash_funding_result,
+)
+from application.strategy_history_repository import (
     save_strategy,
 )
 from application.strategy_run_service import (
@@ -201,7 +204,8 @@ class StrategyExecutionRuntime:
         with self._execution_lock:
             def persist_intent(submission_orders: List[StrategyOrder]) -> None:
                 submitted_order = submission_orders[0]
-                self._save_cash_funding_record(
+                _save_cash_funding_result(
+                    self.history_service(),
                     datetime.now(TZ_ET).strftime("%Y-%m-%d"),
                     {
                         "order": submitted_order,
@@ -234,46 +238,9 @@ class StrategyExecutionRuntime:
             return []
 
         with self._execution_lock:
-            return self._save_cash_funding_record(today_str, result)
-
-    def _save_cash_funding_record(self, today_str: str, result: Dict) -> List[Dict]:
-        order = result["order"]
-        history = self.history_service().load_history()
-        today_entry = _get_today_entry(history, today_str)
-        if today_entry is None:
-            today_entry = {"date": today_str}
-            history.insert(0, today_entry)
-
-        raoeo_data = today_entry.setdefault("raoeo", {"orders": []})
-        results = raoeo_data.setdefault("cash_funding_results", [])
-        record = {
-            "ticker": order.symbol,
-            "side": order.side.name,
-            "qty": order.quantity,
-            "price": order.price,
-            "order_type": order.order_type,
-            "reason": order.reason,
-            "success": result["success"],
-            "message": result["message"],
-            "ambiguous": result.get("ambiguous", False),
-            "correlation_id": order.correlation_id,
-        }
-        existing = next(
-            (
-                index
-                for index, previous in enumerate(results)
-                if order.correlation_id
-                and previous.get("correlation_id") == order.correlation_id
-            ),
-            None,
-        )
-        if existing is None:
-            results.append(record)
-        else:
-            results[existing] = record
-        if not self.dependencies.save_history(history[:200]):
-            raise RuntimeError("Failed to save cash funding history.")
-        return results
+            return _save_cash_funding_result(
+                self.history_service(), today_str, result
+            )
 
     def _report_orderable_usd(self, report_info: Dict) -> Any:
         if self.dependencies.strategy_broker_name() != "toss":
@@ -760,30 +727,14 @@ def execute_raoeo_cash_funding(
 
 def save_raoeo_cash_funding_result(today_str: str, result: Dict) -> List[Dict]:
     """Store a manual funding result without turning it into a retry order."""
-    order = result.get("order") if result else None
-    if order is None:
-        return []
-
-    hist_data = _load_history()
-    today_entry = _get_today_entry(hist_data, today_str)
-    if not today_entry:
-        today_entry = {"date": today_str}
-        hist_data.insert(0, today_entry)
-
-    raoeo_data = today_entry.setdefault("raoeo", {"orders": []})
-    results = raoeo_data.setdefault("cash_funding_results", [])
-    results.append({
-        "ticker": order.symbol,
-        "side": order.side.name,
-        "qty": order.quantity,
-        "price": order.price,
-        "order_type": order.order_type,
-        "reason": order.reason,
-        "success": result["success"],
-        "message": result["message"],
-    })
-    _require_dependencies().save_history(hist_data[:200])
-    return results
+    return _save_cash_funding_result(
+        StrategyHistoryService(
+            load=_load_history,
+            save=_require_dependencies().save_history,
+        ),
+        today_str,
+        result,
+    )
 
 
 def _execute_orders(

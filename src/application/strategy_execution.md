@@ -36,6 +36,8 @@
    - 사용자가 승인한 `cash_ticker` 조달 결과는 RAOEO의 `cash_funding_results`에 별도로 저장하여, 실패한 조달 주문이 일반 전략 재시도 주문으로 자동 실행되지 않게 합니다.
    - RAOEO 자동 실행에서 `normal`/`average` 매수 예산이 1주 가격에 미달해 주문이 없으면,
      해당 금액은 `skipped_buy_budgets`에 티커별 총액으로 저장되어 다음 RAOEO 계산에 이월됩니다.
+   - history JSON 포맷과 조달 결과 저장은
+     `strategy_history_repository.py` 및 `StrategyHistoryService`가 소유합니다.
    - 실제 제출 순서는 `order_submission_service.py`의
      `DurableOrderSubmissionService`가 소유합니다. 전략별 계산과 history
      포맷 조립은 이 모듈에 남기되, intent 저장 -> broker 제출 -> outcome 저장

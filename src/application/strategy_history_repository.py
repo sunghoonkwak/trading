@@ -78,6 +78,22 @@ def build_merged_history_entries(
     ]
 
 
+def build_cash_funding_history_entry(result: Dict) -> Dict:
+    order = result["order"]
+    return {
+        "ticker": order.symbol,
+        "side": order.side.name,
+        "qty": order.quantity,
+        "price": order.price,
+        "order_type": order.order_type,
+        "reason": order.reason,
+        "success": result["success"],
+        "message": result["message"],
+        "ambiguous": result.get("ambiguous", False),
+        "correlation_id": order.correlation_id,
+    }
+
+
 def save_strategy(
     history_service: StrategyHistoryService,
     today_str: str,
@@ -85,3 +101,16 @@ def save_strategy(
     strategy_data: Dict,
 ) -> None:
     history_service.save_strategy(today_str, strategy_key, strategy_data)
+
+
+def save_cash_funding_result(
+    history_service: StrategyHistoryService,
+    today_str: str,
+    result: Dict,
+) -> List[Dict]:
+    if not result or result.get("order") is None:
+        return []
+    return history_service.save_cash_funding_result(
+        today_str,
+        build_cash_funding_history_entry(result),
+    )

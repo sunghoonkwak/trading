@@ -1,4 +1,5 @@
 from application.strategy_history_repository import (
+    build_cash_funding_history_entry,
     build_merged_history_entries,
     build_strategy_history_data,
     save_strategy,
@@ -68,6 +69,21 @@ def test_build_merged_history_entries_keeps_prior_successes():
         ("prior", True),
         ("retry", True),
     ]
+
+
+def test_build_cash_funding_history_entry_preserves_reconciliation_fields():
+    entry = build_cash_funding_history_entry(
+        {
+            "order": _order("funding-1"),
+            "success": False,
+            "message": "broker timeout",
+            "ambiguous": True,
+        }
+    )
+
+    assert entry["correlation_id"] == "funding-1"
+    assert entry["ambiguous"] is True
+    assert entry["message"] == "broker timeout"
 
 
 def test_save_strategy_delegates_to_history_service():

@@ -312,6 +312,38 @@ def test_history_service_rejects_a_failed_strategy_save():
         service.save_strategy("2026-07-11", "raoeo", {"orders": []})
 
 
+def test_history_service_replaces_cash_funding_intent_with_outcome():
+    saved = []
+    service = StrategyHistoryService(
+        load=lambda: [{
+            "date": "2026-07-11",
+            "raoeo": {
+                "orders": [],
+                "cash_funding_results": [
+                    {"correlation_id": "funding-1", "success": False}
+                ],
+            },
+        }],
+        save=lambda history: saved.append(history) or True,
+    )
+
+    service.save_cash_funding_result(
+        "2026-07-11",
+        {"correlation_id": "funding-1", "success": True},
+    )
+
+    assert saved[0][0]["raoeo"]["cash_funding_results"] == [
+        {"correlation_id": "funding-1", "success": True}
+    ]
+
+
+def test_history_service_rejects_a_failed_cash_funding_save():
+    service = StrategyHistoryService(load=lambda: [], save=lambda _history: False)
+
+    with pytest.raises(StrategyHistoryPersistenceError, match="cash funding"):
+        service.save_cash_funding_result("2026-07-11", {"success": True})
+
+
 def _executable_raoeo_dependencies(history, save_history, execute_order):
     return StrategyExecutionDependencies(
         load_strategy_config=lambda: {

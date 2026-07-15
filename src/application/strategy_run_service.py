@@ -150,3 +150,36 @@ class StrategyHistoryService:
         entry[strategy_key] = strategy_data
         if not self._save(history[:200]):
             raise StrategyHistoryPersistenceError("Failed to save strategy history.")
+
+    def save_cash_funding_result(
+        self,
+        date: str,
+        record: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Upsert a manual RAOEO cash-funding result by correlation ID."""
+        history = self.load_history()
+        entry = next(
+            (item for item in history if isinstance(item, dict) and item.get("date") == date),
+            None,
+        )
+        if entry is None:
+            entry = {"date": date}
+            history.insert(0, entry)
+        raoeo_data = entry.setdefault("raoeo", {"orders": []})
+        results = raoeo_data.setdefault("cash_funding_results", [])
+        correlation_id = record.get("correlation_id")
+        existing = next(
+            (
+                index
+                for index, previous in enumerate(results)
+                if correlation_id and previous.get("correlation_id") == correlation_id
+            ),
+            None,
+        )
+        if existing is None:
+            results.append(record)
+        else:
+            results[existing] = record
+        if not self._save(history[:200]):
+            raise StrategyHistoryPersistenceError("Failed to save cash funding history.")
+        return results
