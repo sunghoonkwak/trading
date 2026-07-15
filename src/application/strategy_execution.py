@@ -381,31 +381,6 @@ def get_market_data(
     )
 
 
-def get_strategy_market_data_service() -> StrategyMarketDataService:
-    """Build the application market-data service from legacy adapters."""
-    return _legacy_runtime().market_data_service()
-
-
-def get_orderable_usd(symbol: str, order_price: float) -> float:
-    """Return strategy-broker USD buying power for a representative buy."""
-    return _require_dependencies().get_orderable_usd(symbol, order_price)
-
-
-def _get_rebalancing_orderable_usd(
-    symbol: str,
-    order_price: float,
-    cache_key: str = "",
-) -> float:
-    """Reuse buying power during one automatic trading-day check cycle."""
-    if not cache_key:
-        return get_orderable_usd(symbol, order_price)
-    cache = _require_dependencies().orderable_usd_cache
-    if cache_key not in cache:
-        cache.clear()
-        cache[cache_key] = get_orderable_usd(symbol, order_price)
-    return cache[cache_key]
-
-
 def _get_runtime_rebalancing_orderable_usd(
     dependencies: StrategyExecutionDependencies,
     symbol: str,
@@ -419,35 +394,6 @@ def _get_runtime_rebalancing_orderable_usd(
         cache.clear()
         cache[cache_key] = dependencies.get_orderable_usd(symbol, order_price)
     return cache[cache_key]
-
-
-def execute_single_order(order: StrategyOrder) -> Tuple[bool, str]:
-    """Execute a single strategy order via the configured strategy broker."""
-    broker_name = _require_dependencies().strategy_broker_name()
-    estimated_amount = (
-        f"{order.quantity * order.price:.2f}"
-        if order.price > 0
-        else "unknown"
-    )
-    price_text = f"{order.price:.2f}" if order.price > 0 else "MARKET"
-    logging.info(
-        "[OrderAudit] Preparing strategy order: broker=%s symbol=%s side=%s "
-        "quantity=%s price=%s estimated_amount=%s order_type=%s reason=%s",
-        broker_name,
-        order.symbol,
-        order.side.name,
-        order.quantity,
-        price_text,
-        estimated_amount,
-        order.order_type,
-        order.reason,
-    )
-    return _require_dependencies().execute_order(order)
-
-
-def get_order_report_service() -> OrderReportService:
-    """Build the application order-result facade over the configured broker."""
-    return OrderReportService(execute_order=execute_single_order, sleep=time.sleep)
 
 
 def _build_base_report(today_str: str, market_status: Dict) -> Dict:
@@ -469,15 +415,9 @@ def _build_base_report(today_str: str, market_status: Dict) -> Dict:
 # Unified History Management
 # -------------------------------------------------------------------------
 
-def _load_history(history_service: Optional[StrategyHistoryService] = None) -> list:
+def _load_history() -> list:
     """Load unified strategy history."""
-    service = history_service or get_strategy_history_service()
-    return service.load_history()
-
-
-def get_strategy_history_service() -> StrategyHistoryService:
-    """Build the application history service from the legacy JSON adapter."""
-    return _legacy_runtime().history_service()
+    return _require_dependencies().load_history()
 
 
 def normalize_strategy_history_date(raw: str = "") -> str:
@@ -503,15 +443,7 @@ def normalize_strategy_history_date(raw: str = "") -> str:
 def clear_strategy_history_for_date(target_date: str = "") -> Dict[str, Any]:
     """Remove the full strategy history entry for a date."""
     target_date = normalize_strategy_history_date(target_date)
-    return get_strategy_history_service().clear_date(target_date)
-
-
-def _get_today_entry(hist_data: list, today_str: str) -> Optional[Dict]:
-    """Find or create today's entry in history."""
-    for entry in hist_data:
-        if entry.get("date") == today_str:
-            return entry
-    return None
+    return _legacy_runtime().clear_history(target_date)
 
 
 def _persist_submission_intent(
@@ -645,18 +577,18 @@ def _retry_failed_history_orders(
     extra_fields: Optional[Dict] = None,
     sell_first: bool = False,
     sell_wait_seconds: int = 0,
-    order_report_service: Optional[OrderReportService] = None,
-    history_service: Optional[StrategyHistoryService] = None,
+    *,
+    order_report_service: OrderReportService,
+    history_service: StrategyHistoryService,
 ) -> None:
-    service = order_report_service or get_order_report_service()
     report["orders"] = succeeded + failed
     _submit_strategy_orders(
         report=report,
         strategy_key=strategy_key,
         today_str=today_str,
         orders=failed,
-        history_service=history_service or get_strategy_history_service(),
-        order_report_service=service,
+        history_service=history_service,
+        order_report_service=order_report_service,
         extra_fields=extra_fields,
         succeeded_orders=succeeded,
         sell_first=sell_first,
@@ -683,54 +615,10 @@ def prepare_raoeo_cash_funding(
     context: Optional[StrategyRunContext] = None,
 ) -> Tuple[Any, Dict]:
     """Calculate a manual cash-ticker funding order for pending RAOEO buys."""
-    if raoeo_report is None:
-        raoeo_report = run_raoeo_strategy(execute=False)
-
-    pending_orders = raoeo_report.get("pending_orders", [])
-    reference_buy = next(
-        (order for order in pending_orders if order.side == OrderSide.BUY),
-        None,
+    return _legacy_runtime().prepare_cash_funding(
+        raoeo_report,
+        context=context or _build_strategy_run_context(),
     )
-    strategy_config = _require_dependencies().load_strategy_config()
-    report_info = raoeo_report.get("info", {})
-    holdings = report_info.get("holdings")
-    prices = report_info.get("current_prices", {})
-    if holdings is None:
-        run_context = context or _build_strategy_run_context()
-        holdings, prices = run_context.get_market_data(
-            force_refresh=True,
-            include_cash_ticker=True,
-        )
-
-    orderable_usd = _report_orderable_usd(report_info)
-    if orderable_usd is None:
-        orderable_usd = (
-            get_orderable_usd(reference_buy.symbol, reference_buy.price)
-            if reference_buy
-            else 0.0
-        )
-    return raoeo.calculate_cash_funding_order(
-        orders=pending_orders,
-        portfolio=holdings,
-        current_prices=prices,
-        cash_ticker=strategy_config.get("cash_ticker", ""),
-        orderable_usd=orderable_usd,
-    )
-
-
-def _report_orderable_usd(report_info: Dict) -> Any:
-    """Reuse Toss portfolio buying power captured as USD cash when available."""
-    if _require_dependencies().strategy_broker_name() != "toss":
-        return None
-
-    usd_cash = report_info.get("holdings", {}).get("USD cash", {})
-    if usd_cash.get("type") != "CASH":
-        return None
-
-    try:
-        return float(usd_cash.get("qty", 0.0))
-    except (TypeError, ValueError):
-        return None
 
 
 def execute_raoeo_cash_funding(
@@ -738,7 +626,7 @@ def execute_raoeo_cash_funding(
     context: Optional[StrategyRunContext] = None,
 ) -> Tuple[Any, Dict]:
     """Compatibility entry point routed through the durable runtime flow."""
-    return StrategyExecutionRuntime(_require_dependencies()).execute_cash_funding(
+    return _legacy_runtime().execute_cash_funding(
         raoeo_report,
         context=context,
     )
@@ -756,32 +644,14 @@ def save_raoeo_cash_funding_result(today_str: str, result: Dict) -> List[Dict]:
     )
 
 
-def _execute_orders(
-    orders: List[StrategyOrder],
-    sell_first: bool = False,
-    sell_wait_seconds: int = 0,
-    order_report_service: Optional[OrderReportService] = None,
-) -> List[Dict]:
-    """
-    Execute a list of orders. Optionally execute sells first with a wait.
-    Returns: list of execution result dicts
-    """
-    service = order_report_service or get_order_report_service()
-    return service.execute_many(
-        orders,
-        sell_first=sell_first,
-        sell_wait_seconds=sell_wait_seconds,
-    )
-
-
 def _handle_raoeo_history(
     report: Dict,
     raoeo_hist: Dict,
     execute: bool,
     market_status: Dict,
     today_str: str,
-    order_report_service: Optional[OrderReportService] = None,
-    history_service: Optional[StrategyHistoryService] = None,
+    order_report_service: OrderReportService,
+    history_service: StrategyHistoryService,
 ) -> None:
     logging.info(f"RAOEO: Found today's history at {raoeo_hist.get('time', '?')}")
     succeeded, failed = restore_history_orders(report, raoeo_hist)
@@ -823,8 +693,8 @@ def _handle_va_history(
     execute: bool,
     market_status: Dict,
     today_str: str,
-    order_report_service: Optional[OrderReportService] = None,
-    history_service: Optional[StrategyHistoryService] = None,
+    order_report_service: OrderReportService,
+    history_service: StrategyHistoryService,
 ) -> None:
     logging.info(f"VA: Found today's history at {va_hist.get('time', '?')}")
     succeeded, failed = restore_history_orders(report, va_hist)
@@ -1381,5 +1251,4 @@ def run_rebalancing_strategy(
         execute=execute,
         orderable_cache_key=orderable_cache_key,
         market_data_service=_build_strategy_run_context(),
-        get_orderable_usd_port=get_orderable_usd,
     )

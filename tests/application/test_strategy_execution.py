@@ -1,5 +1,6 @@
 import datetime as dt
 import sys
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -364,7 +365,7 @@ def test_prepare_cash_funding_uses_pending_raoeo_orders(monkeypatch):
     report = {"pending_orders": [_buy_order()]}
     requested = []
     monkeypatch.setattr(
-        execution_service,
+        execution_service.strategy_broker,
         "get_orderable_usd",
         lambda symbol, price: requested.append((symbol, price)) or 100.0,
     )
@@ -398,6 +399,27 @@ def test_legacy_runtime_uses_the_legacy_history_adapter(monkeypatch):
     assert execution_service._legacy_runtime().history_service().load_history() == (
         expected_history
     )
+
+
+def test_legacy_raoeo_run_reads_the_configured_history_port():
+    dependencies = execution_service._require_dependencies()
+    execution_service.configure_strategy_execution(
+        replace(
+            dependencies,
+            load_strategy_config=lambda: {
+                "raoeo": {"targets": {"TQQQ": {"enabled": True}}}
+            },
+            load_history=lambda: [],
+            get_market_status=lambda _date: {
+                "is_market_open": False,
+                "message": "closed",
+            },
+        )
+    )
+
+    report = execution_service.run_raoeo_strategy(execute=False)
+
+    assert report["status"] == StrategyStatus.NON_MARKET_TIME
 
 
 def test_get_market_data_uses_configured_broker_as_portfolio_scope(monkeypatch):
@@ -520,7 +542,7 @@ def test_prepare_cash_funding_reuses_report_market_data(monkeypatch):
         },
     }
     monkeypatch.setattr(
-        execution_service,
+        execution_service.strategy_broker,
         "get_orderable_usd",
         lambda symbol, price: 100.0,
     )
@@ -560,7 +582,7 @@ def test_prepare_cash_funding_reuses_toss_usd_cash_as_orderable_usd(monkeypatch)
         lambda: "toss",
     )
     monkeypatch.setattr(
-        execution_service,
+        execution_service.strategy_broker,
         "get_orderable_usd",
         lambda symbol, price: (_ for _ in ()).throw(
             AssertionError("Toss USD cash should avoid a second buying-power call")
@@ -604,67 +626,6 @@ def test_execute_cash_funding_does_not_submit_strategy_orders_on_failure(monkeyp
     assert result["success"] is False
     assert result["order"] is funding_order
     assert slept == []
-
-
-def test_execute_single_order_logs_audit_before_broker_submission(monkeypatch, caplog):
-    order = StrategyOrder(
-        symbol="SOXL",
-        side=OrderSide.BUY,
-        quantity=3,
-        price=12.5,
-        order_type=ORDER_TYPE_LOC,
-        reason="Buy Normal",
-    )
-    calls = []
-
-    monkeypatch.setattr(
-        execution_service.strategy_broker,
-        "get_strategy_broker_name",
-        lambda: "toss",
-    )
-
-    def place_order(submitted_order):
-        calls.append(("place_order", submitted_order))
-        assert "Preparing strategy order" in caplog.text
-        assert "broker=toss" in caplog.text
-        assert "symbol=SOXL" in caplog.text
-        assert "side=BUY" in caplog.text
-        assert "quantity=3" in caplog.text
-        assert "price=12.50" in caplog.text
-        assert "estimated_amount=37.50" in caplog.text
-        return True, "Success"
-
-    monkeypatch.setattr(execution_service.strategy_broker, "place_order", place_order)
-
-    caplog.set_level("INFO")
-
-    assert execution_service.execute_single_order(order) == (True, "Success")
-    assert calls == [("place_order", order)]
-
-
-def test_execute_orders_runs_strategy_sells_before_buys(monkeypatch):
-    buy_one = StrategyOrder("TQQQ", OrderSide.BUY, 1, 100.0, "buy one")
-    sell_one = StrategyOrder("SOXL", OrderSide.SELL, 2, 50.0, "sell one")
-    buy_two = StrategyOrder("SCHD", OrderSide.BUY, 3, 30.0, "buy two")
-    sell_two = StrategyOrder("UPRO", OrderSide.SELL, 4, 40.0, "sell two")
-    submitted = []
-    slept = []
-
-    monkeypatch.setattr(
-        execution_service,
-        "execute_single_order",
-        lambda order: submitted.append(order.symbol) or (True, "Success"),
-    )
-    monkeypatch.setattr(execution_service.time, "sleep", lambda seconds: slept.append(seconds))
-
-    execution_service._execute_orders(
-        [buy_one, sell_one, buy_two, sell_two],
-        sell_first=True,
-        sell_wait_seconds=5,
-    )
-
-    assert submitted == ["SOXL", "UPRO", "TQQQ", "SCHD"]
-    assert slept == [5]
 
 
 def test_cash_funding_results_are_stored_separately_from_retry_orders(monkeypatch):
@@ -800,18 +761,20 @@ def test_raoeo_history_does_not_retry_ambiguous_order(monkeypatch):
         ]
     }
 
-    monkeypatch.setattr(
-        execution_service,
-        "get_order_report_service",
-        lambda: (_ for _ in ()).throw(AssertionError("ambiguous orders must not retry")),
-    )
-
     execution_service._handle_raoeo_history(
         report,
         history,
         execute=True,
         market_status={"is_market_open": True},
         today_str="2026-07-12",
+        order_report_service=execution_service.OrderReportService(
+            execute_order=lambda _order: (_ for _ in ()).throw(
+                AssertionError("ambiguous orders must not retry")
+            )
+        ),
+        history_service=execution_service.StrategyHistoryService(
+            load=lambda: [], save=lambda _history: True
+        ),
     )
 
     assert report["status"] == StrategyStatus.ERROR
@@ -995,7 +958,7 @@ def test_run_raoeo_does_not_automatically_query_or_sell_cash_ticker(monkeypatch)
         ),
     )
     monkeypatch.setattr(
-        execution_service,
+        execution_service.strategy_broker,
         "get_orderable_usd",
         lambda symbol, price: (_ for _ in ()).throw(
             AssertionError("automatic RAOEO execution must not fund cash")
@@ -1033,7 +996,7 @@ def test_run_rebalancing_passes_api_orderable_usd_to_calculation(monkeypatch):
         lambda force_refresh=False: ({}, {"TQQQ": 100.0}),
     )
     monkeypatch.setattr(
-        execution_service,
+        execution_service.strategy_broker,
         "get_orderable_usd",
         lambda symbol, price: 3023.49,
     )

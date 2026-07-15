@@ -104,20 +104,6 @@ RAOEO와 Value Averaging을 같은 `StrategyRunContext`로 실행하여 포트�
 - Telegram 명령에 의한 확인은 항상 새로 조회하며, 자동 주기
   리밸런싱만 거래일 단위 조회 결과를 재사용합니다.
 
-### `_execute_orders`
-레거시 호환용 실행 helper입니다. 전략의 실제 제출·재시도 경로는
-`DurableOrderSubmissionService`를 사용해 주문 의도와 결과 저장 순서를
-강제합니다.
-
-- **입력 (Input)**:
-  - `orders` (List[StrategyOrder]): 실행할 주문 객체 리스트
-  - `sell_first` (bool): 매도 주문 먼저 실행 여부 (리밸런싱용)
-- **출력 (Output)**: `List[Dict]` (실행 결과 리스트: `success`, `message` 포함)
-- 각 주문은 broker API 호출 직전에 `[OrderAudit] Preparing strategy order`
-  로그를 남깁니다. 로그에는 실행 broker, ticker, 매수/매도, 수량, 주문가,
-  예상 금액, 주문 타입, 주문 사유가 포함됩니다. 시장가처럼 주문가가 없는
-  경우 예상 금액은 `unknown`으로 기록합니다.
-
 ### `runtime.prepare_cash_funding`, `runtime.execute_cash_funding`
 `/strategy` 수동 실행에서만 사용하는 현금 조달 단계입니다.
 
