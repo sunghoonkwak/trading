@@ -6,6 +6,8 @@
 
 1. **Unified Execution Flow (통합 실행 흐름)**:
    - 모든 전략은 `Enabled Check` -> `Market Check` -> `History Check` -> `Determine Action` -> `Execute` -> `Report`의 동일한 6단계 과정을 거칩니다.
+   - 공통 실행 세션(날짜, 장 상태, base report, history/order 서비스)과
+     활성 target 필터링은 `strategy_execution_lifecycle.py`가 맡습니다.
 
 2. **Centralized Market Status (시장 상태 중앙 관리)**:
    - composition root가 주입한 market-status adapter를 통해 휴장일 및 장 운영
@@ -55,6 +57,11 @@
 `strategy_run_service()`, `prepare_cash_funding()`, `execute_cash_funding()`,
 `save_cash_funding_result()`, `clear_history()`만 주입됩니다. application과
 interface는 broker/configuration adapter를 직접 구성하지 않습니다.
+
+모듈 수준의 `run_raoeo_strategy`, `run_va_strategy`,
+`run_rebalancing_strategy`는 이전 호출자를 위한 얇은 호환 adapter입니다.
+이 함수들은 `_legacy_runtime()`을 거쳐 instance runtime으로 진입하며, 기존
+테스트·운영 도구의 전역 history/market-data seam만 그 adapter 안에서 유지합니다.
 
 ### `runtime.run_suite`
 RAOEO와 Value Averaging을 같은 `StrategyRunContext`로 실행하여 포트폴리오와

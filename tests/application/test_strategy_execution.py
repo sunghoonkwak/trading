@@ -391,6 +391,15 @@ def test_prepare_cash_funding_uses_pending_raoeo_orders(monkeypatch):
     assert requested == [("TQQQ", 100.0)]
 
 
+def test_legacy_runtime_uses_the_legacy_history_adapter(monkeypatch):
+    expected_history = [{"date": "2026-07-15"}]
+    monkeypatch.setattr(execution_service, "_load_history", lambda: expected_history)
+
+    assert execution_service._legacy_runtime().history_service().load_history() == (
+        expected_history
+    )
+
+
 def test_get_market_data_uses_configured_broker_as_portfolio_scope(monkeypatch):
     requested = []
 
