@@ -25,7 +25,7 @@ const tickerOrder = [
     // ETFs
     'QQQM', 'VOO', 'SCHD', 'TLT', 'TLTW',
     // Individual Stocks
-    'GOOGL', 'TSM', 'NVDA', 'AVGO', 'QCOM', 'BLK',
+    'GOOGL', 'TSM', 'NVDA', 'AVGO', 'QCOM', 'AAPL',
     // Volatility ETF
     'VIXY'
 ]; // Tickers will layout in this order. Others will follow alphabetically
@@ -45,7 +45,7 @@ const tickerNames = {
     'NVDA': 'NVIDIA Corporation',
     'AVGO': 'Broadcom Inc.',
     'QCOM': 'QUALCOMM, Inc.',
-    'BLK': 'BlackRock, Inc.',
+    'AAPL': 'Apple Inc.',
     'VIXY': 'PROSHARES VIX SHORT TERM FUTURES'
 };
 
