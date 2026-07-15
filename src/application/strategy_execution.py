@@ -23,6 +23,11 @@ from application.execution_recovery_service import (
 )
 from application.order_report_service import OrderReportService
 from application.order_submission_service import DurableOrderSubmissionService
+from application.strategy_execution_lifecycle import (
+    active_targets,
+    begin_strategy_execution,
+    history_for_date,
+)
 from application.strategy_history_repository import (
     build_merged_history_entries as _build_merged_history_entries,
 )
@@ -914,8 +919,6 @@ def _run_raoeo_strategy(
     Run RAOEO strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = dependencies.get_market_status(today_str)
-    report = _build_base_report(today_str, market_status)
     history_service = StrategyHistoryService(
         load=dependencies.load_history,
         save=dependencies.save_history,
@@ -924,6 +927,15 @@ def _run_raoeo_strategy(
         execute_order=dependencies.execute_order,
         sleep=time.sleep,
     )
+    session = begin_strategy_execution(
+        today=today_str,
+        get_market_status=dependencies.get_market_status,
+        build_report=_build_base_report,
+        history_service=history_service,
+        order_report_service=order_report_service,
+    )
+    market_status = session.market_status
+    report = session.report
 
     try:
         # Step 1: Check enabled
@@ -934,14 +946,9 @@ def _run_raoeo_strategy(
             report["status"] = StrategyStatus.DISABLED
             return report
 
-        raoeo_conf = raoeo_section.get('targets', {})
+        enabled_targets = active_targets(strategy_config, "raoeo")
 
-        # Filter enabled tickers only
-        active_targets = {
-            t: c for t, c in raoeo_conf.items() if c.get('enabled', True)
-        }
-
-        if not active_targets:
+        if not enabled_targets:
             report["status"] = StrategyStatus.DISABLED
             return report
 
@@ -949,7 +956,7 @@ def _run_raoeo_strategy(
 
         # Step 3: Check today's history
         hist_data = history_service.load_history()
-        today_entry = _get_today_entry(hist_data, today_str)
+        today_entry = history_for_date(hist_data, today_str)
         raoeo_hist = today_entry.get("raoeo") if today_entry else None
 
         if raoeo_hist and raoeo_hist.get("orders"):
@@ -981,7 +988,7 @@ def _run_raoeo_strategy(
         report["info"]["current_prices"] = prices
 
         orders, calc_info = raoeo.calculate_orders(
-            targets_config=active_targets,
+            targets_config=enabled_targets,
             portfolio=holdings,
             current_prices=prices,
             history_data=hist_data,
@@ -1064,8 +1071,6 @@ def _run_va_strategy(
     Run Value Averaging strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = dependencies.get_market_status(today_str)
-    report = _build_base_report(today_str, market_status)
     history_service = history_service or StrategyHistoryService(
         load=dependencies.load_history,
         save=dependencies.save_history,
@@ -1074,6 +1079,15 @@ def _run_va_strategy(
         execute_order=dependencies.execute_order,
         sleep=time.sleep,
     )
+    session = begin_strategy_execution(
+        today=today_str,
+        get_market_status=dependencies.get_market_status,
+        build_report=_build_base_report,
+        history_service=history_service,
+        order_report_service=order_report_service,
+    )
+    market_status = session.market_status
+    report = session.report
 
     try:
         # Step 1: Check enabled
@@ -1084,13 +1098,9 @@ def _run_va_strategy(
             report["status"] = StrategyStatus.DISABLED
             return report
 
-        va_conf = va_section.get('targets', {})
+        enabled_targets = active_targets(strategy_config, "value_averaging")
 
-        active_targets = {
-            t: c for t, c in va_conf.items() if c.get('enabled', True)
-        }
-
-        if not active_targets:
+        if not enabled_targets:
             report["status"] = StrategyStatus.DISABLED
             return report
 
@@ -1098,7 +1108,7 @@ def _run_va_strategy(
 
         # Step 3: Check today's history
         hist_data = history_service.load_history()
-        today_entry = _get_today_entry(hist_data, today_str)
+        today_entry = history_for_date(hist_data, today_str)
         va_hist = today_entry.get("va") if today_entry else None
 
         if va_hist:
@@ -1132,7 +1142,7 @@ def _run_va_strategy(
 
         # VA needs history for day_count calculation
         orders, context_map = value_averaging.calculate_orders(
-            targets_config=active_targets,
+            targets_config=enabled_targets,
             portfolio=holdings,
             current_prices=prices,
             history_data=hist_data,
@@ -1235,8 +1245,6 @@ def _run_rebalancing_strategy(
     Run Rebalancing strategy with unified 6-step flow.
     """
     today_str = datetime.now(TZ_ET).strftime("%Y-%m-%d")
-    market_status = dependencies.get_market_status(today_str)
-    report = _build_base_report(today_str, market_status)
     history_service = history_service or StrategyHistoryService(
         load=dependencies.load_history,
         save=dependencies.save_history,
@@ -1245,6 +1253,15 @@ def _run_rebalancing_strategy(
         execute_order=dependencies.execute_order,
         sleep=time.sleep,
     )
+    session = begin_strategy_execution(
+        today=today_str,
+        get_market_status=dependencies.get_market_status,
+        build_report=_build_base_report,
+        history_service=history_service,
+        order_report_service=order_report_service,
+    )
+    market_status = session.market_status
+    report = session.report
 
     try:
         # Step 1: Check enabled
@@ -1259,7 +1276,7 @@ def _run_rebalancing_strategy(
 
         # Step 3: Check today's history
         hist_data = history_service.load_history()
-        today_entry = _get_today_entry(hist_data, today_str)
+        today_entry = history_for_date(hist_data, today_str)
         reb_hist = today_entry.get("rebalancing") if today_entry else None
 
         if reb_hist and reb_hist.get("orders"):
