@@ -16,6 +16,11 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
 
+from application.execution_recovery_service import (
+    has_ambiguous_order,
+    mark_ambiguous_order_error,
+    restore_history_orders,
+)
 from application.order_report_service import OrderReportService
 from application.order_submission_service import DurableOrderSubmissionService
 from application.strategy_run_service import (
@@ -26,7 +31,6 @@ from application.strategy_run_service import (
 from domain.strategy import raoeo, rebalancing, value_averaging
 from domain.strategy.base import OrderSide, StrategyOrder, StrategyStatus
 from domain.strategy.constants import (
-    ORDER_TYPE_LIMIT,
     STRATEGY_HISTORY_COMPACT_DATE_RE,
     STRATEGY_HISTORY_DATE_RE,
     TZ_ET,
@@ -512,37 +516,6 @@ def _get_today_entry(hist_data: list, today_str: str) -> Optional[Dict]:
     return None
 
 
-def _restore_orders_from_strategy_history(
-    strategy_data: Dict
-) -> List[Tuple[StrategyOrder, bool]]:
-    """
-    Restore orders from a strategy's history section with success status.
-    Returns: List of (StrategyOrder, success_status) tuples
-    """
-    orders_data = strategy_data.get("orders", [])
-    restored = []
-
-    for order_data in orders_data:
-        try:
-            order = StrategyOrder(
-                symbol=order_data["ticker"],
-                side=OrderSide[order_data["side"]],
-                quantity=order_data["qty"],
-                price=order_data["price"],
-                order_type=order_data.get("order_type", ORDER_TYPE_LIMIT),
-                reason=order_data.get("reason", ""),
-                target_budget=order_data.get("target_budget"),
-                correlation_id=order_data.get("correlation_id"),
-            )
-            success = order_data.get("success", False)
-            restored.append((order, success))
-        except Exception as e:
-            logging.error(f"Failed to restore order: {order_data}, error: {e}")
-            continue
-
-    return restored
-
-
 def _build_order_history_entry(
     order: StrategyOrder,
     success: bool,
@@ -665,19 +638,6 @@ def _submit_strategy_orders(
     )
 
 
-def _restore_history_orders(report: Dict, strategy_hist: Dict) -> Tuple[List[StrategyOrder], List[StrategyOrder]]:
-    """Restore historical orders into a report and return succeeded/failed lists."""
-    orders_with_status = _restore_orders_from_strategy_history(strategy_hist)
-    all_orders = [order for order, _ in orders_with_status]
-    succeeded = [order for order, success in orders_with_status if success]
-    failed = [order for order, success in orders_with_status if not success]
-
-    report["orders"] = all_orders
-    report["succeeded_orders"] = succeeded
-    report["pending_orders"] = failed
-    return succeeded, failed
-
-
 def _apply_execution_results(
     report: Dict,
     orders: List[StrategyOrder],
@@ -750,17 +710,6 @@ def _retry_failed_history_orders(
         sell_first=sell_first,
         sell_wait_seconds=sell_wait_seconds,
     )
-
-
-def _has_ambiguous_history_order(strategy_hist: Dict) -> bool:
-    """Prevent automatic retries until an operator reconciles a timeout."""
-    return any(order.get("ambiguous", False) for order in strategy_hist.get("orders", []))
-
-
-def _mark_ambiguous_order_error(report: Dict) -> None:
-    report["status"] = StrategyStatus.ERROR
-    report["error"] = "Ambiguous order outcome requires reconciliation."
-    report["pending_orders"] = []
 
 
 def _save_strategy_to_history(
@@ -946,10 +895,10 @@ def _handle_raoeo_history(
     history_service: Optional[StrategyHistoryService] = None,
 ) -> None:
     logging.info(f"RAOEO: Found today's history at {raoeo_hist.get('time', '?')}")
-    succeeded, failed = _restore_history_orders(report, raoeo_hist)
+    succeeded, failed = restore_history_orders(report, raoeo_hist)
 
-    if _has_ambiguous_history_order(raoeo_hist):
-        _mark_ambiguous_order_error(report)
+    if has_ambiguous_order(raoeo_hist):
+        mark_ambiguous_order_error(report)
         return
 
     if not failed:
@@ -989,11 +938,11 @@ def _handle_va_history(
     history_service: Optional[StrategyHistoryService] = None,
 ) -> None:
     logging.info(f"VA: Found today's history at {va_hist.get('time', '?')}")
-    succeeded, failed = _restore_history_orders(report, va_hist)
+    succeeded, failed = restore_history_orders(report, va_hist)
     report["info"]["targets_context"] = va_hist.get("targets_context", {})
 
-    if _has_ambiguous_history_order(va_hist):
-        _mark_ambiguous_order_error(report)
+    if has_ambiguous_order(va_hist):
+        mark_ambiguous_order_error(report)
         return
 
     if not failed:
@@ -1028,11 +977,11 @@ def _handle_va_history(
 
 def _handle_rebalancing_history(report: Dict, reb_hist: Dict) -> None:
     logging.info(f"[Rebalancing] Found today's history at {reb_hist.get('time', '?')}")
-    _, failed = _restore_history_orders(report, reb_hist)
+    _, failed = restore_history_orders(report, reb_hist)
     report["info"]["context"] = reb_hist.get("context", {})
 
-    if _has_ambiguous_history_order(reb_hist):
-        _mark_ambiguous_order_error(report)
+    if has_ambiguous_order(reb_hist):
+        mark_ambiguous_order_error(report)
         return
 
     if not failed:
