@@ -23,6 +23,18 @@ from application.execution_recovery_service import (
 )
 from application.order_report_service import OrderReportService
 from application.order_submission_service import DurableOrderSubmissionService
+from application.strategy_history_repository import (
+    build_merged_history_entries as _build_merged_history_entries,
+)
+from application.strategy_history_repository import (
+    build_order_history_entry as _build_order_history_entry,
+)
+from application.strategy_history_repository import (
+    build_strategy_history_data as _build_strategy_history_data,
+)
+from application.strategy_history_repository import (
+    save_strategy,
+)
 from application.strategy_run_service import (
     StrategyHistoryService,
     StrategyMarketDataService,
@@ -516,32 +528,6 @@ def _get_today_entry(hist_data: list, today_str: str) -> Optional[Dict]:
     return None
 
 
-def _build_order_history_entry(
-    order: StrategyOrder,
-    success: bool,
-    message: str,
-    *,
-    ambiguous: bool = False,
-) -> Dict:
-    """Serialize a strategy order for strategy_history.json."""
-    entry = {
-        "ticker": order.symbol,
-        "side": order.side.name,
-        "qty": order.quantity,
-        "price": order.price,
-        "order_type": order.order_type,
-        "reason": order.reason,
-        "success": success,
-        "message": message,
-        "ambiguous": ambiguous,
-    }
-    if order.target_budget is not None:
-        entry["target_budget"] = order.target_budget
-    if order.correlation_id:
-        entry["correlation_id"] = order.correlation_id
-    return entry
-
-
 def _persist_submission_intent(
     *,
     today_str: str,
@@ -664,26 +650,6 @@ def _execution_status(
     return StrategyStatus.PARTIAL
 
 
-def _build_merged_history_entries(
-    succeeded: List[StrategyOrder],
-    results: List[Dict],
-) -> List[Dict]:
-    """Merge previous successes with the latest retry results for history."""
-    merged_orders = [
-        _build_order_history_entry(order, True, "Success")
-        for order in succeeded
-    ]
-    for result in results:
-        order = result["order"]
-        merged_orders.append(_build_order_history_entry(
-            order,
-            result["success"],
-            result["message"],
-            ambiguous=result.get("ambiguous", False),
-        ))
-    return merged_orders
-
-
 def _retry_failed_history_orders(
     report: Dict,
     strategy_key: str,
@@ -723,54 +689,7 @@ def _save_strategy_to_history(
         load=_load_history,
         save=_require_dependencies().save_history,
     )
-    service.save_strategy(
-        today_str,
-        strategy_key,
-        strategy_data,
-    )
-
-
-def _build_strategy_history_data(
-    report: Dict,
-    strategy_key: str,
-    extra_fields: Optional[Dict] = None
-) -> Dict:
-    """Build the history data dict for a strategy from its report."""
-    now_et = datetime.now(TZ_ET)
-    data = {
-        "time": now_et.strftime("%H:%M:%S"),
-        "status": report["status"].value if isinstance(report["status"], StrategyStatus) else report["status"],
-        "orders": [],
-    }
-
-    # Add extra fields (e.g., targets_context for VA, context for Rebalancing)
-    if extra_fields:
-        data.update(extra_fields)
-
-    if strategy_key == "raoeo":
-        skipped_buy_budgets = report.get("info", {}).get("skipped_buy_budgets")
-        if skipped_buy_budgets:
-            data["skipped_buy_budgets"] = skipped_buy_budgets
-
-    # Build order list from execution results or calculated orders
-    if report.get("execution_results"):
-        for res in report["execution_results"]:
-            order = res["order"]
-            data["orders"].append(_build_order_history_entry(
-                order,
-                res["success"],
-                res["message"],
-                ambiguous=res.get("ambiguous", False),
-            ))
-    elif report.get("orders"):
-        for order in report["orders"]:
-            data["orders"].append(_build_order_history_entry(
-                order,
-                False,
-                "Calculated Only",
-            ))
-
-    return data
+    save_strategy(service, today_str, strategy_key, strategy_data)
 
 
 def prepare_raoeo_cash_funding(
