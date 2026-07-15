@@ -13,11 +13,11 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
-from uuid import uuid4
 
 import requests
 
 from application.order_report_service import OrderReportService
+from application.order_submission_service import DurableOrderSubmissionService
 from application.strategy_run_service import (
     StrategyHistoryService,
     StrategyMarketDataService,
@@ -72,6 +72,9 @@ class StrategyExecutionRuntime:
             execute_order=self.dependencies.execute_order,
             sleep=time.sleep,
         )
+
+    def order_submission_service(self) -> DurableOrderSubmissionService:
+        return DurableOrderSubmissionService(self.order_report_service())
 
     def history_service(self) -> StrategyHistoryService:
         return StrategyHistoryService(
@@ -180,18 +183,24 @@ class StrategyExecutionRuntime:
             return None, info
 
         with self._execution_lock:
-            if not order.correlation_id:
-                order.correlation_id = str(uuid4())
-            self._save_cash_funding_record(
-                datetime.now(TZ_ET).strftime("%Y-%m-%d"),
-                {
-                    "order": order,
-                    "success": False,
-                    "message": "Submission started; reconcile before retrying.",
-                    "ambiguous": True,
-                },
+            def persist_intent(submission_orders: List[StrategyOrder]) -> None:
+                submitted_order = submission_orders[0]
+                self._save_cash_funding_record(
+                    datetime.now(TZ_ET).strftime("%Y-%m-%d"),
+                    {
+                        "order": submitted_order,
+                        "success": False,
+                        "message": "Submission started; reconcile before retrying.",
+                        "ambiguous": True,
+                    },
+                )
+
+            results = self.order_submission_service().submit(
+                [order],
+                persist_intent=persist_intent,
             )
-            success, message = self.dependencies.execute_order(order)
+            result = results[0]
+            success, message = result["success"], result["message"]
             result = {
                 "order": order,
                 "success": success,
@@ -572,9 +581,6 @@ def _persist_submission_intent(
 ) -> None:
     """Durably block retries before sending any order to a broker."""
     orders_to_submit = orders_to_submit or report.get("orders", [])
-    for order in orders_to_submit:
-        if not order.correlation_id:
-            order.correlation_id = str(uuid4())
 
     intent_data = _build_strategy_history_data(
         report,
@@ -599,6 +605,63 @@ def _persist_submission_intent(
         strategy_key,
         intent_data,
         history_service=history_service,
+    )
+
+
+def _submit_strategy_orders(
+    *,
+    report: Dict,
+    strategy_key: str,
+    today_str: str,
+    orders: List[StrategyOrder],
+    history_service: StrategyHistoryService,
+    order_report_service: OrderReportService,
+    extra_fields: Optional[Dict] = None,
+    succeeded_orders: Optional[List[StrategyOrder]] = None,
+    sell_first: bool = False,
+    sell_wait_seconds: int = 0,
+) -> List[Dict]:
+    """Submit orders through the single durable strategy submission boundary."""
+    preserved_orders = succeeded_orders or []
+
+    def persist_intent(submission_orders: List[StrategyOrder]) -> None:
+        _persist_submission_intent(
+            today_str=today_str,
+            strategy_key=strategy_key,
+            report=report,
+            history_service=history_service,
+            extra_fields=extra_fields,
+            orders_to_submit=submission_orders,
+            succeeded_orders=preserved_orders,
+        )
+
+    def persist_outcome(results: List[Dict]) -> None:
+        _apply_execution_results(report, orders, results)
+        save_data = _build_strategy_history_data(
+            report,
+            strategy_key,
+            extra_fields=extra_fields,
+        )
+        if preserved_orders:
+            report["succeeded_orders"] = preserved_orders + report["succeeded_orders"]
+            report["orders"] = preserved_orders + orders
+            save_data["orders"] = _build_merged_history_entries(
+                preserved_orders,
+                results,
+            )
+        _save_strategy_to_history(
+            today_str,
+            strategy_key,
+            save_data,
+            history_service=history_service,
+        )
+
+    return DurableOrderSubmissionService(order_report_service).submit(
+        orders,
+        persist_intent=persist_intent,
+        persist_outcome=persist_outcome,
+        sell_first=sell_first,
+        sell_wait_seconds=sell_wait_seconds,
     )
 
 
@@ -675,32 +738,17 @@ def _retry_failed_history_orders(
 ) -> None:
     service = order_report_service or get_order_report_service()
     report["orders"] = succeeded + failed
-    _persist_submission_intent(
-        today_str=today_str,
-        strategy_key=strategy_key,
+    _submit_strategy_orders(
         report=report,
+        strategy_key=strategy_key,
+        today_str=today_str,
+        orders=failed,
         history_service=history_service or get_strategy_history_service(),
+        order_report_service=service,
         extra_fields=extra_fields,
-        orders_to_submit=failed,
         succeeded_orders=succeeded,
-    )
-    retry_result = service.retry_failed(
-        failed,
         sell_first=sell_first,
         sell_wait_seconds=sell_wait_seconds,
-    )
-    results = retry_result["execution_results"]
-    report["execution_results"] = results
-    report["status"] = retry_result["status"]
-
-    save_data = _build_strategy_history_data(
-        report,
-        strategy_key,
-        extra_fields=extra_fields,
-    )
-    save_data["orders"] = _build_merged_history_entries(succeeded, results)
-    _save_strategy_to_history(
-        today_str, strategy_key, save_data, history_service=history_service
     )
 
 
@@ -1145,24 +1193,15 @@ def _run_raoeo_strategy(
             report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
-        _persist_submission_intent(
-            today_str=today_str,
-            strategy_key="raoeo",
+        _submit_strategy_orders(
             report=report,
+            strategy_key="raoeo",
+            today_str=today_str,
+            orders=orders,
             history_service=history_service,
-        )
-        results = _execute_orders(
-            orders,
+            order_report_service=order_report_service,
             sell_first=True,
             sell_wait_seconds=5,
-            order_report_service=order_report_service,
-        )
-        _apply_execution_results(report, orders, results)
-
-        # Save history
-        save_data = _build_strategy_history_data(report, "raoeo")
-        _save_strategy_to_history(
-            today_str, "raoeo", save_data, history_service=history_service
         )
 
     except requests.exceptions.Timeout as e:
@@ -1296,24 +1335,26 @@ def _run_va_strategy(
         elif not market_status["is_market_open"]:
             report["status"] = StrategyStatus.NON_MARKET_TIME
         else:
-            _persist_submission_intent(
-                today_str=today_str,
-                strategy_key="va",
+            _submit_strategy_orders(
                 report=report,
+                strategy_key="va",
+                today_str=today_str,
+                orders=orders,
                 history_service=history_service,
+                order_report_service=order_report_service,
                 extra_fields={"targets_context": targets_context},
             )
-            results = _execute_orders(
-                orders, order_report_service=order_report_service
-            )
-            _apply_execution_results(report, orders, results)
 
         # Save history (always save for VA — day_count tracking)
-        save_data = _build_strategy_history_data(report, "va",
-            extra_fields={"targets_context": targets_context})
-        _save_strategy_to_history(
-            today_str, "va", save_data, history_service=history_service
-        )
+        if not execute or not orders or not market_status["is_market_open"]:
+            save_data = _build_strategy_history_data(
+                report,
+                "va",
+                extra_fields={"targets_context": targets_context},
+            )
+            _save_strategy_to_history(
+                today_str, "va", save_data, history_service=history_service
+            )
 
     except requests.exceptions.Timeout as e:
         logging.error(f"[API Timeout] VA Service Timeout Error: {e}", exc_info=True)
@@ -1466,27 +1507,16 @@ def _run_rebalancing_strategy(
             return report
 
         history_context = _rebalancing_history_context(calc_info)
-        _persist_submission_intent(
-            today_str=today_str,
-            strategy_key="rebalancing",
+        _submit_strategy_orders(
             report=report,
+            strategy_key="rebalancing",
+            today_str=today_str,
+            orders=orders,
             history_service=history_service,
+            order_report_service=order_report_service,
             extra_fields={"context": history_context},
-        )
-        results = _execute_orders(
-            orders,
             sell_first=True,
             sell_wait_seconds=60,
-            order_report_service=order_report_service,
-        )
-        _apply_execution_results(report, orders, results)
-
-        # Save history
-        save_data = _build_strategy_history_data(
-            report, "rebalancing", extra_fields={"context": history_context}
-        )
-        _save_strategy_to_history(
-            today_str, "rebalancing", save_data, history_service=history_service
         )
 
     except requests.exceptions.Timeout as e:

@@ -36,6 +36,10 @@
    - 사용자가 승인한 `cash_ticker` 조달 결과는 RAOEO의 `cash_funding_results`에 별도로 저장하여, 실패한 조달 주문이 일반 전략 재시도 주문으로 자동 실행되지 않게 합니다.
    - RAOEO 자동 실행에서 `normal`/`average` 매수 예산이 1주 가격에 미달해 주문이 없으면,
      해당 금액은 `skipped_buy_budgets`에 티커별 총액으로 저장되어 다음 RAOEO 계산에 이월됩니다.
+   - 실제 제출 순서는 `order_submission_service.py`의
+     `DurableOrderSubmissionService`가 소유합니다. 전략별 계산과 history
+     포맷 조립은 이 모듈에 남기되, intent 저장 -> broker 제출 -> outcome 저장
+     순서는 한 경계를 통해서만 수행합니다.
 
 5. **Timeout Handling (타임아웃 방어 메커니즘)**:
    - 외부 API 응답 지연을 방지하기 위하여 `requests.exceptions.Timeout` 에러를 독립적으로 포착합니다.
@@ -92,7 +96,9 @@ RAOEO와 Value Averaging을 같은 `StrategyRunContext`로 실행하여 포트�
   리밸런싱만 거래일 단위 조회 결과를 재사용합니다.
 
 ### `_execute_orders`
-주문 목록을 받아 순차적으로 선택된 전략 broker API를 통해 실행합니다.
+레거시 호환용 실행 helper입니다. 전략의 실제 제출·재시도 경로는
+`DurableOrderSubmissionService`를 사용해 주문 의도와 결과 저장 순서를
+강제합니다.
 
 - **입력 (Input)**:
   - `orders` (List[StrategyOrder]): 실행할 주문 객체 리스트

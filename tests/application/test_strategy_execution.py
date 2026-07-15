@@ -769,7 +769,13 @@ def test_run_raoeo_persists_skipped_buy_budget_history(monkeypatch):
 
 
 def test_raoeo_history_does_not_retry_ambiguous_order(monkeypatch):
-    report = {"orders": [], "succeeded_orders": [], "pending_orders": [], "info": {}}
+    report = {
+        "status": StrategyStatus.PARTIAL,
+        "orders": [],
+        "succeeded_orders": [],
+        "pending_orders": [],
+        "info": {},
+    }
     history = {
         "orders": [
             {
@@ -802,6 +808,38 @@ def test_raoeo_history_does_not_retry_ambiguous_order(monkeypatch):
     assert report["status"] == StrategyStatus.ERROR
     assert report["pending_orders"] == []
     assert report["error"] == "Ambiguous order outcome requires reconciliation."
+
+
+def test_retry_keeps_previously_succeeded_orders_in_report():
+    succeeded = StrategyOrder("SOXL", OrderSide.BUY, 1, 10.0)
+    failed = StrategyOrder("TQQQ", OrderSide.BUY, 1, 20.0)
+    saved = []
+    report = {
+        "status": StrategyStatus.PARTIAL,
+        "orders": [],
+        "succeeded_orders": [],
+        "pending_orders": [],
+        "info": {},
+    }
+
+    execution_service._retry_failed_history_orders(
+        report,
+        "raoeo",
+        "2026-07-11",
+        [succeeded],
+        [failed],
+        history_service=execution_service.StrategyHistoryService(
+            load=lambda: [],
+            save=lambda history: saved.append(history) or True,
+        ),
+        order_report_service=execution_service.OrderReportService(
+            execute_order=lambda _order: (True, "accepted")
+        ),
+    )
+
+    assert report["succeeded_orders"] == [succeeded, failed]
+    assert report["pending_orders"] == []
+    assert saved[-1][0]["raoeo"]["orders"][0]["success"] is True
 
 
 def test_run_va_with_all_targets_disabled_stops_before_history(monkeypatch):
