@@ -63,7 +63,7 @@ def main() -> None:
     parser.add_argument("symbol", help="Symbol to query, e.g. 005930 or AAPL")
     parser.add_argument("--interval", required=True, choices=("1m", "1d"))
     parser.add_argument("--count", type=int, help="Number of candles, max 200")
-    parser.add_argument("--before", help="Exclusive upper-bound ISO date-time")
+    parser.add_argument("--before", help="Inclusive upper-bound ISO date-time")
     adjusted_group = parser.add_mutually_exclusive_group()
     adjusted_group.add_argument("--adjusted", dest="adjusted", action="store_true")
     adjusted_group.add_argument("--unadjusted", dest="adjusted", action="store_false")
