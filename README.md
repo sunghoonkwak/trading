@@ -140,8 +140,8 @@ cp templates/portfolio_weights.json ~/KIS_config/portfolio_weights.json
 ```
 
 3. `telegram.txt`, `password.txt`, `credentials.enc`를 준비합니다.
-   Toss를 활성화한 현재 런타임은 시작 시 Toss 토큰 초기화에도 성공해야
-   스케줄러와 웹 서버를 시작합니다.
+   `credentials.enc`에는 KIS와 Toss 자격 증명을 모두 넣습니다. Toss 토큰은
+   컨테이너 기동 시점이 아니라 거래 런타임을 켤 때 준비됩니다.
 
 4. 전략 설정을 검증합니다.
 
@@ -158,6 +158,11 @@ docker logs -f my-trading-bot
 
 6. 웹 대시보드에 접속합니다.
 
+컨테이너가 기동되면 Telegram과 웹 대시보드 control plane만 준비되고, 거래
+런타임은 기본적으로 OFF입니다. Telegram에서 `/system_on`을 전송해 KIS/Toss
+인증, 주문 동기화, 스케줄러를 시작하세요. `/system_off`는 거래 런타임만
+중지하며 Telegram과 웹 대시보드는 유지합니다.
+
 인증서가 없으면 HTTP로 시작합니다.
 
 ```text
@@ -173,24 +178,28 @@ https://localhost:8080
 
 ## 실행 순서
 
-`src/main.py`는 다음 순서로 시스템을 시작합니다.
+`src/main.py`는 컨테이너 기동과 거래 런타임 기동을 분리합니다.
 
-1. 로그 초기화
-2. Docker 환경 여부 확인
-3. 중복 실행 방지 락 획득
-4. Telegram 봇 초기화
-5. KIS REST 인증과 WebSocket approval key 발급
-6. KIS WebSocket 및 이벤트 파이프 초기화
-7. 미체결 주문 동기화(KIS/Toss)
-8. Toss access token 준비
-9. 스케줄러 시작
-10. 웹 대시보드 시작
+컨테이너가 시작할 때는 다음만 수행합니다.
 
-Telegram, KIS, Toss 중 하나라도 핵심 초기화가 실패하면 스케줄러와 웹
-서버를 시작하지 않고 종료합니다. KIS 또는 Toss 실패는 가능한 경우
-Telegram 알림을 먼저 시도합니다. 이는 인증, 알림, 시장 데이터가
-불완전한 상태에서 자동 실행이 진행되는 것을 막기 위한 fail-closed
-동작입니다.
+1. 로그 초기화, Docker 환경 확인, 중복 실행 방지 락 획득
+2. Telegram 봇 초기화
+3. 웹 대시보드 control plane 시작
+4. 거래 런타임을 OFF 상태로 두고 명령 대기
+
+Telegram `/system_on` 명령을 받으면 다음 순서로 거래 런타임을 시작합니다.
+
+1. Google Sheets 캐시 초기화
+2. KIS REST/WebSocket 인증과 이벤트 파이프라인 초기화
+3. Toss access token 준비
+4. KIS·Toss 미체결 주문 동기화
+5. 스케줄러 시작 후 runtime을 ON으로 표시
+
+Telegram 초기화가 실패하면 컨테이너는 종료합니다. 반면 KIS 또는 Toss
+초기화가 실패하면 fail-closed로 거래 런타임을 OFF로 유지하고 가능한 경우
+Telegram 알림을 시도합니다. 이 경우에도 Telegram과 웹 대시보드 control
+plane은 계속 실행되므로 원인을 확인하거나 다시 `/system_on`을 실행할 수
+있습니다.
 
 ## 웹 대시보드
 

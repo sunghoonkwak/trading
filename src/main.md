@@ -16,9 +16,9 @@ composition root 역할, 그리고 안정적인 실행을 위한 메인 루프�
      `KIS_ENABLE_REST_API=false`이면 REST 인증은 건너뛰고 WebSocket 인증과
      구독 초기화만 수행합니다.
    - **Toss API**: `infrastructure.toss.auth.ensure_daily_token()`으로 당일 Toss access
-     token을 준비합니다. KIS 초기화 뒤, 스케줄러와 웹 대시보드 시작 전에
-     수행되며 실패하면 Telegram 알림을 시도한 뒤 자동 실행 표면을
-     시작하지 않습니다.
+     token을 준비합니다. KIS 초기화 뒤, 스케줄러 시작 전에 수행되며 실패하면
+     Telegram 알림을 시도한 뒤 자동 실행 표면을 시작하지 않습니다. 웹
+     대시보드는 control plane으로 이미 실행된 상태를 유지합니다.
    - **백그라운드 스케줄러**: `interfaces.scheduler` adapter를 통한 정기적
      매매 업무 실행. portfolio use case는 `main.py`에서 주입합니다.
    - **웹 대시보드**: `interfaces.web` adapter를 통한 실시간 이벤트 뷰어 제공.
@@ -51,9 +51,10 @@ Web dashboard는 이미 control plane으로 떠 있으므로 중복 시작하지
 초기화 실패 시 Telegram 알림을 시도하고 runtime을 OFF로 유지하지만,
 Telegram/web control plane과 컨테이너 프로세스는 계속 살아 있습니다.
 
-`tests/core/test_runtime.py`는 fake collaborators로 이 순서와 KIS/Toss
-실패 시 scheduler/web을 시작하지 않는 fail-closed lifecycle smoke를
-검증합니다. 이 smoke는 네트워크 또는 주문 변경 호출을 하지 않습니다.
+`tests/test_main.py`는 fake collaborators로 이 순서와 KIS/Toss 실패 시
+scheduler를 시작하지 않고 runtime을 OFF로 유지하는 fail-closed lifecycle
+smoke를 검증합니다. 이 smoke는 네트워크 또는 주문 변경 호출을 하지
+않습니다.
 
 ### `TradingSystem.stop_trading_runtime`
 Telegram `/system_off` 명령에서 호출됩니다. Scheduler와 KIS/WebSocket
