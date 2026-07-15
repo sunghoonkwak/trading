@@ -10,7 +10,7 @@ This module handles the orchestration of strategy execution:
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -142,11 +142,18 @@ class StrategyExecutionRuntime:
                 dependencies=self.dependencies,
                 execute=execute,
                 orderable_cache_key=kwargs.get("orderable_cache_key", ""),
+                market_data_service=kwargs.get("market_data_service"),
+                get_orderable_usd_port=kwargs.get("get_orderable_usd_port"),
             )
 
-    def run_suite(self, *, execute: bool = False) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def run_suite(
+        self,
+        *,
+        execute: bool = False,
+        context: Optional["StrategyRunContext"] = None,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         with self._execution_lock:
-            context = self._build_run_context()
+            context = context or self._build_run_context()
             return (
                 self.run_raoeo(execute=execute, context=context),
                 self.run_value_averaging(execute=execute, context=context),
@@ -284,6 +291,13 @@ def _require_dependencies() -> StrategyExecutionDependencies:
     return _dependencies
 
 
+def _legacy_runtime() -> StrategyExecutionRuntime:
+    """Adapt legacy module entry points to the instance-owned runtime."""
+    return StrategyExecutionRuntime(
+        replace(_require_dependencies(), load_history=_load_history)
+    )
+
+
 class StrategyRunContext:
     """Share expensive market data across one strategy execution bundle."""
 
@@ -361,7 +375,7 @@ def get_market_data(
     Fetch current portfolio and prices for all configured strategy targets.
     Returns: (portfolio_holdings, current_prices_map)
     """
-    return get_strategy_market_data_service().get_market_data(
+    return _legacy_runtime().market_data_service().get_market_data(
         force_refresh=force_refresh,
         include_cash_ticker=include_cash_ticker,
     )
@@ -369,7 +383,7 @@ def get_market_data(
 
 def get_strategy_market_data_service() -> StrategyMarketDataService:
     """Build the application market-data service from legacy adapters."""
-    return StrategyExecutionRuntime(_require_dependencies()).market_data_service()
+    return _legacy_runtime().market_data_service()
 
 
 def get_orderable_usd(symbol: str, order_price: float) -> float:
@@ -463,7 +477,7 @@ def _load_history(history_service: Optional[StrategyHistoryService] = None) -> l
 
 def get_strategy_history_service() -> StrategyHistoryService:
     """Build the application history service from the legacy JSON adapter."""
-    return StrategyExecutionRuntime(_require_dependencies()).history_service()
+    return _legacy_runtime().history_service()
 
 
 def normalize_strategy_history_date(raw: str = "") -> str:
@@ -1047,12 +1061,10 @@ def run_raoeo_strategy(
     context: Optional[StrategyRunContext] = None,
 ) -> Dict[str, Any]:
     """Compatibility entry point for callers not yet composed with a runtime."""
-    with _strategy_execution_lock:
-        return _run_raoeo_strategy(
-            dependencies=_require_dependencies(),
-            execute=execute,
-            context=context or _build_strategy_run_context(),
-        )
+    return _legacy_runtime().run_raoeo(
+        execute=execute,
+        context=context or _build_strategy_run_context(),
+    )
 
 
 # -------------------------------------------------------------------------
@@ -1203,17 +1215,11 @@ def run_va_strategy(
     context: Optional[StrategyRunContext] = None,
 ) -> Dict[str, Any]:
     """Compatibility entry point for callers not yet composed with a runtime."""
-    with _strategy_execution_lock:
-        return _run_va_strategy(
-            dependencies=_require_dependencies(),
-            execute=execute,
-            market_snapshot=market_snapshot,
-            context=context or _build_strategy_run_context(),
-            history_service=StrategyHistoryService(
-                load=_load_history,
-                save=_require_dependencies().save_history,
-            ),
-        )
+    return _legacy_runtime().run_value_averaging(
+        execute=execute,
+        market_snapshot=market_snapshot,
+        context=context or _build_strategy_run_context(),
+    )
 
 
 def run_strategy_suite(
@@ -1221,11 +1227,10 @@ def run_strategy_suite(
     context: Optional[StrategyRunContext] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Run RAOEO and Value Averaging with shared market data."""
-    with _strategy_execution_lock:
-        run_context = context or _build_strategy_run_context()
-        raoeo_report = run_raoeo_strategy(execute=execute, context=run_context)
-        va_report = run_va_strategy(execute=execute, context=run_context)
-        return raoeo_report, va_report
+    return _legacy_runtime().run_suite(
+        execute=execute,
+        context=context or _build_strategy_run_context(),
+    )
 
 
 # -------------------------------------------------------------------------
@@ -1372,16 +1377,9 @@ def run_rebalancing_strategy(
     orderable_cache_key: str = "",
 ) -> Dict[str, Any]:
     """Compatibility entry point for callers not yet composed with a runtime."""
-    with _strategy_execution_lock:
-        dependencies = _require_dependencies()
-        return _run_rebalancing_strategy(
-            dependencies=dependencies,
-            execute=execute,
-            orderable_cache_key=orderable_cache_key,
-            history_service=StrategyHistoryService(
-                load=_load_history,
-                save=dependencies.save_history,
-            ),
-            market_data_service=_build_strategy_run_context(),
-            get_orderable_usd_port=get_orderable_usd,
-        )
+    return _legacy_runtime().run_rebalancing(
+        execute=execute,
+        orderable_cache_key=orderable_cache_key,
+        market_data_service=_build_strategy_run_context(),
+        get_orderable_usd_port=get_orderable_usd,
+    )
