@@ -1,4 +1,5 @@
 import sys
+from json import JSONDecodeError
 from pathlib import Path
 
 import pytest
@@ -19,3 +20,13 @@ def test_config_manager_preserves_read_only_files(monkeypatch, tmp_path):
 
     with pytest.raises(ValueError, match="read-only"):
         config.save_json(config.ConfigFile.STRATEGY_CONFIG, {})
+
+
+def test_config_manager_strict_load_raises_for_invalid_json(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "CONFIG_ROOT", str(tmp_path))
+    (tmp_path / config.ConfigFile.STRATEGY_HISTORY.filename).write_text(
+        "not-json", encoding="utf-8"
+    )
+
+    with pytest.raises(JSONDecodeError):
+        config.load_json(config.ConfigFile.STRATEGY_HISTORY, default=[], strict=True)

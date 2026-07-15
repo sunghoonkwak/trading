@@ -4,6 +4,10 @@ from collections.abc import Callable
 from typing import Any
 
 
+class StrategyHistoryPersistenceError(RuntimeError):
+    """Raised when durable strategy history cannot be saved."""
+
+
 class StrategyRunService:
     """Expose strategy runs without binding callers to broker infrastructure."""
 
@@ -144,4 +148,5 @@ class StrategyHistoryService:
         if strategy_key == "raoeo" and previous.get("cash_funding_results"):
             strategy_data.setdefault("cash_funding_results", previous["cash_funding_results"])
         entry[strategy_key] = strategy_data
-        self._save(history[:200])
+        if not self._save(history[:200]):
+            raise StrategyHistoryPersistenceError("Failed to save strategy history.")

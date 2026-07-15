@@ -155,7 +155,9 @@ class TradingSystem:
                 load_strategy_config=lambda: load_json(
                     ConfigFile.STRATEGY_CONFIG, default={}
                 ),
-                load_history=lambda: load_json(ConfigFile.STRATEGY_HISTORY, default=[]),
+                load_history=lambda: load_json(
+                    ConfigFile.STRATEGY_HISTORY, default=[], strict=True
+                ),
                 save_history=lambda history: save_json(ConfigFile.STRATEGY_HISTORY, history),
                 fetch_prices=market_data.fetch_prices,
                 strategy_broker_name=strategy_broker.get_strategy_broker_name,

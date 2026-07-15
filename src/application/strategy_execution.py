@@ -8,10 +8,12 @@ This module handles the orchestration of strategy execution:
 3. Single integrated history file (strategy_history.json)
 """
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from uuid import uuid4
 
 import requests
 
@@ -53,6 +55,7 @@ class StrategyExecutionRuntime:
 
     def __init__(self, dependencies: StrategyExecutionDependencies) -> None:
         self.dependencies = dependencies
+        self._execution_lock = _strategy_execution_lock
 
     def market_data_service(self) -> StrategyMarketDataService:
         reader = self.dependencies.portfolio_reader_factory()
@@ -86,41 +89,46 @@ class StrategyExecutionRuntime:
         )
 
     def run_raoeo(self, *, execute: bool = False, **kwargs: Any) -> Dict[str, Any]:
-        return _run_raoeo_strategy(
-            dependencies=self.dependencies,
-            execute=execute,
-            context=kwargs.get("context"),
-        )
+        with self._execution_lock:
+            return _run_raoeo_strategy(
+                dependencies=self.dependencies,
+                execute=execute,
+                context=kwargs.get("context"),
+            )
 
     def run_value_averaging(
         self, *, execute: bool = False, **kwargs: Any
     ) -> Dict[str, Any]:
-        return _run_va_strategy(
-            dependencies=self.dependencies,
-            execute=execute,
-            market_snapshot=kwargs.get("market_snapshot"),
-            context=kwargs.get("context"),
-        )
+        with self._execution_lock:
+            return _run_va_strategy(
+                dependencies=self.dependencies,
+                execute=execute,
+                market_snapshot=kwargs.get("market_snapshot"),
+                context=kwargs.get("context"),
+            )
 
     def run_rebalancing(
         self, *, execute: bool = False, **kwargs: Any
     ) -> Dict[str, Any]:
-        return _run_rebalancing_strategy(
-            dependencies=self.dependencies,
-            execute=execute,
-            orderable_cache_key=kwargs.get("orderable_cache_key", ""),
-        )
+        with self._execution_lock:
+            return _run_rebalancing_strategy(
+                dependencies=self.dependencies,
+                execute=execute,
+                orderable_cache_key=kwargs.get("orderable_cache_key", ""),
+            )
 
     def run_suite(self, *, execute: bool = False) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        context = self._build_run_context()
-        return (
-            self.run_raoeo(execute=execute, context=context),
-            self.run_value_averaging(execute=execute, context=context),
-        )
+        with self._execution_lock:
+            context = self._build_run_context()
+            return (
+                self.run_raoeo(execute=execute, context=context),
+                self.run_value_averaging(execute=execute, context=context),
+            )
 
     def clear_history(self, target_date: str = "") -> Dict[str, Any]:
-        target_date = normalize_strategy_history_date(target_date)
-        return self.history_service().clear_date(target_date)
+        with self._execution_lock:
+            target_date = normalize_strategy_history_date(target_date)
+            return self.history_service().clear_date(target_date)
 
     def prepare_cash_funding(
         self,
@@ -171,18 +179,40 @@ class StrategyExecutionRuntime:
         if not info.get("required") or order is None:
             return None, info
 
-        success, message = self.dependencies.execute_order(order)
-        result = {"order": order, "success": success, "message": message}
-        if success:
-            logging.info("Cash funding sale accepted. Waiting 5s before strategy execution...")
-            time.sleep(5)
-        return result, info
+        with self._execution_lock:
+            if not order.correlation_id:
+                order.correlation_id = str(uuid4())
+            self._save_cash_funding_record(
+                datetime.now(TZ_ET).strftime("%Y-%m-%d"),
+                {
+                    "order": order,
+                    "success": False,
+                    "message": "Submission started; reconcile before retrying.",
+                    "ambiguous": True,
+                },
+            )
+            success, message = self.dependencies.execute_order(order)
+            result = {
+                "order": order,
+                "success": success,
+                "message": message,
+                "ambiguous": message.startswith("[AMBIGUOUS]"),
+            }
+            if success:
+                logging.info("Cash funding sale accepted. Waiting 5s before strategy execution...")
+                time.sleep(5)
+            return result, info
 
     def save_cash_funding_result(self, today_str: str, result: Dict) -> List[Dict]:
         order = result.get("order") if result else None
         if order is None:
             return []
 
+        with self._execution_lock:
+            return self._save_cash_funding_record(today_str, result)
+
+    def _save_cash_funding_record(self, today_str: str, result: Dict) -> List[Dict]:
+        order = result["order"]
         history = self.history_service().load_history()
         today_entry = _get_today_entry(history, today_str)
         if today_entry is None:
@@ -191,7 +221,7 @@ class StrategyExecutionRuntime:
 
         raoeo_data = today_entry.setdefault("raoeo", {"orders": []})
         results = raoeo_data.setdefault("cash_funding_results", [])
-        results.append({
+        record = {
             "ticker": order.symbol,
             "side": order.side.name,
             "qty": order.quantity,
@@ -200,8 +230,24 @@ class StrategyExecutionRuntime:
             "reason": order.reason,
             "success": result["success"],
             "message": result["message"],
-        })
-        self.dependencies.save_history(history[:200])
+            "ambiguous": result.get("ambiguous", False),
+            "correlation_id": order.correlation_id,
+        }
+        existing = next(
+            (
+                index
+                for index, previous in enumerate(results)
+                if order.correlation_id
+                and previous.get("correlation_id") == order.correlation_id
+            ),
+            None,
+        )
+        if existing is None:
+            results.append(record)
+        else:
+            results[existing] = record
+        if not self.dependencies.save_history(history[:200]):
+            raise RuntimeError("Failed to save cash funding history.")
         return results
 
     def _report_orderable_usd(self, report_info: Dict) -> Any:
@@ -226,6 +272,7 @@ class StrategyExecutionRuntime:
 
 
 _dependencies: Optional[StrategyExecutionDependencies] = None
+_strategy_execution_lock = threading.RLock()
 
 
 def configure_strategy_execution(dependencies: StrategyExecutionDependencies) -> None:
@@ -478,7 +525,7 @@ def _restore_orders_from_strategy_history(
                 target_budget=order_data.get("target_budget"),
                 correlation_id=order_data.get("correlation_id"),
             )
-            success = order_data.get("success", False) or order_data.get("ambiguous", False)
+            success = order_data.get("success", False)
             restored.append((order, success))
         except Exception as e:
             logging.error(f"Failed to restore order: {order_data}, error: {e}")
@@ -511,6 +558,48 @@ def _build_order_history_entry(
     if order.correlation_id:
         entry["correlation_id"] = order.correlation_id
     return entry
+
+
+def _persist_submission_intent(
+    *,
+    today_str: str,
+    strategy_key: str,
+    report: Dict,
+    history_service: StrategyHistoryService,
+    extra_fields: Optional[Dict] = None,
+    orders_to_submit: Optional[List[StrategyOrder]] = None,
+    succeeded_orders: Optional[List[StrategyOrder]] = None,
+) -> None:
+    """Durably block retries before sending any order to a broker."""
+    orders_to_submit = orders_to_submit or report.get("orders", [])
+    for order in orders_to_submit:
+        if not order.correlation_id:
+            order.correlation_id = str(uuid4())
+
+    intent_data = _build_strategy_history_data(
+        report,
+        strategy_key,
+        extra_fields=extra_fields,
+    )
+    intent_data["status"] = StrategyStatus.PARTIAL.value
+    intent_data["orders"] = [
+        _build_order_history_entry(order, True, "Success")
+        for order in succeeded_orders or []
+    ] + [
+        _build_order_history_entry(
+            order,
+            False,
+            "Submission started; reconcile before retrying.",
+            ambiguous=True,
+        )
+        for order in orders_to_submit
+    ]
+    _save_strategy_to_history(
+        today_str,
+        strategy_key,
+        intent_data,
+        history_service=history_service,
+    )
 
 
 def _restore_history_orders(report: Dict, strategy_hist: Dict) -> Tuple[List[StrategyOrder], List[StrategyOrder]]:
@@ -585,6 +674,16 @@ def _retry_failed_history_orders(
     history_service: Optional[StrategyHistoryService] = None,
 ) -> None:
     service = order_report_service or get_order_report_service()
+    report["orders"] = succeeded + failed
+    _persist_submission_intent(
+        today_str=today_str,
+        strategy_key=strategy_key,
+        report=report,
+        history_service=history_service or get_strategy_history_service(),
+        extra_fields=extra_fields,
+        orders_to_submit=failed,
+        succeeded_orders=succeeded,
+    )
     retry_result = service.retry_failed(
         failed,
         sell_first=sell_first,
@@ -608,6 +707,12 @@ def _retry_failed_history_orders(
 def _has_ambiguous_history_order(strategy_hist: Dict) -> bool:
     """Prevent automatic retries until an operator reconciles a timeout."""
     return any(order.get("ambiguous", False) for order in strategy_hist.get("orders", []))
+
+
+def _mark_ambiguous_order_error(report: Dict) -> None:
+    report["status"] = StrategyStatus.ERROR
+    report["error"] = "Ambiguous order outcome requires reconciliation."
+    report["pending_orders"] = []
 
 
 def _save_strategy_to_history(
@@ -730,22 +835,11 @@ def execute_raoeo_cash_funding(
     raoeo_report: Optional[Dict] = None,
     context: Optional[StrategyRunContext] = None,
 ) -> Tuple[Any, Dict]:
-    """Execute approved funding first; callers must stop if it fails."""
-    if context is None:
-        order, info = prepare_raoeo_cash_funding(raoeo_report)
-    else:
-        order, info = prepare_raoeo_cash_funding(raoeo_report, context=context)
-    if not info.get("required"):
-        return None, info
-    if order is None:
-        return None, info
-
-    success, message = execute_single_order(order)
-    result = {"order": order, "success": success, "message": message}
-    if success:
-        logging.info("Cash funding sale accepted. Waiting 5s before strategy execution...")
-        time.sleep(5)
-    return result, info
+    """Compatibility entry point routed through the durable runtime flow."""
+    return StrategyExecutionRuntime(_require_dependencies()).execute_cash_funding(
+        raoeo_report,
+        context=context,
+    )
 
 
 def save_raoeo_cash_funding_result(today_str: str, result: Dict) -> List[Dict]:
@@ -807,9 +901,7 @@ def _handle_raoeo_history(
     succeeded, failed = _restore_history_orders(report, raoeo_hist)
 
     if _has_ambiguous_history_order(raoeo_hist):
-        report["status"] = StrategyStatus.ERROR
-        report["error"] = "Ambiguous order outcome requires reconciliation."
-        report["pending_orders"] = []
+        _mark_ambiguous_order_error(report)
         return
 
     if not failed:
@@ -853,9 +945,7 @@ def _handle_va_history(
     report["info"]["targets_context"] = va_hist.get("targets_context", {})
 
     if _has_ambiguous_history_order(va_hist):
-        report["status"] = StrategyStatus.ERROR
-        report["error"] = "Ambiguous order outcome requires reconciliation."
-        report["pending_orders"] = []
+        _mark_ambiguous_order_error(report)
         return
 
     if not failed:
@@ -892,6 +982,10 @@ def _handle_rebalancing_history(report: Dict, reb_hist: Dict) -> None:
     logging.info(f"[Rebalancing] Found today's history at {reb_hist.get('time', '?')}")
     _, failed = _restore_history_orders(report, reb_hist)
     report["info"]["context"] = reb_hist.get("context", {})
+
+    if _has_ambiguous_history_order(reb_hist):
+        _mark_ambiguous_order_error(report)
+        return
 
     if not failed:
         report["status"] = StrategyStatus.ALREADY_DONE
@@ -1051,6 +1145,12 @@ def _run_raoeo_strategy(
             report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
+        _persist_submission_intent(
+            today_str=today_str,
+            strategy_key="raoeo",
+            report=report,
+            history_service=history_service,
+        )
         results = _execute_orders(
             orders,
             sell_first=True,
@@ -1082,11 +1182,12 @@ def run_raoeo_strategy(
     context: Optional[StrategyRunContext] = None,
 ) -> Dict[str, Any]:
     """Compatibility entry point for callers not yet composed with a runtime."""
-    return _run_raoeo_strategy(
-        dependencies=_require_dependencies(),
-        execute=execute,
-        context=context or _build_strategy_run_context(),
-    )
+    with _strategy_execution_lock:
+        return _run_raoeo_strategy(
+            dependencies=_require_dependencies(),
+            execute=execute,
+            context=context or _build_strategy_run_context(),
+        )
 
 
 # -------------------------------------------------------------------------
@@ -1180,11 +1281,12 @@ def _run_va_strategy(
             today_date=today_str
         )
 
-        report["orders"] = orders
-        report["pending_orders"] = orders
-        report["info"]["targets_context"] = {
+        targets_context = {
             t: {"day_count": ctx.get("day_count", 0)} for t, ctx in context_map.items()
         }
+        report["orders"] = orders
+        report["pending_orders"] = orders
+        report["info"]["targets_context"] = targets_context
         report["info"]["context_map"] = context_map
 
         if not orders:
@@ -1194,16 +1296,19 @@ def _run_va_strategy(
         elif not market_status["is_market_open"]:
             report["status"] = StrategyStatus.NON_MARKET_TIME
         else:
-            # Execute
+            _persist_submission_intent(
+                today_str=today_str,
+                strategy_key="va",
+                report=report,
+                history_service=history_service,
+                extra_fields={"targets_context": targets_context},
+            )
             results = _execute_orders(
                 orders, order_report_service=order_report_service
             )
             _apply_execution_results(report, orders, results)
 
         # Save history (always save for VA — day_count tracking)
-        targets_context = {
-            t: {"day_count": ctx.get("day_count", 0)} for t, ctx in context_map.items()
-        }
         save_data = _build_strategy_history_data(report, "va",
             extra_fields={"targets_context": targets_context})
         _save_strategy_to_history(
@@ -1228,16 +1333,17 @@ def run_va_strategy(
     context: Optional[StrategyRunContext] = None,
 ) -> Dict[str, Any]:
     """Compatibility entry point for callers not yet composed with a runtime."""
-    return _run_va_strategy(
-        dependencies=_require_dependencies(),
-        execute=execute,
-        market_snapshot=market_snapshot,
-        context=context or _build_strategy_run_context(),
-        history_service=StrategyHistoryService(
-            load=_load_history,
-            save=_require_dependencies().save_history,
-        ),
-    )
+    with _strategy_execution_lock:
+        return _run_va_strategy(
+            dependencies=_require_dependencies(),
+            execute=execute,
+            market_snapshot=market_snapshot,
+            context=context or _build_strategy_run_context(),
+            history_service=StrategyHistoryService(
+                load=_load_history,
+                save=_require_dependencies().save_history,
+            ),
+        )
 
 
 def run_strategy_suite(
@@ -1245,10 +1351,11 @@ def run_strategy_suite(
     context: Optional[StrategyRunContext] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Run RAOEO and Value Averaging with shared market data."""
-    run_context = context or _build_strategy_run_context()
-    raoeo_report = run_raoeo_strategy(execute=execute, context=run_context)
-    va_report = run_va_strategy(execute=execute, context=run_context)
-    return raoeo_report, va_report
+    with _strategy_execution_lock:
+        run_context = context or _build_strategy_run_context()
+        raoeo_report = run_raoeo_strategy(execute=execute, context=run_context)
+        va_report = run_va_strategy(execute=execute, context=run_context)
+        return raoeo_report, va_report
 
 
 # -------------------------------------------------------------------------
@@ -1358,6 +1465,14 @@ def _run_rebalancing_strategy(
             report["status"] = StrategyStatus.NON_MARKET_TIME
             return report
 
+        history_context = _rebalancing_history_context(calc_info)
+        _persist_submission_intent(
+            today_str=today_str,
+            strategy_key="rebalancing",
+            report=report,
+            history_service=history_service,
+            extra_fields={"context": history_context},
+        )
         results = _execute_orders(
             orders,
             sell_first=True,
@@ -1367,8 +1482,9 @@ def _run_rebalancing_strategy(
         _apply_execution_results(report, orders, results)
 
         # Save history
-        save_data = _build_strategy_history_data(report, "rebalancing",
-            extra_fields={"context": _rebalancing_history_context(calc_info)})
+        save_data = _build_strategy_history_data(
+            report, "rebalancing", extra_fields={"context": history_context}
+        )
         _save_strategy_to_history(
             today_str, "rebalancing", save_data, history_service=history_service
         )
@@ -1390,15 +1506,16 @@ def run_rebalancing_strategy(
     orderable_cache_key: str = "",
 ) -> Dict[str, Any]:
     """Compatibility entry point for callers not yet composed with a runtime."""
-    dependencies = _require_dependencies()
-    return _run_rebalancing_strategy(
-        dependencies=dependencies,
-        execute=execute,
-        orderable_cache_key=orderable_cache_key,
-        history_service=StrategyHistoryService(
-            load=_load_history,
-            save=dependencies.save_history,
-        ),
-        market_data_service=_build_strategy_run_context(),
-        get_orderable_usd_port=get_orderable_usd,
-    )
+    with _strategy_execution_lock:
+        dependencies = _require_dependencies()
+        return _run_rebalancing_strategy(
+            dependencies=dependencies,
+            execute=execute,
+            orderable_cache_key=orderable_cache_key,
+            history_service=StrategyHistoryService(
+                load=_load_history,
+                save=dependencies.save_history,
+            ),
+            market_data_service=_build_strategy_run_context(),
+            get_orderable_usd_port=get_orderable_usd,
+        )

@@ -578,13 +578,13 @@ def test_execute_cash_funding_does_not_submit_strategy_orders_on_failure(monkeyp
         reason="Fund RAOEO Buys",
     )
     monkeypatch.setattr(
-        execution_service,
-        "prepare_raoeo_cash_funding",
-        lambda report=None: (funding_order, {"required": True}),
+        execution_service.StrategyExecutionRuntime,
+        "prepare_cash_funding",
+        lambda _self, report=None, context=None: (funding_order, {"required": True}),
     )
     monkeypatch.setattr(
-        execution_service,
-        "execute_single_order",
+        execution_service.strategy_broker,
+        "place_order",
         lambda order: (False, "rejected"),
     )
     slept = []

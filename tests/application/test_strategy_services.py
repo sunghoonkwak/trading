@@ -1,5 +1,9 @@
 import sys
+import threading
+from copy import deepcopy
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
 
@@ -9,6 +13,7 @@ from application.strategy_execution import (
     StrategyExecutionRuntime,
 )
 from application.strategy_run_service import (
+    StrategyHistoryPersistenceError,
     StrategyHistoryService,
     StrategyMarketDataService,
     StrategyRunService,
@@ -298,3 +303,153 @@ def test_history_service_upserts_strategy_and_preserves_cash_funding_results():
     assert saved == [[
         {"date": "2026-07-11", "raoeo": {"orders": [], "cash_funding_results": ["sale"]}}
     ]]
+
+
+def test_history_service_rejects_a_failed_strategy_save():
+    service = StrategyHistoryService(load=lambda: [], save=lambda _history: False)
+
+    with pytest.raises(StrategyHistoryPersistenceError, match="strategy history"):
+        service.save_strategy("2026-07-11", "raoeo", {"orders": []})
+
+
+def _executable_raoeo_dependencies(history, save_history, execute_order):
+    return StrategyExecutionDependencies(
+        load_strategy_config=lambda: {
+            "raoeo": {
+                "enabled": True,
+                "targets": {
+                    "TQQQ": {
+                        "enabled": True,
+                        "seed": 1000,
+                        "duration": 1,
+                        "phase": [
+                            {
+                                "name": "initial",
+                                "threshold": 1.0,
+                                "buy": [{"type": "normal", "ratio": 1.0}],
+                                "sell": [],
+                            }
+                        ],
+                    }
+                },
+            }
+        },
+        load_history=lambda: deepcopy(history),
+        save_history=save_history,
+        fetch_prices=lambda _tickers: {"TQQQ": 100.0},
+        strategy_broker_name=lambda: "kis",
+        get_orderable_usd=lambda _symbol, _price: 0.0,
+        execute_order=execute_order,
+        portfolio_reader_factory=lambda: type(
+            "Reader",
+            (),
+            {"get_portfolio_data": lambda _self, **_kwargs: {"merged_data": {}}},
+        )(),
+        get_market_status=lambda _date: {"is_market_open": True, "message": "open"},
+    )
+
+
+def test_runtime_persists_ambiguous_intent_before_submitting_order():
+    history = []
+    saved = []
+
+    def save_history(value):
+        history[:] = deepcopy(value)
+        saved.append(deepcopy(value))
+        return True
+
+    def execute_order(_order):
+        intent = saved[-1][0]["raoeo"]["orders"][0]
+        assert intent["ambiguous"] is True
+        assert intent["correlation_id"]
+        return True, "accepted"
+
+    report = StrategyExecutionRuntime(
+        _executable_raoeo_dependencies(history, save_history, execute_order)
+    ).run_raoeo(execute=True)
+
+    assert report["status"].value == "executed"
+    assert saved[0][0]["raoeo"]["orders"][0]["ambiguous"] is True
+    assert saved[-1][0]["raoeo"]["orders"][0]["success"] is True
+
+
+def test_runtime_does_not_submit_order_when_intent_cannot_be_saved():
+    history = []
+    calls = []
+    runtime = StrategyExecutionRuntime(
+        _executable_raoeo_dependencies(
+            history,
+            save_history=lambda _value: False,
+            execute_order=lambda _order: calls.append("submitted") or (True, "accepted"),
+        )
+    )
+
+    report = runtime.run_raoeo(execute=True)
+
+    assert calls == []
+    assert report["status"].value == "error"
+    assert "Failed to save strategy history" in report["error"]
+
+
+def test_runtime_blocks_retry_when_final_order_save_fails():
+    history = []
+    save_count = 0
+    calls = []
+
+    def save_history(value):
+        nonlocal save_count
+        save_count += 1
+        if save_count == 2:
+            return False
+        history[:] = deepcopy(value)
+        return True
+
+    runtime = StrategyExecutionRuntime(
+        _executable_raoeo_dependencies(
+            history,
+            save_history=save_history,
+            execute_order=lambda _order: calls.append("submitted") or (True, "accepted"),
+        )
+    )
+
+    first_report = runtime.run_raoeo(execute=True)
+    second_report = runtime.run_raoeo(execute=True)
+
+    assert first_report["status"].value == "error"
+    assert second_report["status"].value == "error"
+    assert "Ambiguous order outcome" in second_report["error"]
+    assert calls == ["submitted"]
+
+
+def test_runtime_serializes_overlapping_strategy_execution():
+    history = []
+    started = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    def save_history(value):
+        history[:] = deepcopy(value)
+        return True
+
+    def execute_order(_order):
+        calls.append("submitted")
+        started.set()
+        assert release.wait(timeout=1)
+        return True, "accepted"
+
+    runtime = StrategyExecutionRuntime(
+        _executable_raoeo_dependencies(history, save_history, execute_order)
+    )
+    first = threading.Thread(target=lambda: runtime.run_raoeo(execute=True))
+    second = threading.Thread(target=lambda: runtime.run_raoeo(execute=True))
+
+    first.start()
+    assert started.wait(timeout=1)
+    second.start()
+    release.set()
+    first.join(timeout=1)
+    second.join(timeout=1)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert calls == ["submitted"]
