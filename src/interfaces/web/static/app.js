@@ -9,7 +9,7 @@ let reconnectAttempts = 0;
 let maxReconnectAttempts = 10;
 let autoScroll = true;
 let showMktLogs = false;
-let autoRefreshOrders = true;
+let autoRefreshOrders = false;
 
 // Data stores
 const orders = new Map();
