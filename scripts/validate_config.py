@@ -84,6 +84,22 @@ def _validate_optional_range(
         errors.append(f"{label}.{key} must be a number between {minimum:g} and {maximum:g}")
 
 
+def _validate_target_enabled(
+    errors: List[str],
+    target: Dict[str, Any],
+    ticker: str,
+) -> None:
+    enabled = target.get("enabled", True)
+    if isinstance(enabled, bool):
+        return
+    if not isinstance(enabled, dict):
+        errors.append(f"{ticker}.enabled must be a boolean or an object")
+        return
+    for side in ("buy", "sell"):
+        if side in enabled and not isinstance(enabled[side], bool):
+            errors.append(f"{ticker}.enabled.{side} must be a boolean")
+
+
 def _validate_phase_thresholds(
     errors: List[str],
     ticker: str,
@@ -175,6 +191,7 @@ def _validate_raoeo_target(
 
     _require_positive_number(errors, target.get("seed"), f"{ticker}.seed")
     _require_positive_number(errors, target.get("duration"), f"{ticker}.duration")
+    _validate_target_enabled(errors, target, ticker)
 
     phases = target.get("phase")
     if not isinstance(phases, list) or not phases:
@@ -216,7 +233,7 @@ def validate_strategy_config(
         if not isinstance(target, dict):
             errors.append(f"{ticker} target must be an object")
             continue
-        if not target.get("enabled", True):
+        if target.get("enabled") is False:
             continue
         _validate_raoeo_target(errors, str(ticker), target, registered)
 
@@ -235,8 +252,15 @@ def _enabled_raoeo_targets(strategy_config: Dict[str, Any]) -> List[str]:
     return [
         str(ticker)
         for ticker, target in targets.items()
-        if isinstance(target, dict) and target.get("enabled", True)
+        if isinstance(target, dict) and _target_has_enabled_orders(target)
     ]
+
+
+def _target_has_enabled_orders(target: Dict[str, Any]) -> bool:
+    enabled = target.get("enabled", True)
+    if isinstance(enabled, dict):
+        return enabled.get("buy", True) is True or enabled.get("sell", True) is True
+    return enabled is True
 
 
 def _success_report(

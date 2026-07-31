@@ -263,6 +263,10 @@ Telegram 봇은 시작 시 polling 방식으로 실행되며 `~/KIS_config/teleg
 매수/매도 주문을 계산합니다. `normal`, `average`, `filling` 매수 타입과
 `LOC`, `Limit` 매도 타입을 조합할 수 있습니다.
 
+종목 전체의 매수 또는 매도를 멈추려면 해당 target의 `enabled`에
+`"buy": false` 또는 `"sell": false`를 설정합니다. 이 값은 모든 phase에
+적용되며, 생략하면 둘 다 `true`입니다.
+
 `cash_ticker`가 설정되어 있고 매수 예산이 부족하면 보유 중인 현금성 ETF를
 먼저 매도하는 주문을 생성합니다. 매도 수량은 실제 보유 수량으로 제한됩니다.
 

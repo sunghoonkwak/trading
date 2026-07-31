@@ -115,6 +115,13 @@ def _is_rule_disabled(rule: Dict) -> bool:
     return str(rule.get("disable", "false")).lower() == "true"
 
 
+def _is_order_enabled(config: Dict, side: str) -> bool:
+    enabled = config.get("enabled", True)
+    if isinstance(enabled, dict):
+        return enabled.get(side, True) is True
+    return enabled is True
+
+
 def _select_phase(phases: List[Dict], progress_ratio: float) -> Dict:
     matched_phase = phases[-1]
     for phase in phases:
@@ -393,8 +400,8 @@ def _calculate_ticker_orders(
 
     matched_phase = _select_phase(phases, progress_ratio)
     phase_name = matched_phase.get("name", "Unknown Phase")
-    sell_rules = matched_phase.get("sell", [])
-    buy_rules = matched_phase.get("buy", [])
+    sell_rules = matched_phase.get("sell", []) if _is_order_enabled(config, "sell") else []
+    buy_rules = matched_phase.get("buy", []) if _is_order_enabled(config, "buy") else []
     budget_carryover = _buy_budget_carryover(ticker, history_data, today_date)
     total_buy_budget = round(daily_budget + budget_carryover, 2)
 

@@ -5,7 +5,7 @@
         "enabled": true,
         "targets": {
             "SOXL": {
-                "enabled": true,
+                "enabled": {"buy": true, "sell": true},
                 "seed": 20000,
                 "exchange": "AMS",
                 "duration": 40,
@@ -18,28 +18,24 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
-                                "disable": "false"
+                                "price_percent_cap": 0.1
                             },
                             {
                                 "type": "filling",
                                 "target_ratio": 0.1,
-                                "price_percent_cap": -0.05,
-                                "disable": "false"
+                                "price_percent_cap": -0.05
                             }
                         ],
                         "sell": [
                             {
                                 "type": "LOC",
                                 "ratio": 0.5,
-                                "profit": 0.2,
-                                "disable": "false"
+                                "profit": 0.2
                             },
                             {
                                 "type": "Limit",
                                 "ratio": 0.5,
-                                "profit": 0.2,
-                                "disable": "false"
+                                "profit": 0.2
                             }
                         ]
                     },
@@ -51,22 +47,19 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
-                                "disable": "false"
+                                "price_percent_cap": 0.1
                             }
                         ],
                         "sell": [
                             {
                                 "type": "LOC",
                                 "ratio": 0.5,
-                                "profit": 0.2,
-                                "disable": "false"
+                                "profit": 0.2
                             },
                             {
                                 "type": "Limit",
                                 "ratio": 0.5,
-                                "profit": 0.2,
-                                "disable": "false"
+                                "profit": 0.2
                             }
                         ]
                     },
@@ -78,22 +71,19 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
-                                "disable": "false"
+                                "price_percent_cap": 0.1
                             }
                         ],
                         "sell": [
                             {
                                 "type": "LOC",
                                 "ratio": 0.5,
-                                "profit": 0.1,
-                                "disable": "false"
+                                "profit": 0.1
                             },
                             {
                                 "type": "Limit",
                                 "ratio": 0.5,
-                                "profit": 0.1,
-                                "disable": "false"
+                                "profit": 0.1
                             }
                         ]
                     },
@@ -104,35 +94,31 @@
                             {
                                 "type": "average",
                                 "ratio": 0.5,
-                                "price_percent_cap": 0.0,
-                                "disable": "false"
+                                "price_percent_cap": 0.0
                             },
                             {
                                 "type": "normal",
                                 "ratio": 0.5,
-                                "price_percent_cap": 0.1,
-                                "disable": "false"
+                                "price_percent_cap": 0.1
                             }
                         ],
                         "sell": [
                             {
                                 "type": "LOC",
                                 "ratio": 0.5,
-                                "profit": 0.1,
-                                "disable": "false"
+                                "profit": 0.1
                             },
                             {
                                 "type": "Limit",
                                 "ratio": 0.5,
-                                "profit": 0.1,
-                                "disable": "false"
+                                "profit": 0.1
                             }
                         ]
                     }
                 ]
             },
             "FAS": {
-                "enabled": true,
+                "enabled": {"buy": true, "sell": true},
                 "seed": 10000,
                 "exchange": "AMS",
                 "duration": 60,
@@ -145,28 +131,24 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
-                                "disable": "false"
+                                "price_percent_cap": 0.1
                             },
                             {
                                 "type": "filling",
                                 "target_ratio": 0.1,
-                                "price_percent_cap": -0.05,
-                                "disable": "false"
+                                "price_percent_cap": -0.05
                             }
                         ],
                         "sell": [
                             {
                                 "type": "LOC",
                                 "ratio": 0.5,
-                                "profit": 0.12,
-                                "disable": "false"
+                                "profit": 0.12
                             },
                             {
                                 "type": "Limit",
                                 "ratio": 0.5,
-                                "profit": 0.12,
-                                "disable": "false"
+                                "profit": 0.12
                             }
                         ]
                     },
@@ -178,22 +160,19 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
-                                "disable": "false"
+                                "price_percent_cap": 0.1
                             }
                         ],
                         "sell": [
                             {
                                 "type": "LOC",
                                 "ratio": 0.5,
-                                "profit": 0.12,
-                                "disable": "false"
+                                "profit": 0.12
                             },
                             {
                                 "type": "Limit",
                                 "ratio": 0.5,
-                                "profit": 0.12,
-                                "disable": "false"
+                                "profit": 0.12
                             }
                         ]
                     },
@@ -205,22 +184,19 @@
                             {
                                 "type": "normal",
                                 "ratio": 1,
-                                "price_percent_cap": 0.1,
-                                "disable": "false"
+                                "price_percent_cap": 0.1
                             }
                         ],
                         "sell": [
                             {
                                 "type": "LOC",
                                 "ratio": 0.5,
-                                "profit": 0.06,
-                                "disable": "false"
+                                "profit": 0.06
                             },
                             {
                                 "type": "Limit",
                                 "ratio": 0.5,
-                                "profit": 0.06,
-                                "disable": "false"
+                                "profit": 0.06
                             }
                         ]
                     },
@@ -231,28 +207,24 @@
                             {
                                 "type": "average",
                                 "ratio": 0.5,
-                                "price_percent_cap": 0.0,
-                                "disable": "false"
+                                "price_percent_cap": 0.0
                             },
                             {
                                 "type": "normal",
                                 "ratio": 0.5,
-                                "price_percent_cap": 0.1,
-                                "disable": "false"
+                                "price_percent_cap": 0.1
                             }
                         ],
                         "sell": [
                             {
                                 "type": "LOC",
                                 "ratio": 0.5,
-                                "profit": 0.06,
-                                "disable": "false"
+                                "profit": 0.06
                             },
                             {
                                 "type": "Limit",
                                 "ratio": 0.5,
-                                "profit": 0.06,
-                                "disable": "false"
+                                "profit": 0.06
                             }
                         ]
                     }

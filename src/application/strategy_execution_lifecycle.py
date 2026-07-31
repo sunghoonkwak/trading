@@ -41,8 +41,15 @@ def active_targets(config: Dict, strategy_key: str) -> Dict:
     return {
         ticker: target
         for ticker, target in targets.items()
-        if target.get("enabled", True)
+        if _target_has_enabled_orders(target)
     }
+
+
+def _target_has_enabled_orders(target: Dict) -> bool:
+    enabled = target.get("enabled", True)
+    if isinstance(enabled, dict):
+        return enabled.get("buy", True) is True or enabled.get("sell", True) is True
+    return enabled is True
 
 
 def history_for_date(history: List[Dict], today: str) -> Optional[Dict]:

@@ -200,6 +200,17 @@ def test_reports_invalid_buy_sell_ratio_and_profit():
     assert any("sell[1].profit" in error for error in errors)
 
 
+def test_reports_invalid_target_buy_sell_switches():
+    config = _strategy_config()
+    target = config["raoeo"]["targets"]["SOXL"]
+    target["enabled"] = {"buy": "false", "sell": 0}
+
+    errors = validate_config.validate_strategy_config(config, _stock_config())
+
+    assert "SOXL.enabled.buy must be a boolean" in errors
+    assert "SOXL.enabled.sell must be a boolean" in errors
+
+
 def test_cli_returns_failure_for_invalid_config(tmp_path, capsys):
     config = _strategy_config()
     config["raoeo"]["targets"]["SOXL"]["seed"] = 0

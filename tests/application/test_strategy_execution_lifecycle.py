@@ -8,12 +8,18 @@ def test_active_targets_keeps_only_enabled_configuration():
                 "targets": {
                     "TQQQ": {"enabled": True},
                     "SOXL": {"enabled": False},
+                    "FAS": {"enabled": {"buy": False, "sell": False}},
+                    "TECL": {"enabled": {"buy": True, "sell": False}},
                     "UPRO": {},
                 }
             }
         },
         "raoeo",
-    ) == {"TQQQ": {"enabled": True}, "UPRO": {}}
+    ) == {
+        "TQQQ": {"enabled": True},
+        "TECL": {"enabled": {"buy": True, "sell": False}},
+        "UPRO": {},
+    }
 
 
 def test_history_for_date_returns_the_matching_entry_only():
