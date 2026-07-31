@@ -45,11 +45,16 @@ def active_targets(config: Dict, strategy_key: str) -> Dict:
     }
 
 
-def _target_has_enabled_orders(target: Dict) -> bool:
+def target_order_enabled(target: Dict, side: str) -> bool:
+    """Return whether one target order side is enabled."""
     enabled = target.get("enabled", True)
     if isinstance(enabled, dict):
-        return enabled.get("buy", True) is True or enabled.get("sell", True) is True
+        return enabled.get(side, True) is True
     return enabled is True
+
+
+def _target_has_enabled_orders(target: Dict) -> bool:
+    return target_order_enabled(target, "buy") or target_order_enabled(target, "sell")
 
 
 def history_for_date(history: List[Dict], today: str) -> Optional[Dict]:

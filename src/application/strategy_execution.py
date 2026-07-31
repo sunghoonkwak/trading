@@ -27,6 +27,7 @@ from application.strategy_execution_lifecycle import (
     active_targets,
     begin_strategy_execution,
     history_for_date,
+    target_order_enabled,
 )
 from application.strategy_history_repository import (
     build_merged_history_entries as _build_merged_history_entries,
@@ -754,7 +755,7 @@ def _calculate_raoeo_reserved_cash(strategy_config: Dict) -> float:
     reserved_cash = 0.0
 
     for target_config in raoeo_conf.values():
-        if not target_config.get('enabled', True):
+        if not target_order_enabled(target_config, "buy"):
             continue
         seed = float(target_config.get('seed', 0))
         duration = int(target_config.get('duration', 1))

@@ -211,6 +211,15 @@ def test_reports_invalid_target_buy_sell_switches():
     assert "SOXL.enabled.sell must be a boolean" in errors
 
 
+def test_all_disabled_target_skips_required_raoeo_configuration():
+    config = _strategy_config()
+    config["raoeo"]["targets"]["SOXL"] = {
+        "enabled": {"buy": False, "sell": False},
+    }
+
+    assert validate_config.validate_strategy_config(config, _stock_config()) == []
+
+
 def test_cli_returns_failure_for_invalid_config(tmp_path, capsys):
     config = _strategy_config()
     config["raoeo"]["targets"]["SOXL"]["seed"] = 0

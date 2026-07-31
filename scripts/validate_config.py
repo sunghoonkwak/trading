@@ -235,6 +235,9 @@ def validate_strategy_config(
             continue
         if target.get("enabled") is False:
             continue
+        if not _target_has_enabled_orders(target):
+            _validate_target_enabled(errors, target, str(ticker))
+            continue
         _validate_raoeo_target(errors, str(ticker), target, registered)
 
     return errors

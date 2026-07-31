@@ -973,6 +973,33 @@ def test_run_raoeo_does_not_automatically_query_or_sell_cash_ticker(monkeypatch)
     )
 
 
+def test_raoeo_reservation_ignores_buy_disabled_targets():
+    config = {
+        "raoeo": {
+            "targets": {
+                "TQQQ": {"enabled": True, "seed": 1000, "duration": 10},
+                "SOXL": {
+                    "enabled": {"buy": True, "sell": False},
+                    "seed": 2000,
+                    "duration": 10,
+                },
+                "FAS": {
+                    "enabled": {"buy": False, "sell": True},
+                    "seed": 3000,
+                    "duration": 10,
+                },
+                "UPRO": {
+                    "enabled": {"buy": False, "sell": False},
+                    "seed": 4000,
+                    "duration": 10,
+                },
+            }
+        }
+    }
+
+    assert execution_service._calculate_raoeo_reserved_cash(config) == 300.0
+
+
 def test_run_rebalancing_passes_api_orderable_usd_to_calculation(monkeypatch):
     config = {
         "raoeo": {"targets": {}},

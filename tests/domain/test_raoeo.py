@@ -41,3 +41,23 @@ def test_target_sell_enabled_false_skips_sells_in_every_phase():
     )
 
     assert [order.side for order in orders] == [OrderSide.BUY]
+
+
+def test_legacy_disabled_target_skips_all_orders():
+    orders, _ = calculate_orders(
+        targets_config={"SOXL": _target_config(enabled=False)},
+        portfolio={"SOXL": {"qty": 2, "avg_price": 100.0}},
+        current_prices={"SOXL": 100.0},
+    )
+
+    assert orders == []
+
+
+def test_omitted_enabled_side_defaults_to_true():
+    orders, _ = calculate_orders(
+        targets_config={"SOXL": _target_config(enabled={"buy": False})},
+        portfolio={"SOXL": {"qty": 2, "avg_price": 100.0}},
+        current_prices={"SOXL": 100.0},
+    )
+
+    assert [order.side for order in orders] == [OrderSide.SELL]
