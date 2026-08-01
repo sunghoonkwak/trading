@@ -25,12 +25,9 @@ def _find_ticker_history(
     history_data: List[Dict],
 ) -> Tuple[Optional[Dict], Optional[str]]:
     for entry in history_data:
-        va_context = entry.get('targets', {}).get('va', {}).get('targets_context', {})
+        va_context = entry.get('va', {}).get('targets_context', {})
         if ticker in va_context:
             return va_context[ticker], entry['date']
-
-        if ticker in entry.get('targets', {}):
-            return entry['targets'][ticker], entry['date']
 
     return None, None
 

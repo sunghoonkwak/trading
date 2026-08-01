@@ -104,17 +104,15 @@ def test_sub_share_or_zero_difference_does_not_create_order(
     ) is None
 
 
-def test_nested_history_increments_day_and_applies_target_cap():
+def test_saved_va_history_increments_day_and_applies_target_cap():
     history = [
         {
             "date": "2026-07-08",
-            "targets": {
-                "va": {
-                    "targets_context": {
-                        "SOXL": {
-                            "day_count": 4,
-                            "results": [],
-                        }
+            "va": {
+                "targets_context": {
+                    "SOXL": {
+                        "day_count": 4,
+                        "results": [],
                     }
                 }
             },
@@ -146,10 +144,12 @@ def test_successful_order_today_prevents_duplicate(result):
     history = [
         {
             "date": "2026-07-09",
-            "targets": {
-                "SOXL": {
-                    "day_count": 3,
-                    "results": [result],
+            "va": {
+                "targets_context": {
+                    "SOXL": {
+                        "day_count": 3,
+                        "results": [result],
+                    }
                 }
             },
         }
@@ -172,10 +172,12 @@ def test_skip_result_today_allows_order():
     history = [
         {
             "date": "2026-07-09",
-            "targets": {
-                "SOXL": {
-                    "day_count": 2,
-                    "results": [{"success": True, "type": "skip"}],
+            "va": {
+                "targets_context": {
+                    "SOXL": {
+                        "day_count": 2,
+                        "results": [{"success": True, "type": "skip"}],
+                    }
                 }
             },
         }

@@ -6,3 +6,6 @@ prices, history, and a US trading date, then returns orders and history context.
 
 Price resolution prefers the supplied snapshot and then the holding fallback.
 The module is pure and does not read history or call a broker itself.
+
+For day-count tracking, history entries use
+`va.targets_context.<ticker>.day_count`. Legacy history layouts are not read.
