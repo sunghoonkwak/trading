@@ -60,6 +60,31 @@ def test_data_integration_skips_gsheet_and_toss_for_kis_scope(monkeypatch):
     assert "toss_error" not in result["metadata"]
 
 
+def test_data_integration_delegates_merge_policy_to_application_service(monkeypatch):
+    from infrastructure.portfolio import integration as portfolio_integration
+
+    calls = []
+
+    class FakePortfolioRetrievalService:
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+
+        def fetch(self, *, scope):
+            return {"scope": scope}
+
+    monkeypatch.setattr(
+        portfolio_integration,
+        "PortfolioRetrievalService",
+        FakePortfolioRetrievalService,
+    )
+
+    assert portfolio_integration.get_integrated_portfolio(scope="toss") == {
+        "scope": "toss"
+    }
+    assert calls[0]["fetch_kis"] is portfolio_integration.fetch_kis_portfolio_source
+    assert calls[0]["fetch_toss"] is portfolio_integration.fetch_toss_portfolio_source
+
+
 def test_data_integration_uses_injected_alert_publisher(monkeypatch):
     from infrastructure.portfolio import integration as portfolio_integration
     from infrastructure.toss import portfolio as toss_portfolio

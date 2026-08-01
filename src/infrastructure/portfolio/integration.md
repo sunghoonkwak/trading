@@ -1,11 +1,10 @@
 # Portfolio infrastructure integration
 
-`integration.py` implements the normalized KIS, Toss, and Google Sheets
-portfolio source merge. The Google Sheets adapter owns its in-memory cache;
-this module retains forwarding functions for the established refresh and test
-seams. It is an infrastructure adapter used by
-`application.portfolio_service.PortfolioService` through the `PortfolioSource`
-contract.
+`integration.py` provides KIS, Toss, and Google Sheets source adapters to
+`application.portfolio_retrieval_service.PortfolioRetrievalService`. The
+application service owns source selection, price completion, and normalized
+portfolio merging. This module retains forwarding functions for the established
+Google Sheets cache refresh and test seams.
 
 The adapter preserves partial-error metadata and notification behavior. Local
 alert publication and optional Telegram warnings are injected from `main.py`,
@@ -31,6 +30,6 @@ source result and partial-error behavior.
   exception preserves the existing cache and returns counts, error text, and
   the last update time.
 
-`merge_portfolio_sources()` assigns account IDs and produces the normalized
-raw portfolio consumed by `PortfolioService`. The adapter keeps KIS, GSheet,
-and Toss errors in metadata rather than hiding partial failures.
+`PortfolioRetrievalService` assigns account IDs and produces the normalized
+raw portfolio consumed by `PortfolioService`. The adapter preserves KIS,
+GSheet, and Toss errors as metadata rather than hiding partial failures.
