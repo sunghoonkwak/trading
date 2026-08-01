@@ -1211,11 +1211,7 @@ def _run_rebalancing_strategy(
 
         # Step 6: Execute if requested
         if not execute:
-            report["status"] = StrategyStatus.NON_MARKET_TIME if not market_status["is_market_open"] else StrategyStatus.SKIPPED
-            return report
-
-        if not market_status["is_market_open"]:
-            report["status"] = StrategyStatus.NON_MARKET_TIME
+            report["status"] = StrategyStatus.SKIPPED
             return report
 
         history_context = _rebalancing_history_context(calc_info)
