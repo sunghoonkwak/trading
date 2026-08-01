@@ -666,10 +666,14 @@ def test_runtime_on_starts_trading_dependencies(monkeypatch):
     monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
     monkeypatch.setattr(system, "initialize_kis", lambda: calls.append("kis") or True)
     monkeypatch.setattr(system, "initialize_toss", lambda: calls.append("toss") or True)
-    monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler"))
+    monkeypatch.setattr(
+        system,
+        "start_scheduler",
+        lambda: calls.append("scheduler") or True,
+    )
 
     fake_order_admin = types.ModuleType("infrastructure.order_admin")
-    fake_order_admin.sync_open_orders = lambda: calls.append("sync_open_orders")
+    fake_order_admin.sync_open_orders = lambda: calls.append("sync_open_orders") or True
     monkeypatch.setitem(sys.modules, "infrastructure.order_admin", fake_order_admin)
 
     result = system.start_trading_runtime()
@@ -678,6 +682,81 @@ def test_runtime_on_starts_trading_dependencies(monkeypatch):
     assert result.already_in_state is False
     assert system.is_trading_runtime_running() is True
     assert calls == ["gsheet", "kis", "toss", "sync_open_orders", "scheduler"]
+
+
+def test_runtime_on_rolls_back_when_open_order_sync_fails(monkeypatch):
+    main = _load_main(monkeypatch)
+    calls = []
+    notifications = []
+    system = main.TradingSystem()
+
+    monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
+    monkeypatch.setattr(system, "initialize_kis", lambda: calls.append("kis") or True)
+    monkeypatch.setattr(system, "initialize_toss", lambda: calls.append("toss") or True)
+    monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler") or True)
+    monkeypatch.setattr(
+        system,
+        "_stop_runtime_dependencies",
+        lambda: calls.append("stop_dependencies"),
+    )
+    monkeypatch.setattr(
+        system,
+        "_notify_startup_failure",
+        lambda component: notifications.append(component),
+    )
+
+    fake_order_admin = types.ModuleType("infrastructure.order_admin")
+    fake_order_admin.sync_open_orders = lambda: calls.append("sync_open_orders") or False
+    monkeypatch.setitem(sys.modules, "infrastructure.order_admin", fake_order_admin)
+
+    result = system.start_trading_runtime()
+
+    assert result.success is False
+    assert result.component == "Order sync"
+    assert system.is_trading_runtime_running() is False
+    assert calls == ["gsheet", "kis", "toss", "sync_open_orders", "stop_dependencies"]
+    assert notifications == ["Order sync"]
+
+
+def test_runtime_on_rolls_back_when_scheduler_start_fails(monkeypatch):
+    main = _load_main(monkeypatch)
+    calls = []
+    notifications = []
+    system = main.TradingSystem()
+
+    monkeypatch.setattr(system, "initialize_gsheet_cache", lambda: calls.append("gsheet"))
+    monkeypatch.setattr(system, "initialize_kis", lambda: calls.append("kis") or True)
+    monkeypatch.setattr(system, "initialize_toss", lambda: calls.append("toss") or True)
+    monkeypatch.setattr(system, "start_scheduler", lambda: calls.append("scheduler") or False)
+    monkeypatch.setattr(
+        system,
+        "_stop_runtime_dependencies",
+        lambda: calls.append("stop_dependencies"),
+    )
+    monkeypatch.setattr(
+        system,
+        "_notify_startup_failure",
+        lambda component: notifications.append(component),
+    )
+
+    fake_order_admin = types.ModuleType("infrastructure.order_admin")
+    fake_order_admin.sync_open_orders = lambda: calls.append("sync_open_orders") or True
+    monkeypatch.setitem(sys.modules, "infrastructure.order_admin", fake_order_admin)
+
+    result = system.start_trading_runtime()
+
+    assert result.success is False
+    assert result.component == "Scheduler"
+    assert system.is_trading_runtime_running() is False
+    assert calls == [
+        "gsheet",
+        "kis",
+        "toss",
+        "sync_open_orders",
+        "scheduler",
+        "stop_dependencies",
+    ]
+    assert notifications == ["Scheduler"]
 
 
 def test_runtime_on_failure_keeps_process_alive_and_off(monkeypatch):
@@ -747,11 +826,11 @@ def test_runtime_off_waits_for_in_progress_runtime_on(monkeypatch):
     monkeypatch.setattr(system, "initialize_gsheet_cache", block_gsheet_initialization)
     monkeypatch.setattr(system, "initialize_kis", lambda: True)
     monkeypatch.setattr(system, "initialize_toss", lambda: True)
-    monkeypatch.setattr(system, "start_scheduler", lambda: None)
+    monkeypatch.setattr(system, "start_scheduler", lambda: True)
     monkeypatch.setattr(main.time, "sleep", lambda _seconds: None)
 
     fake_order_admin = types.ModuleType("infrastructure.order_admin")
-    fake_order_admin.sync_open_orders = lambda: None
+    fake_order_admin.sync_open_orders = lambda: True
     monkeypatch.setitem(sys.modules, "infrastructure.order_admin", fake_order_admin)
 
     monkeypatch.setattr(

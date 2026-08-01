@@ -488,7 +488,7 @@ class TradingSystem:
             print("[Startup] ✗ Toss API initialization failed")
             return False
 
-    def start_scheduler(self):
+    def start_scheduler(self) -> bool:
         """Starts the background task scheduler."""
         print("[Startup] Step 4: Starting Scheduler Service...")
         try:
@@ -529,8 +529,10 @@ class TradingSystem:
             )
             self._scheduler_runner.start()
             print("[Startup] ✓ Scheduler started")
-        except Exception as e:
-            logging.error(f"[Startup] Scheduler error: {e}")
+            return True
+        except Exception:
+            logging.exception("[Startup] Scheduler error")
+            return False
 
     def start_web_server(self):
         """Starts the Web Event Viewer dashboard."""
@@ -665,10 +667,26 @@ class TradingSystem:
 
             from infrastructure.order_admin import sync_open_orders
 
-            sync_open_orders()
+            if not sync_open_orders():
+                logging.critical("[Runtime] Open-order synchronization failed")
+                self._notify_startup_failure("Order sync")
+                self._stop_runtime_dependencies()
+                return RuntimeCommandResult(
+                    success=False,
+                    component="Order sync",
+                    message="Open-order synchronization failed. Trading runtime remains OFF.",
+                )
             print("[Startup] ✓ Orders synced")
             time.sleep(0.5)
-            self.start_scheduler()
+            if not self.start_scheduler():
+                logging.critical("[Runtime] Scheduler startup failed")
+                self._notify_startup_failure("Scheduler")
+                self._stop_runtime_dependencies()
+                return RuntimeCommandResult(
+                    success=False,
+                    component="Scheduler",
+                    message="Scheduler startup failed. Trading runtime remains OFF.",
+                )
             self._runtime_running = True
             logging.info("[Runtime] Trading runtime is ON")
             return RuntimeCommandResult(
