@@ -1,6 +1,5 @@
 """Terminal and event-viewer display adapter."""
 import logging
-import sys
 from datetime import datetime
 from typing import Optional
 
@@ -93,26 +92,3 @@ def remove_order_state(order_id: str):
 def clear_order_states():
     """Clear all orders in the event viewer."""
     _send_pipe_log("CLR", "ORDERS")
-
-
-def clear_quotes():
-    """Clear all quotes in the event viewer."""
-    _send_pipe_log("CLR", "QUOTES")
-
-
-def show_in_result_area(lines):
-    """Print result lines to the terminal."""
-    print("")
-    for line in lines:
-        print(line)
-
-
-def input_at(row, col, prompt):
-    """Read terminal input; row and column are retained for compatibility."""
-    return input(prompt)
-
-
-def safe_write(text):
-    """Write text to stdout."""
-    sys.stdout.write(text)
-    sys.stdout.flush()
