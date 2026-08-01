@@ -219,6 +219,34 @@ def test_order_admin_fetches_open_orders_without_domestic_by_default(monkeypatch
     assert calls["us"]["ovrs_excg_cd"] == "NASD"
 
 
+def test_order_admin_preserves_display_when_all_order_fetches_fail(monkeypatch):
+    from infrastructure import order_admin
+
+    cleared = []
+
+    monkeypatch.setenv("KIS_ENABLE_REST_API", "true")
+    monkeypatch.setenv("KIS_ENABLE_DOMESTIC", "false")
+    monkeypatch.setattr(order_admin, "clear_order_states", lambda: cleared.append(True))
+    monkeypatch.setattr(order_admin, "add_alert", lambda *args, **kwargs: None)
+    monkeypatch.setattr(order_admin, "_get_trenv", lambda: _FakeTREnv())
+    monkeypatch.setattr(
+        order_admin,
+        "_get_overseas_order_endpoints",
+        lambda: (
+            lambda **kwargs: (_ for _ in ()).throw(RuntimeError("KIS unavailable")),
+            lambda **kwargs: None,
+        ),
+    )
+    monkeypatch.setattr(
+        order_admin,
+        "_fetch_toss_open_orders",
+        lambda: (_ for _ in ()).throw(RuntimeError("Toss unavailable")),
+    )
+
+    assert order_admin.sync_open_orders() is None
+    assert cleared == []
+
+
 def test_order_admin_skips_kis_open_orders_when_rest_api_disabled(monkeypatch):
     from infrastructure import order_admin
 

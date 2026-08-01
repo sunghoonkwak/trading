@@ -12,6 +12,10 @@ from infrastructure import trading_configuration as trading_config
 from infrastructure.display import add_alert, clear_order_states, update_order_state
 
 
+class OpenOrderFetchError(RuntimeError):
+    """Raised when no configured broker can provide open-order data."""
+
+
 def _get_trenv():
     from infrastructure.kis.kis_api import kis_auth as ka
 
@@ -235,13 +239,17 @@ def fetch_open_orders() -> Tuple[pd.DataFrame, int, int, int]:
     """Fetch open orders from all configured markets."""
     df_us = pd.DataFrame()
     df_kr = pd.DataFrame()
+    fetch_attempts = 0
+    successful_fetches = 0
     if trading_config.is_kis_rest_api_enabled():
-        trenv = _get_trenv()
-        cano = trenv.my_acct
-        prod = trenv.my_prod
-        inquire_nccs_overseas, _ = _get_overseas_order_endpoints()
-
+        fetch_attempts += 1
+        if trading_config.is_kis_domestic_enabled():
+            fetch_attempts += 1
         try:
+            trenv = _get_trenv()
+            cano = trenv.my_acct
+            prod = trenv.my_prod
+            inquire_nccs_overseas, _ = _get_overseas_order_endpoints()
             df_us = inquire_nccs_overseas(
                 cano=cano,
                 acnt_prdt_cd=prod,
@@ -252,12 +260,16 @@ def fetch_open_orders() -> Tuple[pd.DataFrame, int, int, int]:
             )
             if not df_us.empty:
                 df_us["_market"] = "US"
+            successful_fetches += 1
         except Exception as e:
             logging.error("[OrderAdmin] US order fetch failed: %s", e)
 
         if trading_config.is_kis_domestic_enabled():
-            inquire_psbl_rvsecncl, _ = _get_domestic_order_endpoints()
             try:
+                trenv = _get_trenv()
+                cano = trenv.my_acct
+                prod = trenv.my_prod
+                inquire_psbl_rvsecncl, _ = _get_domestic_order_endpoints()
                 df_kr = inquire_psbl_rvsecncl(
                     cano=cano,
                     acnt_prdt_cd=prod,
@@ -266,16 +278,22 @@ def fetch_open_orders() -> Tuple[pd.DataFrame, int, int, int]:
                 )
                 if not df_kr.empty:
                     df_kr["_market"] = "KR"
+                successful_fetches += 1
             except Exception as e:
                 logging.error("[OrderAdmin] KR order fetch failed: %s", e)
 
+    fetch_attempts += 1
     try:
         df_toss = _fetch_toss_open_orders()
         if not df_toss.empty:
             df_toss["_market"] = "TOSS"
+        successful_fetches += 1
     except Exception as e:
         logging.error("[OrderAdmin] Toss order fetch failed: %s", e)
         df_toss = pd.DataFrame()
+
+    if fetch_attempts and not successful_fetches:
+        raise OpenOrderFetchError("All broker open-order fetches failed")
 
     if df_us.empty and df_kr.empty and df_toss.empty:
         return pd.DataFrame(), 0, 0, 0
@@ -467,9 +485,9 @@ def execute_manage_action(
 
 def _sync_display_open_orders():
     add_alert("[ORD] Syncing open orders...", "INFO")
-    clear_order_states()
     try:
         df, num_us, num_kr, num_toss = fetch_open_orders()
+        clear_order_states()
         add_alert(
             f"[ORD] updated! Orders US/KR/Toss : {num_us} / {num_kr} / {num_toss}",
             "SUCCESS",

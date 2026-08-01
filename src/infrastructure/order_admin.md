@@ -20,6 +20,9 @@
   Event Viewer의 주문 시간은 조회 시각이 아니라 브로커 응답의 주문
   입력 시각을 사용합니다. KIS는 `ord_tmd`, Toss는 `orderedAt`을
   `HH:MM:SS`로 변환합니다.
+- 모든 설정된 브로커의 주문 조회가 실패하면 `sync_open_orders()`는
+  기존 display state를 유지하고 실패를 반환합니다. 성공한 조회가
+  빈 결과를 반환한 경우에만 화면을 비워 실제 미체결 0건으로 표시합니다.
 
 ## Market-Specific Behavior
 
