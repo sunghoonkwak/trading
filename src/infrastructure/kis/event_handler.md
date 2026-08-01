@@ -35,7 +35,9 @@ KIS WebSocket 클라이언트가 메시지를 수신할 때마다 실행되는 �
     *   **전체 데이터 덤프**: 모든 주문 알림(ODR/EXE/CAN/REJ 등)에 대해 WebSocket 메시지 전체 내용을 **`INFO`** 레벨로 기록하여, 주문 거절 원인 등을 분석할 수 있도록 합니다.
     *   메인 UI에 `add_alert`를 보냅니다.
     *   **Telegram 알림**: 체결 완료 시 `send_notification()`을 호출하여 원격 알림 전송.
-    *   `sync_open_orders()`를 호출하여 주문 동기화를 자동 트리거합니다.
+    *   단일 백그라운드 worker로 `sync_open_orders()`를 예약하여 WebSocket
+        콜백을 차단하지 않습니다. 동기화 중 새 체결 이벤트는 현재 worker가
+        완료할 때까지 중복 예약하지 않습니다.
 
 3.  **System Messages (시스템 메시지)**:
     *   연결 유지를 위한 PINGPONG 메시지를 처리합니다 (시스템 로깅 타임스탬프 사용).

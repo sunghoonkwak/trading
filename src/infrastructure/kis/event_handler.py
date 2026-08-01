@@ -3,6 +3,7 @@
 import logging
 from collections import OrderedDict
 from datetime import datetime
+from threading import Lock, Thread
 from typing import NotRequired, TypedDict
 
 import pandas as pd
@@ -18,6 +19,8 @@ from infrastructure.trading_configuration import strip_market_prefix
 _MAX_RECENT_ORDER_EVENTS = 1_000
 _recent_order_events: OrderedDict[tuple[str, ...], None] = OrderedDict()
 _notification_sender = None
+_order_sync_lock = Lock()
+_order_sync_running = False
 
 
 def configure_notification_sender(sender) -> None:
@@ -29,6 +32,36 @@ def configure_notification_sender(sender) -> None:
 def _send_notification(message: str) -> None:
     if _notification_sender is not None:
         _notification_sender(message)
+
+
+def _run_open_order_sync() -> None:
+    global _order_sync_running
+    try:
+        sync_open_orders()
+    except Exception as error:
+        logging.error("[KIS] Open-order sync failed: %s", error)
+    finally:
+        with _order_sync_lock:
+            _order_sync_running = False
+
+
+def _schedule_open_order_sync() -> None:
+    global _order_sync_running
+    with _order_sync_lock:
+        if _order_sync_running:
+            return
+        _order_sync_running = True
+
+    try:
+        Thread(
+            target=_run_open_order_sync,
+            daemon=True,
+            name="OpenOrderSyncThread",
+        ).start()
+    except Exception as error:
+        with _order_sync_lock:
+            _order_sync_running = False
+        logging.error("[KIS] Failed to start open-order sync: %s", error)
 
 
 class _MarketState(TypedDict):
@@ -294,8 +327,7 @@ def _handle_domestic_order(row) -> bool:
         if tag in ["CAN", "EXE"]:
             remove_order_state(order_no)
 
-        # Delayed auto-sync with debouncing
-        sync_open_orders()
+        _schedule_open_order_sync()
         return True
     except Exception as e:
         print_viewer("SYS", "ERROR", f"Error parsing H0STCNI0: {e}")
@@ -404,8 +436,7 @@ def _handle_overseas_order(tr_id: str, row) -> bool:
         if tag in ["CAN", "EXE"]:
             remove_order_state(order_no)
 
-        # Delayed auto-sync with debouncing
-        sync_open_orders()
+        _schedule_open_order_sync()
         return True
     except Exception as e:
         print_viewer("SYS", "ERROR", f"Error parsing overseas notification: {e}")

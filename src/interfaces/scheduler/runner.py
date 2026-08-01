@@ -47,14 +47,15 @@ class SchedulerRunner:
             return
         self._stop_event.clear()
         schedule.clear()
+        self._current_order_kst = ""
         schedule.every().day.at("07:00").do(
             self._portfolio_runner.run_daily_portfolio_report,
             self._portfolio_reader,
         )
-        self._current_order_kst = _et_to_kst(*ORDER_REPORT_ET)
-        schedule.every().day.at(self._current_order_kst).do(
-            self._order_runner.run_daily_order_report
-        ).tag("order_report")
+        self._refresh_order_report_schedule()
+        schedule.every().day.at("00:05").do(
+            self._refresh_order_report_schedule
+        ).tag("order_report_reschedule")
         schedule.every(5).minutes.do(self._order_runner.run_periodic_rebalancing)
         self._thread = threading.Thread(
             target=self._run_loop,
@@ -73,6 +74,18 @@ class SchedulerRunner:
     def run_daily_order_report(self) -> None:
         """Run the injected order job for an authorized manual trigger."""
         self._order_runner.run_daily_order_report()
+
+    def _refresh_order_report_schedule(self) -> None:
+        """Re-register the order report when the ET-to-KST offset changes."""
+        next_order_kst = _et_to_kst(*ORDER_REPORT_ET)
+        if next_order_kst == self._current_order_kst:
+            return
+
+        schedule.clear("order_report")
+        self._current_order_kst = next_order_kst
+        schedule.every().day.at(next_order_kst).do(
+            self._order_runner.run_daily_order_report
+        ).tag("order_report")
 
 
 def _et_to_kst(hour: int, minute: int = 0) -> str:

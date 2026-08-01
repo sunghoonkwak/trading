@@ -43,7 +43,7 @@ def _capture_domestic_order_effects(monkeypatch):
     )
     monkeypatch.setattr(
         kis_event_handler,
-        "sync_open_orders",
+        "_schedule_open_order_sync",
         lambda: effects.__setitem__("syncs", effects["syncs"] + 1),
     )
     return effects
@@ -60,6 +60,29 @@ def test_on_result_suppresses_duplicate_order_notifications(monkeypatch):
     assert len(effects["notifications"]) == 1
     assert effects["removed"] == ["12345678"]
     assert effects["syncs"] == 1
+
+
+def test_order_sync_is_started_after_websocket_callback_returns(monkeypatch):
+    started = []
+    synced = []
+
+    class FakeThread:
+        def __init__(self, *, target, daemon, name):
+            self._target = target
+            started.append(self)
+
+        def start(self):
+            return None
+
+    monkeypatch.setattr(kis_event_handler, "Thread", FakeThread)
+    monkeypatch.setattr(kis_event_handler, "sync_open_orders", lambda: synced.append(True))
+
+    kis_event_handler._schedule_open_order_sync()
+
+    assert len(started) == 1
+    assert synced == []
+    started[0]._target()
+    assert synced == [True]
 
 
 def test_on_result_keeps_distinct_partial_fills(monkeypatch):
